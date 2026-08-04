@@ -1,0 +1,321 @@
+// Schema do sistema imobiliário — ver PRD.md (seção 9) para o modelo de dados de alto nível.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- Enums ----------
+
+enum PapelUsuario {
+  ADMINISTRADOR
+  GESTOR
+  CORRETOR
+}
+
+enum EstagioObra {
+  NA_PLANTA
+  EM_CONSTRUCAO
+  PRONTO_PARA_MORAR
+}
+
+enum FinalidadeImovel {
+  VENDA
+  ALUGUEL
+  VENDA_E_ALUGUEL
+}
+
+enum TipoImovel {
+  APARTAMENTO
+  CASA
+  CASA_CONDOMINIO
+  TERRENO
+  COMERCIAL
+  RURAL
+  COBERTURA
+  OUTRO
+}
+
+enum StatusImovel {
+  RASCUNHO
+  DISPONIVEL
+  RESERVADO
+  VENDIDO
+  ALUGADO
+  INATIVO
+}
+
+enum TipoMidia {
+  FOTO
+  VIDEO
+  PLANTA
+}
+
+enum PapelPessoa {
+  LEAD
+  CLIENTE
+  PROPRIETARIO
+}
+
+enum OrigemLead {
+  SITE
+  INDICACAO
+  PORTAL
+  INSTAGRAM
+  WHATSAPP
+  OUTRO
+}
+
+enum EstagioFunil {
+  NOVO_LEAD
+  CONTATO_FEITO
+  VISITA_AGENDADA
+  PROPOSTA
+  FECHADO
+  PERDIDO
+}
+
+enum TipoNegocio {
+  VENDA
+  LOCACAO
+}
+
+enum CategoriaCaracteristica {
+  IMOVEL
+  CONDOMINIO
+}
+
+enum TipoInteracao {
+  VISITA
+  LIGACAO
+  MENSAGEM
+  EMAIL
+  OUTRO
+}
+
+// ---------- Modelos ----------
+
+model Usuario {
+  id        String       @id @default(cuid())
+  nome      String
+  email     String       @unique
+  senhaHash String
+  papel     PapelUsuario @default(CORRETOR)
+  ativo     Boolean      @default(true)
+  criadoEm  DateTime     @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  imoveis      Imovel[]      @relation("CorretorResponsavel")
+  interacoes   Interacao[]
+  negocios     Negocio[]
+  pessoasLead  Pessoa[]      @relation("CorretorAtribuido")
+
+  @@map("usuarios")
+}
+
+model Pessoa {
+  id        String        @id @default(cuid())
+  nome      String
+  email     String?
+  telefone  String?
+  cpfCnpj   String?
+  papeis    PapelPessoa[]
+  origem    OrigemLead?
+  estagioFunil EstagioFunil @default(NOVO_LEAD)
+  observacoes String?
+  criadoEm  DateTime      @default(now())
+  atualizadoEm DateTime   @updatedAt
+
+  corretorAtribuidoId String?
+  corretorAtribuido   Usuario? @relation("CorretorAtribuido", fields: [corretorAtribuidoId], references: [id])
+
+  imoveisComoProprietario Imovel[]      @relation("Proprietario")
+  interacoes              Interacao[]
+  negociosComoCliente     NegocioPessoa[]
+
+  @@map("pessoas")
+}
+
+model Imovel {
+  id           String           @id @default(cuid())
+  codigo       Int              @unique @default(autoincrement())
+  titulo       String
+  descricao    String?
+  tipo         TipoImovel
+  finalidade   FinalidadeImovel
+  status       StatusImovel     @default(RASCUNHO)
+  lancamento   Boolean          @default(false)
+  destaque     Boolean          @default(false)
+  oportunidade Boolean          @default(false)
+  slideshow    Boolean          @default(false)
+  estagioObra      EstagioObra?
+  previsaoEntrega  DateTime?
+  construtora      String?
+
+  // Endereço
+  cep          String?
+  logradouro   String?
+  numero       String?
+  complemento  String?
+  bairro       String
+  cidade       String
+  estado       String
+  latitude     Float?
+  longitude    Float?
+
+  // Valores
+  preco        Decimal?  @db.Decimal(14, 2)
+  precoAluguel Decimal?  @db.Decimal(14, 2)
+  precoCondominio Decimal? @db.Decimal(14, 2)
+  precoIptu    Decimal?  @db.Decimal(14, 2)
+
+  // Características
+  areaTotal    Float?
+  areaPrivativa Float?
+  quartos      Int?
+  suites       Int?
+  banheiros    Int?
+  vagasGaragem Int?
+  caracteristicasImovel     String[] @default([])
+  caracteristicasCondominio String[] @default([])
+
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  publicadoEm  DateTime?
+
+  corretorResponsavelId String?
+  corretorResponsavel   Usuario? @relation("CorretorResponsavel", fields: [corretorResponsavelId], references: [id])
+
+  proprietarioId String?
+  proprietario   Pessoa? @relation("Proprietario", fields: [proprietarioId], references: [id])
+
+  midias           Midia[]
+  historicoStatus  HistoricoStatusImovel[]
+  interacoes       Interacao[]
+  negocios         Negocio[]
+  publicacoesPortais PublicacaoPortal[]
+
+  @@index([status])
+  @@index([cidade, bairro])
+  @@index([finalidade, tipo])
+  @@index([lancamento])
+  @@map("imoveis")
+}
+
+model Midia {
+  id        String    @id @default(cuid())
+  imovelId  String
+  imovel    Imovel    @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+
+  tipo      TipoMidia
+  url       String
+  ehCapa    Boolean   @default(false)
+  ordem     Int       @default(0)
+
+  criadoEm  DateTime  @default(now())
+
+  @@index([imovelId])
+  @@map("midias")
+}
+
+model HistoricoStatusImovel {
+  id         String       @id @default(cuid())
+  imovelId   String
+  imovel     Imovel       @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+  statusAnterior StatusImovel?
+  statusNovo StatusImovel
+  alteradoEm DateTime     @default(now())
+
+  @@index([imovelId])
+  @@map("historico_status_imoveis")
+}
+
+model Interacao {
+  id         String        @id @default(cuid())
+  pessoaId   String
+  pessoa     Pessoa        @relation(fields: [pessoaId], references: [id], onDelete: Cascade)
+  imovelId   String?
+  imovel     Imovel?       @relation(fields: [imovelId], references: [id])
+  corretorId String?
+  corretor   Usuario?      @relation(fields: [corretorId], references: [id])
+
+  tipo       TipoInteracao
+  notas      String?
+  dataHora   DateTime      @default(now())
+
+  @@index([pessoaId])
+  @@map("interacoes")
+}
+
+model Negocio {
+  id         String      @id @default(cuid())
+  imovelId   String
+  imovel     Imovel      @relation(fields: [imovelId], references: [id])
+  corretorId String?
+  corretor   Usuario?    @relation(fields: [corretorId], references: [id])
+
+  tipo       TipoNegocio
+  valorFinal Decimal     @db.Decimal(14, 2)
+  comissao   Decimal?    @db.Decimal(14, 2)
+  fechadoEm  DateTime    @default(now())
+
+  pessoas    NegocioPessoa[]
+
+  @@index([imovelId])
+  @@map("negocios")
+}
+
+model NegocioPessoa {
+  negocioId String
+  negocio   Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  pessoaId  String
+  pessoa    Pessoa  @relation(fields: [pessoaId], references: [id])
+
+  @@id([negocioId, pessoaId])
+  @@map("negocios_pessoas")
+}
+
+// Registro de envio/sincronização de um imóvel para um portal externo (ZAP, VivaReal, OLX, Imovelweb, Mercado Livre).
+model PublicacaoPortal {
+  id           String   @id @default(cuid())
+  imovelId     String
+  imovel       Imovel   @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+  portal       String
+  idAnuncioExterno String?
+  ultimaSincronizacaoEm DateTime?
+  ultimoErro   String?
+
+  @@unique([imovelId, portal])
+  @@map("publicacoes_portais")
+}
+
+// Catálogo de opções selecionáveis para as características do imóvel/condomínio (gerenciado em /admin/caracteristicas).
+model CaracteristicaOpcao {
+  id        String                  @id @default(cuid())
+  nome      String
+  categoria CategoriaCaracteristica
+  criadoEm  DateTime                @default(now())
+
+  @@unique([categoria, nome])
+  @@map("caracteristicas_opcoes")
+}
+
+// Registro único com os dados de contato/redes sociais da imobiliária (gerenciado em /admin/configuracoes).
+model ConfiguracaoContato {
+  id                  String   @id @default("singleton")
+  telefone            String?
+  email               String?
+  whatsapp            String?
+  instagram           String?
+  facebook            String?
+  youtube             String?
+  linkedin            String?
+  codigoImovelPrefixo String?
+  atualizadoEm        DateTime @updatedAt
+
+  @@map("configuracao_contato")
+}
