@@ -105,6 +105,15 @@ async function main() {
     "Vista para montanha",
     "Vista para o mar",
     "Vista para praça",
+    "Aceita pet",
+    "Churrasqueira",
+    "Elevador",
+    "Lavanderia",
+    "Piscina",
+    "Portaria 24h",
+    "Quadra poliesportiva",
+    "Salão de festas",
+    "Zelador",
   ];
 
   const opcoesCondominio = [
