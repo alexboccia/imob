@@ -17,6 +17,11 @@ export function MediaUploader({
 }) {
   const [midias, setMidias] = useState<MidiaItem[]>(midiasIniciais);
   const [enviando, setEnviando] = useState(false);
+  const [progresso, setProgresso] = useState<{
+    tipo: "FOTO" | "PLANTA";
+    atual: number;
+    total: number;
+  } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [urlVideo, setUrlVideo] = useState("");
   const [indiceArrastado, setIndiceArrastado] = useState<number | null>(null);
@@ -45,8 +50,11 @@ export function MediaUploader({
 
     setEnviando(true);
     setErro(null);
+    const total = arquivos.length;
+    setProgresso({ tipo, atual: 0, total });
 
     const novasMidias: MidiaItem[] = [];
+    let concluidos = 0;
     for (const arquivo of Array.from(arquivos)) {
       const formData = new FormData();
       formData.append("arquivo", arquivo);
@@ -55,6 +63,8 @@ export function MediaUploader({
         body: formData,
       });
       const dados = await resposta.json();
+      concluidos += 1;
+      setProgresso({ tipo, atual: concluidos, total });
       if (!resposta.ok) {
         setErro(dados.erro ?? "Falha ao enviar arquivo");
         continue;
@@ -76,6 +86,7 @@ export function MediaUploader({
       return combinado;
     });
     setEnviando(false);
+    setProgresso(null);
     event.target.value = "";
   }
 
@@ -140,7 +151,23 @@ export function MediaUploader({
           disabled={enviando}
           className="block text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
         />
-        {enviando && <p className="text-sm text-gray-500 mt-1">Enviando...</p>}
+        {progresso?.tipo === "FOTO" && (
+          <div className="mt-2">
+            <div className="h-1.5 w-full max-w-xs rounded-full bg-gray-200 overflow-hidden">
+              <div
+                className="h-full bg-black transition-all duration-200"
+                style={{
+                  width: `${Math.round(
+                    (progresso.atual / progresso.total) * 100
+                  )}%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Enviando {progresso.atual} de {progresso.total}...
+            </p>
+          </div>
+        )}
         {erro && <p className="text-sm text-red-600 mt-1">{erro}</p>}
 
         {fotos.length > 0 && (
@@ -229,6 +256,23 @@ export function MediaUploader({
           disabled={enviando}
           className="block text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
         />
+        {progresso?.tipo === "PLANTA" && (
+          <div className="mt-2">
+            <div className="h-1.5 w-full max-w-xs rounded-full bg-gray-200 overflow-hidden">
+              <div
+                className="h-full bg-black transition-all duration-200"
+                style={{
+                  width: `${Math.round(
+                    (progresso.atual / progresso.total) * 100
+                  )}%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Enviando {progresso.atual} de {progresso.total}...
+            </p>
+          </div>
+        )}
 
         {plantas.length > 0 && (
           <>
