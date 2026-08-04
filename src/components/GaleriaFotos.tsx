@@ -393,14 +393,6 @@ export function GaleriaFotos({
             </Swiper>
 
             <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={alternarFavorito}
-                aria-label="Favoritar"
-                className="w-9 h-9 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow"
-              >
-                <IconeCoracao className="w-4 h-4" preenchido={favorito} />
-              </button>
               <div className="relative">
                 <button
                   type="button"
