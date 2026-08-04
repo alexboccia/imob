@@ -138,7 +138,7 @@ export function MediaUploader({
           multiple
           onChange={(e) => handleArquivos(e, "FOTO")}
           disabled={enviando}
-          className="text-sm"
+          className="block text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
         />
         {enviando && <p className="text-sm text-gray-500 mt-1">Enviando...</p>}
         {erro && <p className="text-sm text-red-600 mt-1">{erro}</p>}
@@ -227,7 +227,7 @@ export function MediaUploader({
           multiple
           onChange={(e) => handleArquivos(e, "PLANTA")}
           disabled={enviando}
-          className="text-sm"
+          className="block text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
         />
 
         {plantas.length > 0 && (
