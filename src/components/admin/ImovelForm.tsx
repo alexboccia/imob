@@ -7,6 +7,7 @@ import {
 import { MediaUploader, type MidiaItem } from "@/components/admin/MediaUploader";
 import { CamposEndereco } from "@/components/admin/CamposEndereco";
 import { SeletorCaracteristicas } from "@/components/admin/SeletorCaracteristicas";
+import { BotaoSalvarImovel } from "@/components/admin/BotaoSalvarImovel";
 
 type ImovelFormValues = {
   titulo: string;
@@ -371,12 +372,7 @@ export function ImovelForm({
         <MediaUploader midiasIniciais={midiasIniciais} />
       </div>
 
-      <button
-        type="submit"
-        className="bg-black text-white rounded-md px-6 py-2 font-medium hover:bg-gray-800 active:bg-gray-900 transition-colors"
-      >
-        Salvar imóvel
-      </button>
+      <BotaoSalvarImovel />
     </form>
   );
 }

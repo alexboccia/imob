@@ -152,7 +152,7 @@ export async function criarImovel(formData: FormData) {
   });
 
   revalidatePath("/admin/imoveis");
-  redirect(`/admin/imoveis/${imovel.id}`);
+  redirect(`/admin/imoveis/${imovel.id}?salvo=1`);
 }
 
 export async function atualizarImovel(imovelId: string, formData: FormData) {
@@ -228,5 +228,5 @@ export async function atualizarImovel(imovelId: string, formData: FormData) {
 
   revalidatePath("/admin/imoveis");
   revalidatePath(`/admin/imoveis/${imovelId}`);
-  redirect(`/admin/imoveis/${imovelId}`);
+  redirect(`/admin/imoveis/${imovelId}?salvo=1`);
 }

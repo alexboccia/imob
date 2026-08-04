@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ImovelForm } from "@/components/admin/ImovelForm";
 import { atualizarImovel } from "@/app/admin/imoveis/actions";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
+import { ToastSalvo } from "@/components/admin/ToastSalvo";
 
 export default async function EditarImovelPage({
   params,
@@ -25,6 +27,9 @@ export default async function EditarImovelPage({
 
   return (
     <div>
+      <Suspense fallback={null}>
+        <ToastSalvo />
+      </Suspense>
       <h1 className="text-2xl font-semibold mb-6">Editar imóvel</h1>
       <ImovelForm
         action={atualizarComId}
