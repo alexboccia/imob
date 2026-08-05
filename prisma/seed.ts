@@ -199,6 +199,99 @@ async function main() {
   console.log(
     `Catálogo de características pronto: ${opcoesImovel.length} do imóvel, ${opcoesCondominio.length} do condomínio.`
   );
+
+  const tiposResidenciais = [
+    "Apartamento",
+    "Apartamento duplex",
+    "Apartamento garden",
+    "Apartamento triplex",
+    "Casa",
+    "Casa de condomínio",
+    "Casa de vila",
+    "Casa geminada",
+    "Casa térrea",
+    "Chácara",
+    "Cobertura",
+    "Cobertura duplex",
+    "Cobertura triplex",
+    "Edícula",
+    "Fazenda",
+    "Flat",
+    "Kitnet",
+    "Loft",
+    "Lote residencial",
+    "Mansão",
+    "Prédio residencial",
+    "Quarto",
+    "Rancho",
+    "República",
+    "Residencial multifamiliar",
+    "Sítio",
+    "Sobrado",
+    "Studio",
+    "Terreno residencial",
+  ];
+
+  const tiposComerciais = [
+    "Área comercial",
+    "Área industrial",
+    "Área rural para atividade comercial",
+    "Armazém",
+    "Bar",
+    "Casa comercial",
+    "Centro de distribuição",
+    "Clínica",
+    "Conjunto comercial",
+    "Consultório",
+    "Coworking",
+    "Depósito",
+    "Escritório",
+    "Estacionamento",
+    "Fábrica",
+    "Galpão",
+    "Galpão industrial",
+    "Galpão logístico",
+    "Garagem",
+    "Hostel",
+    "Hotel",
+    "Indústria",
+    "Laboratório",
+    "Laje corporativa",
+    "Loja",
+    "Loja de shopping",
+    "Oficina",
+    "Padaria",
+    "Ponto comercial",
+    "Posto de combustível",
+    "Pousada",
+    "Prédio comercial",
+    "Prédio corporativo",
+    "Restaurante",
+    "Sala comercial",
+    "Sobrado comercial",
+    "Terreno comercial",
+    "Terreno industrial",
+  ];
+
+  for (const nome of tiposResidenciais) {
+    await prisma.tipoImovelOpcao.upsert({
+      where: { categoria_nome: { categoria: "RESIDENCIAL", nome } },
+      update: {},
+      create: { categoria: "RESIDENCIAL", nome },
+    });
+  }
+
+  for (const nome of tiposComerciais) {
+    await prisma.tipoImovelOpcao.upsert({
+      where: { categoria_nome: { categoria: "COMERCIAL", nome } },
+      update: {},
+      create: { categoria: "COMERCIAL", nome },
+    });
+  }
+
+  console.log(
+    `Catálogo de tipos de imóvel pronto: ${tiposResidenciais.length} residenciais, ${tiposComerciais.length} comerciais.`
+  );
 }
 
 main()

@@ -29,15 +29,9 @@ enum FinalidadeImovel {
   VENDA_E_ALUGUEL
 }
 
-enum TipoImovel {
-  APARTAMENTO
-  CASA
-  CASA_CONDOMINIO
-  TERRENO
+enum CategoriaTipoImovel {
+  RESIDENCIAL
   COMERCIAL
-  RURAL
-  COBERTURA
-  OUTRO
 }
 
 enum StatusImovel {
@@ -145,7 +139,7 @@ model Imovel {
   codigo       Int              @unique @default(autoincrement())
   titulo       String
   descricao    String?
-  tipo         TipoImovel
+  tipo         String
   finalidade   FinalidadeImovel
   status       StatusImovel     @default(RASCUNHO)
   lancamento   Boolean          @default(false)
@@ -302,6 +296,17 @@ model CaracteristicaOpcao {
 
   @@unique([categoria, nome])
   @@map("caracteristicas_opcoes")
+}
+
+// Catálogo de tipos de imóvel selecionáveis, residencial/comercial (gerenciado em /admin/tipos-imovel).
+model TipoImovelOpcao {
+  id        String              @id @default(cuid())
+  nome      String
+  categoria CategoriaTipoImovel
+  criadoEm  DateTime            @default(now())
+
+  @@unique([categoria, nome])
+  @@map("tipos_imovel_opcoes")
 }
 
 // Registro único com os dados de contato/redes sociais da imobiliária (gerenciado em /admin/configuracoes).

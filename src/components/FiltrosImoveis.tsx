@@ -10,8 +10,6 @@ import {
   IconeFechar,
 } from "@/components/icons";
 
-type Opcao = { value: string; label: string };
-
 type FiltrosIniciais = {
   tipo: string[];
   finalidade: string;
@@ -219,7 +217,7 @@ export function FiltrosImoveis({
   inicial,
   paramsExtras,
 }: {
-  tipos: Opcao[];
+  tipos: string[];
   bairros: string[];
   caracteristicas: string[];
   inicial: FiltrosIniciais;
@@ -276,11 +274,7 @@ export function FiltrosImoveis({
     router.push(`/imoveis?${query.toString()}`);
   }
 
-  const labelTipo = rotuloMultiplo(
-    tipo,
-    (v) => tipos.find((t) => t.value === v)?.label ?? v,
-    "Não definido"
-  );
+  const labelTipo = rotuloMultiplo(tipo, (v) => v, "Não definido");
   const labelBairro = rotuloMultiplo(bairro, (v) => v, "Não definido");
   const labelCaract = rotuloMultiplo(caract, (v) => v, "Não definido");
   const labelNegocio = finalidade
@@ -353,18 +347,14 @@ export function FiltrosImoveis({
       </div>
 
       {aberto === "tipo" && (
-        <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg p-4 w-[360px]">
-          <div className="grid grid-cols-2 gap-2">
-            {tipos.map((t) => (
-              <Chip
-                key={t.value}
-                ativo={tipo.includes(t.value)}
-                onClick={() => alternar(tipo, setTipo, t.value)}
-              >
-                {t.label}
-              </Chip>
-            ))}
-          </div>
+        <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg">
+          <PainelMultiSelecao
+            titulo="Tipo de imóvel"
+            placeholder="Buscar tipo..."
+            opcoes={tipos}
+            selecionados={tipo}
+            onToggle={(valor) => alternar(tipo, setTipo, valor)}
+          />
         </div>
       )}
 

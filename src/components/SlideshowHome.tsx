@@ -7,11 +7,7 @@ import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
 import type { Swiper as SwiperType } from "swiper";
 import "swiper/css";
-import {
-  FINALIDADE_LABEL,
-  TIPO_IMOVEL_LABEL,
-  formatarPreco,
-} from "@/lib/format";
+import { FINALIDADE_LABEL, formatarPreco } from "@/lib/format";
 import { IconeChevronEsquerdo, IconeChevronDireito } from "@/components/icons";
 
 type ImovelSlide = {
@@ -74,7 +70,7 @@ export function SlideshowHome({ imoveis }: { imoveis: ImovelSlide[] }) {
 
                   <div className="relative h-full mx-auto max-w-6xl px-4 flex flex-col justify-end pb-16">
                     <p className="text-sm text-gray-200">
-                      {TIPO_IMOVEL_LABEL[imovel.tipo] ?? imovel.tipo} ·{" "}
+                      {imovel.tipo} ·{" "}
                       {FINALIDADE_LABEL[imovel.finalidade] ?? imovel.finalidade}
                     </p>
                     <h1 className="text-2xl sm:text-4xl font-semibold mt-1 max-w-2xl">

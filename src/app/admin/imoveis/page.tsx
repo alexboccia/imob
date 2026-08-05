@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import {
   FINALIDADE_LABEL,
   STATUS_IMOVEL_LABEL,
-  TIPO_IMOVEL_LABEL,
   formatarCodigoImovel,
   formatarPreco,
   rotulosAtivos,
@@ -76,7 +75,7 @@ export default async function AdminImoveisPage() {
                   )}
                 </td>
                 <td className="px-4 py-2">
-                  {TIPO_IMOVEL_LABEL[imovel.tipo] ?? imovel.tipo}
+                  {imovel.tipo}
                 </td>
                 <td className="px-4 py-2">
                   {FINALIDADE_LABEL[imovel.finalidade] ?? imovel.finalidade}

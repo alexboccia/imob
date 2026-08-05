@@ -4,7 +4,6 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import {
   FINALIDADE_LABEL,
-  TIPO_IMOVEL_LABEL,
   formatarCodigoImovel,
   formatarPreco,
   formatarTempoRelativo,
@@ -75,7 +74,7 @@ export async function generateMetadata({
   const capa = imovel.midias.find((m) => m.tipo === "FOTO")?.url;
   const descricao = imovel.descricao
     ? imovel.descricao.slice(0, 160)
-    : `${TIPO_IMOVEL_LABEL[imovel.tipo] ?? imovel.tipo} em ${imovel.bairro}, ${imovel.cidade} - ${imovel.estado}.`;
+    : `${imovel.tipo} em ${imovel.bairro}, ${imovel.cidade} - ${imovel.estado}.`;
 
   return {
     title: imovel.titulo,
@@ -144,7 +143,7 @@ export default async function DetalheImovelPage({
   const precoPrincipal = imovel.preco ?? imovel.precoAluguel;
 
   const mensagemContato = `Olá, gostaria de ter mais informações para ${verboFinalidade}: ${
-    (TIPO_IMOVEL_LABEL[imovel.tipo] ?? imovel.tipo).toLowerCase()
+    imovel.tipo.toLowerCase()
   }, ${formatarPreco(precoPrincipal)}, ${enderecoCompleto ? `${enderecoCompleto}, ` : ""}${
     imovel.cidade
   } - ${imovel.estado} que encontrei no site da ${siteConfig.nome}. Aguardo seu contato.`;
@@ -162,7 +161,7 @@ export default async function DetalheImovelPage({
 
       <div className="mx-auto max-w-6xl px-4 py-10">
       <p className="text-sm text-gray-500 mb-2">
-        {TIPO_IMOVEL_LABEL[imovel.tipo] ?? imovel.tipo} ·{" "}
+        {imovel.tipo} ·{" "}
         {FINALIDADE_LABEL[imovel.finalidade] ?? imovel.finalidade}
         {rotulosAtivos(imovel).map((rotulo) => (
           <span

@@ -58,17 +58,6 @@ export const ESTAGIO_OBRA_LABEL: Record<string, string> = {
   PRONTO_PARA_MORAR: "Pronto para morar",
 };
 
-export const TIPO_IMOVEL_LABEL: Record<string, string> = {
-  APARTAMENTO: "Apartamento",
-  CASA: "Casa",
-  CASA_CONDOMINIO: "Casa em condomínio",
-  TERRENO: "Terreno",
-  COMERCIAL: "Comercial",
-  RURAL: "Rural",
-  COBERTURA: "Cobertura",
-  OUTRO: "Outro",
-};
-
 export const FINALIDADE_LABEL: Record<string, string> = {
   VENDA: "Comprar",
   ALUGUEL: "Alugar",

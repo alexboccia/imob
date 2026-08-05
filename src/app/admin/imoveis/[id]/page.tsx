@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ImovelForm } from "@/components/admin/ImovelForm";
 import { atualizarImovel } from "@/app/admin/imoveis/actions";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
+import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
 import { ToastSalvo } from "@/components/admin/ToastSalvo";
 
 export default async function EditarImovelPage({
@@ -13,13 +14,15 @@ export default async function EditarImovelPage({
 }) {
   const { id } = await params;
 
-  const [imovel, { opcoesImovel, opcoesCondominio }] = await Promise.all([
-    prisma.imovel.findUnique({
-      where: { id },
-      include: { midias: { orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }] } },
-    }),
-    buscarOpcoesCaracteristicas(),
-  ]);
+  const [imovel, { opcoesImovel, opcoesCondominio }, { opcoesResidencial, opcoesComercial }] =
+    await Promise.all([
+      prisma.imovel.findUnique({
+        where: { id },
+        include: { midias: { orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }] } },
+      }),
+      buscarOpcoesCaracteristicas(),
+      buscarOpcoesTiposImovel(),
+    ]);
 
   if (!imovel) notFound();
 
@@ -41,6 +44,8 @@ export default async function EditarImovelPage({
         }))}
         opcoesCaracteristicasImovel={opcoesImovel}
         opcoesCaracteristicasCondominio={opcoesCondominio}
+        opcoesTiposResidencial={opcoesResidencial}
+        opcoesTiposComercial={opcoesComercial}
       />
     </div>
   );

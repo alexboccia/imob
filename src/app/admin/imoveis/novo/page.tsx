@@ -1,9 +1,11 @@
 import { ImovelForm } from "@/components/admin/ImovelForm";
 import { criarImovel } from "@/app/admin/imoveis/actions";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
+import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
 
 export default async function NovoImovelPage() {
-  const { opcoesImovel, opcoesCondominio } = await buscarOpcoesCaracteristicas();
+  const [{ opcoesImovel, opcoesCondominio }, { opcoesResidencial, opcoesComercial }] =
+    await Promise.all([buscarOpcoesCaracteristicas(), buscarOpcoesTiposImovel()]);
 
   return (
     <div>
@@ -12,6 +14,8 @@ export default async function NovoImovelPage() {
         action={criarImovel}
         opcoesCaracteristicasImovel={opcoesImovel}
         opcoesCaracteristicasCondominio={opcoesCondominio}
+        opcoesTiposResidencial={opcoesResidencial}
+        opcoesTiposComercial={opcoesComercial}
       />
     </div>
   );

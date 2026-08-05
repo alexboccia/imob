@@ -8,7 +8,6 @@ import type { Swiper as SwiperType } from "swiper";
 import "swiper/css";
 import {
   FINALIDADE_LABEL,
-  TIPO_IMOVEL_LABEL,
   formatarPreco,
   rotulosAtivos,
 } from "@/lib/format";
@@ -128,7 +127,7 @@ export function ImovelCard({ imovel }: ImovelCardProps) {
       </div>
       <div className="p-4">
         <p className="text-xs text-gray-500">
-          {TIPO_IMOVEL_LABEL[imovel.tipo] ?? imovel.tipo} ·{" "}
+          {imovel.tipo} ·{" "}
           {FINALIDADE_LABEL[imovel.finalidade] ?? imovel.finalidade}
         </p>
         <h3 className="mt-1 font-medium">{imovel.titulo}</h3>

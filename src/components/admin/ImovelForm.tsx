@@ -2,7 +2,6 @@ import {
   ESTAGIO_OBRA_LABEL,
   FINALIDADE_LABEL,
   STATUS_IMOVEL_LABEL,
-  TIPO_IMOVEL_LABEL,
 } from "@/lib/format";
 import { MediaUploader, type MidiaItem } from "@/components/admin/MediaUploader";
 import { CamposEndereco } from "@/components/admin/CamposEndereco";
@@ -57,12 +56,16 @@ export function ImovelForm({
   midiasIniciais,
   opcoesCaracteristicasImovel = [],
   opcoesCaracteristicasCondominio = [],
+  opcoesTiposResidencial = [],
+  opcoesTiposComercial = [],
 }: {
   action: (formData: FormData) => void;
   valoresIniciais?: Partial<ImovelFormValues>;
   midiasIniciais?: MidiaItem[];
   opcoesCaracteristicasImovel?: string[];
   opcoesCaracteristicasCondominio?: string[];
+  opcoesTiposResidencial?: string[];
+  opcoesTiposComercial?: string[];
 }) {
   const v = valoresIniciais ?? {};
   const todasOpcoesImovel = mesclarOpcoes(
@@ -73,6 +76,12 @@ export function ImovelForm({
     opcoesCaracteristicasCondominio,
     v.caracteristicasCondominio ?? []
   );
+  const tipoOrfao =
+    v.tipo &&
+    !opcoesTiposResidencial.includes(v.tipo) &&
+    !opcoesTiposComercial.includes(v.tipo)
+      ? v.tipo
+      : null;
 
   return (
     <form action={action} className="space-y-6 max-w-3xl">
@@ -101,14 +110,24 @@ export function ImovelForm({
           <label className="block text-sm font-medium mb-1">Tipo</label>
           <select
             name="tipo"
-            defaultValue={v.tipo ?? "APARTAMENTO"}
+            defaultValue={v.tipo ?? opcoesTiposResidencial[0] ?? ""}
             className="w-full border rounded-md px-3 py-2"
           >
-            {Object.entries(TIPO_IMOVEL_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
+            {tipoOrfao && <option value={tipoOrfao}>{tipoOrfao}</option>}
+            <optgroup label="Residencial">
+              {opcoesTiposResidencial.map((nome) => (
+                <option key={nome} value={nome}>
+                  {nome}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Comercial">
+              {opcoesTiposComercial.map((nome) => (
+                <option key={nome} value={nome}>
+                  {nome}
+                </option>
+              ))}
+            </optgroup>
           </select>
         </div>
         <div>

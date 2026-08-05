@@ -23,16 +23,7 @@ function parseMesAno(valor: string | undefined): Date | null {
 const imovelSchema = z.object({
   titulo: z.string().min(3),
   descricao: z.string().optional(),
-  tipo: z.enum([
-    "APARTAMENTO",
-    "CASA",
-    "CASA_CONDOMINIO",
-    "TERRENO",
-    "COMERCIAL",
-    "RURAL",
-    "COBERTURA",
-    "OUTRO",
-  ]),
+  tipo: z.string().min(1),
   finalidade: z.enum(["VENDA", "ALUGUEL", "VENDA_E_ALUGUEL"]),
   status: z.enum([
     "RASCUNHO",
