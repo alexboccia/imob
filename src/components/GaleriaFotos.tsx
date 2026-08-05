@@ -12,7 +12,6 @@ import {
   IconeChevronDireito,
   IconeFechar,
   IconeCompartilhar,
-  IconeCoracao,
   IconeZoomMais,
   IconeZoomMenos,
   IconeGrade,
@@ -20,16 +19,6 @@ import {
 } from "@/components/icons";
 
 type Foto = { id: string; url: string };
-
-const CHAVE_FAVORITOS = "favoritos";
-
-function lerFavoritos(): string[] {
-  try {
-    return JSON.parse(window.localStorage.getItem(CHAVE_FAVORITOS) ?? "[]");
-  } catch {
-    return [];
-  }
-}
 
 export function GaleriaFotos({
   fotos,
@@ -50,9 +39,6 @@ export function GaleriaFotos({
   const [indice, setIndice] = useState(0);
   const [aberto, setAberto] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [favorito, setFavorito] = useState(
-    () => typeof window !== "undefined" && lerFavoritos().includes(imovelId)
-  );
   const [linkCopiado, setLinkCopiado] = useState(false);
   const thumbsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const swiperInlineRef = useRef<SwiperType | null>(null);
@@ -96,15 +82,6 @@ export function GaleriaFotos({
       swiperLightboxRef.current?.slideTo(indice);
     }
   }, [indice, aberto, fotos.length]);
-
-  function alternarFavorito() {
-    const atuais = lerFavoritos();
-    const novos = atuais.includes(imovelId)
-      ? atuais.filter((id) => id !== imovelId)
-      : [...atuais, imovelId];
-    window.localStorage.setItem(CHAVE_FAVORITOS, JSON.stringify(novos));
-    setFavorito(!favorito);
-  }
 
   async function compartilhar() {
     const url = window.location.href;
@@ -220,14 +197,6 @@ export function GaleriaFotos({
         </button>
 
         <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={alternarFavorito}
-            aria-label="Favoritar"
-            className="w-9 h-9 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow"
-          >
-            <IconeCoracao className="w-4 h-4" preenchido={favorito} />
-          </button>
           <div className="relative">
             <button
               type="button"
