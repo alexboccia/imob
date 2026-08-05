@@ -8,6 +8,7 @@ import { MediaUploader, type MidiaItem } from "@/components/admin/MediaUploader"
 import { CamposEndereco } from "@/components/admin/CamposEndereco";
 import { SeletorCaracteristicas } from "@/components/admin/SeletorCaracteristicas";
 import { BotaoSalvarImovel } from "@/components/admin/BotaoSalvarImovel";
+import { CampoMoeda } from "@/components/admin/CampoMoeda";
 
 type ImovelFormValues = {
   titulo: string;
@@ -250,11 +251,9 @@ export function ImovelForm({
           <label className="block text-sm font-medium mb-1">
             Preço de venda (R$)
           </label>
-          <input
+          <CampoMoeda
             name="preco"
-            type="number"
-            step="0.01"
-            defaultValue={v.preco ? String(v.preco) : ""}
+            defaultValue={v.preco ? String(v.preco) : null}
             className="w-full border rounded-md px-3 py-2"
           />
         </div>
@@ -262,11 +261,9 @@ export function ImovelForm({
           <label className="block text-sm font-medium mb-1">
             Preço de aluguel (R$/mês)
           </label>
-          <input
+          <CampoMoeda
             name="precoAluguel"
-            type="number"
-            step="0.01"
-            defaultValue={v.precoAluguel ? String(v.precoAluguel) : ""}
+            defaultValue={v.precoAluguel ? String(v.precoAluguel) : null}
             className="w-full border rounded-md px-3 py-2"
           />
         </div>
@@ -274,21 +271,17 @@ export function ImovelForm({
           <label className="block text-sm font-medium mb-1">
             Condomínio (R$)
           </label>
-          <input
+          <CampoMoeda
             name="precoCondominio"
-            type="number"
-            step="0.01"
-            defaultValue={v.precoCondominio ? String(v.precoCondominio) : ""}
+            defaultValue={v.precoCondominio ? String(v.precoCondominio) : null}
             className="w-full border rounded-md px-3 py-2"
           />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">IPTU (R$)</label>
-          <input
+          <CampoMoeda
             name="precoIptu"
-            type="number"
-            step="0.01"
-            defaultValue={v.precoIptu ? String(v.precoIptu) : ""}
+            defaultValue={v.precoIptu ? String(v.precoIptu) : null}
             className="w-full border rounded-md px-3 py-2"
           />
         </div>
