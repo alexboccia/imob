@@ -5,7 +5,6 @@ import { SeletorOrdenacao } from "@/components/SeletorOrdenacao";
 import { FiltrosImoveis } from "@/components/FiltrosImoveis";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
-import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
 import type { Prisma } from "@/generated/prisma/client";
 
 export const metadata: Metadata = {
@@ -96,45 +95,42 @@ export default async function ListaImoveisPage({
 
   const orderBy = ORDENACOES[params.ordenar ?? ""] ?? { publicadoEm: "desc" };
 
-  const [
-    imoveis,
-    bairrosDisponiveis,
-    { opcoesImovel, opcoesCondominio },
-    { opcoesResidencial, opcoesComercial },
-  ] = await Promise.all([
-    prisma.imovel.findMany({
-      where,
-      orderBy,
-      include: {
-        midias: {
-          where: { tipo: "FOTO" },
-          orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }],
-          take: 5,
+  const [imoveis, bairrosDisponiveis, tiposDisponiveis, { opcoesImovel, opcoesCondominio }] =
+    await Promise.all([
+      prisma.imovel.findMany({
+        where,
+        orderBy,
+        include: {
+          midias: {
+            where: { tipo: "FOTO" },
+            orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }],
+            take: 5,
+          },
         },
-      },
-    }),
-    prisma.imovel.findMany({
-      where: { status: "DISPONIVEL" },
-      select: { bairro: true },
-      distinct: ["bairro"],
-      orderBy: { bairro: "asc" },
-    }),
-    buscarOpcoesCaracteristicas(),
-    buscarOpcoesTiposImovel(),
-  ]);
+      }),
+      prisma.imovel.findMany({
+        where: { status: "DISPONIVEL" },
+        select: { bairro: true },
+        distinct: ["bairro"],
+        orderBy: { bairro: "asc" },
+      }),
+      prisma.imovel.findMany({
+        where: { status: "DISPONIVEL" },
+        select: { tipo: true },
+        distinct: ["tipo"],
+        orderBy: { tipo: "asc" },
+      }),
+      buscarOpcoesCaracteristicas(),
+    ]);
 
   const caracteristicasDisponiveis = Array.from(
     new Set([...opcoesImovel, ...opcoesCondominio])
   ).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
-  const tiposDisponiveis = [...opcoesResidencial, ...opcoesComercial].sort(
-    (a, b) => a.localeCompare(b, "pt-BR")
-  );
-
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <FiltrosImoveis
-        tipos={tiposDisponiveis}
+        tipos={tiposDisponiveis.map((i) => i.tipo)}
         bairros={bairrosDisponiveis.map((i) => i.bairro)}
         caracteristicas={caracteristicasDisponiveis}
         inicial={{
