@@ -12,7 +12,16 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+
+const TAMANHOS_PAGINA = [10, 50, 100, 200];
 
 export type DataTableColumn<TData extends Record<string, unknown>> = ColumnDef<
   TableFeaturesUsadas,
@@ -106,12 +115,35 @@ export function DataTable<TData extends Record<string, unknown>>({
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <p>
-          Página {table.state.pagination.pageIndex + 1} de{" "}
-          {table.getPageCount() || 1} ·{" "}
-          {table.getFilteredRowModel().rows.length} registro(s)
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-3">
+          <p>
+            Página {table.state.pagination.pageIndex + 1} de{" "}
+            {table.getPageCount() || 1} ·{" "}
+            {table.getFilteredRowModel().rows.length} registro(s)
+          </p>
+          <div className="flex items-center gap-1.5">
+            <span>Itens por página</span>
+            <Select
+              value={String(table.state.pagination.pageSize)}
+              onValueChange={(value) => {
+                table.setPageSize(Number(value));
+                table.setPageIndex(0);
+              }}
+            >
+              <SelectTrigger size="sm" className="w-[70px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TAMANHOS_PAGINA.map((tamanho) => (
+                  <SelectItem key={tamanho} value={String(tamanho)}>
+                    {tamanho}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <div className="flex gap-2">
           <Button
             type="button"
