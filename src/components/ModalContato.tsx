@@ -1,22 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
-import { CheckCircle2, AlertCircle } from "lucide-react";
-import { enviarContato } from "@/app/(public)/actions";
 import { siteConfig } from "@/lib/site-config";
+import { FormularioContato } from "@/components/FormularioContato";
 import {
   Dialog,
   DialogTrigger,
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-
-const estadoInicial = { sucesso: false, erro: undefined as string | undefined };
 
 export function ModalContato({
   imovelId,
@@ -33,11 +24,6 @@ export function ModalContato({
   aoAbrir?: () => void;
   children: React.ReactNode;
 }) {
-  const [estado, formAction, pendente] = useActionState(
-    enviarContato,
-    estadoInicial
-  );
-
   return (
     <Dialog
       onOpenChange={(open) => {
@@ -66,65 +52,11 @@ export function ModalContato({
 
         <div className="p-6">
           <h2 className="font-semibold mb-4">Enviar mensagem</h2>
-
-          {estado.sucesso ? (
-            <Alert className="border-green-200 bg-green-50 text-green-700">
-              <CheckCircle2 />
-              <AlertDescription className="text-green-700">
-                Mensagem enviada com sucesso! Em breve entraremos em contato.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <form action={formAction} className="space-y-3">
-              {imovelId && (
-                <input type="hidden" name="imovelId" value={imovelId} />
-              )}
-              <div className="space-y-1">
-                <Label htmlFor="nome-modal">Nome</Label>
-                <Input id="nome-modal" name="nome" placeholder="Nome" required />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="telefone-modal">Telefone</Label>
-                <Input
-                  id="telefone-modal"
-                  name="telefone"
-                  placeholder="Telefone"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="email-modal">E-mail</Label>
-                <Input
-                  id="email-modal"
-                  name="email"
-                  type="email"
-                  placeholder="E-mail"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="mensagem-modal">Mensagem</Label>
-                <Textarea
-                  id="mensagem-modal"
-                  name="mensagem"
-                  required
-                  rows={4}
-                  defaultValue={mensagemPreenchida}
-                />
-              </div>
-              {estado.erro && (
-                <Alert variant="destructive">
-                  <AlertCircle />
-                  <AlertDescription>{estado.erro}</AlertDescription>
-                </Alert>
-              )}
-              <Button type="submit" disabled={pendente} className="w-full">
-                {pendente ? "Enviando..." : "Enviar mensagem"}
-              </Button>
-              <p className="text-xs text-gray-400">
-                Seus dados serão usados apenas para retornarmos seu contato
-                {imovelId ? " sobre este imóvel" : ""}.
-              </p>
-            </form>
-          )}
+          <FormularioContato
+            imovelId={imovelId}
+            mensagemPreenchida={mensagemPreenchida}
+            idPrefixo="modal-"
+          />
         </div>
       </DialogContent>
     </Dialog>

@@ -12,7 +12,7 @@ import {
 import { siteConfig } from "@/lib/site-config";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { GaleriaFotos } from "@/components/GaleriaFotos";
-import { ModalContato } from "@/components/ModalContato";
+import { FormularioContato } from "@/components/FormularioContato";
 import { EvolucaoObra } from "@/components/EvolucaoObra";
 import { CarrosselPlantas } from "@/components/CarrosselPlantas";
 import { Badge } from "@/components/ui/badge";
@@ -350,14 +350,14 @@ export default async function DetalheImovelPage({
             >
               Falar no WhatsApp
             </Button>
-            <ModalContato
-              imovelId={imovel.id}
-              mensagemPreenchida={mensagemContato}
-              whatsappHref={whatsappHref}
-              className="block w-full text-center border rounded-md px-4 py-2 font-medium hover:bg-gray-50"
-            >
-              Enviar mensagem
-            </ModalContato>
+            <div className="pt-3 border-t space-y-3">
+              <p className="font-medium text-sm">Enviar mensagem</p>
+              <FormularioContato
+                imovelId={imovel.id}
+                mensagemPreenchida={mensagemContato}
+                idPrefixo="aside-"
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
