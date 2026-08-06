@@ -4,6 +4,7 @@ import { ImovelCard } from "@/components/ImovelCard";
 import { SeletorOrdenacao } from "@/components/SeletorOrdenacao";
 import { FiltrosImoveis } from "@/components/FiltrosImoveis";
 import { paraImovelCard } from "@/lib/imovel-card";
+import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
 import type { Prisma } from "@/generated/prisma/client";
 
 export const metadata: Metadata = {
@@ -20,6 +21,12 @@ type SearchParams = {
   caracteristicas?: string | string[];
   precoMin?: string;
   precoMax?: string;
+  areaMin?: string;
+  areaMax?: string;
+  quartos?: string;
+  suites?: string;
+  vagas?: string;
+  categoriaTipo?: string;
   lancamento?: string;
   destaque?: string;
   oportunidade?: string;
@@ -54,6 +61,17 @@ export default async function ListaImoveisPage({
 
   const precoMin = params.precoMin ? Number(params.precoMin) : undefined;
   const precoMax = params.precoMax ? Number(params.precoMax) : undefined;
+  const areaMin = params.areaMin ? Number(params.areaMin) : undefined;
+  const areaMax = params.areaMax ? Number(params.areaMax) : undefined;
+
+  const dadosFiltros = await buscarDadosFiltros();
+
+  const tiposDaCategoria =
+    tipos.length === 0 && params.categoriaTipo
+      ? dadosFiltros.tipos
+          .filter((t) => t.categoria === params.categoriaTipo)
+          .map((t) => t.nome)
+      : [];
 
   const where: Prisma.ImovelWhereInput = {
     status: "DISPONIVEL",
@@ -67,7 +85,11 @@ export default async function ListaImoveisPage({
         }
       : {}),
     ...(params.finalidade ? { finalidade: params.finalidade as never } : {}),
-    ...(tipos.length > 0 ? { tipo: { in: tipos } } : {}),
+    ...(tipos.length > 0
+      ? { tipo: { in: tipos } }
+      : tiposDaCategoria.length > 0
+        ? { tipo: { in: tiposDaCategoria } }
+        : {}),
     ...(bairros.length > 0
       ? { bairro: { in: bairros, mode: "insensitive" } }
       : {}),
@@ -79,6 +101,17 @@ export default async function ListaImoveisPage({
           },
         }
       : {}),
+    ...(areaMin !== undefined || areaMax !== undefined
+      ? {
+          areaTotal: {
+            ...(areaMin !== undefined ? { gte: areaMin } : {}),
+            ...(areaMax !== undefined ? { lte: areaMax } : {}),
+          },
+        }
+      : {}),
+    ...(params.quartos ? { quartos: { gte: Number(params.quartos) } } : {}),
+    ...(params.suites ? { suites: { gte: Number(params.suites) } } : {}),
+    ...(params.vagas ? { vagasGaragem: { gte: Number(params.vagas) } } : {}),
     ...(caracteristicas.length > 0
       ? {
           OR: [
@@ -94,52 +127,24 @@ export default async function ListaImoveisPage({
 
   const orderBy = ORDENACOES[params.ordenar ?? ""] ?? { publicadoEm: "desc" };
 
-  const [imoveis, bairrosDisponiveis, tiposDisponiveis, imoveisComCaracteristicas] =
-    await Promise.all([
-      prisma.imovel.findMany({
-        where,
-        orderBy,
-        include: {
-          midias: {
-            where: { tipo: "FOTO" },
-            orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }],
-            take: 5,
-          },
-        },
-      }),
-      prisma.imovel.findMany({
-        where: { status: "DISPONIVEL" },
-        select: { bairro: true },
-        distinct: ["bairro"],
-        orderBy: { bairro: "asc" },
-      }),
-      prisma.imovel.findMany({
-        where: { status: "DISPONIVEL" },
-        select: { tipo: true },
-        distinct: ["tipo"],
-        orderBy: { tipo: "asc" },
-      }),
-      prisma.imovel.findMany({
-        where: { status: "DISPONIVEL" },
-        select: { caracteristicasImovel: true, caracteristicasCondominio: true },
-      }),
-    ]);
-
-  const caracteristicasEmUso = new Set<string>();
-  for (const imovel of imoveisComCaracteristicas) {
-    imovel.caracteristicasImovel.forEach((c) => caracteristicasEmUso.add(c));
-    imovel.caracteristicasCondominio.forEach((c) => caracteristicasEmUso.add(c));
-  }
-  const caracteristicasDisponiveis = Array.from(caracteristicasEmUso).sort(
-    (a, b) => a.localeCompare(b, "pt-BR")
-  );
+  const imoveis = await prisma.imovel.findMany({
+    where,
+    orderBy,
+    include: {
+      midias: {
+        where: { tipo: "FOTO" },
+        orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }],
+        take: 5,
+      },
+    },
+  });
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <FiltrosImoveis
-        tipos={tiposDisponiveis.map((i) => i.tipo)}
-        bairros={bairrosDisponiveis.map((i) => i.bairro)}
-        caracteristicas={caracteristicasDisponiveis}
+        tipos={dadosFiltros.tipos.map((t) => t.nome)}
+        bairros={dadosFiltros.bairros}
+        caracteristicas={dadosFiltros.caracteristicas}
         inicial={{
           tipo: tipos,
           finalidade: params.finalidade ?? "",
@@ -150,6 +155,12 @@ export default async function ListaImoveisPage({
         }}
         paramsExtras={{
           busca: params.busca ?? "",
+          areaMin: params.areaMin ?? "",
+          areaMax: params.areaMax ?? "",
+          quartos: params.quartos ?? "",
+          suites: params.suites ?? "",
+          vagas: params.vagas ?? "",
+          categoriaTipo: params.categoriaTipo ?? "",
           lancamento: params.lancamento ?? "",
           destaque: params.destaque ?? "",
           oportunidade: params.oportunidade ?? "",
