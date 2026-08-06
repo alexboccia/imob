@@ -337,7 +337,7 @@ export function GaleriaFotos({
           )}
 
           <div
-            className="relative w-full max-w-4xl aspect-[4/3] sm:aspect-video max-h-[70vh] rounded-2xl overflow-hidden shadow-2xl bg-black"
+            className="relative w-full max-w-6xl h-[75vh] sm:h-[80vh] rounded-2xl overflow-hidden shadow-2xl bg-black"
             onClick={(e) => e.stopPropagation()}
           >
             <Swiper
