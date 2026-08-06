@@ -30,13 +30,13 @@ function BuscaHome({
           <form
             action="/imoveis"
             method="GET"
-            className="flex flex-1 rounded-md overflow-hidden border bg-gray-50"
+            className="flex flex-1 rounded-full overflow-hidden border bg-gray-50"
           >
             <Input
               type="text"
               name="busca"
               placeholder="Código, bairro ou empreendimento"
-              className="flex-1 rounded-none border-0 bg-transparent shadow-none"
+              className="flex-1 rounded-none border-0 bg-transparent shadow-none pl-4"
             />
             <Button type="submit" aria-label="Buscar" className="w-11 shrink-0 rounded-none">
               <IconeBusca className="w-4 h-4" />

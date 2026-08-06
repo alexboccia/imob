@@ -201,13 +201,13 @@ export function TodosFiltrosModal({
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           <div className="flex gap-2">
-            <div className="flex flex-1 rounded-md overflow-hidden border bg-gray-50">
+            <div className="flex flex-1 rounded-full overflow-hidden border bg-gray-50">
               <Input
                 type="text"
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
                 placeholder="Código, bairro ou empreendimento"
-                className="flex-1 rounded-none border-0 bg-transparent shadow-none"
+                className="flex-1 rounded-none border-0 bg-transparent shadow-none pl-4"
               />
             </div>
             <Button onClick={buscar}>
