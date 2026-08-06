@@ -329,3 +329,359 @@ model ConfiguracaoContato {
 
   @@map("configuracao_contato")
 }
+
+// =====================================================================
+// Fundação multi-tenant (EasyMob) — ver /Users/alexboccia/.claude/plans/
+// glittery-noodling-harp.md para o plano completo.
+//
+// FASE 1: modelos novos, aditivos, ainda não usados pelo código da
+// aplicação. Os modelos acima (Usuario, Imovel, Pessoa, etc.) continuam
+// sendo a fonte de verdade até a Fase 2 (rename + corte de escopo).
+// =====================================================================
+
+// ---------- Tenancy & RBAC ----------
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MANAGER
+  BROKER
+  ASSISTANT
+}
+
+enum MemberStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  active       Boolean  @default(true)
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships OrganizationMember[]
+
+  @@map("users")
+}
+
+model OrganizationMember {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  userId         String
+  user           User             @relation(fields: [userId], references: [id])
+  role           OrganizationRole
+  status         MemberStatus     @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  notificationPreferences NotificationPreference[]
+
+  @@unique([organizationId, userId])
+  @@map("organization_members")
+}
+
+model Organization {
+  id             String   @id @default(cuid())
+  slug           String   @unique
+  name           String
+  customDomain   String?  @unique
+  planId         String
+  plan           Plan     @relation(fields: [planId], references: [id])
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  members       OrganizationMember[]
+  settings      OrganizationSettings?
+  subscriptions Subscription[]
+  invoices      Invoice[]
+  billingEvents BillingEvent[]
+  activityLogs  ActivityLog[]
+  notifications Notification[]
+  aiUsages      AiUsage[]
+
+  @@map("organizations")
+}
+
+model OrganizationSettings {
+  id                 String       @id @default(cuid())
+  organizationId     String       @unique
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  phone              String?
+  email              String?
+  whatsapp           String?
+  instagram          String?
+  facebook           String?
+  youtube            String?
+  linkedin           String?
+  propertyCodePrefix String?
+  logoUrl            String?
+  logoHeight         Int?
+  updatedAt          DateTime     @updatedAt
+
+  @@map("organization_settings")
+}
+
+// ---------- Permissões (RBAC preparado, não hardcoded) ----------
+
+model Permission {
+  id          String @id @default(cuid())
+  code        String @unique // "properties.create", "crm.view", "billing.manage"...
+  description String
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String           @id @default(cuid())
+  role         OrganizationRole
+  permissionId String
+  permission   Permission       @relation(fields: [permissionId], references: [id])
+
+  @@unique([role, permissionId])
+  @@map("role_permissions")
+}
+
+// ---------- Planos & Entitlements ----------
+
+model Module {
+  id          String  @id @default(cuid())
+  code        String  @unique // "core","crm","properties","ia","portais","whatsapp","email"...
+  name        String
+  description String?
+  active      Boolean @default(true)
+
+  planModules PlanModule[]
+
+  @@map("modules")
+}
+
+model Plan {
+  id                String  @id @default(cuid())
+  code              String  @unique // "BASICO" | "PRO" | "PREMIUM"
+  name              String
+  priceMonthlyCents Int?
+  active            Boolean @default(true)
+
+  organizations Organization[]
+  planModules   PlanModule[]
+  planLimits    PlanLimit[]
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model PlanModule {
+  id       String  @id @default(cuid())
+  planId   String
+  plan     Plan    @relation(fields: [planId], references: [id])
+  moduleId String
+  module   Module  @relation(fields: [moduleId], references: [id])
+  enabled  Boolean @default(true)
+  config   Json?
+
+  @@unique([planId, moduleId])
+  @@map("plan_modules")
+}
+
+model PlanLimit {
+  id      String @id @default(cuid())
+  planId  String
+  plan    Plan   @relation(fields: [planId], references: [id])
+  feature String // "PROPERTIES","USERS","PHOTOS","VIDEOS","IA_CREDITS"... string livre, não enum
+  limit   Int?   // null = ilimitado
+
+  @@unique([planId, feature])
+  @@map("plan_limits")
+}
+
+// ---------- Billing (modelagem, zero lógica de cobrança) ----------
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum InvoiceStatus {
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  organizationId     String
+  organization       Organization       @relation(fields: [organizationId], references: [id])
+  planId             String
+  plan               Plan               @relation(fields: [planId], references: [id])
+  status             SubscriptionStatus
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  externalId         String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  invoices Invoice[]
+
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  status         InvoiceStatus
+  amountCents    Int
+  currency       String        @default("BRL")
+  dueDate        DateTime?
+  paidAt         DateTime?
+  externalId     String?
+  createdAt      DateTime      @default(now())
+
+  payments Payment[]
+
+  @@map("invoices")
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice       @relation(fields: [invoiceId], references: [id])
+  amountCents Int
+  method      String?
+  status      PaymentStatus
+  externalId  String?
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+
+  @@map("payments")
+}
+
+model BillingEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  type           String
+  payload        Json?
+  createdAt      DateTime     @default(now())
+
+  @@map("billing_events")
+}
+
+// ---------- Auditoria ----------
+
+model ActivityLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String?
+  entity         String
+  entityId       String?
+  action         String
+  payload        Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, entity, entityId])
+  @@map("activity_logs")
+}
+
+// ---------- Notificações (arquitetura, sem envio implementado) ----------
+
+model NotificationChannel {
+  id   String @id @default(cuid())
+  code String @unique // "EMAIL","PUSH","WHATSAPP","SMS"
+  name String
+
+  preferences NotificationPreference[]
+
+  @@map("notification_channels")
+}
+
+model Notification {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String
+  type           String
+  title          String
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id                   String               @id @default(cuid())
+  organizationMemberId String
+  organizationMember   OrganizationMember   @relation(fields: [organizationMemberId], references: [id])
+  channelId            String
+  channel              NotificationChannel  @relation(fields: [channelId], references: [id])
+  notificationType     String
+  enabled              Boolean              @default(true)
+
+  @@unique([organizationMemberId, channelId, notificationType])
+  @@map("notification_preferences")
+}
+
+// ---------- Uso de IA ----------
+
+model AiUsage {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String?
+  provider       String
+  model          String
+  feature        String
+  tokensInput    Int
+  tokensOutput   Int
+  costCents      Int?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("ai_usages")
+}
+
+// ---------- Plataforma (super-admin — schema preparado, nada implementado) ----------
+
+enum PlatformRole {
+  PLATFORM_ADMIN
+  PLATFORM_SUPPORT
+}
+
+model PlatformOperator {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  role         PlatformRole
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("platform_operators")
+}

@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../src/generated/prisma/client";
+import { PrismaClient, OrganizationRole } from "../src/generated/prisma/client";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -292,6 +292,174 @@ async function main() {
   console.log(
     `Catálogo de tipos de imóvel pronto: ${tiposResidenciais.length} residenciais, ${tiposComerciais.length} comerciais.`
   );
+
+  await seedTenancy();
+}
+
+// Fundação multi-tenant (EasyMob) — catálogos globais da plataforma, não
+// pertencem a nenhuma organização. Ver /Users/alexboccia/.claude/plans/
+// glittery-noodling-harp.md para o plano completo.
+async function seedTenancy() {
+  const modulos = [
+    { code: "core", name: "Core" },
+    { code: "properties", name: "Imóveis" },
+    { code: "crm", name: "CRM" },
+    { code: "leads", name: "Leads" },
+    { code: "pipeline", name: "Funil" },
+    { code: "agenda", name: "Agenda" },
+    { code: "financeiro", name: "Financeiro" },
+    { code: "marketing", name: "Marketing" },
+    { code: "ia", name: "Inteligência Artificial" },
+    { code: "relatorios", name: "Relatórios" },
+    { code: "integracoes", name: "Integrações" },
+    { code: "billing", name: "Cobrança" },
+    { code: "email", name: "Envio de e-mail" },
+    { code: "portais", name: "Publicação em portais" },
+    { code: "whatsapp", name: "WhatsApp" },
+  ];
+
+  const modulosCriados = new Map<string, string>();
+  for (const modulo of modulos) {
+    const registro = await prisma.module.upsert({
+      where: { code: modulo.code },
+      update: { name: modulo.name },
+      create: modulo,
+    });
+    modulosCriados.set(modulo.code, registro.id);
+  }
+
+  console.log(`Catálogo de módulos pronto: ${modulos.length} módulos.`);
+
+  // Preço mensal em centavos — valor de exibição, sem cobrança automática.
+  const planos = [
+    {
+      code: "BASICO",
+      name: "Básico",
+      priceMonthlyCents: 9900,
+      modulosHabilitados: ["core", "properties"],
+      limites: { PROPERTIES: 20, USERS: 2, PHOTOS_PER_PROPERTY: 10 },
+    },
+    {
+      code: "PRO",
+      name: "Pro",
+      priceMonthlyCents: 24900,
+      modulosHabilitados: [
+        "core",
+        "properties",
+        "crm",
+        "leads",
+        "pipeline",
+        "agenda",
+        "relatorios",
+        "email",
+        "whatsapp",
+      ],
+      limites: { PROPERTIES: 100, USERS: 10, PHOTOS_PER_PROPERTY: 30 },
+    },
+    {
+      code: "PREMIUM",
+      name: "Premium",
+      priceMonthlyCents: 49900,
+      modulosHabilitados: modulos.map((m) => m.code),
+      limites: { PROPERTIES: null, USERS: null, PHOTOS_PER_PROPERTY: null },
+    },
+  ];
+
+  for (const planoConfig of planos) {
+    const plano = await prisma.plan.upsert({
+      where: { code: planoConfig.code },
+      update: { name: planoConfig.name, priceMonthlyCents: planoConfig.priceMonthlyCents },
+      create: {
+        code: planoConfig.code,
+        name: planoConfig.name,
+        priceMonthlyCents: planoConfig.priceMonthlyCents,
+      },
+    });
+
+    for (const modulo of modulos) {
+      const moduleId = modulosCriados.get(modulo.code)!;
+      await prisma.planModule.upsert({
+        where: { planId_moduleId: { planId: plano.id, moduleId } },
+        update: { enabled: planoConfig.modulosHabilitados.includes(modulo.code) },
+        create: {
+          planId: plano.id,
+          moduleId,
+          enabled: planoConfig.modulosHabilitados.includes(modulo.code),
+        },
+      });
+    }
+
+    for (const [feature, limit] of Object.entries(planoConfig.limites)) {
+      await prisma.planLimit.upsert({
+        where: { planId_feature: { planId: plano.id, feature } },
+        update: { limit },
+        create: { planId: plano.id, feature, limit },
+      });
+    }
+  }
+
+  console.log(`Catálogo de planos pronto: ${planos.map((p) => p.code).join(", ")}.`);
+
+  // Permissões — catálogo + mapeamento inicial por role (ajustável sem
+  // redeploy depois, via RolePermission).
+  const permissoes = [
+    { code: "properties.view", description: "Ver imóveis" },
+    { code: "properties.create", description: "Criar imóveis" },
+    { code: "properties.edit", description: "Editar imóveis" },
+    { code: "properties.delete", description: "Excluir imóveis" },
+    { code: "crm.view", description: "Ver clientes/leads" },
+    { code: "crm.manage", description: "Gerenciar clientes/leads e funil" },
+    { code: "users.manage", description: "Gerenciar usuários da organização" },
+    { code: "settings.manage", description: "Gerenciar configurações da organização" },
+    { code: "catalog.manage", description: "Gerenciar catálogos (características, tipos de imóvel)" },
+    { code: "maintenance.manage", description: "Acessar ferramentas de manutenção" },
+    { code: "billing.manage", description: "Gerenciar plano e cobrança" },
+    { code: "reports.view", description: "Ver relatórios" },
+  ];
+
+  const permissoesCriadas = new Map<string, string>();
+  for (const permissao of permissoes) {
+    const registro = await prisma.permission.upsert({
+      where: { code: permissao.code },
+      update: { description: permissao.description },
+      create: permissao,
+    });
+    permissoesCriadas.set(permissao.code, registro.id);
+  }
+
+  const todasPermissoes = permissoes.map((p) => p.code);
+  const mapaRolePermissao: Record<OrganizationRole, string[]> = {
+    OWNER: todasPermissoes,
+    ADMIN: todasPermissoes,
+    MANAGER: [
+      "properties.view",
+      "properties.create",
+      "properties.edit",
+      "properties.delete",
+      "crm.view",
+      "crm.manage",
+      "catalog.manage",
+      "reports.view",
+    ],
+    BROKER: ["properties.view", "properties.create", "properties.edit", "crm.view", "crm.manage"],
+    ASSISTANT: ["properties.view", "crm.view"],
+  };
+
+  for (const [role, codigos] of Object.entries(mapaRolePermissao) as [
+    OrganizationRole,
+    string[],
+  ][]) {
+    for (const codigo of codigos) {
+      const permissionId = permissoesCriadas.get(codigo)!;
+      await prisma.rolePermission.upsert({
+        where: { role_permissionId: { role, permissionId } },
+        update: {},
+        create: { role, permissionId },
+      });
+    }
+  }
+
+  console.log(`Catálogo de permissões pronto: ${permissoes.length} permissões, 5 roles mapeadas.`);
 }
 
 main()
