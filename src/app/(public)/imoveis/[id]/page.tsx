@@ -12,10 +12,13 @@ import {
 } from "@/lib/format";
 import { siteConfig } from "@/lib/site-config";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
+import { distanciaEmKm, formatarDistancia } from "@/lib/geo";
+import { paraImovelCard } from "@/lib/imovel-card";
 import { GaleriaFotos } from "@/components/GaleriaFotos";
 import { FormularioContato } from "@/components/FormularioContato";
 import { EvolucaoObra } from "@/components/EvolucaoObra";
 import { CarrosselPlantas } from "@/components/CarrosselPlantas";
+import { ImovelCard } from "@/components/ImovelCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -65,6 +68,59 @@ const buscarImovel = cache(async (id: string) => {
     },
   });
 });
+
+async function buscarImoveisProximos(imovel: {
+  id: string;
+  bairro: string;
+  cidade: string;
+  latitude: number | null;
+  longitude: number | null;
+}) {
+  const candidatos = await prisma.imovel.findMany({
+    where: {
+      status: "DISPONIVEL",
+      id: { not: imovel.id },
+      cidade: imovel.cidade,
+    },
+    include: {
+      midias: {
+        where: { tipo: "FOTO" },
+        orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }],
+        take: 5,
+      },
+    },
+    take: 30,
+  });
+
+  const comDistancia = candidatos.map((candidato) => ({
+    imovel: candidato,
+    distanciaKm:
+      imovel.latitude != null &&
+      imovel.longitude != null &&
+      candidato.latitude != null &&
+      candidato.longitude != null
+        ? distanciaEmKm(
+            imovel.latitude,
+            imovel.longitude,
+            candidato.latitude,
+            candidato.longitude
+          )
+        : null,
+  }));
+
+  comDistancia.sort((a, b) => {
+    if (a.distanciaKm != null && b.distanciaKm != null) {
+      return a.distanciaKm - b.distanciaKm;
+    }
+    if (a.distanciaKm != null) return -1;
+    if (b.distanciaKm != null) return 1;
+    const aMesmoBairro = a.imovel.bairro === imovel.bairro;
+    const bMesmoBairro = b.imovel.bairro === imovel.bairro;
+    return aMesmoBairro === bMesmoBairro ? 0 : aMesmoBairro ? -1 : 1;
+  });
+
+  return comDistancia.slice(0, 3);
+}
 
 export async function generateMetadata({
   params,
@@ -118,7 +174,10 @@ export default async function DetalheImovelPage({
   const videos = imovel.midias.filter((m) => m.tipo === "VIDEO");
   const plantas = imovel.midias.filter((m) => m.tipo === "PLANTA");
 
-  const configContato = await buscarConfiguracaoContato();
+  const [configContato, imoveisProximos] = await Promise.all([
+    buscarConfiguracaoContato(),
+    buscarImoveisProximos(imovel),
+  ]);
 
   const whatsappHref = `https://wa.me/${configContato.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
     `Olá! Tenho interesse no imóvel "${imovel.titulo}" (${imovel.bairro}, ${imovel.cidade}).`
@@ -387,6 +446,25 @@ export default async function DetalheImovelPage({
           </CardContent>
         </Card>
       </div>
+
+      {imoveisProximos.length > 0 && (
+        <section className="mt-16">
+          <h2 className="text-xl font-semibold mb-6">
+            Imóveis próximos que você pode gostar
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {imoveisProximos.map(({ imovel: proximo, distanciaKm }) => (
+              <ImovelCard
+                key={proximo.id}
+                imovel={paraImovelCard(proximo)}
+                distancia={
+                  distanciaKm != null ? formatarDistancia(distanciaKm) : undefined
+                }
+              />
+            ))}
+          </div>
+        </section>
+      )}
       </div>
     </>
   );

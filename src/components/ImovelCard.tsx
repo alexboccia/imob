@@ -33,9 +33,10 @@ type ImovelCardProps = {
     oportunidade: boolean;
     midias: { url: string }[];
   };
+  distancia?: string;
 };
 
-export function ImovelCard({ imovel }: ImovelCardProps) {
+export function ImovelCard({ imovel, distancia }: ImovelCardProps) {
   const [indice, setIndice] = useState(0);
   const fotos = imovel.midias;
   const swiperRef = useRef<SwiperType | null>(null);
@@ -91,6 +92,14 @@ export function ImovelCard({ imovel }: ImovelCardProps) {
               </Badge>
             ))}
           </div>
+        )}
+        {distancia && (
+          <Badge
+            variant="secondary"
+            className="absolute top-2 right-2 z-10 bg-white/90 text-gray-700"
+          >
+            {distancia}
+          </Badge>
         )}
 
         {fotos.length > 1 && (
