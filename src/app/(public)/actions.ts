@@ -4,11 +4,16 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { enviarEmailContato } from "@/lib/email";
+import { telefoneValido } from "@/lib/telefone";
 
 const contatoSchema = z.object({
   nome: z.string().min(2),
   email: z.string().email().optional().or(z.literal("")),
-  telefone: z.string().min(8).optional().or(z.literal("")),
+  telefone: z
+    .string()
+    .refine((v) => telefoneValido(v), "Telefone inválido")
+    .optional()
+    .or(z.literal("")),
   mensagem: z.string().min(5),
   imovelId: z.string().optional(),
 });
@@ -77,7 +82,7 @@ export async function enviarContato(_prevState: unknown, formData: FormData) {
 const anuncieSchema = z.object({
   nome: z.string().min(2),
   email: z.string().email().optional().or(z.literal("")),
-  telefone: z.string().min(8),
+  telefone: z.string().refine((v) => telefoneValido(v), "Telefone inválido"),
   descricaoImovel: z.string().min(5),
 });
 

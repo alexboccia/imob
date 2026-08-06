@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { CheckCircle2, AlertCircle } from "lucide-react";
 import { enviarContato } from "@/app/(public)/actions";
 import { Input } from "@/components/ui/input";
+import { CampoTelefone } from "@/components/CampoTelefone";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,7 @@ export function FormularioContato({
       </div>
       <div className="space-y-1">
         <Label htmlFor={`${idPrefixo}telefone`}>Telefone</Label>
-        <Input
+        <CampoTelefone
           id={`${idPrefixo}telefone`}
           name="telefone"
           placeholder="Telefone"

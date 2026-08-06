@@ -5,11 +5,22 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { telefoneValido } from "@/lib/telefone";
+
+type EstadoFormulario = { sucesso: boolean; erro?: string };
 
 const pessoaSchema = z.object({
-  nome: z.string().min(2),
-  email: z.string().optional(),
-  telefone: z.string().optional(),
+  nome: z.string().min(2, "Informe o nome."),
+  email: z
+    .string()
+    .email("E-mail inválido.")
+    .optional()
+    .or(z.literal("")),
+  telefone: z
+    .string()
+    .refine((v) => telefoneValido(v), "Telefone inválido.")
+    .optional()
+    .or(z.literal("")),
   papel: z.enum(["LEAD", "CLIENTE", "PROPRIETARIO"]),
   origem: z
     .enum(["SITE", "INDICACAO", "PORTAL", "INSTAGRAM", "WHATSAPP", "OUTRO"])
@@ -17,11 +28,21 @@ const pessoaSchema = z.object({
   observacoes: z.string().optional(),
 });
 
-export async function criarPessoa(formData: FormData) {
+export async function criarPessoa(
+  _prevState: EstadoFormulario,
+  formData: FormData
+): Promise<EstadoFormulario> {
   const session = await auth();
   if (!session) redirect("/admin/login");
 
-  const dados = pessoaSchema.parse(Object.fromEntries(formData.entries()));
+  const parsed = pessoaSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!parsed.success) {
+    return {
+      sucesso: false,
+      erro: parsed.error.issues[0]?.message ?? "Dados inválidos.",
+    };
+  }
+  const dados = parsed.data;
 
   await prisma.pessoa.create({
     data: {
