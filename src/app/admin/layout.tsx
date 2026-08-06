@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { auth, signOut } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/sonner";
 
 const NAV_LINKS = [
   { href: "/admin", label: "Dashboard" },
@@ -46,15 +48,20 @@ export default async function AdminLayout({
               await signOut({ redirectTo: "/admin/login" });
             }}
           >
-            <button type="submit" className="mt-2 text-red-600 hover:underline">
+            <Button
+              type="submit"
+              variant="link"
+              className="mt-2 h-auto p-0 text-destructive"
+            >
               Sair
-            </button>
+            </Button>
           </form>
         </div>
       </aside>
       <div className="flex-1">
         <main className="p-6">{children}</main>
       </div>
+      <Toaster />
     </div>
   );
 }

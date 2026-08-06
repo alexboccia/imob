@@ -4,6 +4,17 @@ import {
   atualizarEstagioFunil,
   registrarInteracao,
 } from "@/app/admin/clientes/actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const ESTAGIOS = [
   "NOVO_LEAD",
@@ -53,92 +64,108 @@ export default async function DetalheClientePage({
   return (
     <div className="max-w-3xl">
       <h1 className="text-2xl font-semibold">{pessoa.nome}</h1>
-      <p className="text-gray-500 mb-6">
+      <p className="text-muted-foreground mb-6">
         {pessoa.telefone ?? "sem telefone"} · {pessoa.email ?? "sem e-mail"} ·{" "}
         {pessoa.papeis.join(", ")}
       </p>
 
-      <div className="border rounded-lg p-4 mb-6">
-        <label className="block text-sm font-medium mb-2">
-          Estágio no funil
-        </label>
-        <form action={atualizarEstagioComId} className="flex gap-2">
-          <select
-            name="estagioFunil"
-            defaultValue={pessoa.estagioFunil}
-            className="border rounded-md px-3 py-2 text-sm"
-          >
-            {ESTAGIOS.map((estagio) => (
-              <option key={estagio} value={estagio}>
-                {ESTAGIO_LABEL[estagio]}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="border rounded-md px-4 py-2 text-sm font-medium"
-          >
-            Atualizar
-          </button>
-        </form>
-      </div>
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">
+            Estágio no funil
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={atualizarEstagioComId} className="flex gap-2">
+            <Select name="estagioFunil" defaultValue={pessoa.estagioFunil}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ESTAGIOS.map((estagio) => (
+                  <SelectItem key={estagio} value={estagio}>
+                    {ESTAGIO_LABEL[estagio]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button type="submit" variant="outline">
+              Atualizar
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       {pessoa.observacoes && (
-        <div className="border rounded-lg p-4 mb-6 text-sm">
-          <p className="font-medium mb-1">Observações</p>
-          <p className="text-gray-700 whitespace-pre-line">
-            {pessoa.observacoes}
-          </p>
-        </div>
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Observações</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-foreground whitespace-pre-line">
+              {pessoa.observacoes}
+            </p>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="border rounded-lg p-4 mb-6">
-        <p className="font-medium mb-2 text-sm">Registrar nova interação</p>
-        <form
-          action={registrarInteracaoComId}
-          className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-sm"
-        >
-          <select name="tipo" className="border rounded-md px-3 py-2">
-            {Object.entries(TIPO_INTERACAO_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <input
-            name="notas"
-            placeholder="Notas"
-            className="border rounded-md px-3 py-2 sm:col-span-2"
-          />
-          <button
-            type="submit"
-            className="bg-black text-white rounded-md px-4 py-2 hover:bg-gray-800 active:bg-gray-900 transition-colors"
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">
+            Registrar nova interação
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form
+            action={registrarInteracaoComId}
+            className="grid grid-cols-1 sm:grid-cols-4 gap-2"
           >
-            Registrar
-          </button>
-        </form>
-      </div>
+            <Select name="tipo" defaultValue="VISITA">
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(TIPO_INTERACAO_LABEL).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input name="notas" placeholder="Notas" className="sm:col-span-2" />
+            <Button type="submit">Registrar</Button>
+          </form>
+        </CardContent>
+      </Card>
 
       <div>
         <h2 className="font-semibold mb-3">Histórico de interações</h2>
         {pessoa.interacoes.length === 0 ? (
-          <p className="text-gray-500 text-sm">Nenhuma interação registrada.</p>
+          <p className="text-muted-foreground text-sm">
+            Nenhuma interação registrada.
+          </p>
         ) : (
           <ul className="space-y-3">
             {pessoa.interacoes.map((interacao) => (
-              <li key={interacao.id} className="border rounded-lg p-3 text-sm">
-                <p className="font-medium">
-                  {TIPO_INTERACAO_LABEL[interacao.tipo]} ·{" "}
-                  {interacao.dataHora.toLocaleString("pt-BR")}
-                </p>
-                {interacao.imovel && (
-                  <p className="text-gray-500">
-                    Imóvel: {interacao.imovel.titulo}
-                  </p>
-                )}
-                {interacao.notas && (
-                  <p className="text-gray-700 mt-1">{interacao.notas}</p>
-                )}
+              <li key={interacao.id}>
+                <Card>
+                  <CardContent className="text-sm">
+                    <p className="font-medium flex items-center gap-2">
+                      <Badge variant="secondary">
+                        {TIPO_INTERACAO_LABEL[interacao.tipo]}
+                      </Badge>
+                      {interacao.dataHora.toLocaleString("pt-BR")}
+                    </p>
+                    {interacao.imovel && (
+                      <p className="text-muted-foreground mt-1">
+                        Imóvel: {interacao.imovel.titulo}
+                      </p>
+                    )}
+                    {interacao.notas && (
+                      <p className="text-foreground mt-1">{interacao.notas}</p>
+                    )}
+                  </CardContent>
+                </Card>
               </li>
             ))}
           </ul>

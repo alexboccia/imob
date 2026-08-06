@@ -19,11 +19,13 @@ function formatarExibicao(digitos: string): string {
 }
 
 export function CampoMoeda({
+  id,
   name,
   defaultValue,
   placeholder = "0,00",
   className,
 }: {
+  id?: string;
   name: string;
   defaultValue?: string | number | null;
   placeholder?: string;
@@ -40,6 +42,7 @@ export function CampoMoeda({
         value={valorNumerico !== null ? valorNumerico.toFixed(2) : ""}
       />
       <input
+        id={id}
         type="text"
         inputMode="decimal"
         value={formatarExibicao(digitos)}

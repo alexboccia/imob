@@ -8,6 +8,19 @@ import { CamposEndereco } from "@/components/admin/CamposEndereco";
 import { SeletorCaracteristicas } from "@/components/admin/SeletorCaracteristicas";
 import { BotaoSalvarImovel } from "@/components/admin/BotaoSalvarImovel";
 import { CampoMoeda } from "@/components/admin/CampoMoeda";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type ImovelFormValues = {
   titulo: string;
@@ -85,103 +98,97 @@ export function ImovelForm({
 
   return (
     <form action={action} className="space-y-6 max-w-3xl">
-      <div>
-        <label className="block text-sm font-medium mb-1">Título</label>
-        <input
-          name="titulo"
-          defaultValue={v.titulo ?? ""}
-          required
-          className="w-full border rounded-md px-3 py-2"
-        />
+      <div className="space-y-1.5">
+        <Label htmlFor="titulo">Título</Label>
+        <Input id="titulo" name="titulo" defaultValue={v.titulo ?? ""} required />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-1">Descrição</label>
-        <textarea
+      <div className="space-y-1.5">
+        <Label htmlFor="descricao">Descrição</Label>
+        <Textarea
+          id="descricao"
           name="descricao"
           defaultValue={v.descricao ?? ""}
           rows={4}
-          className="w-full border rounded-md px-3 py-2"
         />
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Tipo</label>
-          <select
+        <div className="space-y-1.5">
+          <Label htmlFor="tipo">Tipo</Label>
+          <Select
             name="tipo"
             defaultValue={v.tipo ?? opcoesTiposResidencial[0] ?? ""}
-            className="w-full border rounded-md px-3 py-2"
           >
-            {tipoOrfao && <option value={tipoOrfao}>{tipoOrfao}</option>}
-            <optgroup label="Residencial">
-              {opcoesTiposResidencial.map((nome) => (
-                <option key={nome} value={nome}>
-                  {nome}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Comercial">
-              {opcoesTiposComercial.map((nome) => (
-                <option key={nome} value={nome}>
-                  {nome}
-                </option>
-              ))}
-            </optgroup>
-          </select>
+            <SelectTrigger id="tipo" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {tipoOrfao && <SelectItem value={tipoOrfao}>{tipoOrfao}</SelectItem>}
+              <SelectGroup>
+                <SelectLabel>Residencial</SelectLabel>
+                {opcoesTiposResidencial.map((nome) => (
+                  <SelectItem key={nome} value={nome}>
+                    {nome}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+              <SelectGroup>
+                <SelectLabel>Comercial</SelectLabel>
+                {opcoesTiposComercial.map((nome) => (
+                  <SelectItem key={nome} value={nome}>
+                    {nome}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Finalidade</label>
-          <select
-            name="finalidade"
-            defaultValue={v.finalidade ?? "VENDA"}
-            className="w-full border rounded-md px-3 py-2"
-          >
-            {Object.entries(FINALIDADE_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+        <div className="space-y-1.5">
+          <Label htmlFor="finalidade">Finalidade</Label>
+          <Select name="finalidade" defaultValue={v.finalidade ?? "VENDA"}>
+            <SelectTrigger id="finalidade" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(FINALIDADE_LABEL).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Status</label>
-          <select
-            name="status"
-            defaultValue={v.status ?? "RASCUNHO"}
-            className="w-full border rounded-md px-3 py-2"
-          >
-            {Object.entries(STATUS_IMOVEL_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+        <div className="space-y-1.5">
+          <Label htmlFor="status">Status</Label>
+          <Select name="status" defaultValue={v.status ?? "RASCUNHO"}>
+            <SelectTrigger id="status" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(STATUS_IMOVEL_LABEL).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Rótulos</label>
+        <Label className="mb-2">Rótulos</Label>
         <div className="flex flex-col gap-2">
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="lancamento"
-              defaultChecked={v.lancamento ?? false}
-            />
+            <Checkbox name="lancamento" defaultChecked={v.lancamento ?? false} />
             Lançamento
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="destaque"
-              defaultChecked={v.destaque ?? false}
-            />
+            <Checkbox name="destaque" defaultChecked={v.destaque ?? false} />
             Destaque
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               name="oportunidade"
               defaultChecked={v.oportunidade ?? false}
             />
@@ -191,49 +198,41 @@ export function ImovelForm({
       </div>
 
       <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          name="slideshow"
-          defaultChecked={v.slideshow ?? false}
-        />
+        <Checkbox name="slideshow" defaultChecked={v.slideshow ?? false} />
         Adicionar ao slideshow da página inicial
       </label>
 
-      <div>
-        <label className="block text-sm font-medium mb-1">
-          Construtora/Incorporadora
-        </label>
-        <input
+      <div className="space-y-1.5">
+        <Label htmlFor="construtora">Construtora/Incorporadora</Label>
+        <Input
+          id="construtora"
           name="construtora"
           defaultValue={v.construtora ?? ""}
           placeholder="Ex: Cyrela"
-          className="w-full border rounded-md px-3 py-2"
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Evolução da obra
-          </label>
-          <select
-            name="estagioObra"
-            defaultValue={v.estagioObra ?? ""}
-            className="w-full border rounded-md px-3 py-2"
-          >
-            <option value="">Não se aplica</option>
-            {Object.entries(ESTAGIO_OBRA_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+        <div className="space-y-1.5">
+          <Label htmlFor="estagioObra">Evolução da obra</Label>
+          <Select name="estagioObra" defaultValue={v.estagioObra ?? ""}>
+            <SelectTrigger id="estagioObra" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Não se aplica</SelectItem>
+              {Object.entries(ESTAGIO_OBRA_LABEL).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Previsão de entrega
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="previsaoEntrega">Previsão de entrega</Label>
+          <Input
+            id="previsaoEntrega"
             name="previsaoEntrega"
             type="month"
             defaultValue={
@@ -243,9 +242,8 @@ export function ImovelForm({
                   ).padStart(2, "0")}`
                 : ""
             }
-            className="w-full border rounded-md px-3 py-2"
           />
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground">
             Usada quando o estágio ainda não é &quot;Pronto para morar&quot;.
           </p>
         </div>
@@ -266,39 +264,37 @@ export function ImovelForm({
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Preço de venda (R$)
-          </label>
+        <div className="space-y-1.5">
+          <Label htmlFor="preco">Preço de venda (R$)</Label>
           <CampoMoeda
+            id="preco"
             name="preco"
             defaultValue={v.preco ? String(v.preco) : null}
             className="w-full border rounded-md px-3 py-2"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Preço de aluguel (R$/mês)
-          </label>
+        <div className="space-y-1.5">
+          <Label htmlFor="precoAluguel">Preço de aluguel (R$/mês)</Label>
           <CampoMoeda
+            id="precoAluguel"
             name="precoAluguel"
             defaultValue={v.precoAluguel ? String(v.precoAluguel) : null}
             className="w-full border rounded-md px-3 py-2"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Condomínio (R$)
-          </label>
+        <div className="space-y-1.5">
+          <Label htmlFor="precoCondominio">Condomínio (R$)</Label>
           <CampoMoeda
+            id="precoCondominio"
             name="precoCondominio"
             defaultValue={v.precoCondominio ? String(v.precoCondominio) : null}
             className="w-full border rounded-md px-3 py-2"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">IPTU (R$)</label>
+        <div className="space-y-1.5">
+          <Label htmlFor="precoIptu">IPTU (R$)</Label>
           <CampoMoeda
+            id="precoIptu"
             name="precoIptu"
             defaultValue={v.precoIptu ? String(v.precoIptu) : null}
             className="w-full border rounded-md px-3 py-2"
@@ -307,60 +303,60 @@ export function ImovelForm({
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Área total (m²)</label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="areaTotal">Área total (m²)</Label>
+          <Input
+            id="areaTotal"
             name="areaTotal"
             type="number"
             step="0.01"
             defaultValue={v.areaTotal ?? ""}
-            className="w-full border rounded-md px-3 py-2"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Área privativa (m²)</label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="areaPrivativa">Área privativa (m²)</Label>
+          <Input
+            id="areaPrivativa"
             name="areaPrivativa"
             type="number"
             step="0.01"
             defaultValue={v.areaPrivativa ?? ""}
-            className="w-full border rounded-md px-3 py-2"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Quartos</label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="quartos">Quartos</Label>
+          <Input
+            id="quartos"
             name="quartos"
             type="number"
             defaultValue={v.quartos ?? ""}
-            className="w-full border rounded-md px-3 py-2"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Suítes</label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="suites">Suítes</Label>
+          <Input
+            id="suites"
             name="suites"
             type="number"
             defaultValue={v.suites ?? ""}
-            className="w-full border rounded-md px-3 py-2"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Banheiros</label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="banheiros">Banheiros</Label>
+          <Input
+            id="banheiros"
             name="banheiros"
             type="number"
             defaultValue={v.banheiros ?? ""}
-            className="w-full border rounded-md px-3 py-2"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Vagas</label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="vagasGaragem">Vagas</Label>
+          <Input
+            id="vagasGaragem"
             name="vagasGaragem"
             type="number"
             defaultValue={v.vagasGaragem ?? ""}
-            className="w-full border rounded-md px-3 py-2"
           />
         </div>
       </div>

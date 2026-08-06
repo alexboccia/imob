@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { IconeFechar } from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export type MidiaItem = {
   tipo: "FOTO" | "VIDEO" | "PLANTA";
@@ -338,20 +340,16 @@ export function MediaUploader({
           Vídeos (link do YouTube/Vimeo não listado)
         </label>
         <div className="flex gap-2">
-          <input
+          <Input
             type="text"
             value={urlVideo}
             onChange={(e) => setUrlVideo(e.target.value)}
             placeholder="https://www.youtube.com/embed/..."
-            className="flex-1 border rounded-md px-3 py-2 text-sm"
+            className="flex-1"
           />
-          <button
-            type="button"
-            onClick={adicionarVideo}
-            className="border rounded-md px-3 py-2 text-sm"
-          >
+          <Button type="button" variant="outline" onClick={adicionarVideo}>
             Adicionar
-          </button>
+          </Button>
         </div>
         {videos.length > 0 && (
           <ul className="mt-2 space-y-1 text-sm">
@@ -360,13 +358,15 @@ export function MediaUploader({
               return (
                 <li key={video.url} className="flex items-center justify-between">
                   <span className="truncate">{video.url}</span>
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
+                    size="sm"
                     onClick={() => remover(index)}
-                    className="text-red-600 ml-2"
+                    className="text-destructive h-auto p-0 ml-2"
                   >
                     Remover
-                  </button>
+                  </Button>
                 </li>
               );
             })}

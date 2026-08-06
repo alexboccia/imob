@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { limparMidiasOrfas } from "@/app/admin/manutencao/actions";
+import { Button } from "@/components/ui/button";
 
 export function LimparMidiasButton() {
   const [resultado, setResultado] = useState<{
@@ -26,14 +27,9 @@ export function LimparMidiasButton() {
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={executar}
-        disabled={pendente}
-        className="bg-black text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-gray-800 active:bg-gray-900 transition-colors disabled:opacity-50"
-      >
+      <Button type="button" onClick={executar} disabled={pendente}>
         {pendente ? "Limpando..." : "Limpar fotos não utilizadas"}
-      </button>
+      </Button>
       {resultado && (
         <p className="text-sm text-gray-600 mt-3">
           {resultado.totalObjetos} arquivo(s) verificado(s) no storage,{" "}
