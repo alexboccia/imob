@@ -300,42 +300,133 @@ export function FiltrosImoveis({
           </div>
         </div>
 
-        <FiltroPill
-          label="Tipo"
-          valor={labelTipo}
-          aberto={aberto === "tipo"}
-          onClick={() => setAberto((a) => (a === "tipo" ? null : "tipo"))}
-        />
-        <FiltroPill
-          label="Negócio"
-          valor={labelNegocio}
-          aberto={aberto === "negocio"}
-          onClick={() => setAberto((a) => (a === "negocio" ? null : "negocio"))}
-        />
-        <FiltroPill
-          label="Localização"
-          valor={labelBairro}
-          aberto={aberto === "localizacao"}
-          onClick={() =>
-            setAberto((a) => (a === "localizacao" ? null : "localizacao"))
-          }
-        />
-        <FiltroPill
-          label="Valor"
-          valor={labelValor}
-          aberto={aberto === "valor"}
-          onClick={() => setAberto((a) => (a === "valor" ? null : "valor"))}
-        />
-        <FiltroPill
-          label="Características"
-          valor={labelCaract}
-          aberto={aberto === "caracteristicas"}
-          onClick={() =>
-            setAberto((a) =>
-              a === "caracteristicas" ? null : "caracteristicas"
-            )
-          }
-        />
+        <div className="relative">
+          <FiltroPill
+            label="Tipo"
+            valor={labelTipo}
+            aberto={aberto === "tipo"}
+            onClick={() => setAberto((a) => (a === "tipo" ? null : "tipo"))}
+          />
+          {aberto === "tipo" && (
+            <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg">
+              <PainelMultiSelecao
+                titulo="Tipo de imóvel"
+                placeholder="Buscar tipo..."
+                opcoes={tipos}
+                selecionados={tipo}
+                onToggle={(valor) => alternar(tipo, setTipo, valor)}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="relative">
+          <FiltroPill
+            label="Negócio"
+            valor={labelNegocio}
+            aberto={aberto === "negocio"}
+            onClick={() =>
+              setAberto((a) => (a === "negocio" ? null : "negocio"))
+            }
+          />
+          {aberto === "negocio" && (
+            <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg p-4 w-[280px]">
+              <div className="flex flex-col gap-2">
+                <Chip ativo={finalidade === ""} onClick={() => setFinalidade("")}>
+                  Comprar ou Alugar
+                </Chip>
+                {Object.entries(FINALIDADE_LABEL).map(([value, label]) => (
+                  <Chip
+                    key={value}
+                    ativo={finalidade === value}
+                    onClick={() => setFinalidade(value)}
+                  >
+                    {label}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="relative">
+          <FiltroPill
+            label="Localização"
+            valor={labelBairro}
+            aberto={aberto === "localizacao"}
+            onClick={() =>
+              setAberto((a) => (a === "localizacao" ? null : "localizacao"))
+            }
+          />
+          {aberto === "localizacao" && (
+            <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg">
+              <PainelMultiSelecao
+                titulo="Em qual localização?"
+                placeholder="Digite o bairro..."
+                opcoes={bairros}
+                selecionados={bairro}
+                onToggle={(valor) => alternar(bairro, setBairro, valor)}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="relative">
+          <FiltroPill
+            label="Valor"
+            valor={labelValor}
+            aberto={aberto === "valor"}
+            onClick={() => setAberto((a) => (a === "valor" ? null : "valor"))}
+          />
+          {aberto === "valor" && (
+            <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg p-4 w-[280px]">
+              <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
+                Faixa de preço
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={precoMin}
+                  onChange={(e) => setPrecoMin(e.target.value)}
+                  placeholder="Mínimo"
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                />
+                <span className="text-gray-400">–</span>
+                <input
+                  type="number"
+                  value={precoMax}
+                  onChange={(e) => setPrecoMax(e.target.value)}
+                  placeholder="Máximo"
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="relative">
+          <FiltroPill
+            label="Características"
+            valor={labelCaract}
+            aberto={aberto === "caracteristicas"}
+            onClick={() =>
+              setAberto((a) =>
+                a === "caracteristicas" ? null : "caracteristicas"
+              )
+            }
+          />
+          {aberto === "caracteristicas" && (
+            <div className="absolute z-30 top-full right-0 mt-2 bg-white border rounded-lg shadow-lg">
+              <PainelMultiSelecao
+                titulo="Características"
+                placeholder="Buscar característica..."
+                opcoes={caracteristicas}
+                selecionados={caract}
+                onToggle={(valor) => alternar(caract, setCaract, valor)}
+              />
+            </div>
+          )}
+        </div>
 
         <button
           type="button"
@@ -345,89 +436,6 @@ export function FiltrosImoveis({
           Buscar
         </button>
       </div>
-
-      {aberto === "tipo" && (
-        <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg">
-          <PainelMultiSelecao
-            titulo="Tipo de imóvel"
-            placeholder="Buscar tipo..."
-            opcoes={tipos}
-            selecionados={tipo}
-            onToggle={(valor) => alternar(tipo, setTipo, valor)}
-          />
-        </div>
-      )}
-
-      {aberto === "negocio" && (
-        <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg p-4 w-[280px]">
-          <div className="flex flex-col gap-2">
-            <Chip
-              ativo={finalidade === ""}
-              onClick={() => setFinalidade("")}
-            >
-              Comprar ou Alugar
-            </Chip>
-            {Object.entries(FINALIDADE_LABEL).map(([value, label]) => (
-              <Chip
-                key={value}
-                ativo={finalidade === value}
-                onClick={() => setFinalidade(value)}
-              >
-                {label}
-              </Chip>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {aberto === "localizacao" && (
-        <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg">
-          <PainelMultiSelecao
-            titulo="Em qual localização?"
-            placeholder="Digite o bairro..."
-            opcoes={bairros}
-            selecionados={bairro}
-            onToggle={(valor) => alternar(bairro, setBairro, valor)}
-          />
-        </div>
-      )}
-
-      {aberto === "valor" && (
-        <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg p-4 w-[280px]">
-          <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
-            Faixa de preço
-          </p>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={precoMin}
-              onChange={(e) => setPrecoMin(e.target.value)}
-              placeholder="Mínimo"
-              className="w-full border rounded-md px-3 py-2 text-sm"
-            />
-            <span className="text-gray-400">–</span>
-            <input
-              type="number"
-              value={precoMax}
-              onChange={(e) => setPrecoMax(e.target.value)}
-              placeholder="Máximo"
-              className="w-full border rounded-md px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
-      )}
-
-      {aberto === "caracteristicas" && (
-        <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg">
-          <PainelMultiSelecao
-            titulo="Características"
-            placeholder="Buscar característica..."
-            opcoes={caracteristicas}
-            selecionados={caract}
-            onToggle={(valor) => alternar(caract, setCaract, valor)}
-          />
-        </div>
-      )}
     </div>
   );
 }

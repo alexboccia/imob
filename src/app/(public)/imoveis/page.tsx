@@ -4,7 +4,6 @@ import { ImovelCard } from "@/components/ImovelCard";
 import { SeletorOrdenacao } from "@/components/SeletorOrdenacao";
 import { FiltrosImoveis } from "@/components/FiltrosImoveis";
 import { paraImovelCard } from "@/lib/imovel-card";
-import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
 import type { Prisma } from "@/generated/prisma/client";
 
 export const metadata: Metadata = {
@@ -95,7 +94,7 @@ export default async function ListaImoveisPage({
 
   const orderBy = ORDENACOES[params.ordenar ?? ""] ?? { publicadoEm: "desc" };
 
-  const [imoveis, bairrosDisponiveis, tiposDisponiveis, { opcoesImovel, opcoesCondominio }] =
+  const [imoveis, bairrosDisponiveis, tiposDisponiveis, imoveisComCaracteristicas] =
     await Promise.all([
       prisma.imovel.findMany({
         where,
@@ -120,12 +119,20 @@ export default async function ListaImoveisPage({
         distinct: ["tipo"],
         orderBy: { tipo: "asc" },
       }),
-      buscarOpcoesCaracteristicas(),
+      prisma.imovel.findMany({
+        where: { status: "DISPONIVEL" },
+        select: { caracteristicasImovel: true, caracteristicasCondominio: true },
+      }),
     ]);
 
-  const caracteristicasDisponiveis = Array.from(
-    new Set([...opcoesImovel, ...opcoesCondominio])
-  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const caracteristicasEmUso = new Set<string>();
+  for (const imovel of imoveisComCaracteristicas) {
+    imovel.caracteristicasImovel.forEach((c) => caracteristicasEmUso.add(c));
+    imovel.caracteristicasCondominio.forEach((c) => caracteristicasEmUso.add(c));
+  }
+  const caracteristicasDisponiveis = Array.from(caracteristicasEmUso).sort(
+    (a, b) => a.localeCompare(b, "pt-BR")
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
