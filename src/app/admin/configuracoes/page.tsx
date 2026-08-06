@@ -24,7 +24,7 @@ export default async function ConfiguracoesPage() {
             <CardTitle className="text-base">Identidade visual</CardTitle>
           </CardHeader>
           <CardContent>
-            <LogoUpload logoInicial={config.logo} />
+            <LogoUpload logoInicial={config.logo} alturaInicial={config.logoAltura} />
           </CardContent>
         </Card>
 

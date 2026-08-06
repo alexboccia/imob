@@ -3,10 +3,19 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LOGO_ALTURA_MIN, LOGO_ALTURA_MAX, LOGO_ALTURA_PADRAO } from "@/lib/logo";
 
-export function LogoUpload({ logoInicial }: { logoInicial: string | null }) {
+export function LogoUpload({
+  logoInicial,
+  alturaInicial,
+}: {
+  logoInicial: string | null;
+  alturaInicial: number;
+}) {
   const [logo, setLogo] = useState(logoInicial);
+  const [altura, setAltura] = useState(alturaInicial || LOGO_ALTURA_PADRAO);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -38,7 +47,10 @@ export function LogoUpload({ logoInicial }: { logoInicial: string | null }) {
       <Label>Logotipo</Label>
       <input type="hidden" name="logo" value={logo ?? ""} />
       <div className="flex items-center gap-4">
-        <div className="relative w-40 h-14 rounded-md overflow-hidden border bg-gray-50 shrink-0">
+        <div
+          className="relative rounded-md overflow-hidden border bg-gray-50 shrink-0"
+          style={{ height: altura, width: Math.min(altura * 4, 220) }}
+        >
           {logo ? (
             <Image
               src={logo}
@@ -74,14 +86,31 @@ export function LogoUpload({ logoInicial }: { logoInicial: string | null }) {
           {erro && <p className="text-xs text-destructive">{erro}</p>}
         </div>
       </div>
+
+      <div className="space-y-1.5 pt-1">
+        <Label htmlFor="logoAltura">Altura do logotipo no cabeçalho (px)</Label>
+        <Input
+          id="logoAltura"
+          name="logoAltura"
+          type="number"
+          min={LOGO_ALTURA_MIN}
+          max={LOGO_ALTURA_MAX}
+          value={altura}
+          onChange={(e) => {
+            const valor = Number(e.target.value);
+            if (Number.isFinite(valor)) setAltura(valor);
+          }}
+          className="w-24"
+        />
+      </div>
+
       <p className="text-xs text-muted-foreground">
-        Recomendado: PNG ou SVG com fundo transparente, formato retangular
-        (proporção até 3:1) e pelo menos 200px de altura. No cabeçalho do
-        site ele é exibido com altura fixa de 40px — imagens maiores são
-        reduzidas automaticamente e não afetam o layout, mas usar uma
-        imagem já nesse tamanho evita arquivos desnecessariamente pesados.
-        Se nenhum logotipo for enviado, o nome da imobiliária continua
-        sendo exibido em texto.
+        Recomendado: PNG ou SVG com fundo transparente e formato retangular
+        (proporção até 3:1). A imagem é redimensionada automaticamente para
+        caber na altura escolhida (entre {LOGO_ALTURA_MIN}px e{" "}
+        {LOGO_ALTURA_MAX}px) sem distorcer nem quebrar o layout. Se nenhum
+        logotipo for enviado, o nome da imobiliária continua sendo exibido
+        em texto.
       </p>
     </div>
   );

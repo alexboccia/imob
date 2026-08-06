@@ -12,13 +12,17 @@ type NavLink = { href: string; label: string };
 export function SiteHeader({
   nome,
   logo,
+  logoAltura,
   navLinks,
 }: {
   nome: string;
   logo?: string | null;
+  logoAltura?: number | null;
   navLinks: NavLink[];
 }) {
   const [aberto, setAberto] = useState(false);
+  const altura = logoAltura && logoAltura > 0 ? logoAltura : 40;
+  const largura = Math.min(altura * 4, 280);
 
   return (
     <header className="border-b sticky top-0 bg-background z-10">
@@ -29,12 +33,15 @@ export function SiteHeader({
           onClick={() => setAberto(false)}
         >
           {logo ? (
-            <span className="relative block h-10 w-40 shrink-0">
+            <span
+              className="relative block shrink-0"
+              style={{ height: altura, width: largura }}
+            >
               <Image
                 src={logo}
                 alt={nome}
                 fill
-                sizes="160px"
+                sizes={`${largura}px`}
                 className="object-contain object-left"
                 priority
               />

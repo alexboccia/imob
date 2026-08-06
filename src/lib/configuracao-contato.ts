@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { LOGO_ALTURA_PADRAO } from "@/lib/logo";
 
 export const ID_CONFIGURACAO_CONTATO = "singleton";
 
@@ -17,5 +18,6 @@ export async function buscarConfiguracaoContato() {
     linkedin: config?.linkedin ?? "",
     codigoImovelPrefixo: config?.codigoImovelPrefixo ?? "",
     logo: config?.logo ?? null,
+    logoAltura: config?.logoAltura ?? LOGO_ALTURA_PADRAO,
   };
 }

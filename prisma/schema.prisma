@@ -324,6 +324,7 @@ model ConfiguracaoContato {
   linkedin            String?
   codigoImovelPrefixo String?
   logo                String?
+  logoAltura          Int?
   atualizadoEm        DateTime @updatedAt
 
   @@map("configuracao_contato")
