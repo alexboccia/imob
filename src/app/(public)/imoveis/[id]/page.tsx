@@ -214,12 +214,6 @@ export default async function DetalheImovelPage({
         />
       </div>
 
-      {plantas.length > 0 && (
-        <div className="mt-6 border rounded-lg p-5">
-          <CarrosselPlantas plantas={plantas} />
-        </div>
-      )}
-
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mt-10">
         <div className="sm:col-span-2 space-y-6">
           <div>
@@ -275,6 +269,12 @@ export default async function DetalheImovelPage({
                   <ItemCaracteristicaCatalogo key={c} nome={c} />
                 ))}
               </ul>
+            </div>
+          )}
+
+          {plantas.length > 0 && (
+            <div>
+              <CarrosselPlantas plantas={plantas} />
             </div>
           )}
 
