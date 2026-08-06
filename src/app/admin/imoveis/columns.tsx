@@ -31,8 +31,10 @@ export type ImovelRow = {
 
 export const imovelColumns: DataTableColumn<ImovelRow>[] = [
   {
-    accessorKey: "codigo",
+    id: "codigo",
+    accessorFn: (row) => row.codigoFormatado,
     header: "Código",
+    sortFn: (rowA, rowB) => rowA.original.codigo - rowB.original.codigo,
     cell: ({ row }) => (
       <span className="text-muted-foreground">
         {row.original.codigoFormatado}

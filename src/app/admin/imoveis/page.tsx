@@ -49,7 +49,7 @@ export default async function AdminImoveisPage() {
       <DataTable
         columns={imovelColumns}
         data={linhas}
-        searchPlaceholder="Buscar por título, tipo, cidade..."
+        searchPlaceholder="Buscar por código, título, tipo, cidade..."
         emptyMessage="Nenhum imóvel cadastrado ainda."
       />
     </div>
