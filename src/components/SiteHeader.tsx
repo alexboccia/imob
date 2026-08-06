@@ -25,15 +25,16 @@ export function SiteHeader({
       <div className="mx-auto max-w-6xl flex items-center justify-between px-4 py-4">
         <Link
           href="/"
-          className="flex items-center max-w-[180px]"
+          className="flex items-center"
           onClick={() => setAberto(false)}
         >
           {logo ? (
-            <span className="relative block h-10 w-full">
+            <span className="relative block h-10 w-40 shrink-0">
               <Image
                 src={logo}
                 alt={nome}
                 fill
+                sizes="160px"
                 className="object-contain object-left"
                 priority
               />
