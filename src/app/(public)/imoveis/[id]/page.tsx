@@ -1,4 +1,5 @@
 import { cache } from "react";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
@@ -58,7 +59,10 @@ function ItemCaracteristicaCatalogo({ nome }: { nome: string }) {
 const buscarImovel = cache(async (id: string) => {
   return prisma.imovel.findUnique({
     where: { id },
-    include: { midias: { orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }] } },
+    include: {
+      midias: { orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }] },
+      corretorResponsavel: { select: { nome: true, foto: true } },
+    },
   });
 });
 
@@ -350,6 +354,28 @@ export default async function DetalheImovelPage({
             >
               Falar no WhatsApp
             </Button>
+            {imovel.corretorResponsavel && (
+              <div className="flex flex-col items-center text-center pt-3 border-t">
+                <div className="relative w-16 h-16 rounded-full overflow-hidden border bg-gray-100 shrink-0">
+                  {imovel.corretorResponsavel.foto ? (
+                    <Image
+                      src={imovel.corretorResponsavel.foto}
+                      alt={imovel.corretorResponsavel.nome}
+                      fill
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-black text-white font-semibold">
+                      {imovel.corretorResponsavel.nome.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <p className="mt-2 font-medium text-sm">
+                  {imovel.corretorResponsavel.nome}
+                </p>
+                <p className="text-xs text-gray-500">Corretor(a) responsável</p>
+              </div>
+            )}
             <div className="pt-3 border-t space-y-3">
               <p className="font-medium text-sm">Enviar mensagem</p>
               <FormularioContato

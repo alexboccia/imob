@@ -65,6 +65,7 @@ const atualizarUsuarioSchema = z.object({
   nome: z.string().min(2, "Informe o nome."),
   papel: z.enum(PAPEIS),
   ativo: booleanCheckbox,
+  foto: z.string().optional().or(z.literal("")),
   novaSenha: z
     .string()
     .min(6, "A nova senha precisa ter ao menos 6 caracteres.")
@@ -127,6 +128,7 @@ export async function atualizarUsuario(
       nome: dados.nome,
       papel: dados.papel,
       ativo: dados.ativo,
+      foto: dados.foto || null,
       ...(dados.novaSenha
         ? { senhaHash: await bcrypt.hash(dados.novaSenha, 10) }
         : {}),

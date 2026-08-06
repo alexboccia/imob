@@ -27,8 +27,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ erro: "Arquivo ausente" }, { status: 400 });
   }
 
+  const pastasPermitidas = ["imoveis", "usuarios"];
+  const pastaSolicitada = formData.get("pasta");
+  const pasta =
+    typeof pastaSolicitada === "string" && pastasPermitidas.includes(pastaSolicitada)
+      ? pastaSolicitada
+      : "imoveis";
+
   const extensao = arquivo.name.split(".").pop() ?? "bin";
-  const chave = `imoveis/${crypto.randomUUID()}.${extensao}`;
+  const chave = `${pasta}/${crypto.randomUUID()}.${extensao}`;
   const bytes = Buffer.from(await arquivo.arrayBuffer());
 
   try {

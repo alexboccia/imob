@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
+import { FotoCorretorUpload } from "@/components/admin/FotoCorretorUpload";
 
 const estadoInicial = { sucesso: false, erro: undefined as string | undefined };
 
@@ -28,6 +29,7 @@ export function EditarUsuarioForm({
     email: string;
     papel: string;
     ativo: boolean;
+    foto: string | null;
   };
   ehVoceMesmo: boolean;
 }) {
@@ -50,6 +52,8 @@ export function EditarUsuarioForm({
             <Label htmlFor="nome">Nome</Label>
             <Input id="nome" name="nome" defaultValue={usuario.nome} required />
           </div>
+
+          <FotoCorretorUpload fotoInicial={usuario.foto} />
 
           {ehVoceMesmo ? (
             <>

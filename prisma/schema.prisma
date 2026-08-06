@@ -100,6 +100,7 @@ model Usuario {
   senhaHash String
   papel     PapelUsuario @default(CORRETOR)
   ativo     Boolean      @default(true)
+  foto      String?
   criadoEm  DateTime     @default(now())
   atualizadoEm DateTime  @updatedAt
 
