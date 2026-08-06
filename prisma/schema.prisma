@@ -323,6 +323,7 @@ model ConfiguracaoContato {
   youtube             String?
   linkedin            String?
   codigoImovelPrefixo String?
+  logo                String?
   atualizadoEm        DateTime @updatedAt
 
   @@map("configuracao_contato")

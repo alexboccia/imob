@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { AnimatePresence, motion } from "motion/react";
 import { IconeMenu, IconeFechar } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -10,9 +11,11 @@ type NavLink = { href: string; label: string };
 
 export function SiteHeader({
   nome,
+  logo,
   navLinks,
 }: {
   nome: string;
+  logo?: string | null;
   navLinks: NavLink[];
 }) {
   const [aberto, setAberto] = useState(false);
@@ -22,10 +25,22 @@ export function SiteHeader({
       <div className="mx-auto max-w-6xl flex items-center justify-between px-4 py-4">
         <Link
           href="/"
-          className="font-semibold text-lg"
+          className="flex items-center max-w-[180px]"
           onClick={() => setAberto(false)}
         >
-          {nome}
+          {logo ? (
+            <span className="relative block h-10 w-full">
+              <Image
+                src={logo}
+                alt={nome}
+                fill
+                className="object-contain object-left"
+                priority
+              />
+            </span>
+          ) : (
+            <span className="font-semibold text-lg">{nome}</span>
+          )}
         </Link>
 
         <nav className="hidden sm:flex gap-6 text-sm">

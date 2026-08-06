@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ erro: "Arquivo ausente" }, { status: 400 });
   }
 
-  const pastasPermitidas = ["imoveis", "usuarios"];
+  const pastasPermitidas = ["imoveis", "usuarios", "site"];
   const pastaSolicitada = formData.get("pasta");
   const pasta =
     typeof pastaSolicitada === "string" && pastasPermitidas.includes(pastaSolicitada)

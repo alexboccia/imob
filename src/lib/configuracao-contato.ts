@@ -16,5 +16,6 @@ export async function buscarConfiguracaoContato() {
     youtube: config?.youtube ?? "",
     linkedin: config?.linkedin ?? "",
     codigoImovelPrefixo: config?.codigoImovelPrefixo ?? "",
+    logo: config?.logo ?? null,
   };
 }

@@ -24,6 +24,7 @@ export async function salvarConfiguracaoContato(formData: FormData) {
     youtube: valorOuNulo(formData, "youtube"),
     linkedin: valorOuNulo(formData, "linkedin"),
     codigoImovelPrefixo: valorOuNulo(formData, "codigoImovelPrefixo")?.toUpperCase() ?? null,
+    logo: valorOuNulo(formData, "logo"),
   };
 
   await prisma.configuracaoContato.upsert({

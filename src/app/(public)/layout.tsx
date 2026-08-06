@@ -18,7 +18,7 @@ export default async function PublicLayout({
 
   return (
     <>
-      <SiteHeader nome={siteConfig.nome} navLinks={NAV_LINKS} />
+      <SiteHeader nome={siteConfig.nome} logo={config.logo} navLinks={NAV_LINKS} />
       <main className="flex-1">{children}</main>
       <footer className="border-t mt-16">
         <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-gray-500">
