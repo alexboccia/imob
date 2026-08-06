@@ -1,7 +1,13 @@
 "use client";
 
 import { useActionState } from "react";
+import { CheckCircle2, AlertCircle } from "lucide-react";
 import { enviarAnuncioProprietario } from "@/app/(public)/actions";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const estadoInicial = { sucesso: false, erro: undefined as string | undefined };
 
@@ -14,44 +20,50 @@ export function AnuncieForm() {
   return (
     <>
       {estado.sucesso ? (
-        <p className="text-green-700 bg-green-50 border border-green-200 rounded-md px-4 py-3">
-          Recebemos seus dados! Em breve um corretor entrará em contato.
-        </p>
+        <Alert className="border-green-200 bg-green-50 text-green-700">
+          <CheckCircle2 />
+          <AlertDescription className="text-green-700">
+            Recebemos seus dados! Em breve um corretor entrará em contato.
+          </AlertDescription>
+        </Alert>
       ) : (
         <form action={formAction} className="space-y-4">
-          <input
-            name="nome"
-            placeholder="Nome"
-            required
-            className="w-full border rounded-md px-3 py-2"
-          />
-          <input
-            name="email"
-            type="email"
-            placeholder="E-mail"
-            className="w-full border rounded-md px-3 py-2"
-          />
-          <input
-            name="telefone"
-            placeholder="Telefone/WhatsApp"
-            required
-            className="w-full border rounded-md px-3 py-2"
-          />
-          <textarea
-            name="descricaoImovel"
-            placeholder="Descreva o imóvel (endereço, tipo, valor pretendido...)"
-            required
-            rows={5}
-            className="w-full border rounded-md px-3 py-2"
-          />
-          {estado.erro && <p className="text-red-600 text-sm">{estado.erro}</p>}
-          <button
-            type="submit"
-            disabled={pendente}
-            className="bg-black text-white rounded-md px-6 py-2 font-medium hover:bg-gray-800 active:bg-gray-900 transition-colors disabled:opacity-50"
-          >
+          <div className="space-y-1.5">
+            <Label htmlFor="nome">Nome</Label>
+            <Input id="nome" name="nome" placeholder="Nome" required />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="email">E-mail</Label>
+            <Input id="email" name="email" type="email" placeholder="E-mail" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="telefone">Telefone</Label>
+            <Input
+              id="telefone"
+              name="telefone"
+              placeholder="Telefone/WhatsApp"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="descricaoImovel">Descrição do imóvel</Label>
+            <Textarea
+              id="descricaoImovel"
+              name="descricaoImovel"
+              placeholder="Descreva o imóvel (endereço, tipo, valor pretendido...)"
+              required
+              rows={5}
+            />
+          </div>
+          {estado.erro && (
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertDescription>{estado.erro}</AlertDescription>
+            </Alert>
+          )}
+          <Button type="submit" size="lg" disabled={pendente}>
             {pendente ? "Enviando..." : "Enviar"}
-          </button>
+          </Button>
         </form>
       )}
     </>

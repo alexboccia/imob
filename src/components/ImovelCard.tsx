@@ -12,6 +12,8 @@ import {
   rotulosAtivos,
 } from "@/lib/format";
 import { IconeChevronEsquerdo, IconeChevronDireito } from "@/components/icons";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 type ImovelCardProps = {
   imovel: {
@@ -84,34 +86,35 @@ export function ImovelCard({ imovel }: ImovelCardProps) {
         {rotulosAtivos(imovel).length > 0 && (
           <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
             {rotulosAtivos(imovel).map((rotulo) => (
-              <span
-                key={rotulo.chave}
-                className={`text-xs px-2 py-1 rounded-full ${rotulo.className}`}
-              >
+              <Badge key={rotulo.chave} className={rotulo.className}>
                 {rotulo.label}
-              </span>
+              </Badge>
             ))}
           </div>
         )}
 
         {fotos.length > 1 && (
           <>
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="icon"
               onClick={anterior}
               aria-label="Foto anterior"
-              className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white/80 text-gray-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+              className="absolute left-1 top-1/2 -translate-y-1/2 z-10 size-7 rounded-full bg-white/80 opacity-0 group-hover:opacity-100 hover:bg-white"
             >
               <IconeChevronEsquerdo className="w-4 h-4" />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
+              size="icon"
               onClick={proxima}
               aria-label="Próxima foto"
-              className="absolute right-1 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white/80 text-gray-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+              className="absolute right-1 top-1/2 -translate-y-1/2 z-10 size-7 rounded-full bg-white/80 opacity-0 group-hover:opacity-100 hover:bg-white"
             >
               <IconeChevronDireito className="w-4 h-4" />
-            </button>
+            </Button>
             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex gap-1">
               {fotos.map((foto, i) => (
                 <span

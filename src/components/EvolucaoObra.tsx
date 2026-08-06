@@ -1,6 +1,11 @@
 import { Wrench, KeyRound, Info } from "lucide-react";
 import { ESTAGIO_OBRA_LABEL, formatarMesAno } from "@/lib/format";
 import { IconeCheck } from "@/components/icons";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 
 const ORDEM = ["NA_PLANTA", "EM_CONSTRUCAO", "PRONTO_PARA_MORAR"] as const;
 
@@ -18,15 +23,14 @@ export function EvolucaoObra({
     <div className="border rounded-lg p-5">
       <h2 className="font-semibold mb-6 flex items-center gap-1.5">
         Evolução da obra
-        <span className="relative inline-flex group">
-          <span className="w-4 h-4 rounded-full border border-gray-300 text-gray-400 flex items-center justify-center cursor-help">
+        <Tooltip>
+          <TooltipTrigger className="w-4 h-4 rounded-full border border-gray-300 text-gray-400 flex items-center justify-center cursor-help">
             <Info className="w-3 h-3" />
-          </span>
-          <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[240px] rounded-md bg-gray-900 px-3 py-2 text-xs font-normal text-white text-center opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-10">
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[240px] text-center font-normal">
             As datas abaixo são uma previsão de cada etapa da obra.
-            <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-2 h-2 bg-gray-900 rotate-45" />
-          </span>
-        </span>
+          </TooltipContent>
+        </Tooltip>
       </h2>
 
       <div className="flex items-start">

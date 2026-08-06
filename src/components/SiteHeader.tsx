@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion } from "motion/react";
 import { IconeMenu, IconeFechar } from "@/components/icons";
+import { Button } from "@/components/ui/button";
 
 type NavLink = { href: string; label: string };
 
@@ -34,35 +36,47 @@ export function SiteHeader({
           ))}
         </nav>
 
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={() => setAberto((a) => !a)}
           aria-label={aberto ? "Fechar menu" : "Abrir menu"}
           aria-expanded={aberto}
-          className="sm:hidden w-9 h-9 flex items-center justify-center shrink-0"
+          className="sm:hidden"
         >
           {aberto ? (
             <IconeFechar className="w-6 h-6" />
           ) : (
             <IconeMenu className="w-6 h-6" />
           )}
-        </button>
+        </Button>
       </div>
 
-      {aberto && (
-        <nav className="sm:hidden border-t px-4 py-3 flex flex-col gap-1 text-sm bg-background">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="py-2"
-              onClick={() => setAberto(false)}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-      )}
+      <AnimatePresence initial={false}>
+        {aberto && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="sm:hidden overflow-hidden border-t bg-background"
+          >
+            <nav className="px-4 py-3 flex flex-col gap-1 text-sm">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="py-2"
+                  onClick={() => setAberto(false)}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 }

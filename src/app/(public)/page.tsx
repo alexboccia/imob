@@ -4,6 +4,8 @@ import { ImovelCard } from "@/components/ImovelCard";
 import { SlideshowHome } from "@/components/SlideshowHome";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { IconeBusca, IconeFiltros } from "@/components/icons";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import type { Prisma } from "@/generated/prisma/client";
 
 function BuscaHome() {
@@ -19,27 +21,20 @@ function BuscaHome() {
           className="flex flex-1 flex-col sm:flex-row gap-3"
         >
           <div className="flex flex-1 rounded-md overflow-hidden border bg-gray-50">
-            <input
+            <Input
               type="text"
               name="busca"
               placeholder="Código, bairro ou empreendimento"
-              className="flex-1 bg-transparent px-4 py-2.5 text-sm outline-none placeholder:text-gray-400"
+              className="flex-1 rounded-none border-0 bg-transparent shadow-none"
             />
-            <button
-              type="submit"
-              aria-label="Buscar"
-              className="w-11 shrink-0 bg-black text-white flex items-center justify-center hover:bg-gray-800 active:bg-gray-900 transition-colors"
-            >
+            <Button type="submit" aria-label="Buscar" className="w-11 shrink-0 rounded-none">
               <IconeBusca className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
-          <Link
-            href="/imoveis"
-            className="flex items-center justify-center gap-2 border rounded-md px-4 py-2.5 text-sm font-medium hover:bg-gray-50 transition-colors shrink-0"
-          >
+          <Button variant="outline" size="lg" className="shrink-0" render={<Link href="/imoveis" />}>
             <IconeFiltros className="w-4 h-4" />
             Ver todos os filtros
-          </Link>
+          </Button>
         </form>
       </div>
     </section>
@@ -81,12 +76,13 @@ function SecaoImoveis({
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold">{titulo}</h2>
         {verTudoHref && (
-          <Link
-            href={verTudoHref}
-            className="text-sm font-medium hover:underline"
+          <Button
+            variant="link"
+            className="h-auto p-0"
+            render={<Link href={verTudoHref} />}
           >
             Ver tudo
-          </Link>
+          </Button>
         )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -154,12 +150,9 @@ export default async function HomePage() {
             <p className="mt-4 text-gray-600">
               Apartamentos, casas e imóveis comerciais selecionados para você.
             </p>
-            <Link
-              href="/imoveis"
-              className="inline-block mt-8 rounded-md bg-black text-white px-6 py-3 text-sm font-medium hover:bg-gray-800 active:bg-gray-900 transition-colors"
-            >
+            <Button size="lg" className="mt-8" render={<Link href="/imoveis" />}>
               Ver imóveis disponíveis
-            </Link>
+            </Button>
           </div>
         </section>
       )}

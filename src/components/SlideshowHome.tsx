@@ -9,6 +9,7 @@ import type { Swiper as SwiperType } from "swiper";
 import "swiper/css";
 import { FINALIDADE_LABEL, formatarPreco } from "@/lib/format";
 import { IconeChevronEsquerdo, IconeChevronDireito } from "@/components/icons";
+import { Button } from "@/components/ui/button";
 
 type ImovelSlide = {
   id: string;
@@ -86,12 +87,13 @@ export function SlideshowHome({ imoveis }: { imoveis: ImovelSlide[] }) {
                           ? `${formatarPreco(imovel.precoAluguel)}/mês`
                           : formatarPreco(null)}
                     </p>
-                    <Link
-                      href={`/imoveis/${imovel.id}`}
-                      className="inline-block mt-4 w-fit rounded-md bg-white text-gray-900 px-6 py-3 text-sm font-medium hover:bg-gray-100"
+                    <Button
+                      size="lg"
+                      className="mt-4 w-fit bg-white text-gray-900 hover:bg-gray-100"
+                      render={<Link href={`/imoveis/${imovel.id}`} />}
                     >
                       Ver detalhes
-                    </Link>
+                    </Button>
                   </div>
                 </div>
               </SwiperSlide>
@@ -101,22 +103,26 @@ export function SlideshowHome({ imoveis }: { imoveis: ImovelSlide[] }) {
 
         {imoveis.length > 1 && (
           <>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => swiperRef.current?.slidePrev()}
               aria-label="Slide anterior"
-              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center"
+              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 size-10 rounded-full bg-white/15 text-white hover:bg-white/25 hover:text-white"
             >
               <IconeChevronEsquerdo className="w-5 h-5" />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => swiperRef.current?.slideNext()}
               aria-label="Próximo slide"
-              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center"
+              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 size-10 rounded-full bg-white/15 text-white hover:bg-white/25 hover:text-white"
             >
               <IconeChevronDireito className="w-5 h-5" />
-            </button>
+            </Button>
 
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex gap-2">
               {imoveis.map((imovel, i) => (

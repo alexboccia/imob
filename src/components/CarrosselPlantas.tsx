@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Swiper, SwiperSlide } from "swiper/react";
 import type { Swiper as SwiperType } from "swiper";
 import "swiper/css";
+import { AnimatePresence, motion } from "motion/react";
 import {
   IconeChevronEsquerdo,
   IconeChevronDireito,
@@ -93,11 +94,16 @@ export function CarrosselPlantas({ plantas }: { plantas: Planta[] }) {
         )}
       </div>
 
-      {aberto && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
-          onClick={() => setAberto(false)}
-        >
+      <AnimatePresence>
+        {aberto && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+            onClick={() => setAberto(false)}
+          >
           <button
             type="button"
             onClick={() => setAberto(false)}
@@ -160,8 +166,9 @@ export function CarrosselPlantas({ plantas }: { plantas: Planta[] }) {
               <IconeChevronDireito className="w-5 h-5" />
             </button>
           )}
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

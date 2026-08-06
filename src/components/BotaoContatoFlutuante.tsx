@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from "motion/react";
 import {
   IconeMensagem,
   IconeTelefone,
@@ -8,6 +9,7 @@ import {
   IconeFechar,
 } from "@/components/icons";
 import { ModalContato } from "@/components/ModalContato";
+import { Button } from "@/components/ui/button";
 
 function OpcaoContato({
   icone,
@@ -60,23 +62,34 @@ export function BotaoContatoFlutuante({
 
   return (
     <div className="fixed bottom-6 right-6 z-40">
-      {/* Fica sempre montado (só escondido via CSS) para o ModalContato
-          dentro dele não perder o próprio estado quando o balão fecha. */}
-      <div
+      {/* Fica sempre montado (a animação do Motion só controla opacidade/
+          escala) para o ModalContato dentro dele não perder o próprio
+          estado quando o balão fecha. */}
+      <motion.div
+        initial={false}
+        animate={
+          aberto
+            ? { opacity: 1, scale: 1, y: 0 }
+            : { opacity: 0, scale: 0.95, y: 8 }
+        }
+        transition={{ duration: 0.15 }}
+        aria-hidden={!aberto}
         className={`absolute bottom-16 right-0 w-80 max-w-[calc(100vw-3rem)] bg-white border rounded-xl shadow-xl p-4 ${
-          aberto ? "" : "hidden"
+          aberto ? "" : "pointer-events-none"
         }`}
       >
         <div className="flex items-center justify-between mb-1">
           <h2 className="font-semibold text-lg">Contato</h2>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setAberto(false)}
             aria-label="Fechar"
             className="text-gray-400 hover:text-gray-700"
           >
             <IconeFechar className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
         <p className="text-sm text-gray-500 mb-4">
           Escolha como deseja entrar em contato
@@ -118,21 +131,22 @@ export function BotaoContatoFlutuante({
             </span>
           </ModalContato>
         </div>
-      </div>
+      </motion.div>
 
-      <button
+      <Button
         type="button"
+        size="icon"
         onClick={() => setAberto((a) => !a)}
         aria-label={aberto ? "Fechar contato" : "Abrir contato"}
         aria-expanded={aberto}
-        className="w-14 h-14 rounded-full bg-black text-white shadow-lg flex items-center justify-center hover:bg-gray-800 active:bg-gray-900 transition-colors"
+        className="size-14 rounded-full shadow-lg"
       >
         {aberto ? (
           <IconeFechar className="w-6 h-6" />
         ) : (
           <IconeMensagem className="w-6 h-6" />
         )}
-      </button>
+      </Button>
     </div>
   );
 }

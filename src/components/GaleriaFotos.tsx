@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { Swiper, SwiperSlide } from "swiper/react";
 import type { Swiper as SwiperType } from "swiper";
 import "swiper/css";
+import { AnimatePresence, motion } from "motion/react";
 import { ModalContato } from "@/components/ModalContato";
+import { Button } from "@/components/ui/button";
 import {
   IconeChevronEsquerdo,
   IconeChevronDireito,
@@ -187,14 +189,15 @@ export function GaleriaFotos({
           ))}
         </Swiper>
 
-        <button
+        <Button
           type="button"
+          variant="secondary"
           onClick={() => router.back()}
-          className="absolute top-4 left-4 z-20 flex items-center gap-1.5 bg-white/90 hover:bg-white text-gray-900 text-sm font-medium rounded-full pl-2.5 pr-4 py-2 shadow"
+          className="absolute top-4 left-4 z-20 rounded-full bg-white/90 pl-2.5 shadow hover:bg-white"
         >
           <IconeChevronEsquerdo className="w-4 h-4" />
           Voltar
-        </button>
+        </Button>
 
         <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
           <div className="relative">
@@ -287,11 +290,16 @@ export function GaleriaFotos({
         </div>
       )}
 
-      {aberto && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-md p-4 sm:p-8"
-          onClick={() => setAberto(false)}
-        >
+      <AnimatePresence>
+        {aberto && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-md p-4 sm:p-8"
+            onClick={() => setAberto(false)}
+          >
           <button
             type="button"
             onClick={() => setAberto(false)}
@@ -413,14 +421,14 @@ export function GaleriaFotos({
             className="flex items-center gap-2"
             onClick={(e) => e.stopPropagation()}
           >
-            <a
-              href={whatsappHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-green-600 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-green-700 active:bg-green-800 transition-colors"
+            <Button
+              className="bg-green-600 hover:bg-green-700 active:bg-green-800"
+              render={
+                <a href={whatsappHref} target="_blank" rel="noopener noreferrer" />
+              }
             >
               WhatsApp
-            </a>
+            </Button>
             <ModalContato
               imovelId={imovelId}
               mensagemPreenchida={mensagemContato}
@@ -430,8 +438,9 @@ export function GaleriaFotos({
               Enviar mensagem
             </ModalContato>
           </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

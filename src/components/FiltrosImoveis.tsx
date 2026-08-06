@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { normalizarTexto } from "@/lib/texto";
 import { FINALIDADE_LABEL, formatarPreco } from "@/lib/format";
+import { IconeFiltros, IconeChevronBaixo, IconeFechar } from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  IconeFiltros,
-  IconeChevronBaixo,
-  IconeFechar,
-} from "@/components/icons";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 type FiltrosIniciais = {
   tipo: string[];
@@ -92,12 +95,12 @@ function PainelMultiSelecao({
       <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
         {titulo}
       </p>
-      <input
+      <Input
         type="text"
         value={busca}
         onChange={(e) => setBusca(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-gray-50 border rounded-md px-3 py-2 text-sm mb-3 outline-none"
+        className="mb-3 bg-gray-50"
       />
 
       {opcoes.length === 0 ? (
@@ -168,25 +171,23 @@ function PainelMultiSelecao({
   );
 }
 
-function FiltroPill({
+function pillTriggerClassName(aberto: boolean) {
+  return `flex flex-col items-start text-left px-3 py-1.5 rounded-lg border shrink-0 ${
+    aberto ? "border-gray-900" : "border-gray-200 hover:border-gray-300"
+  }`;
+}
+
+function FiltroPillLabel({
   label,
   valor,
   aberto,
-  onClick,
 }: {
   label: string;
   valor: string;
   aberto: boolean;
-  onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex flex-col items-start text-left px-3 py-1.5 rounded-lg border shrink-0 ${
-        aberto ? "border-gray-900" : "border-gray-200 hover:border-gray-300"
-      }`}
-    >
+    <>
       <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
         {label}
         <IconeChevronBaixo
@@ -196,7 +197,7 @@ function FiltroPill({
       <span className="text-sm font-medium truncate max-w-[160px]">
         {valor}
       </span>
-    </button>
+    </>
   );
 }
 
@@ -224,7 +225,6 @@ export function FiltrosImoveis({
   paramsExtras: Record<string, string>;
 }) {
   const router = useRouter();
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const [tipo, setTipo] = useState(inicial.tipo);
   const [finalidade, setFinalidade] = useState(inicial.finalidade);
@@ -233,19 +233,6 @@ export function FiltrosImoveis({
   const [precoMax, setPrecoMax] = useState(inicial.precoMax);
   const [caract, setCaract] = useState(inicial.caracteristicas);
   const [aberto, setAberto] = useState<PainelAberto>(null);
-
-  useEffect(() => {
-    function aoClicarFora(evento: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(evento.target as Node)
-      ) {
-        setAberto(null);
-      }
-    }
-    document.addEventListener("mousedown", aoClicarFora);
-    return () => document.removeEventListener("mousedown", aoClicarFora);
-  }, []);
 
   function alternar(
     lista: string[],
@@ -257,6 +244,10 @@ export function FiltrosImoveis({
         ? lista.filter((v) => v !== valor)
         : [...lista, valor]
     );
+  }
+
+  function abrirPainel(painel: Exclude<PainelAberto, null>) {
+    return (aberto: boolean) => setAberto(aberto ? painel : null);
   }
 
   function buscar() {
@@ -288,7 +279,7 @@ export function FiltrosImoveis({
       : "Não definido";
 
   return (
-    <div ref={containerRef} className="relative border rounded-lg">
+    <div className="border rounded-lg">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2.5">
         <div className="flex items-center gap-2 pr-3 border-r shrink-0">
           <IconeFiltros className="w-5 h-5 text-gray-400 shrink-0" />
@@ -300,141 +291,131 @@ export function FiltrosImoveis({
           </div>
         </div>
 
-        <div className="relative">
-          <FiltroPill
-            label="Tipo"
-            valor={labelTipo}
-            aberto={aberto === "tipo"}
-            onClick={() => setAberto((a) => (a === "tipo" ? null : "tipo"))}
-          />
-          {aberto === "tipo" && (
-            <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg">
-              <PainelMultiSelecao
-                titulo="Tipo de imóvel"
-                placeholder="Buscar tipo..."
-                opcoes={tipos}
-                selecionados={tipo}
-                onToggle={(valor) => alternar(tipo, setTipo, valor)}
-              />
-            </div>
-          )}
-        </div>
+        <Popover open={aberto === "tipo"} onOpenChange={abrirPainel("tipo")}>
+          <PopoverTrigger className={pillTriggerClassName(aberto === "tipo")}>
+            <FiltroPillLabel label="Tipo" valor={labelTipo} aberto={aberto === "tipo"} />
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-auto p-0">
+            <PainelMultiSelecao
+              titulo="Tipo de imóvel"
+              placeholder="Buscar tipo..."
+              opcoes={tipos}
+              selecionados={tipo}
+              onToggle={(valor) => alternar(tipo, setTipo, valor)}
+            />
+          </PopoverContent>
+        </Popover>
 
-        <div className="relative">
-          <FiltroPill
-            label="Negócio"
-            valor={labelNegocio}
-            aberto={aberto === "negocio"}
-            onClick={() =>
-              setAberto((a) => (a === "negocio" ? null : "negocio"))
-            }
-          />
-          {aberto === "negocio" && (
-            <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg p-4 w-[280px]">
-              <div className="flex flex-col gap-2">
-                <Chip ativo={finalidade === ""} onClick={() => setFinalidade("")}>
-                  Comprar ou Alugar
-                </Chip>
-                {Object.entries(FINALIDADE_LABEL).map(([value, label]) => (
-                  <Chip
-                    key={value}
-                    ativo={finalidade === value}
-                    onClick={() => setFinalidade(value)}
-                  >
-                    {label}
-                  </Chip>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="relative">
-          <FiltroPill
-            label="Localização"
-            valor={labelBairro}
-            aberto={aberto === "localizacao"}
-            onClick={() =>
-              setAberto((a) => (a === "localizacao" ? null : "localizacao"))
-            }
-          />
-          {aberto === "localizacao" && (
-            <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg">
-              <PainelMultiSelecao
-                titulo="Em qual localização?"
-                placeholder="Digite o bairro..."
-                opcoes={bairros}
-                selecionados={bairro}
-                onToggle={(valor) => alternar(bairro, setBairro, valor)}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="relative">
-          <FiltroPill
-            label="Valor"
-            valor={labelValor}
-            aberto={aberto === "valor"}
-            onClick={() => setAberto((a) => (a === "valor" ? null : "valor"))}
-          />
-          {aberto === "valor" && (
-            <div className="absolute z-30 top-full left-0 mt-2 bg-white border rounded-lg shadow-lg p-4 w-[280px]">
-              <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
-                Faixa de preço
-              </p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={precoMin}
-                  onChange={(e) => setPrecoMin(e.target.value)}
-                  placeholder="Mínimo"
-                  className="w-full border rounded-md px-3 py-2 text-sm"
-                />
-                <span className="text-gray-400">–</span>
-                <input
-                  type="number"
-                  value={precoMax}
-                  onChange={(e) => setPrecoMax(e.target.value)}
-                  placeholder="Máximo"
-                  className="w-full border rounded-md px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="relative">
-          <FiltroPill
-            label="Características"
-            valor={labelCaract}
-            aberto={aberto === "caracteristicas"}
-            onClick={() =>
-              setAberto((a) =>
-                a === "caracteristicas" ? null : "caracteristicas"
-              )
-            }
-          />
-          {aberto === "caracteristicas" && (
-            <div className="absolute z-30 top-full right-0 mt-2 bg-white border rounded-lg shadow-lg">
-              <PainelMultiSelecao
-                titulo="Características"
-                placeholder="Buscar característica..."
-                opcoes={caracteristicas}
-                selecionados={caract}
-                onToggle={(valor) => alternar(caract, setCaract, valor)}
-              />
-            </div>
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={buscar}
-          className="ml-auto bg-black text-white rounded-md px-6 py-2.5 text-sm font-medium hover:bg-gray-800 active:bg-gray-900 transition-colors shrink-0"
+        <Popover
+          open={aberto === "negocio"}
+          onOpenChange={abrirPainel("negocio")}
         >
+          <PopoverTrigger className={pillTriggerClassName(aberto === "negocio")}>
+            <FiltroPillLabel
+              label="Negócio"
+              valor={labelNegocio}
+              aberto={aberto === "negocio"}
+            />
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[280px] p-4">
+            <div className="flex flex-col gap-2">
+              <Chip ativo={finalidade === ""} onClick={() => setFinalidade("")}>
+                Comprar ou Alugar
+              </Chip>
+              {Object.entries(FINALIDADE_LABEL).map(([value, label]) => (
+                <Chip
+                  key={value}
+                  ativo={finalidade === value}
+                  onClick={() => setFinalidade(value)}
+                >
+                  {label}
+                </Chip>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <Popover
+          open={aberto === "localizacao"}
+          onOpenChange={abrirPainel("localizacao")}
+        >
+          <PopoverTrigger
+            className={pillTriggerClassName(aberto === "localizacao")}
+          >
+            <FiltroPillLabel
+              label="Localização"
+              valor={labelBairro}
+              aberto={aberto === "localizacao"}
+            />
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-auto p-0">
+            <PainelMultiSelecao
+              titulo="Em qual localização?"
+              placeholder="Digite o bairro..."
+              opcoes={bairros}
+              selecionados={bairro}
+              onToggle={(valor) => alternar(bairro, setBairro, valor)}
+            />
+          </PopoverContent>
+        </Popover>
+
+        <Popover open={aberto === "valor"} onOpenChange={abrirPainel("valor")}>
+          <PopoverTrigger className={pillTriggerClassName(aberto === "valor")}>
+            <FiltroPillLabel
+              label="Valor"
+              valor={labelValor}
+              aberto={aberto === "valor"}
+            />
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[280px] p-4">
+            <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
+              Faixa de preço
+            </p>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={precoMin}
+                onChange={(e) => setPrecoMin(e.target.value)}
+                placeholder="Mínimo"
+              />
+              <span className="text-gray-400">–</span>
+              <Input
+                type="number"
+                value={precoMax}
+                onChange={(e) => setPrecoMax(e.target.value)}
+                placeholder="Máximo"
+              />
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <Popover
+          open={aberto === "caracteristicas"}
+          onOpenChange={abrirPainel("caracteristicas")}
+        >
+          <PopoverTrigger
+            className={pillTriggerClassName(aberto === "caracteristicas")}
+          >
+            <FiltroPillLabel
+              label="Características"
+              valor={labelCaract}
+              aberto={aberto === "caracteristicas"}
+            />
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-auto p-0">
+            <PainelMultiSelecao
+              titulo="Características"
+              placeholder="Buscar característica..."
+              opcoes={caracteristicas}
+              selecionados={caract}
+              onToggle={(valor) => alternar(caract, setCaract, valor)}
+            />
+          </PopoverContent>
+        </Popover>
+
+        <Button onClick={buscar} size="lg" className="ml-auto shrink-0">
           Buscar
-        </button>
+        </Button>
       </div>
     </div>
   );

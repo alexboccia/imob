@@ -15,6 +15,9 @@ import { GaleriaFotos } from "@/components/GaleriaFotos";
 import { ModalContato } from "@/components/ModalContato";
 import { EvolucaoObra } from "@/components/EvolucaoObra";
 import { CarrosselPlantas } from "@/components/CarrosselPlantas";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   IconeCheck,
   IconeArea,
@@ -164,17 +167,14 @@ export default async function DetalheImovelPage({
         {imovel.tipo} ·{" "}
         {FINALIDADE_LABEL[imovel.finalidade] ?? imovel.finalidade}
         {rotulosAtivos(imovel).map((rotulo) => (
-          <span
-            key={rotulo.chave}
-            className={`ml-2 text-xs px-2 py-1 rounded-full ${rotulo.className}`}
-          >
+          <Badge key={rotulo.chave} className={`ml-2 ${rotulo.className}`}>
             {rotulo.label}
-          </span>
+          </Badge>
         ))}
-        <span className="ml-2 text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-500">
+        <Badge variant="secondary" className="ml-2">
           # Cód:{" "}
           {formatarCodigoImovel(imovel.codigo, configContato.codigoImovelPrefixo)}
-        </span>
+        </Badge>
       </p>
       <h1 className="text-2xl font-semibold">{imovel.titulo}</h1>
       {imovel.construtora && (
@@ -304,59 +304,62 @@ export default async function DetalheImovelPage({
           </div>
         </div>
 
-        <aside className="border rounded-lg p-5 h-fit space-y-3">
-          {imovel.preco != null && (
-            <div>
-              {imovel.finalidade === "VENDA_E_ALUGUEL" && (
-                <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full mb-1">
-                  Para comprar
-                </span>
-              )}
-              <p className="text-2xl font-semibold">
-                {formatarPreco(imovel.preco)}
+        <Card className="h-fit">
+          <CardContent className="space-y-3">
+            {imovel.preco != null && (
+              <div>
+                {imovel.finalidade === "VENDA_E_ALUGUEL" && (
+                  <Badge variant="secondary" className="mb-1">
+                    Para comprar
+                  </Badge>
+                )}
+                <p className="text-2xl font-semibold">
+                  {formatarPreco(imovel.preco)}
+                </p>
+              </div>
+            )}
+            {imovel.precoAluguel != null && (
+              <div>
+                {imovel.finalidade === "VENDA_E_ALUGUEL" && (
+                  <Badge variant="secondary" className="mb-1">
+                    Para alugar
+                  </Badge>
+                )}
+                <p className="text-2xl font-semibold">
+                  {formatarPreco(imovel.precoAluguel)}
+                  <span className="text-sm font-normal text-gray-500">/mês</span>
+                </p>
+              </div>
+            )}
+            {imovel.precoCondominio && (
+              <p className="text-sm text-gray-500">
+                Condomínio: {formatarPreco(imovel.precoCondominio)}
               </p>
-            </div>
-          )}
-          {imovel.precoAluguel != null && (
-            <div>
-              {imovel.finalidade === "VENDA_E_ALUGUEL" && (
-                <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full mb-1">
-                  Para alugar
-                </span>
-              )}
-              <p className="text-2xl font-semibold">
-                {formatarPreco(imovel.precoAluguel)}
-                <span className="text-sm font-normal text-gray-500">/mês</span>
+            )}
+            {imovel.precoIptu && (
+              <p className="text-sm text-gray-500">
+                IPTU: {formatarPreco(imovel.precoIptu)}
               </p>
-            </div>
-          )}
-          {imovel.precoCondominio && (
-            <p className="text-sm text-gray-500">
-              Condomínio: {formatarPreco(imovel.precoCondominio)}
-            </p>
-          )}
-          {imovel.precoIptu && (
-            <p className="text-sm text-gray-500">
-              IPTU: {formatarPreco(imovel.precoIptu)}
-            </p>
-          )}
-          <a
-            href={whatsappHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block text-center bg-green-600 text-white rounded-md px-4 py-2 font-medium hover:bg-green-700 active:bg-green-800 transition-colors"
-          >
-            Falar no WhatsApp
-          </a>
-          <ModalContato
-            imovelId={imovel.id}
-            mensagemPreenchida={mensagemContato}
-            whatsappHref={whatsappHref}
-            className="block w-full text-center border rounded-md px-4 py-2 font-medium hover:bg-gray-50"
-          >
-            Enviar mensagem
-          </ModalContato>
-        </aside>
+            )}
+            <Button
+              size="lg"
+              className="w-full bg-green-600 hover:bg-green-700 active:bg-green-800"
+              render={
+                <a href={whatsappHref} target="_blank" rel="noopener noreferrer" />
+              }
+            >
+              Falar no WhatsApp
+            </Button>
+            <ModalContato
+              imovelId={imovel.id}
+              mensagemPreenchida={mensagemContato}
+              whatsappHref={whatsappHref}
+              className="block w-full text-center border rounded-md px-4 py-2 font-medium hover:bg-gray-50"
+            >
+              Enviar mensagem
+            </ModalContato>
+          </CardContent>
+        </Card>
       </div>
       </div>
     </>
