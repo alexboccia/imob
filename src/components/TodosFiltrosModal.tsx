@@ -190,7 +190,7 @@ export function TodosFiltrosModal({
         }
       >
         <IconeFiltros className="w-4 h-4" />
-        Ver todos os filtros
+        Exibir filtros
       </DialogTrigger>
       <DialogContent className="flex max-h-[85vh] w-full max-w-2xl flex-col gap-0 p-0 sm:max-w-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b">
