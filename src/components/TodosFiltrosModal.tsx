@@ -206,14 +206,9 @@ export function TodosFiltrosModal({
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Código, bairro ou empreendimento"
-              className="flex-1 rounded-full"
+              className="flex-1"
             />
-            <Button
-              onClick={buscar}
-              aria-label="Buscar"
-              size="icon"
-              className="rounded-full shrink-0"
-            >
+            <Button onClick={buscar} aria-label="Buscar" size="icon" className="shrink-0">
               <IconeBusca className="w-4 h-4" />
             </Button>
           </div>
