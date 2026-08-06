@@ -30,7 +30,7 @@ function BuscaHome({
           <form
             action="/imoveis"
             method="GET"
-            className="flex flex-1 rounded-full overflow-hidden border bg-gray-50"
+            className="flex flex-1 rounded-2xl overflow-hidden border bg-gray-50"
           >
             <Input
               type="text"
