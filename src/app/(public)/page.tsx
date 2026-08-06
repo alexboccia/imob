@@ -24,7 +24,7 @@ function BuscaHome({
     <section className="border-b">
       <div className="mx-auto max-w-6xl px-4 py-6 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
         <h2 className="text-xl font-semibold shrink-0">
-          Encontre seu próximo imóvel
+          Descubra o imóvel perfeito para você
         </h2>
         <div className="flex flex-1 flex-col sm:flex-row gap-3">
           <form
