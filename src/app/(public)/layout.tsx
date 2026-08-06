@@ -3,6 +3,10 @@ import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { SiteHeader } from "@/components/SiteHeader";
 import { BotaoContatoFlutuante } from "@/components/BotaoContatoFlutuante";
 
+// Garante que o cabeçalho (nome/logo/whatsapp) sempre reflita o que está em
+// Configurações, sem depender de revalidação de cache por instância.
+export const dynamic = "force-dynamic";
+
 const NAV_LINKS = [
   { href: "/imoveis?finalidade=VENDA", label: "Comprar" },
   { href: "/imoveis?finalidade=ALUGUEL", label: "Alugar" },
