@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { DataTable } from "@/components/admin/data-table/DataTable";
 import { clienteColumns, type ClienteRow } from "./columns";
-import { CadastroClienteDisclosure } from "@/components/admin/CadastroClienteDisclosure";
+import { FormDisclosure } from "@/components/admin/FormDisclosure";
 
 export default async function ClientesPage() {
   const pessoas = await prisma.pessoa.findMany({
@@ -33,7 +33,7 @@ export default async function ClientesPage() {
     <div>
       <h1 className="text-2xl font-semibold mb-6">Clientes</h1>
 
-      <CadastroClienteDisclosure>
+      <FormDisclosure titulo="+ Cadastrar novo cliente/lead">
         <form action={criarPessoa} className="grid grid-cols-2 gap-3 text-sm">
           <Input name="nome" placeholder="Nome" required />
           <Input name="telefone" placeholder="Telefone/WhatsApp" />
@@ -66,7 +66,7 @@ export default async function ClientesPage() {
             Cadastrar
           </Button>
         </form>
-      </CadastroClienteDisclosure>
+      </FormDisclosure>
 
       <DataTable
         columns={clienteColumns}

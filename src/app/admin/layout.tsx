@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { href: "/admin/clientes", label: "Clientes" },
   { href: "/admin/caracteristicas", label: "Características" },
   { href: "/admin/tipos-imovel", label: "Tipos de imóvel" },
+  { href: "/admin/usuarios", label: "Usuários" },
   { href: "/admin/configuracoes", label: "Configurações" },
   { href: "/admin/manutencao", label: "Manutenção" },
 ];

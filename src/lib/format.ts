@@ -73,6 +73,12 @@ export const STATUS_IMOVEL_LABEL: Record<string, string> = {
   INATIVO: "Inativo",
 };
 
+export const PAPEL_USUARIO_LABEL: Record<string, string> = {
+  ADMINISTRADOR: "Administrador",
+  GESTOR: "Gestor",
+  CORRETOR: "Corretor",
+};
+
 export const ROTULOS_IMOVEL = [
   { chave: "lancamento", label: "Lançamento", className: "bg-black text-white" },
   { chave: "destaque", label: "Destaque", className: "bg-blue-600 text-white" },

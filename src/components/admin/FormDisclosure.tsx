@@ -4,9 +4,11 @@ import { useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronRight } from "lucide-react";
 
-export function CadastroClienteDisclosure({
+export function FormDisclosure({
+  titulo,
   children,
 }: {
+  titulo: string;
   children: ReactNode;
 }) {
   const [aberto, setAberto] = useState(false);
@@ -25,7 +27,7 @@ export function CadastroClienteDisclosure({
         >
           <ChevronRight className="size-4" />
         </motion.span>
-        + Cadastrar novo cliente/lead
+        {titulo}
       </button>
       <AnimatePresence initial={false}>
         {aberto && (
