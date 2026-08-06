@@ -35,6 +35,7 @@ export default async function EditarUsuarioPage({
           papel: usuario.papel,
           ativo: usuario.ativo,
           foto: usuario.foto,
+          whatsapp: usuario.whatsapp,
         }}
         ehVoceMesmo={usuario.id === session.user.id}
       />

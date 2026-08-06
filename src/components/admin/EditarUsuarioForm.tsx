@@ -30,6 +30,7 @@ export function EditarUsuarioForm({
     papel: string;
     ativo: boolean;
     foto: string | null;
+    whatsapp: string | null;
   };
   ehVoceMesmo: boolean;
 }) {
@@ -54,6 +55,20 @@ export function EditarUsuarioForm({
           </div>
 
           <FotoCorretorUpload fotoInicial={usuario.foto} />
+
+          <div className="space-y-1.5">
+            <Label htmlFor="whatsapp">WhatsApp do corretor (opcional)</Label>
+            <Input
+              id="whatsapp"
+              name="whatsapp"
+              defaultValue={usuario.whatsapp ?? ""}
+              placeholder="5511999998888 (DDI + DDD + número, só dígitos)"
+            />
+            <p className="text-xs text-muted-foreground">
+              Se vazio, os botões de WhatsApp dos imóveis deste corretor usam
+              o número configurado em Configurações.
+            </p>
+          </div>
 
           {ehVoceMesmo ? (
             <>

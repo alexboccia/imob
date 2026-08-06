@@ -101,6 +101,7 @@ model Usuario {
   papel     PapelUsuario @default(CORRETOR)
   ativo     Boolean      @default(true)
   foto      String?
+  whatsapp  String?
   criadoEm  DateTime     @default(now())
   atualizadoEm DateTime  @updatedAt
 

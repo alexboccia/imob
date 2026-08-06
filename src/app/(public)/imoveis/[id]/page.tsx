@@ -64,7 +64,7 @@ const buscarImovel = cache(async (id: string) => {
     where: { id },
     include: {
       midias: { orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }] },
-      corretorResponsavel: { select: { nome: true, foto: true } },
+      corretorResponsavel: { select: { nome: true, foto: true, whatsapp: true } },
     },
   });
 });
@@ -179,7 +179,10 @@ export default async function DetalheImovelPage({
     buscarImoveisProximos(imovel),
   ]);
 
-  const whatsappHref = `https://wa.me/${configContato.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
+  const whatsappNumero =
+    imovel.corretorResponsavel?.whatsapp || configContato.whatsapp;
+
+  const whatsappHref = `https://wa.me/${whatsappNumero.replace(/\D/g, "")}?text=${encodeURIComponent(
     `Olá! Tenho interesse no imóvel "${imovel.titulo}" (${imovel.bairro}, ${imovel.cidade}).`
   )}`;
 
