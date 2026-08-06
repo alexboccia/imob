@@ -67,6 +67,11 @@ const atualizarUsuarioSchema = z.object({
   ativo: booleanCheckbox,
   foto: z.string().optional().or(z.literal("")),
   whatsapp: z.string().optional().or(z.literal("")),
+  emailContato: z
+    .string()
+    .email("E-mail de contato inválido.")
+    .optional()
+    .or(z.literal("")),
   novaSenha: z
     .string()
     .min(6, "A nova senha precisa ter ao menos 6 caracteres.")
@@ -131,6 +136,7 @@ export async function atualizarUsuario(
       ativo: dados.ativo,
       foto: dados.foto || null,
       whatsapp: dados.whatsapp ? dados.whatsapp.replace(/\D/g, "") : null,
+      emailContato: dados.emailContato || null,
       ...(dados.novaSenha
         ? { senhaHash: await bcrypt.hash(dados.novaSenha, 10) }
         : {}),

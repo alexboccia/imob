@@ -31,6 +31,7 @@ export function EditarUsuarioForm({
     ativo: boolean;
     foto: string | null;
     whatsapp: string | null;
+    emailContato: string | null;
   };
   ehVoceMesmo: boolean;
 }) {
@@ -67,6 +68,22 @@ export function EditarUsuarioForm({
             <p className="text-xs text-muted-foreground">
               Se vazio, os botões de WhatsApp dos imóveis deste corretor usam
               o número configurado em Configurações.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="emailContato">E-mail de contato (opcional)</Label>
+            <Input
+              id="emailContato"
+              name="emailContato"
+              type="email"
+              defaultValue={usuario.emailContato ?? ""}
+              placeholder="corretor@suaimobiliaria.com.br"
+            />
+            <p className="text-xs text-muted-foreground">
+              Para onde vão as mensagens do formulário de contato dos imóveis
+              deste corretor. Se vazio, usa o e-mail configurado em
+              Configurações.
             </p>
           </div>
 

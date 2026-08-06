@@ -2,6 +2,8 @@
 
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
+import { enviarEmailContato } from "@/lib/email";
 
 const contatoSchema = z.object({
   nome: z.string().min(2),
@@ -44,6 +46,30 @@ export async function enviarContato(_prevState: unknown, formData: FormData) {
       notas: mensagem,
     },
   });
+
+  const imovel = imovelId
+    ? await prisma.imovel.findUnique({
+        where: { id: imovelId },
+        select: {
+          titulo: true,
+          corretorResponsavel: { select: { emailContato: true } },
+        },
+      })
+    : null;
+
+  const configContato = await buscarConfiguracaoContato();
+  const emailDestino = imovel?.corretorResponsavel?.emailContato || configContato.email;
+
+  if (emailDestino) {
+    await enviarEmailContato({
+      para: emailDestino,
+      nomeLead: nome,
+      emailLead: email || null,
+      telefoneLead: telefone || null,
+      mensagem,
+      imovelTitulo: imovel?.titulo,
+    });
+  }
 
   return { sucesso: true };
 }

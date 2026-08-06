@@ -102,6 +102,7 @@ model Usuario {
   ativo     Boolean      @default(true)
   foto      String?
   whatsapp  String?
+  emailContato String?
   criadoEm  DateTime     @default(now())
   atualizadoEm DateTime  @updatedAt
 
