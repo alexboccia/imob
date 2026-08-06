@@ -27,18 +27,19 @@ function BuscaHome({
           Descubra o imóvel perfeito para você
         </h2>
         <div className="flex flex-1 flex-col sm:flex-row gap-3">
-          <form
-            action="/imoveis"
-            method="GET"
-            className="flex flex-1 rounded-2xl overflow-hidden border bg-gray-50"
-          >
+          <form action="/imoveis" method="GET" className="flex flex-1 gap-2">
             <Input
               type="text"
               name="busca"
               placeholder="Código, bairro ou empreendimento"
-              className="flex-1 rounded-none border-0 bg-transparent shadow-none pl-4"
+              className="flex-1 rounded-full"
             />
-            <Button type="submit" aria-label="Buscar" className="w-11 shrink-0 rounded-none">
+            <Button
+              type="submit"
+              aria-label="Buscar"
+              size="icon"
+              className="rounded-full shrink-0"
+            >
               <IconeBusca className="w-4 h-4" />
             </Button>
           </form>
