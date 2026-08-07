@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import { telefoneValido } from "@/lib/telefone";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
+import { hasModule } from "@/lib/entitlements";
 
 type EstadoFormulario = { sucesso: boolean; erro?: string };
 
@@ -47,6 +48,10 @@ export async function criarPessoa(
   const dados = parsed.data;
 
   const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return { sucesso: false, erro: "CRM não incluído no seu plano." };
+  }
+
   await withOrganization(organizationId, async () => {
     await prisma.person.create({
       data: {
@@ -89,6 +94,8 @@ export async function atualizarEstagioFunil(
   );
 
   const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) return;
+
   await withOrganization(organizationId, async () => {
     await prisma.person.update({
       where: { id: pessoaId, organizationId },
@@ -111,6 +118,8 @@ export async function registrarInteracao(pessoaId: string, formData: FormData) {
   const dados = interacaoSchema.parse(Object.fromEntries(formData.entries()));
 
   const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) return;
+
   await withOrganization(organizationId, async () => {
     await prisma.interaction.create({
       data: {

@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
+import { verificarLimiteUsuarios, LimiteDoPlanoError } from "@/lib/entitlements";
 
 const ROLES = ["OWNER", "ADMIN", "MANAGER", "BROKER", "ASSISTANT"] as const;
 const PAPEIS_COM_GESTAO_DE_USUARIOS = new Set(["OWNER", "ADMIN"]);
@@ -49,6 +50,15 @@ export async function criarUsuario(
   }
 
   const organizationId = await requireOrganizationId();
+  try {
+    await verificarLimiteUsuarios(organizationId);
+  } catch (erro) {
+    if (erro instanceof LimiteDoPlanoError) {
+      return { sucesso: false, erro: erro.message };
+    }
+    throw erro;
+  }
+
   const senhaHash = await bcrypt.hash(dados.senha, 10);
 
   const user = await prisma.user.create({

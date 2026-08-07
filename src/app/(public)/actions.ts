@@ -7,6 +7,7 @@ import { enviarEmailContato } from "@/lib/email";
 import { telefoneValido } from "@/lib/telefone";
 import { getPublicOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
+import { hasModule } from "@/lib/entitlements";
 
 const contatoSchema = z.object({
   nome: z.string().min(2),
@@ -76,7 +77,7 @@ export async function enviarContato(_prevState: unknown, formData: FormData) {
 
   const emailDestino = imovel?.responsibleMember?.contactEmail || configContato.email;
 
-  if (emailDestino) {
+  if (emailDestino && (await hasModule(organizationId, "email"))) {
     await enviarEmailContato({
       para: emailDestino,
       nomeLead: nome,

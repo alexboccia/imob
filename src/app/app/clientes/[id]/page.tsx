@@ -6,10 +6,12 @@ import {
 } from "@/app/app/clientes/actions";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
+import { hasModule } from "@/lib/entitlements";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import {
   Select,
   SelectContent,
@@ -51,6 +53,17 @@ export default async function DetalheClientePage({
 }) {
   const { id } = await params;
   const organizationId = await requireOrganizationId();
+
+  if (!(await hasModule(organizationId, "crm"))) {
+    return (
+      <div className="max-w-3xl">
+        <ModuloBloqueado
+          titulo="CRM não incluído no seu plano"
+          descricao="Gerencie leads, clientes e o funil de vendas em um só lugar."
+        />
+      </div>
+    );
+  }
 
   const pessoa = await withOrganization(organizationId, () =>
     prisma.person.findUnique({

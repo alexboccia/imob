@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
+import { verificarLimiteImoveis } from "@/lib/entitlements";
 
 const numeroOpcional = z.preprocess(
   (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
@@ -112,6 +113,8 @@ export async function criarImovel(formData: FormData) {
   const midias = parseMidias(dados.midiasJson);
 
   const organizationId = await requireOrganizationId();
+  await verificarLimiteImoveis(organizationId);
+
   const imovel = await withOrganization(organizationId, () =>
     prisma.property.create({
       data: {

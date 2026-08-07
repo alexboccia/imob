@@ -2,12 +2,14 @@ import Link from "next/link";
 import { auth, signOut } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
+import { Badge } from "@/components/ui/badge";
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
+import { hasModule } from "@/lib/entitlements";
 
 const NAV_LINKS = [
   { href: "/app", label: "Dashboard" },
   { href: "/app/imoveis", label: "Imóveis" },
-  { href: "/app/clientes", label: "Clientes" },
+  { href: "/app/clientes", label: "Clientes", modulo: "crm" },
   { href: "/app/caracteristicas", label: "Características" },
   { href: "/app/tipos-imovel", label: "Tipos de imóvel" },
   { href: "/app/usuarios", label: "Usuários" },
@@ -26,20 +28,47 @@ export default async function AdminLayout({
     return children;
   }
 
+  const organizationId = session.user.organizationId;
+  const modulosHabilitados = new Map<string, boolean>();
+  if (organizationId) {
+    for (const link of NAV_LINKS) {
+      if (link.modulo && !modulosHabilitados.has(link.modulo)) {
+        modulosHabilitados.set(link.modulo, await hasModule(organizationId, link.modulo));
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen flex">
       <aside className="w-56 border-r bg-gray-50 flex flex-col">
         <div className="px-4 py-4 font-semibold border-b">Painel</div>
         <nav className="flex-1 px-2 py-4 space-y-1 text-sm">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="block rounded-md px-3 py-2 hover:bg-gray-100"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {NAV_LINKS.map((link) => {
+            const liberado = !link.modulo || modulosHabilitados.get(link.modulo);
+            if (!liberado) {
+              return (
+                <span
+                  key={link.href}
+                  title="Disponível em planos superiores"
+                  className="flex items-center justify-between rounded-md px-3 py-2 text-gray-400 cursor-not-allowed"
+                >
+                  {link.label}
+                  <Badge variant="secondary" className="text-[10px]">
+                    Pro
+                  </Badge>
+                </span>
+              );
+            }
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="block rounded-md px-3 py-2 hover:bg-gray-100"
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
         <div className="px-4 py-4 border-t text-sm">
           <p className="font-medium truncate">{session.user?.name}</p>
