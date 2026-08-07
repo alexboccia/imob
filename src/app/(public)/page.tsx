@@ -5,6 +5,8 @@ import { SlideshowHome } from "@/components/SlideshowHome";
 import { TodosFiltrosModal } from "@/components/TodosFiltrosModal";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
+import { getPublicOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 import { IconeBusca } from "@/components/icons";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -50,18 +52,19 @@ function BuscaHome({
 }
 
 function buscarImoveis(
-  where: Prisma.ImovelWhereInput,
+  organizationId: string,
+  where: Prisma.PropertyWhereInput,
   take: number,
-  orderBy: Prisma.ImovelOrderByWithRelationInput = { publicadoEm: "desc" }
+  orderBy: Prisma.PropertyOrderByWithRelationInput = { publishedAt: "desc" }
 ) {
-  return prisma.imovel.findMany({
-    where,
+  return prisma.property.findMany({
+    where: { ...where, organizationId },
     orderBy,
     take,
     include: {
-      midias: {
-        where: { tipo: "FOTO" },
-        orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }],
+      media: {
+        where: { type: "PHOTO" },
+        orderBy: [{ isCover: "desc" }, { order: "asc" }],
         take: 5,
       },
     },
@@ -103,35 +106,43 @@ function SecaoImoveis({
 }
 
 export default async function HomePage() {
-  const ultimosCadastrados = { criadoEm: "desc" } as const;
+  const organizationId = await getPublicOrganizationId();
+  const ultimosCadastrados = { createdAt: "desc" } as const;
 
   const [imoveisSlideshow, lancamentos, destaques, oportunidades, dadosFiltros] =
-    await Promise.all([
-      buscarImoveis({ status: "DISPONIVEL", slideshow: true }, 10),
-      buscarImoveis(
-        { status: "DISPONIVEL", lancamento: true },
-        3,
-        ultimosCadastrados
-      ),
-      buscarImoveis(
-        { status: "DISPONIVEL", destaque: true },
-        3,
-        ultimosCadastrados
-      ),
-      buscarImoveis(
-        { status: "DISPONIVEL", oportunidade: true },
-        3,
-        ultimosCadastrados
-      ),
-      buscarDadosFiltros(),
-    ]);
+    await withOrganization(organizationId, () =>
+      Promise.all([
+        buscarImoveis(organizationId, { status: "AVAILABLE", hasSlideshow: true }, 10),
+        buscarImoveis(
+          organizationId,
+          { status: "AVAILABLE", isLaunch: true },
+          3,
+          ultimosCadastrados
+        ),
+        buscarImoveis(
+          organizationId,
+          { status: "AVAILABLE", isFeatured: true },
+          3,
+          ultimosCadastrados
+        ),
+        buscarImoveis(
+          organizationId,
+          { status: "AVAILABLE", isOpportunity: true },
+          3,
+          ultimosCadastrados
+        ),
+        buscarDadosFiltros(organizationId),
+      ])
+    );
 
   const temRotulos =
     lancamentos.length > 0 || destaques.length > 0 || oportunidades.length > 0;
 
   const geral = temRotulos
     ? []
-    : await buscarImoveis({ status: "DISPONIVEL" }, 6);
+    : await withOrganization(organizationId, () =>
+        buscarImoveis(organizationId, { status: "AVAILABLE" }, 6)
+      );
 
   return (
     <div>
@@ -139,15 +150,15 @@ export default async function HomePage() {
         <SlideshowHome
           imoveis={imoveisSlideshow.map((imovel) => ({
             id: imovel.id,
-            titulo: imovel.titulo,
-            tipo: imovel.tipo,
-            finalidade: imovel.finalidade,
-            bairro: imovel.bairro,
-            cidade: imovel.cidade,
-            estado: imovel.estado,
-            preco: imovel.preco?.toString() ?? null,
-            precoAluguel: imovel.precoAluguel?.toString() ?? null,
-            midias: imovel.midias.map((m) => ({ url: m.url })),
+            titulo: imovel.title,
+            tipo: imovel.type,
+            finalidade: imovel.purpose,
+            bairro: imovel.neighborhood,
+            cidade: imovel.city,
+            estado: imovel.state,
+            preco: imovel.price?.toString() ?? null,
+            precoAluguel: imovel.rentPrice?.toString() ?? null,
+            midias: imovel.media.map((m) => ({ url: m.url })),
           }))}
         />
       ) : (

@@ -10,13 +10,17 @@ export const authConfig = {
   callbacks: {
     jwt: ({ token, user }) => {
       if (user) {
-        token.papel = user.papel;
+        token.organizationId = user.organizationId;
+        token.organizationMemberId = user.organizationMemberId;
+        token.role = user.role;
       }
       return token;
     },
     session: ({ session, token }) => {
       session.user.id = token.sub as string;
-      session.user.papel = token.papel as string | undefined;
+      session.user.organizationId = token.organizationId as string | undefined;
+      session.user.organizationMemberId = token.organizationMemberId as string | undefined;
+      session.user.role = token.role as string | undefined;
       return session;
     },
   },

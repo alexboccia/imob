@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireOrganizationId } from "@/lib/tenant";
 import { EditarUsuarioForm } from "@/components/admin/EditarUsuarioForm";
 
 export default async function EditarUsuarioPage({
@@ -10,11 +11,15 @@ export default async function EditarUsuarioPage({
 }) {
   const { id } = await params;
   const session = await auth();
+  const organizationId = await requireOrganizationId();
 
-  const usuario = await prisma.usuario.findUnique({ where: { id } });
-  if (!usuario) notFound();
+  const membro = await prisma.organizationMember.findFirst({
+    where: { id, organizationId },
+    include: { user: true },
+  });
+  if (!membro) notFound();
 
-  if (session?.user.papel !== "ADMINISTRADOR") {
+  if (session?.user.role !== "OWNER" && session?.user.role !== "ADMIN") {
     return (
       <div className="max-w-lg">
         <p className="text-sm text-muted-foreground">
@@ -29,16 +34,16 @@ export default async function EditarUsuarioPage({
       <h1 className="text-2xl font-semibold mb-6">Editar usuário</h1>
       <EditarUsuarioForm
         usuario={{
-          id: usuario.id,
-          nome: usuario.nome,
-          email: usuario.email,
-          papel: usuario.papel,
-          ativo: usuario.ativo,
-          foto: usuario.foto,
-          whatsapp: usuario.whatsapp,
-          emailContato: usuario.emailContato,
+          id: membro.id,
+          nome: membro.user.name,
+          email: membro.user.email,
+          papel: membro.role,
+          ativo: membro.status === "ACTIVE",
+          foto: membro.user.avatarUrl,
+          whatsapp: membro.whatsapp,
+          emailContato: membro.contactEmail,
         }}
-        ehVoceMesmo={usuario.id === session.user.id}
+        ehVoceMesmo={membro.id === session?.user.organizationMemberId}
       />
     </div>
   );

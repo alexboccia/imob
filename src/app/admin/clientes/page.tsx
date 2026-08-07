@@ -1,22 +1,28 @@
 import { prisma } from "@/lib/prisma";
+import { requireOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 import { DataTable } from "@/components/admin/data-table/DataTable";
 import { clienteColumns, type ClienteRow } from "./columns";
 import { CriarClienteForm } from "@/components/admin/CriarClienteForm";
 
 export default async function ClientesPage() {
-  const pessoas = await prisma.pessoa.findMany({
-    orderBy: { criadoEm: "desc" },
-    include: { corretorAtribuido: { select: { nome: true } } },
-  });
+  const organizationId = await requireOrganizationId();
+  const pessoas = await withOrganization(organizationId, () =>
+    prisma.person.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: "desc" },
+      include: { assignedMember: { include: { user: { select: { name: true } } } } },
+    })
+  );
 
   const linhas: ClienteRow[] = pessoas.map((pessoa) => ({
     id: pessoa.id,
-    nome: pessoa.nome,
-    contato: pessoa.telefone ?? pessoa.email ?? "-",
-    papeis: pessoa.papeis.join(", "),
-    estagioFunil: pessoa.estagioFunil,
-    origem: pessoa.origem ?? "-",
-    corretor: pessoa.corretorAtribuido?.nome ?? "-",
+    nome: pessoa.name,
+    contato: pessoa.phone ?? pessoa.email ?? "-",
+    papeis: pessoa.roles.join(", "),
+    estagioFunil: pessoa.pipelineStage,
+    origem: pessoa.source ?? "-",
+    corretor: pessoa.assignedMember?.user.name ?? "-",
   }));
 
   return (

@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { STATUS_IMOVEL_LABEL } from "@/lib/format";
+import { requireOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 import {
   DashboardCharts,
   type PontoTendencia,
@@ -18,6 +20,8 @@ function rotuloMes(data: Date) {
 }
 
 export default async function DashboardPage() {
+  const organizationId = await requireOrganizationId();
+
   const inicioDoMes = new Date();
   inicioDoMes.setDate(1);
   inicioDoMes.setHours(0, 0, 0, 0);
@@ -40,32 +44,35 @@ export default async function DashboardPage() {
     porTipo,
     porBairro,
     porStatus,
-  ] = await Promise.all([
-    prisma.imovel.count({ where: { status: "DISPONIVEL" } }),
-    prisma.pessoa.count({
-      where: { papeis: { has: "LEAD" }, criadoEm: { gte: inicioDoMes } },
-    }),
-    prisma.negocio.count({ where: { fechadoEm: { gte: inicioDoMes } } }),
-    prisma.imovel.count({
-      where: {
-        status: "DISPONIVEL",
-        publicadoEm: {
-          lt: noventaDiasAtras,
+  ] = await withOrganization(organizationId, () =>
+    Promise.all([
+      prisma.property.count({ where: { organizationId, status: "AVAILABLE" } }),
+      prisma.person.count({
+        where: { organizationId, roles: { has: "LEAD" }, createdAt: { gte: inicioDoMes } },
+      }),
+      prisma.deal.count({ where: { organizationId, closedAt: { gte: inicioDoMes } } }),
+      prisma.property.count({
+        where: {
+          organizationId,
+          status: "AVAILABLE",
+          publishedAt: {
+            lt: noventaDiasAtras,
+          },
         },
-      },
-    }),
-    prisma.pessoa.findMany({
-      where: { papeis: { has: "LEAD" }, criadoEm: { gte: seisMesesAtras } },
-      select: { criadoEm: true },
-    }),
-    prisma.negocio.findMany({
-      where: { fechadoEm: { gte: seisMesesAtras } },
-      select: { fechadoEm: true },
-    }),
-    prisma.imovel.groupBy({ by: ["tipo"], _count: true }),
-    prisma.imovel.groupBy({ by: ["bairro"], _count: true }),
-    prisma.imovel.groupBy({ by: ["status"], _count: true }),
-  ]);
+      }),
+      prisma.person.findMany({
+        where: { organizationId, roles: { has: "LEAD" }, createdAt: { gte: seisMesesAtras } },
+        select: { createdAt: true },
+      }),
+      prisma.deal.findMany({
+        where: { organizationId, closedAt: { gte: seisMesesAtras } },
+        select: { closedAt: true },
+      }),
+      prisma.property.groupBy({ where: { organizationId }, by: ["type"], _count: true }),
+      prisma.property.groupBy({ where: { organizationId }, by: ["neighborhood"], _count: true }),
+      prisma.property.groupBy({ where: { organizationId }, by: ["status"], _count: true }),
+    ])
+  );
 
   const cards = [
     { label: "Imóveis disponíveis", valor: imoveisAtivos },
@@ -84,7 +91,7 @@ export default async function DashboardPage() {
 
   const contagemLeads = new Map(meses.map((m) => [m.chave, 0]));
   for (const lead of leadsRecentes) {
-    const chave = chaveMes(lead.criadoEm);
+    const chave = chaveMes(lead.createdAt);
     if (contagemLeads.has(chave)) {
       contagemLeads.set(chave, (contagemLeads.get(chave) ?? 0) + 1);
     }
@@ -92,8 +99,8 @@ export default async function DashboardPage() {
 
   const contagemNegocios = new Map(meses.map((m) => [m.chave, 0]));
   for (const negocio of negociosRecentes) {
-    if (!negocio.fechadoEm) continue;
-    const chave = chaveMes(negocio.fechadoEm);
+    if (!negocio.closedAt) continue;
+    const chave = chaveMes(negocio.closedAt);
     if (contagemNegocios.has(chave)) {
       contagemNegocios.set(chave, (contagemNegocios.get(chave) ?? 0) + 1);
     }
@@ -108,12 +115,12 @@ export default async function DashboardPage() {
   const porTotal = (a: ItemComposicao, b: ItemComposicao) => b.total - a.total;
 
   const composicaoTipo: ItemComposicao[] = porTipo
-    .map((g) => ({ nome: g.tipo, total: g._count }))
+    .map((g) => ({ nome: g.type, total: g._count }))
     .sort(porTotal)
     .slice(0, 8);
 
   const composicaoBairro: ItemComposicao[] = porBairro
-    .map((g) => ({ nome: g.bairro, total: g._count }))
+    .map((g) => ({ nome: g.neighborhood, total: g._count }))
     .sort(porTotal)
     .slice(0, 8);
 

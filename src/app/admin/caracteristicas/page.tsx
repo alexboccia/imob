@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
+import { requireOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 
 function ColunaCaracteristicas({
   titulo,
@@ -14,7 +16,7 @@ function ColunaCaracteristicas({
   opcoes,
 }: {
   titulo: string;
-  categoria: "IMOVEL" | "CONDOMINIO";
+  categoria: "PROPERTY" | "CONDO";
   opcoes: { id: string; nome: string }[];
 }) {
   return (
@@ -60,15 +62,20 @@ function ColunaCaracteristicas({
 }
 
 export default async function CaracteristicasPage() {
-  const opcoes = await prisma.caracteristicaOpcao.findMany();
+  const organizationId = await requireOrganizationId();
+  const opcoes = await withOrganization(organizationId, () =>
+    prisma.featureOption.findMany({ where: { organizationId } })
+  );
   const porNome = (a: { nome: string }, b: { nome: string }) =>
     a.nome.localeCompare(b.nome, "pt-BR");
 
   const opcoesImovel = opcoes
-    .filter((o) => o.categoria === "IMOVEL")
+    .filter((o) => o.category === "PROPERTY")
+    .map((o) => ({ id: o.id, nome: o.name }))
     .sort(porNome);
   const opcoesCondominio = opcoes
-    .filter((o) => o.categoria === "CONDOMINIO")
+    .filter((o) => o.category === "CONDO")
+    .map((o) => ({ id: o.id, nome: o.name }))
     .sort(porNome);
 
   return (
@@ -83,12 +90,12 @@ export default async function CaracteristicasPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <ColunaCaracteristicas
           titulo="Características do imóvel"
-          categoria="IMOVEL"
+          categoria="PROPERTY"
           opcoes={opcoesImovel}
         />
         <ColunaCaracteristicas
           titulo="Características do condomínio"
-          categoria="CONDOMINIO"
+          categoria="CONDO"
           opcoes={opcoesCondominio}
         />
       </div>

@@ -11,332 +11,303 @@ datasource db {
 
 // ---------- Enums ----------
 
-enum PapelUsuario {
-  ADMINISTRADOR
-  GESTOR
-  CORRETOR
+enum ConstructionStage {
+  PRE_CONSTRUCTION
+  UNDER_CONSTRUCTION
+  READY_TO_MOVE
 }
 
-enum EstagioObra {
-  NA_PLANTA
-  EM_CONSTRUCAO
-  PRONTO_PARA_MORAR
+enum PropertyPurpose {
+  SALE
+  RENT
+  SALE_AND_RENT
 }
 
-enum FinalidadeImovel {
-  VENDA
-  ALUGUEL
-  VENDA_E_ALUGUEL
+enum PropertyTypeCategory {
+  RESIDENTIAL
+  COMMERCIAL
 }
 
-enum CategoriaTipoImovel {
-  RESIDENCIAL
-  COMERCIAL
+enum PropertyStatus {
+  DRAFT
+  AVAILABLE
+  RESERVED
+  SOLD
+  RENTED
+  INACTIVE
 }
 
-enum StatusImovel {
-  RASCUNHO
-  DISPONIVEL
-  RESERVADO
-  VENDIDO
-  ALUGADO
-  INATIVO
-}
-
-enum TipoMidia {
-  FOTO
+enum MediaType {
+  PHOTO
   VIDEO
-  PLANTA
+  FLOOR_PLAN
 }
 
-enum PapelPessoa {
+enum PersonRole {
   LEAD
-  CLIENTE
-  PROPRIETARIO
+  CLIENT
+  OWNER
 }
 
-enum OrigemLead {
-  SITE
-  INDICACAO
+enum LeadSource {
+  WEBSITE
+  REFERRAL
   PORTAL
   INSTAGRAM
   WHATSAPP
-  OUTRO
+  OTHER
 }
 
-enum EstagioFunil {
-  NOVO_LEAD
-  CONTATO_FEITO
-  VISITA_AGENDADA
-  PROPOSTA
-  FECHADO
-  PERDIDO
+enum PipelineStage {
+  NEW_LEAD
+  CONTACTED
+  VISIT_SCHEDULED
+  PROPOSAL
+  CLOSED
+  LOST
 }
 
-enum TipoNegocio {
-  VENDA
-  LOCACAO
+enum DealType {
+  SALE
+  LEASE
 }
 
-enum CategoriaCaracteristica {
-  IMOVEL
-  CONDOMINIO
+enum FeatureCategory {
+  PROPERTY
+  CONDO
 }
 
-enum TipoInteracao {
-  VISITA
-  LIGACAO
-  MENSAGEM
+enum InteractionType {
+  VISIT
+  CALL
+  MESSAGE
   EMAIL
-  OUTRO
+  OTHER
 }
 
-// ---------- Modelos ----------
+// ---------- Modelos de domínio ----------
 
-model Usuario {
-  id        String       @id @default(cuid())
-  nome      String
-  email     String       @unique
-  senhaHash String
-  papel     PapelUsuario @default(CORRETOR)
-  ativo     Boolean      @default(true)
-  foto      String?
-  whatsapp  String?
-  emailContato String?
-  criadoEm  DateTime     @default(now())
-  atualizadoEm DateTime  @updatedAt
+model Person {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  name           String
+  email          String?
+  phone          String?
+  taxId          String?
+  roles          PersonRole[]
+  source         LeadSource?
+  pipelineStage  PipelineStage @default(NEW_LEAD)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  imoveis      Imovel[]      @relation("CorretorResponsavel")
-  interacoes   Interacao[]
-  negocios     Negocio[]
-  pessoasLead  Pessoa[]      @relation("CorretorAtribuido")
+  assignedMemberId String?
+  assignedMember    OrganizationMember? @relation("PersonAssignedMember", fields: [assignedMemberId], references: [id])
 
-  @@map("usuarios")
+  ownedProperties Property[]    @relation("PropertyOwner")
+  interactions    Interaction[]
+  deals           DealPerson[]
+
+  @@index([organizationId])
+  @@map("people")
 }
 
-model Pessoa {
-  id        String        @id @default(cuid())
-  nome      String
-  email     String?
-  telefone  String?
-  cpfCnpj   String?
-  papeis    PapelPessoa[]
-  origem    OrigemLead?
-  estagioFunil EstagioFunil @default(NOVO_LEAD)
-  observacoes String?
-  criadoEm  DateTime      @default(now())
-  atualizadoEm DateTime   @updatedAt
-
-  corretorAtribuidoId String?
-  corretorAtribuido   Usuario? @relation("CorretorAtribuido", fields: [corretorAtribuidoId], references: [id])
-
-  imoveisComoProprietario Imovel[]      @relation("Proprietario")
-  interacoes              Interacao[]
-  negociosComoCliente     NegocioPessoa[]
-
-  @@map("pessoas")
-}
-
-model Imovel {
-  id           String           @id @default(cuid())
-  codigo       Int              @unique @default(autoincrement())
-  titulo       String
-  descricao    String?
-  tipo         String
-  finalidade   FinalidadeImovel
-  status       StatusImovel     @default(RASCUNHO)
-  lancamento   Boolean          @default(false)
-  destaque     Boolean          @default(false)
-  oportunidade Boolean          @default(false)
-  slideshow    Boolean          @default(false)
-  estagioObra      EstagioObra?
-  previsaoEntrega  DateTime?
-  construtora      String?
+model Property {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  code           Int             @default(autoincrement())
+  title          String
+  description    String?
+  type           String
+  purpose        PropertyPurpose
+  status         PropertyStatus  @default(DRAFT)
+  isLaunch       Boolean         @default(false)
+  isFeatured     Boolean         @default(false)
+  isOpportunity  Boolean         @default(false)
+  hasSlideshow   Boolean         @default(false)
+  constructionStage ConstructionStage?
+  deliveryForecast  DateTime?
+  developer         String?
 
   // Endereço
-  cep          String?
-  logradouro   String?
-  numero       String?
-  complemento  String?
-  bairro       String
-  cidade       String
-  estado       String
+  zipCode      String?
+  street       String?
+  number       String?
+  complement   String?
+  neighborhood String
+  city         String
+  state        String
   latitude     Float?
   longitude    Float?
 
   // Valores
-  preco        Decimal?  @db.Decimal(14, 2)
-  precoAluguel Decimal?  @db.Decimal(14, 2)
-  precoCondominio Decimal? @db.Decimal(14, 2)
-  precoIptu    Decimal?  @db.Decimal(14, 2)
+  price       Decimal? @db.Decimal(14, 2)
+  rentPrice   Decimal? @db.Decimal(14, 2)
+  condoFee    Decimal? @db.Decimal(14, 2)
+  propertyTax Decimal? @db.Decimal(14, 2)
 
   // Características
-  areaTotal    Float?
-  areaPrivativa Float?
-  quartos      Int?
-  suites       Int?
-  banheiros    Int?
-  vagasGaragem Int?
-  caracteristicasImovel     String[] @default([])
-  caracteristicasCondominio String[] @default([])
+  totalArea        Float?
+  privateArea      Float?
+  bedrooms         Int?
+  suites           Int?
+  bathrooms        Int?
+  parkingSpots     Int?
+  propertyFeatures String[] @default([])
+  condoFeatures    String[] @default([])
 
-  criadoEm     DateTime  @default(now())
-  atualizadoEm DateTime  @updatedAt
-  publicadoEm  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
 
-  corretorResponsavelId String?
-  corretorResponsavel   Usuario? @relation("CorretorResponsavel", fields: [corretorResponsavelId], references: [id])
+  responsibleMemberId String?
+  responsibleMember   OrganizationMember? @relation("PropertyResponsibleMember", fields: [responsibleMemberId], references: [id])
 
-  proprietarioId String?
-  proprietario   Pessoa? @relation("Proprietario", fields: [proprietarioId], references: [id])
+  ownerId String?
+  owner   Person? @relation("PropertyOwner", fields: [ownerId], references: [id])
 
-  midias           Midia[]
-  historicoStatus  HistoricoStatusImovel[]
-  interacoes       Interacao[]
-  negocios         Negocio[]
-  publicacoesPortais PublicacaoPortal[]
+  media          Media[]
+  statusHistory  PropertyStatusHistory[]
+  interactions   Interaction[]
+  deals          Deal[]
+  portalListings PortalListing[]
 
-  @@index([status])
-  @@index([cidade, bairro])
-  @@index([finalidade, tipo])
-  @@index([lancamento])
-  @@map("imoveis")
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([organizationId, city, neighborhood])
+  @@index([organizationId, purpose, type])
+  @@index([organizationId, isLaunch])
+  @@map("properties")
 }
 
-model Midia {
-  id        String    @id @default(cuid())
-  imovelId  String
-  imovel    Imovel    @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+model Media {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  propertyId     String
+  property       Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  tipo      TipoMidia
-  url       String
-  ehCapa    Boolean   @default(false)
-  ordem     Int       @default(0)
+  type    MediaType
+  url     String
+  isCover Boolean   @default(false)
+  order   Int       @default(0)
 
-  criadoEm  DateTime  @default(now())
+  createdAt DateTime @default(now())
 
-  @@index([imovelId])
-  @@map("midias")
+  @@index([propertyId])
+  @@map("media")
 }
 
-model HistoricoStatusImovel {
-  id         String       @id @default(cuid())
-  imovelId   String
-  imovel     Imovel       @relation(fields: [imovelId], references: [id], onDelete: Cascade)
-  statusAnterior StatusImovel?
-  statusNovo StatusImovel
-  alteradoEm DateTime     @default(now())
+model PropertyStatusHistory {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  propertyId     String
+  property       Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  previousStatus PropertyStatus?
+  newStatus      PropertyStatus
+  changedAt      DateTime        @default(now())
 
-  @@index([imovelId])
-  @@map("historico_status_imoveis")
+  @@index([propertyId])
+  @@map("property_status_history")
 }
 
-model Interacao {
-  id         String        @id @default(cuid())
-  pessoaId   String
-  pessoa     Pessoa        @relation(fields: [pessoaId], references: [id], onDelete: Cascade)
-  imovelId   String?
-  imovel     Imovel?       @relation(fields: [imovelId], references: [id])
-  corretorId String?
-  corretor   Usuario?      @relation(fields: [corretorId], references: [id])
+model Interaction {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+  personId       String
+  person         Person              @relation(fields: [personId], references: [id], onDelete: Cascade)
+  propertyId     String?
+  property       Property?           @relation(fields: [propertyId], references: [id])
+  memberId       String?
+  member         OrganizationMember? @relation("InteractionMember", fields: [memberId], references: [id])
 
-  tipo       TipoInteracao
-  notas      String?
-  dataHora   DateTime      @default(now())
+  type       InteractionType
+  notes      String?
+  occurredAt DateTime        @default(now())
 
-  @@index([pessoaId])
-  @@map("interacoes")
+  @@index([personId])
+  @@map("interactions")
 }
 
-model Negocio {
-  id         String      @id @default(cuid())
-  imovelId   String
-  imovel     Imovel      @relation(fields: [imovelId], references: [id])
-  corretorId String?
-  corretor   Usuario?    @relation(fields: [corretorId], references: [id])
+model Deal {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+  propertyId     String
+  property       Property            @relation(fields: [propertyId], references: [id])
+  memberId       String?
+  member         OrganizationMember? @relation("DealMember", fields: [memberId], references: [id])
 
-  tipo       TipoNegocio
-  valorFinal Decimal     @db.Decimal(14, 2)
-  comissao   Decimal?    @db.Decimal(14, 2)
-  fechadoEm  DateTime    @default(now())
+  type       DealType
+  finalValue Decimal  @db.Decimal(14, 2)
+  commission Decimal? @db.Decimal(14, 2)
+  closedAt   DateTime @default(now())
 
-  pessoas    NegocioPessoa[]
+  people DealPerson[]
 
-  @@index([imovelId])
-  @@map("negocios")
+  @@index([propertyId])
+  @@map("deals")
 }
 
-model NegocioPessoa {
-  negocioId String
-  negocio   Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
-  pessoaId  String
-  pessoa    Pessoa  @relation(fields: [pessoaId], references: [id])
+model DealPerson {
+  dealId   String
+  deal     Deal   @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  personId String
+  person   Person @relation(fields: [personId], references: [id])
 
-  @@id([negocioId, pessoaId])
-  @@map("negocios_pessoas")
+  @@id([dealId, personId])
+  @@map("deal_people")
 }
 
 // Registro de envio/sincronização de um imóvel para um portal externo (ZAP, VivaReal, OLX, Imovelweb, Mercado Livre).
-model PublicacaoPortal {
-  id           String   @id @default(cuid())
-  imovelId     String
-  imovel       Imovel   @relation(fields: [imovelId], references: [id], onDelete: Cascade)
-  portal       String
-  idAnuncioExterno String?
-  ultimaSincronizacaoEm DateTime?
-  ultimoErro   String?
+model PortalListing {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  propertyId         String
+  property           Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  portal             String
+  externalListingId  String?
+  lastSyncedAt       DateTime?
+  lastError          String?
 
-  @@unique([imovelId, portal])
-  @@map("publicacoes_portais")
+  @@unique([propertyId, portal])
+  @@map("portal_listings")
 }
 
 // Catálogo de opções selecionáveis para as características do imóvel/condomínio (gerenciado em /admin/caracteristicas).
-model CaracteristicaOpcao {
-  id        String                  @id @default(cuid())
-  nome      String
-  categoria CategoriaCaracteristica
-  criadoEm  DateTime                @default(now())
+model FeatureOption {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  name           String
+  category       FeatureCategory
+  createdAt      DateTime        @default(now())
 
-  @@unique([categoria, nome])
-  @@map("caracteristicas_opcoes")
+  @@unique([organizationId, category, name])
+  @@map("feature_options")
 }
 
 // Catálogo de tipos de imóvel selecionáveis, residencial/comercial (gerenciado em /admin/tipos-imovel).
-model TipoImovelOpcao {
-  id        String              @id @default(cuid())
-  nome      String
-  categoria CategoriaTipoImovel
-  criadoEm  DateTime            @default(now())
+model PropertyTypeOption {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  name           String
+  category       PropertyTypeCategory
+  createdAt      DateTime             @default(now())
 
-  @@unique([categoria, nome])
-  @@map("tipos_imovel_opcoes")
-}
-
-// Registro único com os dados de contato/redes sociais da imobiliária (gerenciado em /admin/configuracoes).
-model ConfiguracaoContato {
-  id                  String   @id @default("singleton")
-  telefone            String?
-  email               String?
-  whatsapp            String?
-  instagram           String?
-  facebook            String?
-  youtube             String?
-  linkedin            String?
-  codigoImovelPrefixo String?
-  logo                String?
-  logoAltura          Int?
-  atualizadoEm        DateTime @updatedAt
-
-  @@map("configuracao_contato")
+  @@unique([organizationId, category, name])
+  @@map("property_type_options")
 }
 
 // =====================================================================
 // Fundação multi-tenant (EasyMob) — ver /Users/alexboccia/.claude/plans/
 // glittery-noodling-harp.md para o plano completo.
-//
-// FASE 1: modelos novos, aditivos, ainda não usados pelo código da
-// aplicação. Os modelos acima (Usuario, Imovel, Pessoa, etc.) continuam
-// sendo a fonte de verdade até a Fase 2 (rename + corte de escopo).
 // =====================================================================
 
 // ---------- Tenancy & RBAC ----------
@@ -378,10 +349,16 @@ model OrganizationMember {
   user           User             @relation(fields: [userId], references: [id])
   role           OrganizationRole
   status         MemberStatus     @default(ACTIVE)
+  whatsapp       String?
+  contactEmail   String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
   notificationPreferences NotificationPreference[]
+  responsibleProperties   Property[]    @relation("PropertyResponsibleMember")
+  assignedPeople          Person[]      @relation("PersonAssignedMember")
+  interactions            Interaction[] @relation("InteractionMember")
+  deals                   Deal[]        @relation("DealMember")
 
   @@unique([organizationId, userId])
   @@map("organization_members")
@@ -398,14 +375,23 @@ model Organization {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  members       OrganizationMember[]
-  settings      OrganizationSettings?
-  subscriptions Subscription[]
-  invoices      Invoice[]
-  billingEvents BillingEvent[]
-  activityLogs  ActivityLog[]
-  notifications Notification[]
-  aiUsages      AiUsage[]
+  members             OrganizationMember[]
+  settings             OrganizationSettings?
+  subscriptions         Subscription[]
+  invoices              Invoice[]
+  billingEvents         BillingEvent[]
+  activityLogs          ActivityLog[]
+  notifications         Notification[]
+  aiUsages              AiUsage[]
+  people                Person[]
+  properties            Property[]
+  media                 Media[]
+  propertyStatusHistory PropertyStatusHistory[]
+  interactions          Interaction[]
+  deals                 Deal[]
+  portalListings        PortalListing[]
+  featureOptions        FeatureOption[]
+  propertyTypeOptions   PropertyTypeOption[]
 
   @@map("organizations")
 }

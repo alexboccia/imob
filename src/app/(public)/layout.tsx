@@ -1,5 +1,7 @@
 import { siteConfig } from "@/lib/site-config";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
+import { getPublicOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 import { SiteHeader } from "@/components/SiteHeader";
 import { BotaoContatoFlutuante } from "@/components/BotaoContatoFlutuante";
 
@@ -8,8 +10,8 @@ import { BotaoContatoFlutuante } from "@/components/BotaoContatoFlutuante";
 export const dynamic = "force-dynamic";
 
 const NAV_LINKS = [
-  { href: "/imoveis?finalidade=VENDA", label: "Comprar" },
-  { href: "/imoveis?finalidade=ALUGUEL", label: "Alugar" },
+  { href: "/imoveis?finalidade=SALE", label: "Comprar" },
+  { href: "/imoveis?finalidade=RENT", label: "Alugar" },
   { href: "/imoveis?lancamento=1", label: "Lançamentos" },
 ];
 
@@ -18,7 +20,10 @@ export default async function PublicLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const config = await buscarConfiguracaoContato();
+  const organizationId = await getPublicOrganizationId();
+  const config = await withOrganization(organizationId, () =>
+    buscarConfiguracaoContato(organizationId)
+  );
 
   return (
     <>

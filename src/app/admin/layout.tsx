@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth, signOut } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
+import { PAPEL_USUARIO_LABEL } from "@/lib/format";
 
 const NAV_LINKS = [
   { href: "/admin", label: "Dashboard" },
@@ -42,7 +43,9 @@ export default async function AdminLayout({
         </nav>
         <div className="px-4 py-4 border-t text-sm">
           <p className="font-medium truncate">{session.user?.name}</p>
-          <p className="text-gray-500 truncate">{session.user?.papel}</p>
+          <p className="text-gray-500 truncate">
+            {PAPEL_USUARIO_LABEL[session.user?.role ?? ""] ?? session.user?.role}
+          </p>
           <form
             action={async () => {
               "use server";

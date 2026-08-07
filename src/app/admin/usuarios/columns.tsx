@@ -6,9 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import type { DataTableColumn } from "@/components/admin/data-table/DataTable";
 
 const PAPEL_BADGE_CLASS: Record<string, string> = {
-  ADMINISTRADOR: "bg-black text-white",
-  GESTOR: "bg-blue-600 text-white",
-  CORRETOR: "bg-secondary text-secondary-foreground",
+  OWNER: "bg-black text-white",
+  ADMIN: "bg-black text-white",
+  MANAGER: "bg-blue-600 text-white",
+  BROKER: "bg-secondary text-secondary-foreground",
+  ASSISTANT: "bg-secondary text-secondary-foreground",
 };
 
 export type UsuarioRow = {

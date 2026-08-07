@@ -6,8 +6,10 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { requireOrganizationId } from "@/lib/tenant";
 
-const PAPEIS = ["ADMINISTRADOR", "GESTOR", "CORRETOR"] as const;
+const ROLES = ["OWNER", "ADMIN", "MANAGER", "BROKER", "ASSISTANT"] as const;
+const PAPEIS_COM_GESTAO_DE_USUARIOS = new Set(["OWNER", "ADMIN"]);
 
 const booleanCheckbox = z.preprocess((v) => v === "on", z.boolean());
 
@@ -17,7 +19,7 @@ const criarUsuarioSchema = z.object({
   nome: z.string().min(2, "Informe o nome."),
   email: z.string().email("E-mail inválido."),
   senha: z.string().min(6, "A senha precisa ter ao menos 6 caracteres."),
-  papel: z.enum(PAPEIS),
+  papel: z.enum(ROLES),
 });
 
 export async function criarUsuario(
@@ -26,7 +28,7 @@ export async function criarUsuario(
 ): Promise<EstadoFormulario> {
   const session = await auth();
   if (!session) redirect("/admin/login");
-  if (session.user.papel !== "ADMINISTRADOR") {
+  if (!PAPEIS_COM_GESTAO_DE_USUARIOS.has(session.user.role ?? "")) {
     return { sucesso: false, erro: "Apenas administradores podem criar usuários." };
   }
 
@@ -39,22 +41,26 @@ export async function criarUsuario(
   }
   const dados = parsed.data;
 
-  const existente = await prisma.usuario.findUnique({
+  const existente = await prisma.user.findUnique({
     where: { email: dados.email },
   });
   if (existente) {
     return { sucesso: false, erro: "Já existe um usuário com esse e-mail." };
   }
 
+  const organizationId = await requireOrganizationId();
   const senhaHash = await bcrypt.hash(dados.senha, 10);
 
-  await prisma.usuario.create({
+  const user = await prisma.user.create({
     data: {
-      nome: dados.nome,
+      name: dados.nome,
       email: dados.email,
-      senhaHash,
-      papel: dados.papel,
+      passwordHash: senhaHash,
     },
+  });
+
+  await prisma.organizationMember.create({
+    data: { organizationId, userId: user.id, role: dados.papel },
   });
 
   revalidatePath("/admin/usuarios");
@@ -63,7 +69,7 @@ export async function criarUsuario(
 
 const atualizarUsuarioSchema = z.object({
   nome: z.string().min(2, "Informe o nome."),
-  papel: z.enum(PAPEIS),
+  papel: z.enum(ROLES),
   ativo: booleanCheckbox,
   foto: z.string().optional().or(z.literal("")),
   whatsapp: z.string().optional().or(z.literal("")),
@@ -80,13 +86,13 @@ const atualizarUsuarioSchema = z.object({
 });
 
 export async function atualizarUsuario(
-  usuarioId: string,
+  membershipId: string,
   _prevState: EstadoFormulario,
   formData: FormData
 ): Promise<EstadoFormulario> {
   const session = await auth();
   if (!session) redirect("/admin/login");
-  if (session.user.papel !== "ADMINISTRADOR") {
+  if (!PAPEIS_COM_GESTAO_DE_USUARIOS.has(session.user.role ?? "")) {
     return { sucesso: false, erro: "Apenas administradores podem editar usuários." };
   }
 
@@ -99,51 +105,64 @@ export async function atualizarUsuario(
   }
   const dados = parsed.data;
 
-  const usuarioAlvo = await prisma.usuario.findUnique({ where: { id: usuarioId } });
-  if (!usuarioAlvo) {
+  const organizationId = await requireOrganizationId();
+  const membershipAlvo = await prisma.organizationMember.findFirst({
+    where: { id: membershipId, organizationId },
+  });
+  if (!membershipAlvo) {
     return { sucesso: false, erro: "Usuário não encontrado." };
   }
 
-  const ehVoceMesmo = usuarioId === session.user.id;
+  const ehVoceMesmo = membershipId === session.user.organizationMemberId;
+  const eraAdmin = membershipAlvo.role === "OWNER" || membershipAlvo.role === "ADMIN";
+  const continuaAdmin = dados.papel === "OWNER" || dados.papel === "ADMIN";
 
   if (ehVoceMesmo) {
     if (!dados.ativo) {
       return { sucesso: false, erro: "Você não pode desativar sua própria conta." };
     }
-    if (dados.papel !== "ADMINISTRADOR") {
+    if (!continuaAdmin) {
       return {
         sucesso: false,
         erro: "Você não pode remover seu próprio acesso de administrador.",
       };
     }
-  } else if (
-    usuarioAlvo.papel === "ADMINISTRADOR" &&
-    (dados.papel !== "ADMINISTRADOR" || !dados.ativo)
-  ) {
-    const outrosAdmins = await prisma.usuario.count({
-      where: { papel: "ADMINISTRADOR", ativo: true, id: { not: usuarioId } },
+  } else if (eraAdmin && (!continuaAdmin || !dados.ativo)) {
+    const outrosAdmins = await prisma.organizationMember.count({
+      where: {
+        organizationId,
+        role: { in: ["OWNER", "ADMIN"] },
+        status: "ACTIVE",
+        id: { not: membershipId },
+      },
     });
     if (outrosAdmins === 0) {
       return { sucesso: false, erro: "Precisa haver ao menos um administrador ativo." };
     }
   }
 
-  await prisma.usuario.update({
-    where: { id: usuarioId },
+  await prisma.user.update({
+    where: { id: membershipAlvo.userId },
     data: {
-      nome: dados.nome,
-      papel: dados.papel,
-      ativo: dados.ativo,
-      foto: dados.foto || null,
-      whatsapp: dados.whatsapp ? dados.whatsapp.replace(/\D/g, "") : null,
-      emailContato: dados.emailContato || null,
+      name: dados.nome,
+      avatarUrl: dados.foto || null,
       ...(dados.novaSenha
-        ? { senhaHash: await bcrypt.hash(dados.novaSenha, 10) }
+        ? { passwordHash: await bcrypt.hash(dados.novaSenha, 10) }
         : {}),
     },
   });
 
+  await prisma.organizationMember.update({
+    where: { id: membershipId, organizationId },
+    data: {
+      role: dados.papel,
+      status: dados.ativo ? "ACTIVE" : "SUSPENDED",
+      whatsapp: dados.whatsapp ? dados.whatsapp.replace(/\D/g, "") : null,
+      contactEmail: dados.emailContato || null,
+    },
+  });
+
   revalidatePath("/admin/usuarios");
-  revalidatePath(`/admin/usuarios/${usuarioId}`);
+  revalidatePath(`/admin/usuarios/${membershipId}`);
   redirect("/admin/usuarios");
 }

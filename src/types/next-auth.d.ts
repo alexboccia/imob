@@ -4,17 +4,23 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      papel?: string;
+      organizationId?: string;
+      organizationMemberId?: string;
+      role?: string;
     } & DefaultSession["user"];
   }
 
   interface User {
-    papel?: string;
+    organizationId?: string;
+    organizationMemberId?: string;
+    role?: string;
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
-    papel?: string;
+    organizationId?: string;
+    organizationMemberId?: string;
+    role?: string;
   }
 }

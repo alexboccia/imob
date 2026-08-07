@@ -17,17 +17,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const senha = credentials?.senha as string | undefined;
         if (!email || !senha) return null;
 
-        const usuario = await prisma.usuario.findUnique({ where: { email } });
-        if (!usuario || !usuario.ativo) return null;
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user || !user.active) return null;
 
-        const senhaValida = await bcrypt.compare(senha, usuario.senhaHash);
+        const senhaValida = await bcrypt.compare(senha, user.passwordHash);
         if (!senhaValida) return null;
 
+        // Um usuário pode pertencer a várias organizações no futuro; por
+        // enquanto, usamos o primeiro vínculo ativo.
+        const membership = await prisma.organizationMember.findFirst({
+          where: { userId: user.id, status: "ACTIVE" },
+        });
+        if (!membership) return null;
+
         return {
-          id: usuario.id,
-          name: usuario.nome,
-          email: usuario.email,
-          papel: usuario.papel,
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          organizationId: membership.organizationId,
+          organizationMemberId: membership.id,
+          role: membership.role,
         };
       },
     }),

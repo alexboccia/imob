@@ -4,6 +4,8 @@ import { ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getR2Client } from "@/lib/r2";
+import { requireOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 
 const IDADE_MINIMA_MS = 24 * 60 * 60 * 1000;
 
@@ -11,7 +13,7 @@ export async function limparMidiasOrfas() {
   const session = await auth();
   if (
     !session ||
-    (session.user.papel !== "ADMINISTRADOR" && session.user.papel !== "GESTOR")
+    (session.user.role !== "OWNER" && session.user.role !== "ADMIN" && session.user.role !== "MANAGER")
   ) {
     throw new Error(
       "Apenas administradores ou gestores podem executar essa limpeza."
@@ -26,7 +28,10 @@ export async function limparMidiasOrfas() {
 
   const client = getR2Client();
 
-  const midias = await prisma.midia.findMany({ select: { url: true } });
+  const organizationId = await requireOrganizationId();
+  const midias = await withOrganization(organizationId, () =>
+    prisma.media.findMany({ where: { organizationId }, select: { url: true } })
+  );
   const chavesEmUso = new Set(
     midias
       .filter((m) => m.url.startsWith(publicUrl))

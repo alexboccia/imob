@@ -262,15 +262,15 @@ export function TodosFiltrosModal({
                 <p className="text-sm font-medium mb-2">Transação</p>
                 <div className="flex flex-wrap gap-2">
                   <Chip
-                    ativo={transacao === "VENDA"}
-                    onClick={() => alternarUnico(transacao, setTransacao, "VENDA")}
+                    ativo={transacao === "SALE"}
+                    onClick={() => alternarUnico(transacao, setTransacao, "SALE")}
                   >
                     Comprar
                   </Chip>
                   <Chip
-                    ativo={transacao === "ALUGUEL"}
+                    ativo={transacao === "RENT"}
                     onClick={() =>
-                      alternarUnico(transacao, setTransacao, "ALUGUEL")
+                      alternarUnico(transacao, setTransacao, "RENT")
                     }
                   >
                     Alugar
@@ -281,17 +281,17 @@ export function TodosFiltrosModal({
                 <p className="text-sm font-medium mb-2">Finalidade</p>
                 <div className="flex flex-wrap gap-2">
                   <Chip
-                    ativo={categoriaTipo === "RESIDENCIAL"}
+                    ativo={categoriaTipo === "RESIDENTIAL"}
                     onClick={() =>
-                      alternarUnico(categoriaTipo, setCategoriaTipo, "RESIDENCIAL")
+                      alternarUnico(categoriaTipo, setCategoriaTipo, "RESIDENTIAL")
                     }
                   >
                     Residencial
                   </Chip>
                   <Chip
-                    ativo={categoriaTipo === "COMERCIAL"}
+                    ativo={categoriaTipo === "COMMERCIAL"}
                     onClick={() =>
-                      alternarUnico(categoriaTipo, setCategoriaTipo, "COMERCIAL")
+                      alternarUnico(categoriaTipo, setCategoriaTipo, "COMMERCIAL")
                     }
                   >
                     Comercial

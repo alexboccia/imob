@@ -4,6 +4,8 @@ import {
   atualizarEstagioFunil,
   registrarInteracao,
 } from "@/app/admin/clientes/actions";
+import { requireOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -17,29 +19,29 @@ import {
 } from "@/components/ui/select";
 
 const ESTAGIOS = [
-  "NOVO_LEAD",
-  "CONTATO_FEITO",
-  "VISITA_AGENDADA",
-  "PROPOSTA",
-  "FECHADO",
-  "PERDIDO",
+  "NEW_LEAD",
+  "CONTACTED",
+  "VISIT_SCHEDULED",
+  "PROPOSAL",
+  "CLOSED",
+  "LOST",
 ];
 
 const ESTAGIO_LABEL: Record<string, string> = {
-  NOVO_LEAD: "Novo lead",
-  CONTATO_FEITO: "Contato feito",
-  VISITA_AGENDADA: "Visita agendada",
-  PROPOSTA: "Proposta",
-  FECHADO: "Fechado",
-  PERDIDO: "Perdido",
+  NEW_LEAD: "Novo lead",
+  CONTACTED: "Contato feito",
+  VISIT_SCHEDULED: "Visita agendada",
+  PROPOSAL: "Proposta",
+  CLOSED: "Fechado",
+  LOST: "Perdido",
 };
 
 const TIPO_INTERACAO_LABEL: Record<string, string> = {
-  VISITA: "Visita",
-  LIGACAO: "Ligação",
-  MENSAGEM: "Mensagem",
+  VISIT: "Visita",
+  CALL: "Ligação",
+  MESSAGE: "Mensagem",
   EMAIL: "E-mail",
-  OUTRO: "Outro",
+  OTHER: "Outro",
 };
 
 export default async function DetalheClientePage({
@@ -48,13 +50,16 @@ export default async function DetalheClientePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const organizationId = await requireOrganizationId();
 
-  const pessoa = await prisma.pessoa.findUnique({
-    where: { id },
-    include: {
-      interacoes: { orderBy: { dataHora: "desc" }, include: { imovel: true } },
-    },
-  });
+  const pessoa = await withOrganization(organizationId, () =>
+    prisma.person.findUnique({
+      where: { id, organizationId },
+      include: {
+        interactions: { orderBy: { occurredAt: "desc" }, include: { property: true } },
+      },
+    })
+  );
 
   if (!pessoa) notFound();
 
@@ -63,10 +68,10 @@ export default async function DetalheClientePage({
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-semibold">{pessoa.nome}</h1>
+      <h1 className="text-2xl font-semibold">{pessoa.name}</h1>
       <p className="text-muted-foreground mb-6">
-        {pessoa.telefone ?? "sem telefone"} · {pessoa.email ?? "sem e-mail"} ·{" "}
-        {pessoa.papeis.join(", ")}
+        {pessoa.phone ?? "sem telefone"} · {pessoa.email ?? "sem e-mail"} ·{" "}
+        {pessoa.roles.join(", ")}
       </p>
 
       <Card className="mb-6">
@@ -77,7 +82,7 @@ export default async function DetalheClientePage({
         </CardHeader>
         <CardContent>
           <form action={atualizarEstagioComId} className="flex gap-2">
-            <Select name="estagioFunil" defaultValue={pessoa.estagioFunil}>
+            <Select name="estagioFunil" defaultValue={pessoa.pipelineStage}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -96,14 +101,14 @@ export default async function DetalheClientePage({
         </CardContent>
       </Card>
 
-      {pessoa.observacoes && (
+      {pessoa.notes && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-sm font-medium">Observações</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-foreground whitespace-pre-line">
-              {pessoa.observacoes}
+              {pessoa.notes}
             </p>
           </CardContent>
         </Card>
@@ -120,7 +125,7 @@ export default async function DetalheClientePage({
             action={registrarInteracaoComId}
             className="grid grid-cols-1 sm:grid-cols-4 gap-2"
           >
-            <Select name="tipo" defaultValue="VISITA">
+            <Select name="tipo" defaultValue="VISIT">
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -140,29 +145,29 @@ export default async function DetalheClientePage({
 
       <div>
         <h2 className="font-semibold mb-3">Histórico de interações</h2>
-        {pessoa.interacoes.length === 0 ? (
+        {pessoa.interactions.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             Nenhuma interação registrada.
           </p>
         ) : (
           <ul className="space-y-3">
-            {pessoa.interacoes.map((interacao) => (
+            {pessoa.interactions.map((interacao) => (
               <li key={interacao.id}>
                 <Card>
                   <CardContent className="text-sm">
                     <p className="font-medium flex items-center gap-2">
                       <Badge variant="secondary">
-                        {TIPO_INTERACAO_LABEL[interacao.tipo]}
+                        {TIPO_INTERACAO_LABEL[interacao.type]}
                       </Badge>
-                      {interacao.dataHora.toLocaleString("pt-BR")}
+                      {interacao.occurredAt.toLocaleString("pt-BR")}
                     </p>
-                    {interacao.imovel && (
+                    {interacao.property && (
                       <p className="text-muted-foreground mt-1">
-                        Imóvel: {interacao.imovel.titulo}
+                        Imóvel: {interacao.property.title}
                       </p>
                     )}
-                    {interacao.notas && (
-                      <p className="text-foreground mt-1">{interacao.notas}</p>
+                    {interacao.notes && (
+                      <p className="text-foreground mt-1">{interacao.notes}</p>
                     )}
                   </CardContent>
                 </Card>

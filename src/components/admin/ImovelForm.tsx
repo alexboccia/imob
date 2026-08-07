@@ -146,7 +146,7 @@ export function ImovelForm({
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="finalidade">Finalidade</Label>
-          <Select name="finalidade" defaultValue={v.finalidade ?? "VENDA"}>
+          <Select name="finalidade" defaultValue={v.finalidade ?? "SALE"}>
             <SelectTrigger id="finalidade" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -161,7 +161,7 @@ export function ImovelForm({
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="status">Status</Label>
-          <Select name="status" defaultValue={v.status ?? "RASCUNHO"}>
+          <Select name="status" defaultValue={v.status ?? "DRAFT"}>
             <SelectTrigger id="status" className="w-full">
               <SelectValue />
             </SelectTrigger>

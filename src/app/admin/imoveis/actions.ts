@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { requireOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 
 const numeroOpcional = z.preprocess(
   (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
@@ -24,14 +26,14 @@ const imovelSchema = z.object({
   titulo: z.string().min(3),
   descricao: z.string().optional(),
   tipo: z.string().min(1),
-  finalidade: z.enum(["VENDA", "ALUGUEL", "VENDA_E_ALUGUEL"]),
+  finalidade: z.enum(["SALE", "RENT", "SALE_AND_RENT"]),
   status: z.enum([
-    "RASCUNHO",
-    "DISPONIVEL",
-    "RESERVADO",
-    "VENDIDO",
-    "ALUGADO",
-    "INATIVO",
+    "DRAFT",
+    "AVAILABLE",
+    "RESERVED",
+    "SOLD",
+    "RENTED",
+    "INACTIVE",
   ]),
   cep: z.string().optional(),
   logradouro: z.string().optional(),
@@ -57,7 +59,7 @@ const imovelSchema = z.object({
   oportunidade: booleanCheckbox,
   slideshow: booleanCheckbox,
   estagioObra: z
-    .enum(["NA_PLANTA", "EM_CONSTRUCAO", "PRONTO_PARA_MORAR"])
+    .enum(["PRE_CONSTRUCTION", "UNDER_CONSTRUCTION", "READY_TO_MOVE"])
     .optional()
     .or(z.literal("")),
   previsaoEntrega: z.string().optional(),
@@ -77,6 +79,12 @@ function parseFormData(formData: FormData) {
   };
 }
 
+const TIPO_MIDIA_PARA_MEDIA_TYPE = {
+  FOTO: "PHOTO",
+  VIDEO: "VIDEO",
+  PLANTA: "FLOOR_PLAN",
+} as const;
+
 function parseMidias(json: string | undefined) {
   if (!json) return [];
   try {
@@ -85,7 +93,12 @@ function parseMidias(json: string | undefined) {
       url: string;
       ehCapa: boolean;
     }[];
-    return midias.map((m, i) => ({ ...m, ordem: i }));
+    return midias.map((m, i) => ({
+      type: TIPO_MIDIA_PARA_MEDIA_TYPE[m.tipo],
+      url: m.url,
+      isCover: m.ehCapa,
+      order: i,
+    }));
   } catch {
     return [];
   }
@@ -98,49 +111,53 @@ export async function criarImovel(formData: FormData) {
   const dados = parseFormData(formData);
   const midias = parseMidias(dados.midiasJson);
 
-  const imovel = await prisma.imovel.create({
-    data: {
-      titulo: dados.titulo,
-      descricao: dados.descricao || null,
-      tipo: dados.tipo,
-      finalidade: dados.finalidade,
-      status: dados.status,
-      cep: dados.cep || null,
-      logradouro: dados.logradouro || null,
-      numero: dados.numero || null,
-      complemento: dados.complemento || null,
-      bairro: dados.bairro,
-      cidade: dados.cidade,
-      estado: dados.estado.toUpperCase(),
-      latitude: dados.latitude ?? null,
-      longitude: dados.longitude ?? null,
-      preco: dados.preco ?? null,
-      precoAluguel: dados.precoAluguel ?? null,
-      precoCondominio: dados.precoCondominio ?? null,
-      precoIptu: dados.precoIptu ?? null,
-      areaTotal: dados.areaTotal ?? null,
-      areaPrivativa: dados.areaPrivativa ?? null,
-      quartos: dados.quartos ?? null,
-      suites: dados.suites ?? null,
-      banheiros: dados.banheiros ?? null,
-      vagasGaragem: dados.vagasGaragem ?? null,
-      caracteristicasImovel: dados.caracteristicasImovel,
-      caracteristicasCondominio: dados.caracteristicasCondominio,
-      lancamento: dados.lancamento,
-      destaque: dados.destaque,
-      oportunidade: dados.oportunidade,
-      slideshow: dados.slideshow,
-      estagioObra: dados.estagioObra || null,
-      previsaoEntrega: parseMesAno(dados.previsaoEntrega),
-      construtora: dados.construtora || null,
-      corretorResponsavelId: session.user.id,
-      publicadoEm: dados.status === "DISPONIVEL" ? new Date() : null,
-      midias: { create: midias },
-      historicoStatus: {
-        create: { statusAnterior: null, statusNovo: dados.status },
+  const organizationId = await requireOrganizationId();
+  const imovel = await withOrganization(organizationId, () =>
+    prisma.property.create({
+      data: {
+        organizationId,
+        title: dados.titulo,
+        description: dados.descricao || null,
+        type: dados.tipo,
+        purpose: dados.finalidade,
+        status: dados.status,
+        zipCode: dados.cep || null,
+        street: dados.logradouro || null,
+        number: dados.numero || null,
+        complement: dados.complemento || null,
+        neighborhood: dados.bairro,
+        city: dados.cidade,
+        state: dados.estado.toUpperCase(),
+        latitude: dados.latitude ?? null,
+        longitude: dados.longitude ?? null,
+        price: dados.preco ?? null,
+        rentPrice: dados.precoAluguel ?? null,
+        condoFee: dados.precoCondominio ?? null,
+        propertyTax: dados.precoIptu ?? null,
+        totalArea: dados.areaTotal ?? null,
+        privateArea: dados.areaPrivativa ?? null,
+        bedrooms: dados.quartos ?? null,
+        suites: dados.suites ?? null,
+        bathrooms: dados.banheiros ?? null,
+        parkingSpots: dados.vagasGaragem ?? null,
+        propertyFeatures: dados.caracteristicasImovel,
+        condoFeatures: dados.caracteristicasCondominio,
+        isLaunch: dados.lancamento,
+        isFeatured: dados.destaque,
+        isOpportunity: dados.oportunidade,
+        hasSlideshow: dados.slideshow,
+        constructionStage: dados.estagioObra || null,
+        deliveryForecast: parseMesAno(dados.previsaoEntrega),
+        developer: dados.construtora || null,
+        responsibleMemberId: session.user.organizationMemberId ?? null,
+        publishedAt: dados.status === "AVAILABLE" ? new Date() : null,
+        media: { create: midias.map((m) => ({ ...m, organizationId })) },
+        statusHistory: {
+          create: { previousStatus: null, newStatus: dados.status, organizationId },
+        },
       },
-    },
-  });
+    })
+  );
 
   revalidatePath("/admin/imoveis");
   redirect(`/admin/imoveis/${imovel.id}?salvo=1`);
@@ -153,69 +170,74 @@ export async function atualizarImovel(imovelId: string, formData: FormData) {
   const dados = parseFormData(formData);
   const midias = parseMidias(dados.midiasJson);
 
-  const imovelAtual = await prisma.imovel.findUniqueOrThrow({
-    where: { id: imovelId },
-    select: { status: true, publicadoEm: true },
-  });
+  const organizationId = await requireOrganizationId();
 
-  const statusMudou = imovelAtual.status !== dados.status;
+  await withOrganization(organizationId, async () => {
+    const imovelAtual = await prisma.property.findUniqueOrThrow({
+      where: { id: imovelId, organizationId },
+      select: { status: true, publishedAt: true },
+    });
 
-  await prisma.$transaction([
-    prisma.midia.deleteMany({ where: { imovelId } }),
-    prisma.imovel.update({
-      where: { id: imovelId },
-      data: {
-        titulo: dados.titulo,
-        descricao: dados.descricao || null,
-        tipo: dados.tipo,
-        finalidade: dados.finalidade,
-        status: dados.status,
-        cep: dados.cep || null,
-        logradouro: dados.logradouro || null,
-        numero: dados.numero || null,
-        complemento: dados.complemento || null,
-        bairro: dados.bairro,
-        cidade: dados.cidade,
-        estado: dados.estado.toUpperCase(),
-        latitude: dados.latitude ?? null,
-        longitude: dados.longitude ?? null,
-        preco: dados.preco ?? null,
-        precoAluguel: dados.precoAluguel ?? null,
-        precoCondominio: dados.precoCondominio ?? null,
-        precoIptu: dados.precoIptu ?? null,
-        areaTotal: dados.areaTotal ?? null,
-        areaPrivativa: dados.areaPrivativa ?? null,
-        quartos: dados.quartos ?? null,
-        suites: dados.suites ?? null,
-        banheiros: dados.banheiros ?? null,
-        vagasGaragem: dados.vagasGaragem ?? null,
-        caracteristicasImovel: dados.caracteristicasImovel,
-        caracteristicasCondominio: dados.caracteristicasCondominio,
-        lancamento: dados.lancamento,
-        destaque: dados.destaque,
-        oportunidade: dados.oportunidade,
-        slideshow: dados.slideshow,
-        estagioObra: dados.estagioObra || null,
-        previsaoEntrega: parseMesAno(dados.previsaoEntrega),
-        construtora: dados.construtora || null,
-        publicadoEm:
-          dados.status === "DISPONIVEL" && !imovelAtual.publicadoEm
-            ? new Date()
-            : undefined,
-        midias: { create: midias },
-        ...(statusMudou
-          ? {
-              historicoStatus: {
-                create: {
-                  statusAnterior: imovelAtual.status,
-                  statusNovo: dados.status,
+    const statusMudou = imovelAtual.status !== dados.status;
+
+    await prisma.$transaction([
+      prisma.media.deleteMany({ where: { propertyId: imovelId, organizationId } }),
+      prisma.property.update({
+        where: { id: imovelId, organizationId },
+        data: {
+          title: dados.titulo,
+          description: dados.descricao || null,
+          type: dados.tipo,
+          purpose: dados.finalidade,
+          status: dados.status,
+          zipCode: dados.cep || null,
+          street: dados.logradouro || null,
+          number: dados.numero || null,
+          complement: dados.complemento || null,
+          neighborhood: dados.bairro,
+          city: dados.cidade,
+          state: dados.estado.toUpperCase(),
+          latitude: dados.latitude ?? null,
+          longitude: dados.longitude ?? null,
+          price: dados.preco ?? null,
+          rentPrice: dados.precoAluguel ?? null,
+          condoFee: dados.precoCondominio ?? null,
+          propertyTax: dados.precoIptu ?? null,
+          totalArea: dados.areaTotal ?? null,
+          privateArea: dados.areaPrivativa ?? null,
+          bedrooms: dados.quartos ?? null,
+          suites: dados.suites ?? null,
+          bathrooms: dados.banheiros ?? null,
+          parkingSpots: dados.vagasGaragem ?? null,
+          propertyFeatures: dados.caracteristicasImovel,
+          condoFeatures: dados.caracteristicasCondominio,
+          isLaunch: dados.lancamento,
+          isFeatured: dados.destaque,
+          isOpportunity: dados.oportunidade,
+          hasSlideshow: dados.slideshow,
+          constructionStage: dados.estagioObra || null,
+          deliveryForecast: parseMesAno(dados.previsaoEntrega),
+          developer: dados.construtora || null,
+          publishedAt:
+            dados.status === "AVAILABLE" && !imovelAtual.publishedAt
+              ? new Date()
+              : undefined,
+          media: { create: midias.map((m) => ({ ...m, organizationId })) },
+          ...(statusMudou
+            ? {
+                statusHistory: {
+                  create: {
+                    previousStatus: imovelAtual.status,
+                    newStatus: dados.status,
+                    organizationId,
+                  },
                 },
-              },
-            }
-          : {}),
-      },
-    }),
-  ]);
+              }
+            : {}),
+        },
+      }),
+    ]);
+  });
 
   revalidatePath("/admin/imoveis");
   revalidatePath(`/admin/imoveis/${imovelId}`);

@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { siteConfig } from "@/lib/site-config";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
+import { requireOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 
 export async function GET(request: Request) {
   const session = await auth();
   if (!session) {
     return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   }
+  const organizationId = await requireOrganizationId();
 
   const { searchParams } = new URL(request.url);
   const endereco = searchParams.get("endereco")?.trim();
@@ -22,7 +25,9 @@ export async function GET(request: Request) {
   // O Nominatim exige um identificador válido (política de uso). O domínio
   // "example.com" (valor padrão até cadastrar um e-mail em Configurações) é
   // bloqueado por eles, então usamos um identificador genérico nesse caso.
-  const configContato = await buscarConfiguracaoContato();
+  const configContato = await withOrganization(organizationId, () =>
+    buscarConfiguracaoContato(organizationId)
+  );
   const emailConfigurado = configContato.email || siteConfig.emailContato;
   const contatoValido =
     emailConfigurado && emailConfigurado !== "contato@example.com"

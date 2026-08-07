@@ -1,37 +1,37 @@
 type ImovelParaCard = {
   id: string;
-  titulo: string;
-  tipo: string;
-  finalidade: string;
-  bairro: string;
-  cidade: string;
-  estado: string;
-  preco: { toString(): string } | null;
-  precoAluguel: { toString(): string } | null;
-  quartos: number | null;
-  vagasGaragem: number | null;
-  lancamento: boolean;
-  destaque: boolean;
-  oportunidade: boolean;
-  midias: { url: string }[];
+  title: string;
+  type: string;
+  purpose: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  price: { toString(): string } | null;
+  rentPrice: { toString(): string } | null;
+  bedrooms: number | null;
+  parkingSpots: number | null;
+  isLaunch: boolean;
+  isFeatured: boolean;
+  isOpportunity: boolean;
+  media: { url: string }[];
 };
 
 export function paraImovelCard(imovel: ImovelParaCard) {
   return {
     id: imovel.id,
-    titulo: imovel.titulo,
-    tipo: imovel.tipo,
-    finalidade: imovel.finalidade,
-    bairro: imovel.bairro,
-    cidade: imovel.cidade,
-    estado: imovel.estado,
-    preco: imovel.preco ? imovel.preco.toString() : null,
-    precoAluguel: imovel.precoAluguel ? imovel.precoAluguel.toString() : null,
-    quartos: imovel.quartos,
-    vagasGaragem: imovel.vagasGaragem,
-    lancamento: imovel.lancamento,
-    destaque: imovel.destaque,
-    oportunidade: imovel.oportunidade,
-    midias: imovel.midias.map((m) => ({ url: m.url })),
+    titulo: imovel.title,
+    tipo: imovel.type,
+    finalidade: imovel.purpose,
+    bairro: imovel.neighborhood,
+    cidade: imovel.city,
+    estado: imovel.state,
+    preco: imovel.price ? imovel.price.toString() : null,
+    precoAluguel: imovel.rentPrice ? imovel.rentPrice.toString() : null,
+    quartos: imovel.bedrooms,
+    vagasGaragem: imovel.parkingSpots,
+    lancamento: imovel.isLaunch,
+    destaque: imovel.isFeatured,
+    oportunidade: imovel.isOpportunity,
+    midias: imovel.media.map((m) => ({ url: m.url })),
   };
 }

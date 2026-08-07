@@ -4,12 +4,12 @@ import Link from "next/link";
 import type { DataTableColumn } from "@/components/admin/data-table/DataTable";
 
 const ESTAGIO_LABEL: Record<string, string> = {
-  NOVO_LEAD: "Novo lead",
-  CONTATO_FEITO: "Contato feito",
-  VISITA_AGENDADA: "Visita agendada",
-  PROPOSTA: "Proposta",
-  FECHADO: "Fechado",
-  PERDIDO: "Perdido",
+  NEW_LEAD: "Novo lead",
+  CONTACTED: "Contato feito",
+  VISIT_SCHEDULED: "Visita agendada",
+  PROPOSAL: "Proposta",
+  CLOSED: "Fechado",
+  LOST: "Perdido",
 };
 
 export type ClienteRow = {

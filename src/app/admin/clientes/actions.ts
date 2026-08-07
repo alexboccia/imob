@@ -6,6 +6,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { telefoneValido } from "@/lib/telefone";
+import { requireOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 
 type EstadoFormulario = { sucesso: boolean; erro?: string };
 
@@ -21,9 +23,9 @@ const pessoaSchema = z.object({
     .refine((v) => telefoneValido(v), "Telefone inválido.")
     .optional()
     .or(z.literal("")),
-  papel: z.enum(["LEAD", "CLIENTE", "PROPRIETARIO"]),
+  papel: z.enum(["LEAD", "CLIENT", "OWNER"]),
   origem: z
-    .enum(["SITE", "INDICACAO", "PORTAL", "INSTAGRAM", "WHATSAPP", "OUTRO"])
+    .enum(["WEBSITE", "REFERRAL", "PORTAL", "INSTAGRAM", "WHATSAPP", "OTHER"])
     .optional(),
   observacoes: z.string().optional(),
 });
@@ -44,30 +46,34 @@ export async function criarPessoa(
   }
   const dados = parsed.data;
 
-  await prisma.pessoa.create({
-    data: {
-      nome: dados.nome,
-      email: dados.email || null,
-      telefone: dados.telefone || null,
-      papeis: [dados.papel],
-      origem: dados.origem || null,
-      observacoes: dados.observacoes || null,
-      corretorAtribuidoId: session.user.id,
-    },
-  });
+  const organizationId = await requireOrganizationId();
+  await withOrganization(organizationId, async () => {
+    await prisma.person.create({
+      data: {
+        organizationId,
+        name: dados.nome,
+        email: dados.email || null,
+        phone: dados.telefone || null,
+        roles: [dados.papel],
+        source: dados.origem || null,
+        notes: dados.observacoes || null,
+        assignedMemberId: session.user.organizationMemberId ?? null,
+      },
+    });
 
-  revalidatePath("/admin/clientes");
+    revalidatePath("/admin/clientes");
+  });
   redirect("/admin/clientes");
 }
 
 const estagioSchema = z.object({
   estagioFunil: z.enum([
-    "NOVO_LEAD",
-    "CONTATO_FEITO",
-    "VISITA_AGENDADA",
-    "PROPOSTA",
-    "FECHADO",
-    "PERDIDO",
+    "NEW_LEAD",
+    "CONTACTED",
+    "VISIT_SCHEDULED",
+    "PROPOSAL",
+    "CLOSED",
+    "LOST",
   ]),
 });
 
@@ -82,16 +88,19 @@ export async function atualizarEstagioFunil(
     Object.fromEntries(formData.entries())
   );
 
-  await prisma.pessoa.update({
-    where: { id: pessoaId },
-    data: { estagioFunil },
-  });
+  const organizationId = await requireOrganizationId();
+  await withOrganization(organizationId, async () => {
+    await prisma.person.update({
+      where: { id: pessoaId, organizationId },
+      data: { pipelineStage: estagioFunil },
+    });
 
-  revalidatePath(`/admin/clientes/${pessoaId}`);
+    revalidatePath(`/admin/clientes/${pessoaId}`);
+  });
 }
 
 const interacaoSchema = z.object({
-  tipo: z.enum(["VISITA", "LIGACAO", "MENSAGEM", "EMAIL", "OUTRO"]),
+  tipo: z.enum(["VISIT", "CALL", "MESSAGE", "EMAIL", "OTHER"]),
   notas: z.string().optional(),
 });
 
@@ -101,14 +110,18 @@ export async function registrarInteracao(pessoaId: string, formData: FormData) {
 
   const dados = interacaoSchema.parse(Object.fromEntries(formData.entries()));
 
-  await prisma.interacao.create({
-    data: {
-      pessoaId,
-      tipo: dados.tipo,
-      notas: dados.notas || null,
-      corretorId: session.user.id,
-    },
-  });
+  const organizationId = await requireOrganizationId();
+  await withOrganization(organizationId, async () => {
+    await prisma.interaction.create({
+      data: {
+        organizationId,
+        personId: pessoaId,
+        type: dados.tipo,
+        notes: dados.notas || null,
+        memberId: session.user.organizationMemberId ?? null,
+      },
+    });
 
-  revalidatePath(`/admin/clientes/${pessoaId}`);
+    revalidatePath(`/admin/clientes/${pessoaId}`);
+  });
 }

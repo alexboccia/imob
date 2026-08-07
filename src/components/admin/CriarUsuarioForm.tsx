@@ -30,14 +30,15 @@ export function CriarUsuarioForm() {
           required
           minLength={6}
         />
-        <Select name="papel" defaultValue="CORRETOR">
+        <Select name="papel" defaultValue="BROKER">
           <SelectTrigger className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="ADMINISTRADOR">Administrador</SelectItem>
-            <SelectItem value="GESTOR">Gestor</SelectItem>
-            <SelectItem value="CORRETOR">Corretor</SelectItem>
+            <SelectItem value="ADMIN">Administrador</SelectItem>
+            <SelectItem value="MANAGER">Gestor</SelectItem>
+            <SelectItem value="BROKER">Corretor</SelectItem>
+            <SelectItem value="ASSISTANT">Assistente</SelectItem>
           </SelectContent>
         </Select>
         {estado.erro && (

@@ -31,8 +31,8 @@ export function CriarClienteForm() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="LEAD">Lead</SelectItem>
-            <SelectItem value="CLIENTE">Cliente</SelectItem>
-            <SelectItem value="PROPRIETARIO">Proprietário</SelectItem>
+            <SelectItem value="CLIENT">Cliente</SelectItem>
+            <SelectItem value="OWNER">Proprietário</SelectItem>
           </SelectContent>
         </Select>
         <Select name="origem">
@@ -40,12 +40,12 @@ export function CriarClienteForm() {
             <SelectValue placeholder="Origem" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="SITE">Site</SelectItem>
-            <SelectItem value="INDICACAO">Indicação</SelectItem>
+            <SelectItem value="WEBSITE">Site</SelectItem>
+            <SelectItem value="REFERRAL">Indicação</SelectItem>
             <SelectItem value="PORTAL">Portal</SelectItem>
             <SelectItem value="INSTAGRAM">Instagram</SelectItem>
             <SelectItem value="WHATSAPP">WhatsApp</SelectItem>
-            <SelectItem value="OUTRO">Outro</SelectItem>
+            <SelectItem value="OTHER">Outro</SelectItem>
           </SelectContent>
         </Select>
         <Input name="observacoes" placeholder="Observações" className="col-span-2" />

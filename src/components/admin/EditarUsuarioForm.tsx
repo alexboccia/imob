@@ -111,9 +111,11 @@ export function EditarUsuarioForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ADMINISTRADOR">Administrador</SelectItem>
-                    <SelectItem value="GESTOR">Gestor</SelectItem>
-                    <SelectItem value="CORRETOR">Corretor</SelectItem>
+                    <SelectItem value="OWNER">Proprietário</SelectItem>
+                    <SelectItem value="ADMIN">Administrador</SelectItem>
+                    <SelectItem value="MANAGER">Gestor</SelectItem>
+                    <SelectItem value="BROKER">Corretor</SelectItem>
+                    <SelectItem value="ASSISTANT">Assistente</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

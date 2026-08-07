@@ -6,23 +6,36 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  await seedTenancy();
+
+  const orgSlug = process.env.ORG_SLUG ?? "boccia";
+  const orgName = process.env.ORG_NAME ?? "Boccia Consultoria Imobiliária";
   const email = process.env.SEED_ADMIN_EMAIL ?? "admin@example.com";
   const senha = process.env.SEED_ADMIN_SENHA ?? "admin123";
 
-  const senhaHash = await bcrypt.hash(senha, 10);
+  const planoPremium = await prisma.plan.findUniqueOrThrow({ where: { code: "PREMIUM" } });
 
-  const usuario = await prisma.usuario.upsert({
-    where: { email },
+  const organization = await prisma.organization.upsert({
+    where: { slug: orgSlug },
     update: {},
-    create: {
-      nome: "Administrador",
-      email,
-      senhaHash,
-      papel: "ADMINISTRADOR",
-    },
+    create: { slug: orgSlug, name: orgName, planId: planoPremium.id },
   });
 
-  console.log(`Usuário administrador pronto: ${usuario.email}`);
+  const senhaHash = await bcrypt.hash(senha, 10);
+
+  const usuario = await prisma.user.upsert({
+    where: { email },
+    update: {},
+    create: { name: "Administrador", email, passwordHash: senhaHash },
+  });
+
+  await prisma.organizationMember.upsert({
+    where: { organizationId_userId: { organizationId: organization.id, userId: usuario.id } },
+    update: {},
+    create: { organizationId: organization.id, userId: usuario.id, role: "OWNER" },
+  });
+
+  console.log(`Usuário administrador pronto: ${usuario.email} (organização: ${organization.slug})`);
 
   const opcoesImovel = [
     "Acessível para PCD",
@@ -181,18 +194,30 @@ async function main() {
   ];
 
   for (const nome of opcoesImovel) {
-    await prisma.caracteristicaOpcao.upsert({
-      where: { categoria_nome: { categoria: "IMOVEL", nome } },
+    await prisma.featureOption.upsert({
+      where: {
+        organizationId_category_name: {
+          organizationId: organization.id,
+          category: "PROPERTY",
+          name: nome,
+        },
+      },
       update: {},
-      create: { categoria: "IMOVEL", nome },
+      create: { organizationId: organization.id, category: "PROPERTY", name: nome },
     });
   }
 
   for (const nome of opcoesCondominio) {
-    await prisma.caracteristicaOpcao.upsert({
-      where: { categoria_nome: { categoria: "CONDOMINIO", nome } },
+    await prisma.featureOption.upsert({
+      where: {
+        organizationId_category_name: {
+          organizationId: organization.id,
+          category: "CONDO",
+          name: nome,
+        },
+      },
       update: {},
-      create: { categoria: "CONDOMINIO", nome },
+      create: { organizationId: organization.id, category: "CONDO", name: nome },
     });
   }
 
@@ -274,26 +299,36 @@ async function main() {
   ];
 
   for (const nome of tiposResidenciais) {
-    await prisma.tipoImovelOpcao.upsert({
-      where: { categoria_nome: { categoria: "RESIDENCIAL", nome } },
+    await prisma.propertyTypeOption.upsert({
+      where: {
+        organizationId_category_name: {
+          organizationId: organization.id,
+          category: "RESIDENTIAL",
+          name: nome,
+        },
+      },
       update: {},
-      create: { categoria: "RESIDENCIAL", nome },
+      create: { organizationId: organization.id, category: "RESIDENTIAL", name: nome },
     });
   }
 
   for (const nome of tiposComerciais) {
-    await prisma.tipoImovelOpcao.upsert({
-      where: { categoria_nome: { categoria: "COMERCIAL", nome } },
+    await prisma.propertyTypeOption.upsert({
+      where: {
+        organizationId_category_name: {
+          organizationId: organization.id,
+          category: "COMMERCIAL",
+          name: nome,
+        },
+      },
       update: {},
-      create: { categoria: "COMERCIAL", nome },
+      create: { organizationId: organization.id, category: "COMMERCIAL", name: nome },
     });
   }
 
   console.log(
     `Catálogo de tipos de imóvel pronto: ${tiposResidenciais.length} residenciais, ${tiposComerciais.length} comerciais.`
   );
-
-  await seedTenancy();
 }
 
 // Fundação multi-tenant (EasyMob) — catálogos globais da plataforma, não

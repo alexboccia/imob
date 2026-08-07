@@ -1,6 +1,8 @@
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { formatarCodigoImovel } from "@/lib/format";
 import { salvarConfiguracaoContato } from "./actions";
+import { requireOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +10,10 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { LogoUpload } from "@/components/admin/LogoUpload";
 
 export default async function ConfiguracoesPage() {
-  const config = await buscarConfiguracaoContato();
+  const organizationId = await requireOrganizationId();
+  const config = await withOrganization(organizationId, () =>
+    buscarConfiguracaoContato(organizationId)
+  );
 
   return (
     <div className="max-w-2xl">

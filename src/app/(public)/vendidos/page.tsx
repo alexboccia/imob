@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { ImovelCard } from "@/components/ImovelCard";
 import { paraImovelCard } from "@/lib/imovel-card";
+import { getPublicOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Vendidos e Alugados",
@@ -9,18 +13,21 @@ export const metadata: Metadata = {
 };
 
 export default async function VendidosAlugadosPage() {
-  const imoveis = await prisma.imovel.findMany({
-    where: { status: { in: ["VENDIDO", "ALUGADO"] } },
-    orderBy: { atualizadoEm: "desc" },
-    take: 30,
-    include: {
-      midias: {
-        where: { tipo: "FOTO" },
-        orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }],
-        take: 5,
+  const organizationId = await getPublicOrganizationId();
+  const imoveis = await withOrganization(organizationId, () =>
+    prisma.property.findMany({
+      where: { organizationId, status: { in: ["SOLD", "RENTED"] } },
+      orderBy: { updatedAt: "desc" },
+      take: 30,
+      include: {
+        media: {
+          where: { type: "PHOTO" },
+          orderBy: [{ isCover: "desc" }, { order: "asc" }],
+          take: 5,
+        },
       },
-    },
-  });
+    })
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">

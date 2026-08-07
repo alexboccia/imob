@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireOrganizationId } from "@/lib/tenant";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/admin/data-table/DataTable";
 import { CriarUsuarioForm } from "@/components/admin/CriarUsuarioForm";
@@ -7,17 +8,22 @@ import { usuarioColumns, type UsuarioRow } from "./columns";
 
 export default async function UsuariosPage() {
   const session = await auth();
-  const ehAdministrador = session?.user.papel === "ADMINISTRADOR";
+  const organizationId = await requireOrganizationId();
+  const ehAdministrador = session?.user.role === "OWNER" || session?.user.role === "ADMIN";
 
-  const usuarios = await prisma.usuario.findMany({ orderBy: { criadoEm: "asc" } });
+  const membros = await prisma.organizationMember.findMany({
+    where: { organizationId },
+    include: { user: true },
+    orderBy: { createdAt: "asc" },
+  });
 
-  const linhas: UsuarioRow[] = usuarios.map((usuario) => ({
-    id: usuario.id,
-    nome: usuario.nome,
-    email: usuario.email,
-    papel: usuario.papel,
-    ativo: usuario.ativo,
-    ehVoceMesmo: usuario.id === session?.user.id,
+  const linhas: UsuarioRow[] = membros.map((membro) => ({
+    id: membro.id,
+    nome: membro.user.name,
+    email: membro.user.email,
+    papel: membro.role,
+    ativo: membro.status === "ACTIVE",
+    ehVoceMesmo: membro.id === session?.user.organizationMemberId,
   }));
 
   return (

@@ -14,6 +14,8 @@ import { siteConfig } from "@/lib/site-config";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { distanciaEmKm, formatarDistancia } from "@/lib/geo";
 import { paraImovelCard } from "@/lib/imovel-card";
+import { getPublicOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 import { GaleriaFotos } from "@/components/GaleriaFotos";
 import { FormularioContato } from "@/components/FormularioContato";
 import { EvolucaoObra } from "@/components/EvolucaoObra";
@@ -59,33 +61,39 @@ function ItemCaracteristicaCatalogo({ nome }: { nome: string }) {
   );
 }
 
-const buscarImovel = cache(async (id: string) => {
-  return prisma.imovel.findUnique({
-    where: { id },
+const buscarImovel = cache(async (id: string, organizationId: string) => {
+  return prisma.property.findUnique({
+    where: { id, organizationId },
     include: {
-      midias: { orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }] },
-      corretorResponsavel: { select: { nome: true, foto: true, whatsapp: true } },
+      media: { orderBy: [{ isCover: "desc" }, { order: "asc" }] },
+      responsibleMember: {
+        select: { whatsapp: true, user: { select: { name: true, avatarUrl: true } } },
+      },
     },
   });
 });
 
-async function buscarImoveisProximos(imovel: {
-  id: string;
-  bairro: string;
-  cidade: string;
-  latitude: number | null;
-  longitude: number | null;
-}) {
-  const candidatos = await prisma.imovel.findMany({
+async function buscarImoveisProximos(
+  organizationId: string,
+  imovel: {
+    id: string;
+    neighborhood: string;
+    city: string;
+    latitude: number | null;
+    longitude: number | null;
+  }
+) {
+  const candidatos = await prisma.property.findMany({
     where: {
-      status: "DISPONIVEL",
+      organizationId,
+      status: "AVAILABLE",
       id: { not: imovel.id },
-      cidade: imovel.cidade,
+      city: imovel.city,
     },
     include: {
-      midias: {
-        where: { tipo: "FOTO" },
-        orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }],
+      media: {
+        where: { type: "PHOTO" },
+        orderBy: [{ isCover: "desc" }, { order: "asc" }],
         take: 5,
       },
     },
@@ -114,8 +122,8 @@ async function buscarImoveisProximos(imovel: {
     }
     if (a.distanciaKm != null) return -1;
     if (b.distanciaKm != null) return 1;
-    const aMesmoBairro = a.imovel.bairro === imovel.bairro;
-    const bMesmoBairro = b.imovel.bairro === imovel.bairro;
+    const aMesmoBairro = a.imovel.neighborhood === imovel.neighborhood;
+    const bMesmoBairro = b.imovel.neighborhood === imovel.neighborhood;
     return aMesmoBairro === bMesmoBairro ? 0 : aMesmoBairro ? -1 : 1;
   });
 
@@ -128,29 +136,32 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const imovel = await buscarImovel(id);
+  const organizationId = await getPublicOrganizationId();
+  const imovel = await withOrganization(organizationId, () =>
+    buscarImovel(id, organizationId)
+  );
 
-  if (!imovel || imovel.status === "RASCUNHO" || imovel.status === "INATIVO") {
+  if (!imovel || imovel.status === "DRAFT" || imovel.status === "INACTIVE") {
     return {};
   }
 
-  const capa = imovel.midias.find((m) => m.tipo === "FOTO")?.url;
-  const descricao = imovel.descricao
-    ? imovel.descricao.slice(0, 160)
-    : `${imovel.tipo} em ${imovel.bairro}, ${imovel.cidade} - ${imovel.estado}.`;
+  const capa = imovel.media.find((m) => m.type === "PHOTO")?.url;
+  const descricao = imovel.description
+    ? imovel.description.slice(0, 160)
+    : `${imovel.type} em ${imovel.neighborhood}, ${imovel.city} - ${imovel.state}.`;
 
   return {
-    title: imovel.titulo,
+    title: imovel.title,
     description: descricao,
     openGraph: {
-      title: imovel.titulo,
+      title: imovel.title,
       description: descricao,
       type: "website",
       images: capa ? [{ url: capa, width: 1200, height: 900 }] : undefined,
     },
     twitter: {
       card: "summary_large_image",
-      title: imovel.titulo,
+      title: imovel.title,
       description: descricao,
       images: capa ? [capa] : undefined,
     },
@@ -163,34 +174,42 @@ export default async function DetalheImovelPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const organizationId = await getPublicOrganizationId();
 
-  const imovel = await buscarImovel(id);
+  const { imovel, configContato, imoveisProximos } = await withOrganization(
+    organizationId,
+    async () => {
+      const imovel = await buscarImovel(id, organizationId);
 
-  if (!imovel || imovel.status === "RASCUNHO" || imovel.status === "INATIVO") {
-    notFound();
-  }
+      if (!imovel || imovel.status === "DRAFT" || imovel.status === "INACTIVE") {
+        notFound();
+      }
 
-  const fotos = imovel.midias.filter((m) => m.tipo === "FOTO");
-  const videos = imovel.midias.filter((m) => m.tipo === "VIDEO");
-  const plantas = imovel.midias.filter((m) => m.tipo === "PLANTA");
+      const [configContato, imoveisProximos] = await Promise.all([
+        buscarConfiguracaoContato(organizationId),
+        buscarImoveisProximos(organizationId, imovel),
+      ]);
 
-  const [configContato, imoveisProximos] = await Promise.all([
-    buscarConfiguracaoContato(),
-    buscarImoveisProximos(imovel),
-  ]);
+      return { imovel, configContato, imoveisProximos };
+    }
+  );
+
+  const fotos = imovel.media.filter((m) => m.type === "PHOTO");
+  const videos = imovel.media.filter((m) => m.type === "VIDEO");
+  const plantas = imovel.media.filter((m) => m.type === "FLOOR_PLAN");
 
   const whatsappNumero =
-    imovel.corretorResponsavel?.whatsapp || configContato.whatsapp;
+    imovel.responsibleMember?.whatsapp || configContato.whatsapp;
 
   const whatsappHref = `https://wa.me/${whatsappNumero.replace(/\D/g, "")}?text=${encodeURIComponent(
-    `Olá! Tenho interesse no imóvel "${imovel.titulo}" (${imovel.bairro}, ${imovel.cidade}).`
+    `Olá! Tenho interesse no imóvel "${imovel.title}" (${imovel.neighborhood}, ${imovel.city}).`
   )}`;
 
   const enderecoCompleto = [
-    imovel.logradouro && imovel.numero
-      ? `${imovel.logradouro}, ${imovel.numero}`
-      : imovel.logradouro,
-    imovel.bairro,
+    imovel.street && imovel.number
+      ? `${imovel.street}, ${imovel.number}`
+      : imovel.street,
+    imovel.neighborhood,
   ]
     .filter(Boolean)
     .join(" - ");
@@ -199,29 +218,29 @@ export default async function DetalheImovelPage({
   const linkGoogleMaps = temCoordenadas
     ? `https://www.google.com/maps/search/?api=1&query=${imovel.latitude},${imovel.longitude}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-        `${enderecoCompleto}, ${imovel.cidade} - ${imovel.estado}`
+        `${enderecoCompleto}, ${imovel.city} - ${imovel.state}`
       )}`;
 
   const verboFinalidade =
-    imovel.finalidade === "ALUGUEL"
+    imovel.purpose === "RENT"
       ? "alugar"
-      : imovel.finalidade === "VENDA_E_ALUGUEL"
+      : imovel.purpose === "SALE_AND_RENT"
         ? "comprar ou alugar"
         : "comprar";
 
-  const precoPrincipal = imovel.preco ?? imovel.precoAluguel;
+  const precoPrincipal = imovel.price ?? imovel.rentPrice;
 
   const mensagemContato = `Olá, gostaria de ter mais informações para ${verboFinalidade}: ${
-    imovel.tipo.toLowerCase()
+    imovel.type.toLowerCase()
   }, ${formatarPreco(precoPrincipal)}, ${enderecoCompleto ? `${enderecoCompleto}, ` : ""}${
-    imovel.cidade
-  } - ${imovel.estado} que encontrei no site da ${siteConfig.nome}. Aguardo seu contato.`;
+    imovel.city
+  } - ${imovel.state} que encontrei no site da ${siteConfig.nome}. Aguardo seu contato.`;
 
   return (
     <>
       <GaleriaFotos
         fotos={fotos}
-        titulo={imovel.titulo}
+        titulo={imovel.title}
         imovelId={imovel.id}
         whatsappHref={whatsappHref}
         mensagemContato={mensagemContato}
@@ -230,32 +249,36 @@ export default async function DetalheImovelPage({
 
       <div className="mx-auto max-w-6xl px-4 py-10">
       <p className="text-sm text-gray-500 mb-2">
-        {imovel.tipo} ·{" "}
-        {FINALIDADE_LABEL[imovel.finalidade] ?? imovel.finalidade}
-        {rotulosAtivos(imovel).map((rotulo) => (
+        {imovel.type} ·{" "}
+        {FINALIDADE_LABEL[imovel.purpose] ?? imovel.purpose}
+        {rotulosAtivos({
+          lancamento: imovel.isLaunch,
+          destaque: imovel.isFeatured,
+          oportunidade: imovel.isOpportunity,
+        }).map((rotulo) => (
           <Badge key={rotulo.chave} className={`ml-2 ${rotulo.className}`}>
             {rotulo.label}
           </Badge>
         ))}
         <Badge variant="secondary" className="ml-2">
           # Cód:{" "}
-          {formatarCodigoImovel(imovel.codigo, configContato.codigoImovelPrefixo)}
+          {formatarCodigoImovel(imovel.code, configContato.codigoImovelPrefixo)}
         </Badge>
       </p>
-      <h1 className="text-2xl font-semibold">{imovel.titulo}</h1>
-      {imovel.construtora && (
+      <h1 className="text-2xl font-semibold">{imovel.title}</h1>
+      {imovel.developer && (
         <p className="text-sm text-gray-600 mt-1">
-          Responsável pela obra: <strong>{imovel.construtora}</strong>
+          Responsável pela obra: <strong>{imovel.developer}</strong>
         </p>
       )}
       <p className="text-gray-500 mt-1">
         {enderecoCompleto ? `${enderecoCompleto}, ` : ""}
-        {imovel.cidade} - {imovel.estado}
+        {imovel.city} - {imovel.state}
       </p>
-      {imovel.publicadoEm && (
+      {imovel.publishedAt && (
         <p className="text-xs text-gray-400 mt-1">
-          Publicado {formatarTempoRelativo(imovel.publicadoEm)}, atualizado{" "}
-          {formatarTempoRelativo(imovel.atualizadoEm)}.
+          Publicado {formatarTempoRelativo(imovel.publishedAt)}, atualizado{" "}
+          {formatarTempoRelativo(imovel.updatedAt)}.
         </p>
       )}
 
@@ -275,8 +298,8 @@ export default async function DetalheImovelPage({
 
       <div className="mt-6">
         <EvolucaoObra
-          estagioObra={imovel.estagioObra}
-          previsaoEntrega={imovel.previsaoEntrega}
+          estagioObra={imovel.constructionStage}
+          previsaoEntrega={imovel.deliveryForecast}
         />
       </div>
 
@@ -285,25 +308,25 @@ export default async function DetalheImovelPage({
           <div>
             <h2 className="font-semibold mb-2">Descrição</h2>
             <p className="text-gray-700 whitespace-pre-line">
-              {imovel.descricao ?? "Sem descrição disponível."}
+              {imovel.description ?? "Sem descrição disponível."}
             </p>
           </div>
           <div>
             <h2 className="font-semibold mb-2">Características do imóvel</h2>
             <ul className="grid grid-cols-2 gap-y-1 text-sm text-gray-700">
-              {imovel.areaTotal && (
+              {imovel.totalArea && (
                 <ItemCaracteristica icon={IconeArea}>
-                  Área total: {imovel.areaTotal} m²
+                  Área total: {imovel.totalArea} m²
                 </ItemCaracteristica>
               )}
-              {imovel.areaPrivativa && (
+              {imovel.privateArea && (
                 <ItemCaracteristica icon={IconeArea}>
-                  Área privativa: {imovel.areaPrivativa} m²
+                  Área privativa: {imovel.privateArea} m²
                 </ItemCaracteristica>
               )}
-              {imovel.quartos !== null && (
+              {imovel.bedrooms !== null && (
                 <ItemCaracteristica icon={IconeQuartos}>
-                  Quartos: {imovel.quartos}
+                  Quartos: {imovel.bedrooms}
                 </ItemCaracteristica>
               )}
               {imovel.suites !== null && (
@@ -311,27 +334,27 @@ export default async function DetalheImovelPage({
                   Suítes: {imovel.suites}
                 </ItemCaracteristica>
               )}
-              {imovel.banheiros !== null && (
+              {imovel.bathrooms !== null && (
                 <ItemCaracteristica icon={IconeBanheiro}>
-                  Banheiros: {imovel.banheiros}
+                  Banheiros: {imovel.bathrooms}
                 </ItemCaracteristica>
               )}
-              {imovel.vagasGaragem !== null && (
+              {imovel.parkingSpots !== null && (
                 <ItemCaracteristica icon={IconeVaga}>
-                  Vagas de garagem: {imovel.vagasGaragem}
+                  Vagas de garagem: {imovel.parkingSpots}
                 </ItemCaracteristica>
               )}
-              {imovel.caracteristicasImovel.map((c) => (
+              {imovel.propertyFeatures.map((c) => (
                 <ItemCaracteristicaCatalogo key={c} nome={c} />
               ))}
             </ul>
           </div>
 
-          {imovel.caracteristicasCondominio.length > 0 && (
+          {imovel.condoFeatures.length > 0 && (
             <div>
               <h2 className="font-semibold mb-2">Características do condomínio</h2>
               <ul className="grid grid-cols-2 gap-y-1 text-sm text-gray-700">
-                {imovel.caracteristicasCondominio.map((c) => (
+                {imovel.condoFeatures.map((c) => (
                   <ItemCaracteristicaCatalogo key={c} nome={c} />
                 ))}
               </ul>
@@ -348,7 +371,7 @@ export default async function DetalheImovelPage({
             <h2 className="font-semibold mb-2">Localização</h2>
             <p className="text-sm text-gray-700 mb-3">
               {enderecoCompleto ? `${enderecoCompleto}, ` : ""}
-              {imovel.cidade} - {imovel.estado}
+              {imovel.city} - {imovel.state}
             </p>
             {temCoordenadas && (
               <div className="aspect-video rounded-lg overflow-hidden border mb-2">
@@ -372,39 +395,39 @@ export default async function DetalheImovelPage({
 
         <Card className="h-fit">
           <CardContent className="space-y-3">
-            {imovel.preco != null && (
+            {imovel.price != null && (
               <div>
-                {imovel.finalidade === "VENDA_E_ALUGUEL" && (
+                {imovel.purpose === "SALE_AND_RENT" && (
                   <Badge variant="secondary" className="mb-1">
                     Para comprar
                   </Badge>
                 )}
                 <p className="text-2xl font-semibold">
-                  {formatarPreco(imovel.preco)}
+                  {formatarPreco(imovel.price)}
                 </p>
               </div>
             )}
-            {imovel.precoAluguel != null && (
+            {imovel.rentPrice != null && (
               <div>
-                {imovel.finalidade === "VENDA_E_ALUGUEL" && (
+                {imovel.purpose === "SALE_AND_RENT" && (
                   <Badge variant="secondary" className="mb-1">
                     Para alugar
                   </Badge>
                 )}
                 <p className="text-2xl font-semibold">
-                  {formatarPreco(imovel.precoAluguel)}
+                  {formatarPreco(imovel.rentPrice)}
                   <span className="text-sm font-normal text-gray-500">/mês</span>
                 </p>
               </div>
             )}
-            {imovel.precoCondominio && (
+            {imovel.condoFee && (
               <p className="text-sm text-gray-500">
-                Condomínio: {formatarPreco(imovel.precoCondominio)}
+                Condomínio: {formatarPreco(imovel.condoFee)}
               </p>
             )}
-            {imovel.precoIptu && (
+            {imovel.propertyTax && (
               <p className="text-sm text-gray-500">
-                IPTU: {formatarPreco(imovel.precoIptu)}
+                IPTU: {formatarPreco(imovel.propertyTax)}
               </p>
             )}
             <Button
@@ -416,24 +439,24 @@ export default async function DetalheImovelPage({
             >
               Falar no WhatsApp
             </Button>
-            {imovel.corretorResponsavel && (
+            {imovel.responsibleMember && (
               <div className="flex flex-col items-center text-center pt-3 border-t">
                 <div className="relative w-16 h-16 rounded-full overflow-hidden border bg-gray-100 shrink-0">
-                  {imovel.corretorResponsavel.foto ? (
+                  {imovel.responsibleMember.user.avatarUrl ? (
                     <Image
-                      src={imovel.corretorResponsavel.foto}
-                      alt={imovel.corretorResponsavel.nome}
+                      src={imovel.responsibleMember.user.avatarUrl}
+                      alt={imovel.responsibleMember.user.name}
                       fill
                       className="object-cover"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-black text-white font-semibold">
-                      {imovel.corretorResponsavel.nome.charAt(0).toUpperCase()}
+                      {imovel.responsibleMember.user.name.charAt(0).toUpperCase()}
                     </div>
                   )}
                 </div>
                 <p className="mt-2 font-medium text-sm">
-                  {imovel.corretorResponsavel.nome}
+                  {imovel.responsibleMember.user.name}
                 </p>
                 <p className="text-xs text-gray-500">Corretor(a) responsável</p>
               </div>

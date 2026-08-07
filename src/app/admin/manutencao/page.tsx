@@ -5,7 +5,9 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 export default async function ManutencaoPage() {
   const session = await auth();
   const podeExecutar =
-    session?.user.papel === "ADMINISTRADOR" || session?.user.papel === "GESTOR";
+    session?.user.role === "OWNER" ||
+    session?.user.role === "ADMIN" ||
+    session?.user.role === "MANAGER";
 
   return (
     <div className="max-w-2xl">

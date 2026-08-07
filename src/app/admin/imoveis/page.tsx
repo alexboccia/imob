@@ -2,39 +2,45 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatarCodigoImovel } from "@/lib/format";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
+import { requireOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/admin/data-table/DataTable";
 import { imovelColumns, type ImovelRow } from "./columns";
 
 export default async function AdminImoveisPage() {
-  const [imoveis, configContato] = await Promise.all([
-    prisma.imovel.findMany({
-      orderBy: { criadoEm: "desc" },
-      include: { corretorResponsavel: { select: { nome: true } } },
-    }),
-    buscarConfiguracaoContato(),
-  ]);
+  const organizationId = await requireOrganizationId();
+  const [imoveis, configContato] = await withOrganization(organizationId, () =>
+    Promise.all([
+      prisma.property.findMany({
+        where: { organizationId },
+        orderBy: { createdAt: "desc" },
+        include: { responsibleMember: { include: { user: { select: { name: true } } } } },
+      }),
+      buscarConfiguracaoContato(organizationId),
+    ])
+  );
 
   const linhas: ImovelRow[] = imoveis.map((imovel) => ({
     id: imovel.id,
-    codigo: imovel.codigo,
+    codigo: imovel.code,
     codigoFormatado: formatarCodigoImovel(
-      imovel.codigo,
+      imovel.code,
       configContato.codigoImovelPrefixo
     ),
-    titulo: imovel.titulo,
-    lancamento: imovel.lancamento,
-    destaque: imovel.destaque,
-    oportunidade: imovel.oportunidade,
-    slideshow: imovel.slideshow,
-    tipo: imovel.tipo,
-    finalidade: imovel.finalidade,
-    cidade: imovel.cidade,
-    estado: imovel.estado,
-    preco: imovel.preco != null ? Number(imovel.preco) : null,
-    precoAluguel: imovel.precoAluguel != null ? Number(imovel.precoAluguel) : null,
+    titulo: imovel.title,
+    lancamento: imovel.isLaunch,
+    destaque: imovel.isFeatured,
+    oportunidade: imovel.isOpportunity,
+    slideshow: imovel.hasSlideshow,
+    tipo: imovel.type,
+    finalidade: imovel.purpose,
+    cidade: imovel.city,
+    estado: imovel.state,
+    preco: imovel.price != null ? Number(imovel.price) : null,
+    precoAluguel: imovel.rentPrice != null ? Number(imovel.rentPrice) : null,
     status: imovel.status,
-    corretor: imovel.corretorResponsavel?.nome ?? "-",
+    corretor: imovel.responsibleMember?.user.name ?? "-",
   }));
 
   return (

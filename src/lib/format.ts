@@ -53,30 +53,32 @@ export function formatarMesAno(data: Date) {
 }
 
 export const ESTAGIO_OBRA_LABEL: Record<string, string> = {
-  NA_PLANTA: "Na planta",
-  EM_CONSTRUCAO: "Em construção",
-  PRONTO_PARA_MORAR: "Pronto para morar",
+  PRE_CONSTRUCTION: "Na planta",
+  UNDER_CONSTRUCTION: "Em construção",
+  READY_TO_MOVE: "Pronto para morar",
 };
 
 export const FINALIDADE_LABEL: Record<string, string> = {
-  VENDA: "Comprar",
-  ALUGUEL: "Alugar",
-  VENDA_E_ALUGUEL: "Comprar ou Alugar",
+  SALE: "Comprar",
+  RENT: "Alugar",
+  SALE_AND_RENT: "Comprar ou Alugar",
 };
 
 export const STATUS_IMOVEL_LABEL: Record<string, string> = {
-  RASCUNHO: "Rascunho",
-  DISPONIVEL: "Disponível",
-  RESERVADO: "Reservado",
-  VENDIDO: "Vendido",
-  ALUGADO: "Alugado",
-  INATIVO: "Inativo",
+  DRAFT: "Rascunho",
+  AVAILABLE: "Disponível",
+  RESERVED: "Reservado",
+  SOLD: "Vendido",
+  RENTED: "Alugado",
+  INACTIVE: "Inativo",
 };
 
 export const PAPEL_USUARIO_LABEL: Record<string, string> = {
-  ADMINISTRADOR: "Administrador",
-  GESTOR: "Gestor",
-  CORRETOR: "Corretor",
+  OWNER: "Proprietário",
+  ADMIN: "Administrador",
+  MANAGER: "Gestor",
+  BROKER: "Corretor",
+  ASSISTANT: "Assistente",
 };
 
 export const ROTULOS_IMOVEL = [

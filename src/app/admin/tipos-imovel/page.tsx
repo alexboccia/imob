@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
+import { requireOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 
 function ColunaTipos({
   titulo,
@@ -14,7 +16,7 @@ function ColunaTipos({
   opcoes,
 }: {
   titulo: string;
-  categoria: "RESIDENCIAL" | "COMERCIAL";
+  categoria: "RESIDENTIAL" | "COMMERCIAL";
   opcoes: { id: string; nome: string }[];
 }) {
   return (
@@ -58,15 +60,20 @@ function ColunaTipos({
 }
 
 export default async function TiposImovelPage() {
-  const opcoes = await prisma.tipoImovelOpcao.findMany();
+  const organizationId = await requireOrganizationId();
+  const opcoes = await withOrganization(organizationId, () =>
+    prisma.propertyTypeOption.findMany({ where: { organizationId } })
+  );
   const porNome = (a: { nome: string }, b: { nome: string }) =>
     a.nome.localeCompare(b.nome, "pt-BR");
 
   const opcoesResidencial = opcoes
-    .filter((o) => o.categoria === "RESIDENCIAL")
+    .filter((o) => o.category === "RESIDENTIAL")
+    .map((o) => ({ id: o.id, nome: o.name }))
     .sort(porNome);
   const opcoesComercial = opcoes
-    .filter((o) => o.categoria === "COMERCIAL")
+    .filter((o) => o.category === "COMMERCIAL")
+    .map((o) => ({ id: o.id, nome: o.name }))
     .sort(porNome);
 
   return (
@@ -81,12 +88,12 @@ export default async function TiposImovelPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <ColunaTipos
           titulo="Imóveis residenciais"
-          categoria="RESIDENCIAL"
+          categoria="RESIDENTIAL"
           opcoes={opcoesResidencial}
         />
         <ColunaTipos
           titulo="Imóveis comerciais"
-          categoria="COMERCIAL"
+          categoria="COMMERCIAL"
           opcoes={opcoesComercial}
         />
       </div>

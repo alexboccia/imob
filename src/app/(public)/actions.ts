@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { enviarEmailContato } from "@/lib/email";
 import { telefoneValido } from "@/lib/telefone";
+import { getPublicOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 
 const contatoSchema = z.object({
   nome: z.string().min(2),
@@ -33,37 +35,46 @@ export async function enviarContato(_prevState: unknown, formData: FormData) {
 
   const { nome, email, telefone, mensagem, imovelId } = parsed.data;
 
-  const pessoa = await prisma.pessoa.create({
-    data: {
-      nome,
-      email: email || null,
-      telefone: telefone || null,
-      papeis: ["LEAD"],
-      origem: "SITE",
-    },
+  const organizationId = await getPublicOrganizationId();
+
+  const { imovel, configContato } = await withOrganization(organizationId, async () => {
+    const pessoa = await prisma.person.create({
+      data: {
+        organizationId,
+        name: nome,
+        email: email || null,
+        phone: telefone || null,
+        roles: ["LEAD"],
+        source: "WEBSITE",
+      },
+    });
+
+    await prisma.interaction.create({
+      data: {
+        organizationId,
+        personId: pessoa.id,
+        propertyId: imovelId || null,
+        type: "MESSAGE",
+        notes: mensagem,
+      },
+    });
+
+    const imovel = imovelId
+      ? await prisma.property.findUnique({
+          where: { id: imovelId, organizationId },
+          select: {
+            title: true,
+            responsibleMember: { select: { contactEmail: true } },
+          },
+        })
+      : null;
+
+    const configContato = await buscarConfiguracaoContato(organizationId);
+
+    return { imovel, configContato };
   });
 
-  await prisma.interacao.create({
-    data: {
-      pessoaId: pessoa.id,
-      imovelId: imovelId || null,
-      tipo: "MENSAGEM",
-      notas: mensagem,
-    },
-  });
-
-  const imovel = imovelId
-    ? await prisma.imovel.findUnique({
-        where: { id: imovelId },
-        select: {
-          titulo: true,
-          corretorResponsavel: { select: { emailContato: true } },
-        },
-      })
-    : null;
-
-  const configContato = await buscarConfiguracaoContato();
-  const emailDestino = imovel?.corretorResponsavel?.emailContato || configContato.email;
+  const emailDestino = imovel?.responsibleMember?.contactEmail || configContato.email;
 
   if (emailDestino) {
     await enviarEmailContato({
@@ -72,7 +83,7 @@ export async function enviarContato(_prevState: unknown, formData: FormData) {
       emailLead: email || null,
       telefoneLead: telefone || null,
       mensagem,
-      imovelTitulo: imovel?.titulo,
+      imovelTitulo: imovel?.title,
     });
   }
 
@@ -103,15 +114,19 @@ export async function enviarAnuncioProprietario(
 
   const { nome, email, telefone, descricaoImovel } = parsed.data;
 
-  await prisma.pessoa.create({
-    data: {
-      nome,
-      email: email || null,
-      telefone,
-      papeis: ["PROPRIETARIO"],
-      origem: "SITE",
-      observacoes: `Quer anunciar imóvel: ${descricaoImovel}`,
-    },
+  const organizationId = await getPublicOrganizationId();
+  await withOrganization(organizationId, async () => {
+    await prisma.person.create({
+      data: {
+        organizationId,
+        name: nome,
+        email: email || null,
+        phone: telefone,
+        roles: ["OWNER"],
+        source: "WEBSITE",
+        notes: `Quer anunciar imóvel: ${descricaoImovel}`,
+      },
+    });
   });
 
   return { sucesso: true };

@@ -5,6 +5,8 @@ import { SeletorOrdenacao } from "@/components/SeletorOrdenacao";
 import { FiltrosImoveis } from "@/components/FiltrosImoveis";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
+import { getPublicOrganizationId } from "@/lib/tenant";
+import { withOrganization } from "@/lib/tenant-context";
 import type { Prisma } from "@/generated/prisma/client";
 
 export const metadata: Metadata = {
@@ -38,11 +40,11 @@ function paraArray(valor: string | string[] | undefined): string[] {
   return Array.isArray(valor) ? valor : [valor];
 }
 
-const ORDENACOES: Record<string, Prisma.ImovelOrderByWithRelationInput> = {
-  menor_valor: { preco: { sort: "asc", nulls: "last" } },
-  maior_valor: { preco: { sort: "desc", nulls: "last" } },
-  menor_metragem: { areaTotal: { sort: "asc", nulls: "last" } },
-  maior_metragem: { areaTotal: { sort: "desc", nulls: "last" } },
+const ORDENACOES: Record<string, Prisma.PropertyOrderByWithRelationInput> = {
+  menor_valor: { price: { sort: "asc", nulls: "last" } },
+  maior_valor: { price: { sort: "desc", nulls: "last" } },
+  menor_metragem: { totalArea: { sort: "asc", nulls: "last" } },
+  maior_metragem: { totalArea: { sort: "desc", nulls: "last" } },
 };
 
 export default async function ListaImoveisPage({
@@ -51,6 +53,7 @@ export default async function ListaImoveisPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
+  const organizationId = await getPublicOrganizationId();
 
   const tipos = paraArray(params.tipo);
   const bairros = paraArray(params.bairro);
@@ -64,79 +67,84 @@ export default async function ListaImoveisPage({
   const areaMin = params.areaMin ? Number(params.areaMin) : undefined;
   const areaMax = params.areaMax ? Number(params.areaMax) : undefined;
 
-  const dadosFiltros = await buscarDadosFiltros();
+  const { imoveis, dadosFiltros } = await withOrganization(organizationId, async () => {
+    const dadosFiltros = await buscarDadosFiltros(organizationId);
 
-  const tiposDaCategoria =
-    tipos.length === 0 && params.categoriaTipo
-      ? dadosFiltros.tipos
-          .filter((t) => t.categoria === params.categoriaTipo)
-          .map((t) => t.nome)
-      : [];
+    const tiposDaCategoria =
+      tipos.length === 0 && params.categoriaTipo
+        ? dadosFiltros.tipos
+            .filter((t) => t.categoria === params.categoriaTipo)
+            .map((t) => t.nome)
+        : [];
 
-  const where: Prisma.ImovelWhereInput = {
-    status: "DISPONIVEL",
-    ...(buscaTexto
-      ? {
-          OR: [
-            { titulo: { contains: buscaTexto, mode: "insensitive" } },
-            { bairro: { contains: buscaTexto, mode: "insensitive" } },
-            ...(Number.isInteger(buscaCodigo) ? [{ codigo: buscaCodigo }] : []),
-          ],
-        }
-      : {}),
-    ...(params.finalidade ? { finalidade: params.finalidade as never } : {}),
-    ...(tipos.length > 0
-      ? { tipo: { in: tipos } }
-      : tiposDaCategoria.length > 0
-        ? { tipo: { in: tiposDaCategoria } }
+    const where: Prisma.PropertyWhereInput = {
+      organizationId,
+      status: "AVAILABLE",
+      ...(buscaTexto
+        ? {
+            OR: [
+              { title: { contains: buscaTexto, mode: "insensitive" } },
+              { neighborhood: { contains: buscaTexto, mode: "insensitive" } },
+              ...(Number.isInteger(buscaCodigo) ? [{ code: buscaCodigo }] : []),
+            ],
+          }
         : {}),
-    ...(bairros.length > 0
-      ? { bairro: { in: bairros, mode: "insensitive" } }
-      : {}),
-    ...(precoMin !== undefined || precoMax !== undefined
-      ? {
-          preco: {
-            ...(precoMin !== undefined ? { gte: precoMin } : {}),
-            ...(precoMax !== undefined ? { lte: precoMax } : {}),
-          },
-        }
-      : {}),
-    ...(areaMin !== undefined || areaMax !== undefined
-      ? {
-          areaTotal: {
-            ...(areaMin !== undefined ? { gte: areaMin } : {}),
-            ...(areaMax !== undefined ? { lte: areaMax } : {}),
-          },
-        }
-      : {}),
-    ...(params.quartos ? { quartos: { gte: Number(params.quartos) } } : {}),
-    ...(params.suites ? { suites: { gte: Number(params.suites) } } : {}),
-    ...(params.vagas ? { vagasGaragem: { gte: Number(params.vagas) } } : {}),
-    ...(caracteristicas.length > 0
-      ? {
-          OR: [
-            { caracteristicasImovel: { hasSome: caracteristicas } },
-            { caracteristicasCondominio: { hasSome: caracteristicas } },
-          ],
-        }
-      : {}),
-    ...(params.lancamento === "1" ? { lancamento: true } : {}),
-    ...(params.destaque === "1" ? { destaque: true } : {}),
-    ...(params.oportunidade === "1" ? { oportunidade: true } : {}),
-  };
+      ...(params.finalidade ? { purpose: params.finalidade as never } : {}),
+      ...(tipos.length > 0
+        ? { type: { in: tipos } }
+        : tiposDaCategoria.length > 0
+          ? { type: { in: tiposDaCategoria } }
+          : {}),
+      ...(bairros.length > 0
+        ? { neighborhood: { in: bairros, mode: "insensitive" } }
+        : {}),
+      ...(precoMin !== undefined || precoMax !== undefined
+        ? {
+            price: {
+              ...(precoMin !== undefined ? { gte: precoMin } : {}),
+              ...(precoMax !== undefined ? { lte: precoMax } : {}),
+            },
+          }
+        : {}),
+      ...(areaMin !== undefined || areaMax !== undefined
+        ? {
+            totalArea: {
+              ...(areaMin !== undefined ? { gte: areaMin } : {}),
+              ...(areaMax !== undefined ? { lte: areaMax } : {}),
+            },
+          }
+        : {}),
+      ...(params.quartos ? { bedrooms: { gte: Number(params.quartos) } } : {}),
+      ...(params.suites ? { suites: { gte: Number(params.suites) } } : {}),
+      ...(params.vagas ? { parkingSpots: { gte: Number(params.vagas) } } : {}),
+      ...(caracteristicas.length > 0
+        ? {
+            OR: [
+              { propertyFeatures: { hasSome: caracteristicas } },
+              { condoFeatures: { hasSome: caracteristicas } },
+            ],
+          }
+        : {}),
+      ...(params.lancamento === "1" ? { isLaunch: true } : {}),
+      ...(params.destaque === "1" ? { isFeatured: true } : {}),
+      ...(params.oportunidade === "1" ? { isOpportunity: true } : {}),
+    };
 
-  const orderBy = ORDENACOES[params.ordenar ?? ""] ?? { publicadoEm: "desc" };
+    const orderBy = ORDENACOES[params.ordenar ?? ""] ?? { publishedAt: "desc" };
 
-  const imoveis = await prisma.imovel.findMany({
-    where,
-    orderBy,
-    include: {
-      midias: {
-        where: { tipo: "FOTO" },
-        orderBy: [{ ehCapa: "desc" }, { ordem: "asc" }],
-        take: 5,
+    const imoveis = await prisma.property.findMany({
+      where,
+      orderBy,
+      include: {
+        media: {
+          where: { type: "PHOTO" },
+          orderBy: [{ isCover: "desc" }, { order: "asc" }],
+          take: 5,
+        },
       },
-    },
+    });
+
+    return { imoveis, dadosFiltros };
   });
 
   return (

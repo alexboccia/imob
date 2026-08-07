@@ -4,15 +4,15 @@ function ordenarPtBr(nomes: string[]) {
   return [...nomes].sort((a, b) => a.localeCompare(b, "pt-BR"));
 }
 
-export async function buscarOpcoesTiposImovel() {
-  const opcoes = await prisma.tipoImovelOpcao.findMany();
+export async function buscarOpcoesTiposImovel(organizationId: string) {
+  const opcoes = await prisma.propertyTypeOption.findMany({ where: { organizationId } });
 
   return {
     opcoesResidencial: ordenarPtBr(
-      opcoes.filter((o) => o.categoria === "RESIDENCIAL").map((o) => o.nome)
+      opcoes.filter((o) => o.category === "RESIDENTIAL").map((o) => o.name)
     ),
     opcoesComercial: ordenarPtBr(
-      opcoes.filter((o) => o.categoria === "COMERCIAL").map((o) => o.nome)
+      opcoes.filter((o) => o.category === "COMMERCIAL").map((o) => o.name)
     ),
   };
 }
