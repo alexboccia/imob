@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { atualizarUsuario } from "@/app/admin/usuarios/actions";
+import { atualizarUsuario } from "@/app/app/usuarios/actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";

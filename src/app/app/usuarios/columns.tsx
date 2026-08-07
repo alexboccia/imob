@@ -28,7 +28,7 @@ export const usuarioColumns: DataTableColumn<UsuarioRow>[] = [
     header: "Nome",
     cell: ({ row }) => (
       <Link
-        href={`/admin/usuarios/${row.original.id}`}
+        href={`/app/usuarios/${row.original.id}`}
         className="font-medium hover:underline"
       >
         {row.original.nome}

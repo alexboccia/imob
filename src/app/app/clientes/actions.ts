@@ -35,7 +35,7 @@ export async function criarPessoa(
   formData: FormData
 ): Promise<EstadoFormulario> {
   const session = await auth();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect("/app/login");
 
   const parsed = pessoaSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) {
@@ -61,9 +61,9 @@ export async function criarPessoa(
       },
     });
 
-    revalidatePath("/admin/clientes");
+    revalidatePath("/app/clientes");
   });
-  redirect("/admin/clientes");
+  redirect("/app/clientes");
 }
 
 const estagioSchema = z.object({
@@ -82,7 +82,7 @@ export async function atualizarEstagioFunil(
   formData: FormData
 ) {
   const session = await auth();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect("/app/login");
 
   const { estagioFunil } = estagioSchema.parse(
     Object.fromEntries(formData.entries())
@@ -95,7 +95,7 @@ export async function atualizarEstagioFunil(
       data: { pipelineStage: estagioFunil },
     });
 
-    revalidatePath(`/admin/clientes/${pessoaId}`);
+    revalidatePath(`/app/clientes/${pessoaId}`);
   });
 }
 
@@ -106,7 +106,7 @@ const interacaoSchema = z.object({
 
 export async function registrarInteracao(pessoaId: string, formData: FormData) {
   const session = await auth();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect("/app/login");
 
   const dados = interacaoSchema.parse(Object.fromEntries(formData.entries()));
 
@@ -122,6 +122,6 @@ export async function registrarInteracao(pessoaId: string, formData: FormData) {
       },
     });
 
-    revalidatePath(`/admin/clientes/${pessoaId}`);
+    revalidatePath(`/app/clientes/${pessoaId}`);
   });
 }

@@ -1,5 +1,5 @@
 import { ImovelForm } from "@/components/admin/ImovelForm";
-import { criarImovel } from "@/app/admin/imoveis/actions";
+import { criarImovel } from "@/app/app/imoveis/actions";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
 import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
 import { requireOrganizationId } from "@/lib/tenant";

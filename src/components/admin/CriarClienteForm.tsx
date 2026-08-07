@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { criarPessoa } from "@/app/admin/clientes/actions";
+import { criarPessoa } from "@/app/app/clientes/actions";
 import { FormDisclosure } from "@/components/admin/FormDisclosure";
 import { Input } from "@/components/ui/input";
 import { CampoTelefone } from "@/components/CampoTelefone";

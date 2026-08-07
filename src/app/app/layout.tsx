@@ -5,14 +5,14 @@ import { Toaster } from "@/components/ui/sonner";
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
 
 const NAV_LINKS = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/imoveis", label: "Imóveis" },
-  { href: "/admin/clientes", label: "Clientes" },
-  { href: "/admin/caracteristicas", label: "Características" },
-  { href: "/admin/tipos-imovel", label: "Tipos de imóvel" },
-  { href: "/admin/usuarios", label: "Usuários" },
-  { href: "/admin/configuracoes", label: "Configurações" },
-  { href: "/admin/manutencao", label: "Manutenção" },
+  { href: "/app", label: "Dashboard" },
+  { href: "/app/imoveis", label: "Imóveis" },
+  { href: "/app/clientes", label: "Clientes" },
+  { href: "/app/caracteristicas", label: "Características" },
+  { href: "/app/tipos-imovel", label: "Tipos de imóvel" },
+  { href: "/app/usuarios", label: "Usuários" },
+  { href: "/app/configuracoes", label: "Configurações" },
+  { href: "/app/manutencao", label: "Manutenção" },
 ];
 
 export default async function AdminLayout({
@@ -49,7 +49,7 @@ export default async function AdminLayout({
           <form
             action={async () => {
               "use server";
-              await signOut({ redirectTo: "/admin/login" });
+              await signOut({ redirectTo: "/app/login" });
             }}
           >
             <Button

@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ImovelForm } from "@/components/admin/ImovelForm";
-import { atualizarImovel } from "@/app/admin/imoveis/actions";
+import { atualizarImovel } from "@/app/app/imoveis/actions";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
 import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
 import { ToastSalvo } from "@/components/admin/ToastSalvo";

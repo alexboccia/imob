@@ -27,7 +27,7 @@ export async function criarUsuario(
   formData: FormData
 ): Promise<EstadoFormulario> {
   const session = await auth();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect("/app/login");
   if (!PAPEIS_COM_GESTAO_DE_USUARIOS.has(session.user.role ?? "")) {
     return { sucesso: false, erro: "Apenas administradores podem criar usuários." };
   }
@@ -63,8 +63,8 @@ export async function criarUsuario(
     data: { organizationId, userId: user.id, role: dados.papel },
   });
 
-  revalidatePath("/admin/usuarios");
-  redirect("/admin/usuarios");
+  revalidatePath("/app/usuarios");
+  redirect("/app/usuarios");
 }
 
 const atualizarUsuarioSchema = z.object({
@@ -91,7 +91,7 @@ export async function atualizarUsuario(
   formData: FormData
 ): Promise<EstadoFormulario> {
   const session = await auth();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect("/app/login");
   if (!PAPEIS_COM_GESTAO_DE_USUARIOS.has(session.user.role ?? "")) {
     return { sucesso: false, erro: "Apenas administradores podem editar usuários." };
   }
@@ -162,7 +162,7 @@ export async function atualizarUsuario(
     },
   });
 
-  revalidatePath("/admin/usuarios");
-  revalidatePath(`/admin/usuarios/${membershipId}`);
-  redirect("/admin/usuarios");
+  revalidatePath("/app/usuarios");
+  revalidatePath(`/app/usuarios/${membershipId}`);
+  redirect("/app/usuarios");
 }

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   atualizarEstagioFunil,
   registrarInteracao,
-} from "@/app/admin/clientes/actions";
+} from "@/app/app/clientes/actions";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { Button } from "@/components/ui/button";

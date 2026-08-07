@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { limparMidiasOrfas } from "@/app/admin/manutencao/actions";
+import { limparMidiasOrfas } from "@/app/app/manutencao/actions";
 import { Button } from "@/components/ui/button";
 
 export function LimparMidiasButton() {

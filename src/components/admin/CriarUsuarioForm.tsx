@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { criarUsuario } from "@/app/admin/usuarios/actions";
+import { criarUsuario } from "@/app/app/usuarios/actions";
 import { FormDisclosure } from "@/components/admin/FormDisclosure";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

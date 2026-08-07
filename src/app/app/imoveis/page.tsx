@@ -47,7 +47,7 @@ export default async function AdminImoveisPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">Imóveis</h1>
-        <Button render={<Link href="/admin/imoveis/novo" />}>
+        <Button render={<Link href="/app/imoveis/novo" />}>
           + Novo imóvel
         </Button>
       </div>

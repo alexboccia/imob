@@ -106,7 +106,7 @@ function parseMidias(json: string | undefined) {
 
 export async function criarImovel(formData: FormData) {
   const session = await auth();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect("/app/login");
 
   const dados = parseFormData(formData);
   const midias = parseMidias(dados.midiasJson);
@@ -159,13 +159,13 @@ export async function criarImovel(formData: FormData) {
     })
   );
 
-  revalidatePath("/admin/imoveis");
-  redirect(`/admin/imoveis/${imovel.id}?salvo=1`);
+  revalidatePath("/app/imoveis");
+  redirect(`/app/imoveis/${imovel.id}?salvo=1`);
 }
 
 export async function atualizarImovel(imovelId: string, formData: FormData) {
   const session = await auth();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect("/app/login");
 
   const dados = parseFormData(formData);
   const midias = parseMidias(dados.midiasJson);
@@ -239,7 +239,7 @@ export async function atualizarImovel(imovelId: string, formData: FormData) {
     ]);
   });
 
-  revalidatePath("/admin/imoveis");
-  revalidatePath(`/admin/imoveis/${imovelId}`);
-  redirect(`/admin/imoveis/${imovelId}?salvo=1`);
+  revalidatePath("/app/imoveis");
+  revalidatePath(`/app/imoveis/${imovelId}`);
+  redirect(`/app/imoveis/${imovelId}?salvo=1`);
 }

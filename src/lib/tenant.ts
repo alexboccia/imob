@@ -2,11 +2,11 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// Resolve o tenant da sessão autenticada (área /admin). Redireciona pro
+// Resolve o tenant da sessão autenticada (área /app). Redireciona pro
 // login se não houver sessão — mesma convenção já usada em cada action.
 export async function requireOrganizationId(): Promise<string> {
   const session = await auth();
-  if (!session?.user?.organizationId) redirect("/admin/login");
+  if (!session?.user?.organizationId) redirect("/app/login");
   return session.user.organizationId;
 }
 

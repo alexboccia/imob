@@ -21,7 +21,7 @@ function alturaLogo(formData: FormData) {
 
 export async function salvarConfiguracaoContato(formData: FormData) {
   const session = await auth();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect("/app/login");
 
   const dados = {
     phone: valorOuNulo(formData, "telefone"),
@@ -44,8 +44,8 @@ export async function salvarConfiguracaoContato(formData: FormData) {
       create: { ...dados, organizationId },
     });
 
-    revalidatePath("/admin/configuracoes");
-    revalidatePath("/admin/imoveis");
+    revalidatePath("/app/configuracoes");
+    revalidatePath("/app/imoveis");
     revalidatePath("/", "layout");
   });
 }

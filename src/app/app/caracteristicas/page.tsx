@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import {
-  criarTipoImovel,
-  removerTipoImovel,
-} from "@/app/admin/tipos-imovel/actions";
+  criarCaracteristica,
+  removerCaracteristica,
+} from "@/app/app/caracteristicas/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -10,13 +10,13 @@ import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 
-function ColunaTipos({
+function ColunaCaracteristicas({
   titulo,
   categoria,
   opcoes,
 }: {
   titulo: string;
-  categoria: "RESIDENTIAL" | "COMMERCIAL";
+  categoria: "PROPERTY" | "CONDO";
   opcoes: { id: string; nome: string }[];
 }) {
   return (
@@ -25,20 +25,22 @@ function ColunaTipos({
         <CardTitle className="text-base">{titulo}</CardTitle>
       </CardHeader>
       <CardContent>
-        <form action={criarTipoImovel} className="flex gap-2 mb-4">
+        <form action={criarCaracteristica} className="flex gap-2 mb-4">
           <input type="hidden" name="categoria" value={categoria} />
-          <Input name="nome" placeholder="Novo tipo de imóvel" required />
+          <Input name="nome" placeholder="Nova característica" required />
           <Button type="submit" variant="outline">
             Adicionar
           </Button>
         </form>
 
         {opcoes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum tipo cadastrado.</p>
+          <p className="text-sm text-muted-foreground">
+            Nenhuma característica cadastrada.
+          </p>
         ) : (
           <ul className="space-y-1">
             {opcoes.map((opcao) => {
-              const removerComId = removerTipoImovel.bind(null, opcao.id);
+              const removerComId = removerCaracteristica.bind(null, opcao.id);
               return (
                 <li
                   key={opcao.id}
@@ -59,42 +61,42 @@ function ColunaTipos({
   );
 }
 
-export default async function TiposImovelPage() {
+export default async function CaracteristicasPage() {
   const organizationId = await requireOrganizationId();
   const opcoes = await withOrganization(organizationId, () =>
-    prisma.propertyTypeOption.findMany({ where: { organizationId } })
+    prisma.featureOption.findMany({ where: { organizationId } })
   );
   const porNome = (a: { nome: string }, b: { nome: string }) =>
     a.nome.localeCompare(b.nome, "pt-BR");
 
-  const opcoesResidencial = opcoes
-    .filter((o) => o.category === "RESIDENTIAL")
+  const opcoesImovel = opcoes
+    .filter((o) => o.category === "PROPERTY")
     .map((o) => ({ id: o.id, nome: o.name }))
     .sort(porNome);
-  const opcoesComercial = opcoes
-    .filter((o) => o.category === "COMMERCIAL")
+  const opcoesCondominio = opcoes
+    .filter((o) => o.category === "CONDO")
     .map((o) => ({ id: o.id, nome: o.name }))
     .sort(porNome);
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-2">Tipos de imóvel</h1>
+      <h1 className="text-2xl font-semibold mb-2">Características</h1>
       <p className="text-muted-foreground mb-6">
-        Gerencie as opções de tipo (residencial/comercial) que aparecem no
-        cadastro de imóveis. Remover um tipo daqui não afeta imóveis que já
-        o possuem — só deixa de aparecer como opção para novos cadastros.
+        Gerencie as opções que aparecem para seleção no cadastro de imóveis.
+        Remover uma característica daqui não afeta imóveis que já a
+        possuem — só deixa de aparecer como opção para novos cadastros.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <ColunaTipos
-          titulo="Imóveis residenciais"
-          categoria="RESIDENTIAL"
-          opcoes={opcoesResidencial}
+        <ColunaCaracteristicas
+          titulo="Características do imóvel"
+          categoria="PROPERTY"
+          opcoes={opcoesImovel}
         />
-        <ColunaTipos
-          titulo="Imóveis comerciais"
-          categoria="COMMERCIAL"
-          opcoes={opcoesComercial}
+        <ColunaCaracteristicas
+          titulo="Características do condomínio"
+          categoria="CONDO"
+          opcoes={opcoesCondominio}
         />
       </div>
     </div>

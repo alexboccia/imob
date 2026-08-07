@@ -28,7 +28,7 @@ export const clienteColumns: DataTableColumn<ClienteRow>[] = [
     header: "Nome",
     cell: ({ row }) => (
       <Link
-        href={`/admin/clientes/${row.original.id}`}
+        href={`/app/clientes/${row.original.id}`}
         className="font-medium hover:underline"
       >
         {row.original.nome}

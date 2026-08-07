@@ -6,20 +6,20 @@ const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
-  const isLoginPage = req.nextUrl.pathname === "/admin/login";
+  const isLoginPage = req.nextUrl.pathname === "/app/login";
 
   if (!isLoggedIn && !isLoginPage) {
-    const loginUrl = new URL("/admin/login", req.nextUrl.origin);
+    const loginUrl = new URL("/app/login", req.nextUrl.origin);
     return NextResponse.redirect(loginUrl);
   }
 
   if (isLoggedIn && isLoginPage) {
-    return NextResponse.redirect(new URL("/admin", req.nextUrl.origin));
+    return NextResponse.redirect(new URL("/app", req.nextUrl.origin));
   }
 
   return NextResponse.next();
 });
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/app/:path*"],
 };

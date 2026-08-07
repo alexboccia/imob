@@ -47,7 +47,7 @@ export const imovelColumns: DataTableColumn<ImovelRow>[] = [
     cell: ({ row }) => (
       <div>
         <Link
-          href={`/admin/imoveis/${row.original.id}`}
+          href={`/app/imoveis/${row.original.id}`}
           className="font-medium hover:underline"
         >
           {row.original.titulo}
