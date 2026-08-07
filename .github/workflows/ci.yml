@@ -152,6 +152,12 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
+      - name: Preparar banco de teste (cria se preciso + aplica migrations)
+        run: npx tsx scripts/prepare-test-db.ts
+
+      - name: Seed mínimo do banco de teste
+        run: npx tsx prisma/seed-e2e.ts
+
       - name: "Testes E2E (fluxos críticos: login, CRUD de imóvel, isolamento de tenant, bloqueio de módulo, formulário público, mobile)"
         run: npm run test:e2e
 
