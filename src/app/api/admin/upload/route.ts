@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { auth } from "@/lib/auth";
 import { getR2Client } from "@/lib/r2";
+import { requireOrganizationId } from "@/lib/tenant";
 
 export async function POST(request: Request) {
   const session = await auth();
   if (!session) {
     return NextResponse.json({ erro: "Não autorizado" }, { status: 401 });
   }
+  const organizationId = await requireOrganizationId();
 
   const bucket = process.env.R2_BUCKET_NAME;
   const publicUrl = process.env.R2_PUBLIC_URL;
@@ -35,7 +37,7 @@ export async function POST(request: Request) {
       : "imoveis";
 
   const extensao = arquivo.name.split(".").pop() ?? "bin";
-  const chave = `${pasta}/${crypto.randomUUID()}.${extensao}`;
+  const chave = `${organizationId}/${pasta}/${crypto.randomUUID()}.${extensao}`;
   const bytes = Buffer.from(await arquivo.arrayBuffer());
 
   try {
