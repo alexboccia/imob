@@ -279,7 +279,7 @@ export function FiltrosImoveis({
       : "Não definido";
 
   return (
-    <div className="border rounded-lg">
+    <div className="border rounded-lg sticky top-[var(--site-header-height)] z-20 bg-background">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2.5">
         <div className="flex items-center gap-2 pr-3 border-r shrink-0">
           <IconeFiltros className="w-5 h-5 text-gray-400 shrink-0" />

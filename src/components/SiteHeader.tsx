@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { AnimatePresence, motion } from "motion/react";
@@ -23,9 +23,37 @@ export function SiteHeader({
   const [aberto, setAberto] = useState(false);
   const altura = logoAltura && logoAltura > 0 ? logoAltura : 40;
   const largura = Math.min(altura * 4, 280);
+  const headerRef = useRef<HTMLElement>(null);
+
+  // A altura real do header varia com logoAltura (configurável por
+  // organização) e com a quebra do menu mobile — outros elementos sticky
+  // (ex: FiltrosImoveis) precisam saber essa altura pra colar logo abaixo
+  // dele, não por baixo. Expõe como custom property em vez de prop
+  // drilling, já que quem consome não é filho do header.
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      document.documentElement.style.setProperty(
+        "--site-header-height",
+        `${entry.contentRect.height}px`
+      );
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <header className="border-b sticky top-0 bg-background z-10">
+    <header
+      ref={headerRef}
+      // z-30: precisa ficar acima de qualquer conteúdo que role por baixo
+      // (ex: badges "Destaque"/"Oportunidade" dos cards de imóvel, também
+      // absolutamente posicionados com z-index próprio) — com z-index
+      // empatado, o desempate do navegador é por ordem no DOM, e esse
+      // conteúdo vem depois do header, então venceria o empate e pintaria
+      // por cima dele durante o scroll.
+      className="border-b sticky top-0 bg-background z-30"
+    >
       <div className="mx-auto max-w-6xl flex items-center justify-between px-4 py-4">
         <Link
           href="/"

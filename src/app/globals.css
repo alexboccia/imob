@@ -49,6 +49,9 @@
 }
 
 :root {
+  /* Atualizado via ResizeObserver em SiteHeader.tsx — o valor aqui é só o
+     fallback antes do JS rodar (bate com logoAltura padrão de 40px). */
+  --site-header-height: 73px;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
