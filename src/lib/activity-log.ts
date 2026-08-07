@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
 
 // Trilha técnica/segurança (quem fez o quê, quando) — separada de
 // Interaction/PropertyStatusHistory, que continuam sendo o histórico
@@ -24,6 +25,11 @@ export async function logActivity(params: {
       },
     });
   } catch (erro) {
-    console.error("Falha ao gravar ActivityLog:", erro);
+    logger.error("Falha ao gravar ActivityLog", erro, {
+      organizationId: params.organizationId,
+      userId: params.userId ?? undefined,
+      action: params.action,
+      modulo: "database",
+    });
   }
 }

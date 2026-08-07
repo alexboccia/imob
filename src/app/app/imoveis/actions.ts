@@ -1,161 +1,53 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
-import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
-import { verificarLimiteImoveis } from "@/lib/entitlements";
+import { verificarLimiteImoveis, LimiteDoPlanoError } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
+import { type ActionState, erroGenerico } from "@/lib/action-result";
+import {
+  parseImovelFormData,
+  parseMidias,
+  camposImovel,
+  midiasParaCriar,
+} from "@/lib/property-mapper";
+import { tagFacetas } from "@/lib/cache-tags";
 
-const numeroOpcional = z.preprocess(
-  (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
-  z.number().optional()
-);
-
-const booleanCheckbox = z.preprocess((v) => v === "on", z.boolean());
-
-function parseMesAno(valor: string | undefined): Date | null {
-  if (!valor) return null;
-  const [ano, mes] = valor.split("-").map(Number);
-  if (!ano || !mes) return null;
-  return new Date(Date.UTC(ano, mes - 1, 1));
-}
-
-const imovelSchema = z.object({
-  titulo: z.string().min(3),
-  descricao: z.string().optional(),
-  tipo: z.string().min(1),
-  finalidade: z.enum(["SALE", "RENT", "SALE_AND_RENT"]),
-  status: z.enum([
-    "DRAFT",
-    "AVAILABLE",
-    "RESERVED",
-    "SOLD",
-    "RENTED",
-    "INACTIVE",
-  ]),
-  cep: z.string().optional(),
-  logradouro: z.string().optional(),
-  numero: z.string().optional(),
-  complemento: z.string().optional(),
-  bairro: z.string().min(1),
-  cidade: z.string().min(1),
-  estado: z.string().min(2).max(2),
-  latitude: numeroOpcional,
-  longitude: numeroOpcional,
-  preco: numeroOpcional,
-  precoAluguel: numeroOpcional,
-  precoCondominio: numeroOpcional,
-  precoIptu: numeroOpcional,
-  areaTotal: numeroOpcional,
-  areaPrivativa: numeroOpcional,
-  quartos: numeroOpcional,
-  suites: numeroOpcional,
-  banheiros: numeroOpcional,
-  vagasGaragem: numeroOpcional,
-  lancamento: booleanCheckbox,
-  destaque: booleanCheckbox,
-  oportunidade: booleanCheckbox,
-  slideshow: booleanCheckbox,
-  estagioObra: z
-    .enum(["PRE_CONSTRUCTION", "UNDER_CONSTRUCTION", "READY_TO_MOVE"])
-    .optional()
-    .or(z.literal("")),
-  previsaoEntrega: z.string().optional(),
-  construtora: z.string().optional(),
-  midiasJson: z.string().optional(),
-});
-
-function parseFormData(formData: FormData) {
-  const bruto = Object.fromEntries(formData.entries());
-  const dados = imovelSchema.parse(bruto);
-  return {
-    ...dados,
-    caracteristicasImovel: formData.getAll("caracteristicasImovel").map(String),
-    caracteristicasCondominio: formData
-      .getAll("caracteristicasCondominio")
-      .map(String),
-  };
-}
-
-const TIPO_MIDIA_PARA_MEDIA_TYPE = {
-  FOTO: "PHOTO",
-  VIDEO: "VIDEO",
-  PLANTA: "FLOOR_PLAN",
-} as const;
-
-function parseMidias(json: string | undefined) {
-  if (!json) return [];
-  try {
-    const midias = JSON.parse(json) as {
-      tipo: "FOTO" | "VIDEO" | "PLANTA";
-      url: string;
-      ehCapa: boolean;
-    }[];
-    return midias.map((m, i) => ({
-      type: TIPO_MIDIA_PARA_MEDIA_TYPE[m.tipo],
-      url: m.url,
-      isCover: m.ehCapa,
-      order: i,
-    }));
-  } catch {
-    return [];
-  }
-}
-
-export async function criarImovel(formData: FormData) {
+export async function criarImovel(
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
 
-  const dados = parseFormData(formData);
+  const resultado = parseImovelFormData(formData);
+  if (!resultado.ok) return resultado.estado;
+  const { dados } = resultado;
   const midias = parseMidias(dados.midiasJson);
 
   const organizationId = await requireOrganizationId();
-  await verificarLimiteImoveis(organizationId);
+  try {
+    await verificarLimiteImoveis(organizationId);
+  } catch (erro) {
+    if (erro instanceof LimiteDoPlanoError) return erroGenerico(erro.message);
+    throw erro;
+  }
 
   const imovel = await withOrganization(organizationId, () =>
     prisma.property.create({
       data: {
         organizationId,
-        title: dados.titulo,
-        description: dados.descricao || null,
-        type: dados.tipo,
-        purpose: dados.finalidade,
-        status: dados.status,
-        zipCode: dados.cep || null,
-        street: dados.logradouro || null,
-        number: dados.numero || null,
-        complement: dados.complemento || null,
-        neighborhood: dados.bairro,
-        city: dados.cidade,
-        state: dados.estado.toUpperCase(),
-        latitude: dados.latitude ?? null,
-        longitude: dados.longitude ?? null,
-        price: dados.preco ?? null,
-        rentPrice: dados.precoAluguel ?? null,
-        condoFee: dados.precoCondominio ?? null,
-        propertyTax: dados.precoIptu ?? null,
-        totalArea: dados.areaTotal ?? null,
-        privateArea: dados.areaPrivativa ?? null,
-        bedrooms: dados.quartos ?? null,
-        suites: dados.suites ?? null,
-        bathrooms: dados.banheiros ?? null,
-        parkingSpots: dados.vagasGaragem ?? null,
-        propertyFeatures: dados.caracteristicasImovel,
-        condoFeatures: dados.caracteristicasCondominio,
-        isLaunch: dados.lancamento,
-        isFeatured: dados.destaque,
-        isOpportunity: dados.oportunidade,
-        hasSlideshow: dados.slideshow,
-        constructionStage: dados.estagioObra || null,
-        deliveryForecast: parseMesAno(dados.previsaoEntrega),
-        developer: dados.construtora || null,
+        ...camposImovel(dados),
+        // Só definido na criação: quem cadastra o imóvel vira o
+        // responsável inicial. A edição não tem campo de UI para
+        // reatribuir responsável, então não mexe nesse valor.
         responsibleMemberId: session.user.organizationMemberId ?? null,
         publishedAt: dados.status === "AVAILABLE" ? new Date() : null,
-        media: { create: midias.map((m) => ({ ...m, organizationId })) },
+        media: { create: midiasParaCriar(midias, organizationId) },
         statusHistory: {
           create: { previousStatus: null, newStatus: dados.status, organizationId },
         },
@@ -173,14 +65,27 @@ export async function criarImovel(formData: FormData) {
   });
 
   revalidatePath("/app/imoveis");
+  updateTag(tagFacetas(organizationId));
+  // Redundância deliberada — mesma razão documentada em
+  // configuracoes/actions.ts: não consegui confirmar ao vivo que
+  // updateTag() dentro do callback aninhado invalida de fato a página
+  // pública.
+  revalidatePath("/imoveis");
+  revalidatePath("/");
   redirect(`/app/imoveis/${imovel.id}?salvo=1`);
 }
 
-export async function atualizarImovel(imovelId: string, formData: FormData) {
+export async function atualizarImovel(
+  imovelId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
 
-  const dados = parseFormData(formData);
+  const resultado = parseImovelFormData(formData);
+  if (!resultado.ok) return resultado.estado;
+  const { dados } = resultado;
   const midias = parseMidias(dados.midiasJson);
 
   const organizationId = await requireOrganizationId();
@@ -198,44 +103,12 @@ export async function atualizarImovel(imovelId: string, formData: FormData) {
       prisma.property.update({
         where: { id: imovelId, organizationId },
         data: {
-          title: dados.titulo,
-          description: dados.descricao || null,
-          type: dados.tipo,
-          purpose: dados.finalidade,
-          status: dados.status,
-          zipCode: dados.cep || null,
-          street: dados.logradouro || null,
-          number: dados.numero || null,
-          complement: dados.complemento || null,
-          neighborhood: dados.bairro,
-          city: dados.cidade,
-          state: dados.estado.toUpperCase(),
-          latitude: dados.latitude ?? null,
-          longitude: dados.longitude ?? null,
-          price: dados.preco ?? null,
-          rentPrice: dados.precoAluguel ?? null,
-          condoFee: dados.precoCondominio ?? null,
-          propertyTax: dados.precoIptu ?? null,
-          totalArea: dados.areaTotal ?? null,
-          privateArea: dados.areaPrivativa ?? null,
-          bedrooms: dados.quartos ?? null,
-          suites: dados.suites ?? null,
-          bathrooms: dados.banheiros ?? null,
-          parkingSpots: dados.vagasGaragem ?? null,
-          propertyFeatures: dados.caracteristicasImovel,
-          condoFeatures: dados.caracteristicasCondominio,
-          isLaunch: dados.lancamento,
-          isFeatured: dados.destaque,
-          isOpportunity: dados.oportunidade,
-          hasSlideshow: dados.slideshow,
-          constructionStage: dados.estagioObra || null,
-          deliveryForecast: parseMesAno(dados.previsaoEntrega),
-          developer: dados.construtora || null,
+          ...camposImovel(dados),
           publishedAt:
             dados.status === "AVAILABLE" && !imovelAtual.publishedAt
               ? new Date()
               : undefined,
-          media: { create: midias.map((m) => ({ ...m, organizationId })) },
+          media: { create: midiasParaCriar(midias, organizationId) },
           ...(statusMudou
             ? {
                 statusHistory: {
@@ -262,5 +135,10 @@ export async function atualizarImovel(imovelId: string, formData: FormData) {
 
   revalidatePath("/app/imoveis");
   revalidatePath(`/app/imoveis/${imovelId}`);
+  revalidatePath(`/imoveis/${imovelId}`);
+  updateTag(tagFacetas(organizationId));
+  // Redundância deliberada — ver nota em criarImovel acima.
+  revalidatePath("/imoveis");
+  revalidatePath("/");
   redirect(`/app/imoveis/${imovelId}?salvo=1`);
 }

@@ -1,0 +1,38 @@
+import type { Page } from "@playwright/test";
+
+// Credenciais do seed determinístico (prisma/seed-e2e.ts) — lidas do mesmo
+// .env.test que o seed usa, pra nunca divergir entre o dado seedado e o
+// valor que o spec tenta logar.
+export const ORG_A = {
+  slug: process.env.ORG_SLUG ?? "e2e-org-a",
+  email: process.env.SEED_ADMIN_EMAIL ?? "owner-a@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
+export const ORG_B = {
+  slug: "e2e-org-b",
+  email: "owner-b@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
+export const IDS_E2E = {
+  imovelParaEditarOrgA: "e2e-imovel-editar-a",
+  membroOwnerOrgB: "e2e-membro-owner-b",
+};
+
+export async function login(page: Page, credenciais: { email: string; senha: string }) {
+  await page.goto("/app/login");
+  await page.locator("#email").fill(credenciais.email);
+  await page.locator("#senha").fill(credenciais.senha);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.waitForURL("/app");
+}
+
+// CamposAntiSpam bloqueia qualquer envio de formulário público que chegue
+// em menos de 1.5s após o formulário renderizar (src/app/(public)/actions.ts,
+// LIMIAR_MUITO_RAPIDO_MS) — Playwright preenche campos rápido demais pra
+// esse limiar por padrão, então specs de formulário público esperam aqui
+// antes de enviar.
+export async function esperarJanelaAntiSpam(page: Page) {
+  await page.waitForTimeout(1600);
+}

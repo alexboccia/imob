@@ -1,39 +1,79 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { LOGO_ALTURA_MIN, LOGO_ALTURA_MAX, LOGO_ALTURA_PADRAO } from "@/lib/logo";
+import { temPapel, PAPEIS_GESTAO_CONFIGURACOES } from "@/lib/authorization";
+import {
+  type ActionState,
+  erroAcessoNegado,
+  erroValidacao,
+  sucesso,
+} from "@/lib/action-result";
+import { tagConfiguracao } from "@/lib/cache-tags";
 
-function valorOuNulo(formData: FormData, campo: string) {
-  const valor = formData.get(campo);
-  return typeof valor === "string" && valor.trim() ? valor.trim() : null;
-}
+const vazioParaNulo = (v: unknown) =>
+  typeof v === "string" && v.trim() ? v.trim() : undefined;
 
-function alturaLogo(formData: FormData) {
-  const valor = Number(formData.get("logoAltura"));
-  if (!Number.isFinite(valor) || valor <= 0) return null;
+const configuracaoSchema = z.object({
+  telefone: z.preprocess(vazioParaNulo, z.string().optional()),
+  email: z.preprocess(
+    vazioParaNulo,
+    z.string().email("E-mail inválido.").optional()
+  ),
+  whatsapp: z.preprocess(vazioParaNulo, z.string().optional()),
+  instagram: z.preprocess(vazioParaNulo, z.string().optional()),
+  facebook: z.preprocess(vazioParaNulo, z.string().optional()),
+  youtube: z.preprocess(vazioParaNulo, z.string().optional()),
+  linkedin: z.preprocess(vazioParaNulo, z.string().optional()),
+  codigoImovelPrefixo: z.preprocess(
+    vazioParaNulo,
+    z.string().max(10, "Use no máximo 10 caracteres.").optional()
+  ),
+  logo: z.preprocess(vazioParaNulo, z.string().optional()),
+  logoAltura: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
+    z.number().optional()
+  ),
+});
+
+function alturaLogo(valor: number | undefined) {
+  if (valor === undefined || !Number.isFinite(valor) || valor <= 0) {
+    return LOGO_ALTURA_PADRAO;
+  }
   return Math.min(LOGO_ALTURA_MAX, Math.max(LOGO_ALTURA_MIN, Math.round(valor)));
 }
 
-export async function salvarConfiguracaoContato(formData: FormData) {
+export async function salvarConfiguracaoContato(
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
+  if (!temPapel(session.user.role, PAPEIS_GESTAO_CONFIGURACOES)) {
+    return erroAcessoNegado();
+  }
+
+  const parsed = configuracaoSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!parsed.success) return erroValidacao(parsed.error);
+  const campos = parsed.data;
 
   const dados = {
-    phone: valorOuNulo(formData, "telefone"),
-    email: valorOuNulo(formData, "email"),
-    whatsapp: valorOuNulo(formData, "whatsapp"),
-    instagram: valorOuNulo(formData, "instagram"),
-    facebook: valorOuNulo(formData, "facebook"),
-    youtube: valorOuNulo(formData, "youtube"),
-    linkedin: valorOuNulo(formData, "linkedin"),
-    propertyCodePrefix: valorOuNulo(formData, "codigoImovelPrefixo")?.toUpperCase() ?? null,
-    logoUrl: valorOuNulo(formData, "logo"),
-    logoHeight: alturaLogo(formData) ?? LOGO_ALTURA_PADRAO,
+    phone: campos.telefone ?? null,
+    email: campos.email ?? null,
+    whatsapp: campos.whatsapp ?? null,
+    instagram: campos.instagram ?? null,
+    facebook: campos.facebook ?? null,
+    youtube: campos.youtube ?? null,
+    linkedin: campos.linkedin ?? null,
+    propertyCodePrefix: campos.codigoImovelPrefixo?.toUpperCase() ?? null,
+    logoUrl: campos.logo ?? null,
+    logoHeight: alturaLogo(campos.logoAltura),
   };
 
   const organizationId = await requireOrganizationId();
@@ -46,6 +86,17 @@ export async function salvarConfiguracaoContato(formData: FormData) {
 
     revalidatePath("/app/configuracoes");
     revalidatePath("/app/imoveis");
+    updateTag(tagConfiguracao(organizationId));
+    // Redundância deliberada: não consegui verificar ao vivo (limitação
+    // de ferramental pra invocar Server Actions fora do navegador, mesma
+    // limitação já documentada em fases anteriores desta sessão) que
+    // updateTag() dentro deste callback aninhado realmente invalida a
+    // entrada de unstable_cache do site público. Como essa exata classe
+    // de bug (config desatualizada no site público) já aconteceu neste
+    // projeto antes, mantenho revalidatePath("/", "layout") como rede de
+    // segurança até confirmar manualmente em produção.
     revalidatePath("/", "layout");
   });
+
+  return sucesso("Configurações salvas.");
 }

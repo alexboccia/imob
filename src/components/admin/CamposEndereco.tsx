@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { ESTADOS_BRASIL } from "@/lib/estados-brasil";
+import { ErroCampo } from "@/components/admin/ErroCampo";
 
 const MapaLocalizacao = dynamic(
   () => import("@/components/admin/MapaLocalizacao").then((m) => m.MapaLocalizacao),
@@ -36,8 +37,10 @@ function formatarCep(valor: string) {
 
 export function CamposEndereco({
   valoresIniciais,
+  erros,
 }: {
   valoresIniciais?: ValoresEndereco;
+  erros?: Record<string, string[]>;
 }) {
   const v = valoresIniciais ?? {};
   const [cep, setCep] = useState(formatarCep(v.cep ?? ""));
@@ -214,6 +217,7 @@ export function CamposEndereco({
               <option key={b} value={b} />
             ))}
           </datalist>
+          <ErroCampo erros={erros?.bairro} />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -234,6 +238,7 @@ export function CamposEndereco({
                 <option key={c} value={c} />
               ))}
             </datalist>
+            <ErroCampo erros={erros?.cidade} />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">UF</label>
@@ -254,6 +259,7 @@ export function CamposEndereco({
                 </option>
               ))}
             </select>
+            <ErroCampo erros={erros?.estado} />
           </div>
         </div>
       </div>

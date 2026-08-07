@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useTable, flexRender, type ColumnDef } from "@tanstack/react-table";
 import { tableFeaturesUsadas, type TableFeaturesUsadas } from "./table-features";
+import { PAGE_SIZE_MAXIMO, totalDePaginas } from "@/lib/pagination";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 
-const TAMANHOS_PAGINA = [10, 50, 100, 200];
+const TAMANHOS_PAGINA = [10, 20, 50, 100].filter((n) => n <= PAGE_SIZE_MAXIMO);
 
 export type DataTableColumn<TData extends Record<string, unknown>> = ColumnDef<
   TableFeaturesUsadas,
@@ -30,32 +33,90 @@ export type DataTableColumn<TData extends Record<string, unknown>> = ColumnDef<
   any
 >;
 
+// Paginação, ordenação e busca acontecem no servidor (Prisma/PostgreSQL) —
+// este componente só renderiza a página atual e navega alterando
+// searchParams (page/pageSize/search/sort), nunca processa a listagem
+// inteira no navegador.
 export function DataTable<TData extends Record<string, unknown>>({
   columns,
   data,
+  totalCount,
+  page,
+  pageSize,
+  sortableColumns = {},
   searchPlaceholder = "Buscar...",
   emptyMessage = "Nenhum registro encontrado.",
 }: {
   columns: DataTableColumn<TData>[];
   data: TData[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  /** Mapa "id da coluna" -> "campo aceito pelo servidor no parâmetro sort". */
+  sortableColumns?: Record<string, string>;
   searchPlaceholder?: string;
   emptyMessage?: string;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const table = useTable({
     features: tableFeaturesUsadas,
     columns,
     data,
-    initialState: { pagination: { pageIndex: 0, pageSize: 10 } },
   });
 
   const linhas = table.getRowModel().rows;
+  const paginas = totalDePaginas(totalCount, pageSize);
+  const sortAtual = searchParams.get("sort") ?? "";
+  const [sortCampoAtual, sortDirecaoAtual] = sortAtual.split(":");
+
+  // Reseta buscaLocal quando o `search` da URL muda por fora deste
+  // componente (voltar no navegador, clicar num link que limpa filtros).
+  // Ajustado durante o render (padrão recomendado pelo React pra "resetar
+  // estado quando uma prop muda"), não num useEffect — evita o
+  // cascading-render de um setState síncrono dentro de efeito.
+  const searchNaUrl = searchParams.get("search") ?? "";
+  const [buscaLocal, setBuscaLocal] = useState(searchNaUrl);
+  const [ultimoSearchNaUrl, setUltimoSearchNaUrl] = useState(searchNaUrl);
+  if (searchNaUrl !== ultimoSearchNaUrl) {
+    setUltimoSearchNaUrl(searchNaUrl);
+    setBuscaLocal(searchNaUrl);
+  }
+
+  function navegarCom(alteracoes: Record<string, string | null>) {
+    const novo = new URLSearchParams(searchParams.toString());
+    for (const [chave, valor] of Object.entries(alteracoes)) {
+      if (valor === null || valor === "") novo.delete(chave);
+      else novo.set(chave, valor);
+    }
+    router.push(`${pathname}?${novo.toString()}`);
+  }
+
+  // Debounce simples: só atualiza a URL (e refaz a consulta no servidor)
+  // 400ms depois da última tecla, pra não disparar uma query por caractere.
+  useEffect(() => {
+    const atual = searchParams.get("search") ?? "";
+    if (buscaLocal === atual) return;
+    const id = setTimeout(() => {
+      navegarCom({ search: buscaLocal || null, page: null });
+    }, 400);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buscaLocal]);
+
+  function alternarOrdenacao(campo: string) {
+    const proximaDirecao = sortCampoAtual === campo && sortDirecaoAtual === "asc" ? "desc" : "asc";
+    navegarCom({ sort: `${campo}:${proximaDirecao}`, page: null });
+  }
 
   return (
     <div className="space-y-3">
       <Input
         placeholder={searchPlaceholder}
-        value={(table.state.globalFilter as string) ?? ""}
-        onChange={(e) => table.setGlobalFilter(e.target.value)}
+        value={buscaLocal}
+        onChange={(e) => setBuscaLocal(e.target.value)}
         className="max-w-xs"
       />
       <div className="border rounded-lg overflow-x-auto">
@@ -63,28 +124,31 @@ export function DataTable<TData extends Record<string, unknown>>({
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                      <button
-                        type="button"
-                        onClick={header.column.getToggleSortingHandler()}
-                        className="flex items-center gap-1 hover:text-foreground"
-                      >
-                        {flexRender(
+                {headerGroup.headers.map((header) => {
+                  const campoOrdenacao = sortableColumns[header.column.id];
+                  return (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder ? null : campoOrdenacao ? (
+                        <button
+                          type="button"
+                          onClick={() => alternarOrdenacao(campoOrdenacao)}
+                          className="flex items-center gap-1 hover:text-foreground"
+                        >
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                          <ArrowUpDown className="size-3.5 text-muted-foreground" />
+                        </button>
+                      ) : (
+                        flexRender(
                           header.column.columnDef.header,
                           header.getContext()
-                        )}
-                        <ArrowUpDown className="size-3.5 text-muted-foreground" />
-                      </button>
-                    ) : (
-                      flexRender(
-                        header.column.columnDef.header,
-                        header.getContext()
-                      )
-                    )}
-                  </TableHead>
-                ))}
+                        )
+                      )}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             ))}
           </TableHeader>
@@ -118,18 +182,13 @@ export function DataTable<TData extends Record<string, unknown>>({
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
         <div className="flex flex-wrap items-center gap-3">
           <p>
-            Página {table.state.pagination.pageIndex + 1} de{" "}
-            {table.getPageCount() || 1} ·{" "}
-            {table.getFilteredRowModel().rows.length} registro(s)
+            Página {page} de {paginas} · {totalCount} registro(s)
           </p>
           <div className="flex items-center gap-1.5">
             <span>Itens por página</span>
             <Select
-              value={String(table.state.pagination.pageSize)}
-              onValueChange={(value) => {
-                table.setPageSize(Number(value));
-                table.setPageIndex(0);
-              }}
+              value={String(pageSize)}
+              onValueChange={(value) => navegarCom({ pageSize: value, page: null })}
             >
               <SelectTrigger size="sm" className="w-[70px]">
                 <SelectValue />
@@ -149,8 +208,8 @@ export function DataTable<TData extends Record<string, unknown>>({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => navegarCom({ page: String(page - 1) })}
+            disabled={page <= 1}
           >
             <ChevronLeft className="size-4" /> Anterior
           </Button>
@@ -158,8 +217,8 @@ export function DataTable<TData extends Record<string, unknown>>({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => navegarCom({ page: String(page + 1) })}
+            disabled={page >= paginas}
           >
             Próxima <ChevronRight className="size-4" />
           </Button>

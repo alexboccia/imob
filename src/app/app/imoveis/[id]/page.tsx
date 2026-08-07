@@ -47,6 +47,7 @@ export default async function EditarImovelPage({
       <h1 className="text-2xl font-semibold mb-6">Editar imóvel</h1>
       <ImovelForm
         action={atualizarComId}
+        propertyId={imovel.id}
         valoresIniciais={{
           titulo: imovel.title,
           descricao: imovel.description,

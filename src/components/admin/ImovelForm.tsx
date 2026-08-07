@@ -1,17 +1,23 @@
+"use client";
+
+import { useActionState } from "react";
 import {
   ESTAGIO_OBRA_LABEL,
   FINALIDADE_LABEL,
   STATUS_IMOVEL_LABEL,
 } from "@/lib/format";
+import { ESTADO_INICIAL_ACAO, type ActionState } from "@/lib/action-result";
 import { MediaUploader, type MidiaItem } from "@/components/admin/MediaUploader";
 import { CamposEndereco } from "@/components/admin/CamposEndereco";
 import { SeletorCaracteristicas } from "@/components/admin/SeletorCaracteristicas";
 import { BotaoSalvarImovel } from "@/components/admin/BotaoSalvarImovel";
 import { CampoMoeda } from "@/components/admin/CampoMoeda";
+import { ErroCampo } from "@/components/admin/ErroCampo";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -67,19 +73,23 @@ export function ImovelForm({
   action,
   valoresIniciais,
   midiasIniciais,
+  propertyId,
   opcoesCaracteristicasImovel = [],
   opcoesCaracteristicasCondominio = [],
   opcoesTiposResidencial = [],
   opcoesTiposComercial = [],
 }: {
-  action: (formData: FormData) => void;
+  action: (prevState: ActionState, formData: FormData) => Promise<ActionState>;
   valoresIniciais?: Partial<ImovelFormValues>;
   midiasIniciais?: MidiaItem[];
+  /** Id do imóvel sendo editado, se já existir (imóvel novo ainda não tem id). */
+  propertyId?: string;
   opcoesCaracteristicasImovel?: string[];
   opcoesCaracteristicasCondominio?: string[];
   opcoesTiposResidencial?: string[];
   opcoesTiposComercial?: string[];
 }) {
+  const [estado, formAction] = useActionState(action, ESTADO_INICIAL_ACAO);
   const v = valoresIniciais ?? {};
   const todasOpcoesImovel = mesclarOpcoes(
     opcoesCaracteristicasImovel,
@@ -97,10 +107,17 @@ export function ImovelForm({
       : null;
 
   return (
-    <form action={action} className="space-y-6 max-w-3xl">
+    <form action={formAction} className="space-y-6 max-w-3xl">
+      {estado.message && !estado.success && (
+        <Alert variant="destructive">
+          <AlertDescription>{estado.message}</AlertDescription>
+        </Alert>
+      )}
+
       <div className="space-y-1.5">
         <Label htmlFor="titulo">Título</Label>
         <Input id="titulo" name="titulo" defaultValue={v.titulo ?? ""} required />
+        <ErroCampo erros={estado.fieldErrors?.titulo} />
       </div>
 
       <div className="space-y-1.5">
@@ -111,6 +128,7 @@ export function ImovelForm({
           defaultValue={v.descricao ?? ""}
           rows={4}
         />
+        <ErroCampo erros={estado.fieldErrors?.descricao} />
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -143,6 +161,7 @@ export function ImovelForm({
               </SelectGroup>
             </SelectContent>
           </Select>
+          <ErroCampo erros={estado.fieldErrors?.tipo} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="finalidade">Finalidade</Label>
@@ -261,6 +280,7 @@ export function ImovelForm({
           latitude: v.latitude,
           longitude: v.longitude,
         }}
+        erros={estado.fieldErrors}
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -272,6 +292,7 @@ export function ImovelForm({
             defaultValue={v.preco ? String(v.preco) : null}
             className="w-full border rounded-md px-3 py-2"
           />
+          <ErroCampo erros={estado.fieldErrors?.preco} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="precoAluguel">Preço de aluguel (R$/mês)</Label>
@@ -281,6 +302,7 @@ export function ImovelForm({
             defaultValue={v.precoAluguel ? String(v.precoAluguel) : null}
             className="w-full border rounded-md px-3 py-2"
           />
+          <ErroCampo erros={estado.fieldErrors?.precoAluguel} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="precoCondominio">Condomínio (R$)</Label>
@@ -290,6 +312,7 @@ export function ImovelForm({
             defaultValue={v.precoCondominio ? String(v.precoCondominio) : null}
             className="w-full border rounded-md px-3 py-2"
           />
+          <ErroCampo erros={estado.fieldErrors?.precoCondominio} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="precoIptu">IPTU (R$)</Label>
@@ -299,6 +322,7 @@ export function ImovelForm({
             defaultValue={v.precoIptu ? String(v.precoIptu) : null}
             className="w-full border rounded-md px-3 py-2"
           />
+          <ErroCampo erros={estado.fieldErrors?.precoIptu} />
         </div>
       </div>
 
@@ -377,7 +401,7 @@ export function ImovelForm({
       </div>
 
       <div className="border-t pt-6">
-        <MediaUploader midiasIniciais={midiasIniciais} />
+        <MediaUploader midiasIniciais={midiasIniciais} propertyId={propertyId} />
       </div>
 
       <BotaoSalvarImovel />

@@ -1,0 +1,166 @@
+name: CI
+
+# Roda em toda PR contra main e em todo push direto a main. O job "e2e"
+# depende de "verify" (needs) — se tipos/lint/testes/build já falharam, o
+# Playwright nem chega a subir, economizando minutos de CI.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Permissão mínima: nenhum job deste workflow escreve no repositório,
+# comenta em PR ou publica artefato que precise de escopo além de leitura
+# do código. actions/upload-artifact não exige permissão extra.
+permissions:
+  contents: read
+
+# Cancela uma rodada anterior do mesmo PR/branch quando um novo push chega
+# — evita gastar minutos de CI validando um commit que já foi substituído.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Credenciais fixas do Postgres efêmero do job — não são segredo (mesmo
+  # padrão do docker-compose.yml local), só precisam bater com o service
+  # container abaixo e com .env.test (que os testes carregam sozinhos).
+  POSTGRES_USER: imoveis
+  POSTGRES_PASSWORD: imoveis
+  POSTGRES_DB: imoveis_test
+
+jobs:
+  verify:
+    name: Verificação (tipos, lint, testes, build)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+        ports:
+          - 5432:5432
+        # O runner só passa os steps seguintes pro Postgres depois que o
+        # healthcheck ficar "healthy" — não precisa de polling manual.
+        options: >-
+          --health-cmd "pg_isready -U imoveis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configurar Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar Prisma Client
+        # npm ci já roda isso via postinstall — mantido explícito porque
+        # foi pedido como passo próprio e serve de salvaguarda caso o
+        # postinstall seja removido do package.json no futuro.
+        run: npx prisma generate
+
+      - name: Checar tipos (tsc --noEmit)
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Preparar banco de teste (cria se preciso + aplica migrations)
+        run: npx tsx scripts/prepare-test-db.ts
+
+      - name: Seed mínimo do banco de teste
+        run: npx tsx prisma/seed-e2e.ts
+
+      - name: Testes (unitários + integração)
+        run: npm run test
+
+      - name: Build de produção
+        run: npm run build
+        env:
+          # NODE_ENV=test só pra este passo: faz o `next build` carregar
+          # .env.test (valores fixos, sem segredo real) em vez de exigir
+          # segredo de produção — o objetivo aqui é só detectar erro de
+          # build antes do merge, não gerar o artefato que vai pro
+          # deploy (a DigitalOcean faz seu próprio build a partir do
+          # source — ver README, seção CI/CD).
+          NODE_ENV: test
+
+    # O Postgres efêmero deste job é destruído automaticamente pelo runner
+    # ao final (container de "services" não sobrevive além do job) — não
+    # precisa de um passo de teardown manual.
+
+  e2e:
+    name: E2E (Playwright)
+    needs: verify
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U imoveis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configurar Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Descobrir versão instalada do Playwright
+        id: playwright-version
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache dos browsers do Playwright
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - name: Instalar browser do Playwright (cache miss)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Instalar dependências de sistema do Chromium (cache hit)
+        # O cache acima só guarda o binário do browser — as libs de
+        # sistema (libnss3 etc.) não fazem parte de ~/.cache/ms-playwright
+        # e precisam ser garantidas mesmo quando o browser já está em
+        # cache. Rápido: não baixa nada, só confere/instala pacotes apt.
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: "Testes E2E (fluxos críticos: login, CRUD de imóvel, isolamento de tenant, bloqueio de módulo, formulário público, mobile)"
+        run: npm run test:e2e
+
+      - name: Anexar relatório do Playwright (só quando falha)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

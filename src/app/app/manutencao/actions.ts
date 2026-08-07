@@ -38,6 +38,11 @@ export async function limparMidiasOrfas() {
       .map((m) => m.url.slice(publicUrl.length + 1))
   );
 
+  // Prefixo sempre preso à organização da sessão — nunca lista nem apaga
+  // nada fora de {organizationId}/imoveis/, mesmo que o bucket tenha
+  // objetos de outras organizações.
+  const prefixoOrganizacao = `${organizationId}/imoveis/`;
+
   const agora = Date.now();
   const chavesParaRemover: string[] = [];
   let continuationToken: string | undefined;
@@ -47,13 +52,13 @@ export async function limparMidiasOrfas() {
     const resposta = await client.send(
       new ListObjectsV2Command({
         Bucket: bucket,
-        Prefix: "imoveis/",
+        Prefix: prefixoOrganizacao,
         ContinuationToken: continuationToken,
       })
     );
 
     for (const objeto of resposta.Contents ?? []) {
-      if (!objeto.Key) continue;
+      if (!objeto.Key || !objeto.Key.startsWith(prefixoOrganizacao)) continue;
       totalObjetos += 1;
       const idadeMs = objeto.LastModified
         ? agora - objeto.LastModified.getTime()

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireOrganizationId } from "@/lib/tenant";
+import { temPapel, PAPEIS_GESTAO_USUARIOS } from "@/lib/authorization";
 import { EditarUsuarioForm } from "@/components/admin/EditarUsuarioForm";
 
 export default async function EditarUsuarioPage({
@@ -19,7 +20,7 @@ export default async function EditarUsuarioPage({
   });
   if (!membro) notFound();
 
-  if (session?.user.role !== "OWNER" && session?.user.role !== "ADMIN") {
+  if (!temPapel(session?.user.role, PAPEIS_GESTAO_USUARIOS)) {
     return (
       <div className="max-w-lg">
         <p className="text-sm text-muted-foreground">
@@ -44,6 +45,7 @@ export default async function EditarUsuarioPage({
           emailContato: membro.contactEmail,
         }}
         ehVoceMesmo={membro.id === session?.user.organizationMemberId}
+        podeGerenciarOwner={session?.user.role === "OWNER"}
       />
     </div>
   );

@@ -14,8 +14,11 @@ export type MidiaItem = {
 
 export function MediaUploader({
   midiasIniciais = [],
+  propertyId,
 }: {
   midiasIniciais?: MidiaItem[];
+  /** Id do imóvel sendo editado, se já existir (imóvel novo ainda não tem id). */
+  propertyId?: string;
 }) {
   const [midias, setMidias] = useState<MidiaItem[]>(midiasIniciais);
   const [enviando, setEnviando] = useState(false);
@@ -60,6 +63,8 @@ export function MediaUploader({
     for (const arquivo of Array.from(arquivos)) {
       const formData = new FormData();
       formData.append("arquivo", arquivo);
+      formData.append("pasta", "imoveis");
+      if (propertyId) formData.append("propertyId", propertyId);
       const resposta = await fetch("/api/admin/upload", {
         method: "POST",
         body: formData,

@@ -110,6 +110,10 @@ model Person {
   deals           DealPerson[]
 
   @@index([organizationId])
+  // GIN: `roles` é filtrado com `has`/`hasSome` (ex: dashboard, roles: {
+  // has: "LEAD" }) — índice B-tree comum não serve pra containment de
+  // array, só GIN.
+  @@index([roles], type: Gin)
   @@map("people")
 }
 
@@ -179,6 +183,12 @@ model Property {
   @@index([organizationId, city, neighborhood])
   @@index([organizationId, purpose, type])
   @@index([organizationId, isLaunch])
+  // GIN: propertyFeatures/condoFeatures são filtrados com `hasSome` na
+  // busca pública (src/app/(public)/imoveis/page.tsx) e no cálculo de
+  // facetas (filtros-imoveis-data.ts) — mesma justificativa do índice de
+  // Person.roles acima.
+  @@index([propertyFeatures], type: Gin)
+  @@index([condoFeatures], type: Gin)
   @@map("properties")
 }
 

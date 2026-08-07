@@ -4,13 +4,15 @@ import { ImovelCard } from "@/components/ImovelCard";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { getPublicOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
+import { metadataPaginaPublica } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = metadataPaginaPublica({
   title: "Vendidos e Alugados",
   description: "Confira alguns dos negócios que já concretizamos.",
-};
+  path: "/vendidos",
+});
 
 export default async function VendidosAlugadosPage() {
   const organizationId = await getPublicOrganizationId();

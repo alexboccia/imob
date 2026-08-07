@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { ImovelCard } from "@/components/ImovelCard";
@@ -12,6 +13,18 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { Prisma } from "@/generated/prisma/client";
 import type { TipoComCategoria } from "@/lib/filtros-imoveis-data";
+
+// Sem force-dynamic (removido do layout): as listas de imóveis desta
+// página (slideshow/lançamentos/destaques/oportunidades) não têm tag de
+// invalidação própria (só configurações e facetas têm, ver
+// cache-tags.ts) — um revalidate curto garante que a home nunca fique
+// mais que 1 minuto desatualizada em vez de ficar presa ao HTML gerado
+// no último build.
+export const revalidate = 60;
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 function BuscaHome({
   tipos,

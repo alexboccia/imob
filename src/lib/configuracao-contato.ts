@@ -1,7 +1,9 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { LOGO_ALTURA_PADRAO } from "@/lib/logo";
+import { tagConfiguracao } from "@/lib/cache-tags";
 
-export async function buscarConfiguracaoContato(organizationId: string) {
+async function buscarConfiguracaoContatoSemCache(organizationId: string) {
   const settings = await prisma.organizationSettings.findFirst({ where: { organizationId } });
 
   return {
@@ -16,4 +18,18 @@ export async function buscarConfiguracaoContato(organizationId: string) {
     logo: settings?.logoUrl ?? null,
     logoAltura: settings?.logoHeight ?? LOGO_ALTURA_PADRAO,
   };
+}
+
+// Muda raramente (só quando alguém salva Configurações) — cacheado com
+// tag por organização, invalidada explicitamente em
+// salvarConfiguracaoContato (configuracoes/actions.ts) via updateTag.
+// organizationId é passado como argumento (não só capturado por closure)
+// de propósito: é isso que garante que o Next derive uma entrada de cache
+// por organização — nunca a mesma chave pra duas organizações diferentes.
+export async function buscarConfiguracaoContato(organizationId: string) {
+  return unstable_cache(
+    buscarConfiguracaoContatoSemCache,
+    ["configuracao-contato", organizationId],
+    { tags: [tagConfiguracao(organizationId)] }
+  )(organizationId);
 }

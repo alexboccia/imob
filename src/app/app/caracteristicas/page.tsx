@@ -3,10 +3,9 @@ import {
   criarCaracteristica,
   removerCaracteristica,
 } from "@/app/app/caracteristicas/actions";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
+import { NovoItemCatalogoForm } from "@/components/admin/NovoItemCatalogoForm";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 
@@ -25,13 +24,11 @@ function ColunaCaracteristicas({
         <CardTitle className="text-base">{titulo}</CardTitle>
       </CardHeader>
       <CardContent>
-        <form action={criarCaracteristica} className="flex gap-2 mb-4">
-          <input type="hidden" name="categoria" value={categoria} />
-          <Input name="nome" placeholder="Nova característica" required />
-          <Button type="submit" variant="outline">
-            Adicionar
-          </Button>
-        </form>
+        <NovoItemCatalogoForm
+          action={criarCaracteristica}
+          categoria={categoria}
+          placeholder="Nova característica"
+        />
 
         {opcoes.length === 0 ? (
           <p className="text-sm text-muted-foreground">

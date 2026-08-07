@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { logger } from "@/lib/logger";
 
 let clienteResend: Resend | null = null;
 
@@ -28,17 +29,17 @@ export async function enviarEmailContato({
 }) {
   const cliente = obterCliente();
   if (!cliente) {
-    console.warn(
-      "RESEND_API_KEY não configurada — e-mail de contato não foi enviado."
-    );
+    logger.warn("RESEND_API_KEY não configurada — e-mail de contato não foi enviado", {
+      modulo: "email",
+    });
     return;
   }
 
   const remetente = process.env.RESEND_FROM_EMAIL;
   if (!remetente) {
-    console.warn(
-      "RESEND_FROM_EMAIL não configurado — e-mail de contato não foi enviado."
-    );
+    logger.warn("RESEND_FROM_EMAIL não configurado — e-mail de contato não foi enviado", {
+      modulo: "email",
+    });
     return;
   }
 
@@ -65,6 +66,9 @@ export async function enviarEmailContato({
       text: linhas.join("\n"),
     });
   } catch (erro) {
-    console.error("Falha ao enviar e-mail de contato:", erro);
+    // Nunca passar nomeLead/emailLead/telefoneLead/mensagem como contexto
+    // aqui — logger.error só encaminha pra Sentry os campos da allowlist
+    // (ver src/lib/logger.ts), então nem vale a pena tentar.
+    logger.error("Falha ao enviar e-mail de contato", erro, { modulo: "email" });
   }
 }

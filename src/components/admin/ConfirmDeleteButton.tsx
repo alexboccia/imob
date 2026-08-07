@@ -1,5 +1,7 @@
 "use client";
 
+import { useActionState, useEffect } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,14 +13,23 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import { ESTADO_INICIAL_ACAO, type ActionState } from "@/lib/action-result";
 
 export function ConfirmDeleteButton({
   action,
   itemLabel,
 }: {
-  action: () => void;
+  action: (prevState: ActionState, formData: FormData) => Promise<ActionState>;
   itemLabel: string;
 }) {
+  const [estado, formAction, pendente] = useActionState(action, ESTADO_INICIAL_ACAO);
+
+  useEffect(() => {
+    if (estado.message && !estado.success) {
+      toast.error(estado.message);
+    }
+  }, [estado]);
+
   return (
     <Dialog>
       <DialogTrigger
@@ -45,8 +56,13 @@ export function ConfirmDeleteButton({
           <DialogClose render={<Button variant="outline" />}>
             Cancelar
           </DialogClose>
-          <form action={action}>
-            <Button type="submit" variant="destructive" className="w-full">
+          <form action={formAction}>
+            <Button
+              type="submit"
+              variant="destructive"
+              className="w-full"
+              disabled={pendente}
+            >
               Remover
             </Button>
           </form>

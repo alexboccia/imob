@@ -1,22 +1,8 @@
-import {
-  tableFeatures,
-  rowSortingFeature,
-  columnFilteringFeature,
-  globalFilteringFeature,
-  rowPaginationFeature,
-  createSortedRowModel,
-  createFilteredRowModel,
-  createPaginatedRowModel,
-} from "@tanstack/react-table";
+import { tableFeatures } from "@tanstack/react-table";
 
-export const tableFeaturesUsadas = tableFeatures({
-  rowSortingFeature,
-  columnFilteringFeature,
-  globalFilteringFeature,
-  rowPaginationFeature,
-  sortedRowModel: createSortedRowModel(),
-  filteredRowModel: createFilteredRowModel(),
-  paginatedRowModel: createPaginatedRowModel(),
-});
+// Paginação, ordenação e busca agora acontecem no servidor (Prisma/
+// PostgreSQL) — a tabela só precisa saber renderizar colunas/linhas da
+// página atual, sem nenhuma feature de processamento client-side.
+export const tableFeaturesUsadas = tableFeatures({});
 
 export type TableFeaturesUsadas = typeof tableFeaturesUsadas;

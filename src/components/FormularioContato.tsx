@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { CheckCircle2, AlertCircle } from "lucide-react";
 import { enviarContato } from "@/app/(public)/actions";
+import { CamposAntiSpam } from "@/components/CamposAntiSpam";
 import { Input } from "@/components/ui/input";
 import { CampoTelefone } from "@/components/CampoTelefone";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,6 +40,7 @@ export function FormularioContato({
 
   return (
     <form action={formAction} className="space-y-3">
+      <CamposAntiSpam />
       {imovelId && <input type="hidden" name="imovelId" value={imovelId} />}
       <div className="space-y-1">
         <Label htmlFor={`${idPrefixo}nome`}>Nome</Label>

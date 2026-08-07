@@ -35,7 +35,11 @@ export default function LoginPage() {
     setCarregando(false);
 
     if (!resultado || resultado.error) {
-      setErro("E-mail ou senha inválidos.");
+      if (resultado?.code === "too_many_attempts") {
+        setErro("Muitas tentativas. Aguarde alguns minutos e tente novamente.");
+      } else {
+        setErro("E-mail ou senha inválidos.");
+      }
       return;
     }
 

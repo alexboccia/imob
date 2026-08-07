@@ -3,19 +3,32 @@ import { prisma } from "@/lib/prisma";
 import { ImovelCard } from "@/components/ImovelCard";
 import { SeletorOrdenacao } from "@/components/SeletorOrdenacao";
 import { FiltrosImoveis } from "@/components/FiltrosImoveis";
+import { PaginacaoPublica } from "@/components/PaginacaoPublica";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
 import { getPublicOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
+import { interpretarPaginacao, normalizarBusca, totalDePaginas } from "@/lib/pagination";
+import { metadataPaginaPublica } from "@/lib/seo";
 import type { Prisma } from "@/generated/prisma/client";
 
-export const metadata: Metadata = {
+// Canonical aponta sempre pra URL base, sem os parâmetros de
+// busca/filtro/página — evita conteúdo duplicado no Google entre as
+// várias combinações de filtro que renderizam a mesma "página" do ponto
+// de vista de SEO.
+export const metadata: Metadata = metadataPaginaPublica({
   title: "Imóveis disponíveis",
   description:
     "Busque apartamentos, casas e imóveis comerciais para comprar ou alugar, com filtros por localização, preço e características.",
-};
+  path: "/imoveis",
+});
+
+// Grade de 3 colunas — 12 é um múltiplo redondo de linhas completas.
+const PAGE_SIZE_PADRAO_PUBLICO = 12;
+const PAGE_SIZE_MAXIMO_PUBLICO = 24;
 
 type SearchParams = {
+  page?: string;
   busca?: string;
   finalidade?: string;
   tipo?: string | string[];
@@ -55,19 +68,28 @@ export default async function ListaImoveisPage({
   const params = await searchParams;
   const organizationId = await getPublicOrganizationId();
 
+  const { page, skip, take } = interpretarPaginacao(params, {
+    pageSizePadrao: PAGE_SIZE_PADRAO_PUBLICO,
+    pageSizeMaximo: PAGE_SIZE_MAXIMO_PUBLICO,
+  });
+
   const tipos = paraArray(params.tipo);
   const bairros = paraArray(params.bairro);
   const caracteristicas = paraArray(params.caracteristicas);
 
-  const buscaTexto = params.busca?.trim();
-  const buscaCodigo = buscaTexto ? Number(buscaTexto.replace(/\D/g, "")) : NaN;
+  const buscaTexto = normalizarBusca(params.busca);
+  // "".replace(/\D/g,"") -> "" -> Number("") é 0, não NaN — sem o
+  // dígitos ? ... : NaN, uma busca só de texto incluiria por engano a
+  // cláusula { code: 0 } no OR.
+  const digitosBusca = buscaTexto.replace(/\D/g, "");
+  const buscaCodigo = digitosBusca ? Number(digitosBusca) : NaN;
 
   const precoMin = params.precoMin ? Number(params.precoMin) : undefined;
   const precoMax = params.precoMax ? Number(params.precoMax) : undefined;
   const areaMin = params.areaMin ? Number(params.areaMin) : undefined;
   const areaMax = params.areaMax ? Number(params.areaMax) : undefined;
 
-  const { imoveis, dadosFiltros } = await withOrganization(organizationId, async () => {
+  const { imoveis, totalCount, dadosFiltros } = await withOrganization(organizationId, async () => {
     const dadosFiltros = await buscarDadosFiltros(organizationId);
 
     const tiposDaCategoria =
@@ -132,20 +154,42 @@ export default async function ListaImoveisPage({
 
     const orderBy = ORDENACOES[params.ordenar ?? ""] ?? { publishedAt: "desc" };
 
-    const imoveis = await prisma.property.findMany({
-      where,
-      orderBy,
-      include: {
-        media: {
-          where: { type: "PHOTO" },
-          orderBy: [{ isCover: "desc" }, { order: "asc" }],
-          take: 5,
+    const [imoveis, totalCount] = await Promise.all([
+      prisma.property.findMany({
+        where,
+        orderBy,
+        skip,
+        take,
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          purpose: true,
+          neighborhood: true,
+          city: true,
+          state: true,
+          price: true,
+          rentPrice: true,
+          bedrooms: true,
+          parkingSpots: true,
+          isLaunch: true,
+          isFeatured: true,
+          isOpportunity: true,
+          media: {
+            where: { type: "PHOTO" },
+            orderBy: [{ isCover: "desc" }, { order: "asc" }],
+            take: 5,
+            select: { url: true },
+          },
         },
-      },
-    });
+      }),
+      prisma.property.count({ where }),
+    ]);
 
-    return { imoveis, dadosFiltros };
+    return { imoveis, totalCount, dadosFiltros };
   });
+
+  const paginas = totalDePaginas(totalCount, take);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
@@ -186,8 +230,7 @@ export default async function ListaImoveisPage({
                 ? "Oportunidades"
                 : "Resultados da busca"}{" "}
           <span className="text-gray-400 font-normal text-lg">
-            {imoveis.length}{" "}
-            {imoveis.length === 1 ? "imóvel encontrado" : "imóveis encontrados"}
+            {totalCount} {totalCount === 1 ? "imóvel encontrado" : "imóveis encontrados"}
           </span>
         </h1>
         <SeletorOrdenacao valorAtual={params.ordenar ?? "relevantes"} />
@@ -198,11 +241,19 @@ export default async function ListaImoveisPage({
           Nenhum imóvel encontrado com esses filtros.
         </p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {imoveis.map((imovel) => (
-            <ImovelCard key={imovel.id} imovel={paraImovelCard(imovel)} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {imoveis.map((imovel) => (
+              <ImovelCard key={imovel.id} imovel={paraImovelCard(imovel)} />
+            ))}
+          </div>
+          <PaginacaoPublica
+            basePath="/imoveis"
+            paginaAtual={page}
+            totalPaginas={paginas}
+            searchParams={params}
+          />
+        </>
       )}
     </div>
   );

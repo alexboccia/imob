@@ -33,9 +33,25 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+# .env.test é intencionalmente commitado — convenção documentada do
+# próprio Next.js (node_modules/next/dist/docs/.../environment-variables.md):
+# sem segredo real, só credenciais do Postgres local de teste e valores
+# fixos, pra todo mundo (e o CI) rodar os testes com o mesmo ambiente.
+!.env.test
+
+# playwright
+/test-results
+/playwright-report
+/playwright/.cache
 
 # vercel
 .vercel
+
+# sentry — .env.sentry-build-plugin já cai no padrão .env* acima;
+# .sentryclirc é o formato antigo (sentry-cli local), nunca deve ter token
+# de verdade commitado se alguém criar um pra testar upload de source map
+# manualmente.
+.sentryclirc
 
 # typescript
 *.tsbuildinfo

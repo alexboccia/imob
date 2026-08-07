@@ -34,6 +34,14 @@ import {
 } from "@/components/icons";
 import { IconeCaracteristica } from "@/lib/caracteristicas-icones";
 
+// Página de detalhe não tem tag de invalidação própria (preço/status
+// mudam por edição de imóvel, sem updateTag associado) — sem
+// force-dynamic (removido do layout), um segmento dinâmico como este
+// tende a ficar estático após a primeira visita. O revalidate curto
+// evita que um imóvel vendido/alterado continue aparecendo desatualizado
+// por tempo indefinido.
+export const revalidate = 60;
+
 function ItemCaracteristica({
   icon: Icone = IconeCheck,
   children,
@@ -153,6 +161,7 @@ export async function generateMetadata({
   return {
     title: imovel.title,
     description: descricao,
+    alternates: { canonical: `/imoveis/${id}` },
     openGraph: {
       title: imovel.title,
       description: descricao,

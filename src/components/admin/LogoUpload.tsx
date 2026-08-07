@@ -105,12 +105,12 @@ export function LogoUpload({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Recomendado: PNG ou SVG com fundo transparente e formato retangular
-        (proporção até 3:1). A imagem é redimensionada automaticamente para
-        caber na altura escolhida (entre {LOGO_ALTURA_MIN}px e{" "}
-        {LOGO_ALTURA_MAX}px) sem distorcer nem quebrar o layout. Se nenhum
-        logotipo for enviado, o nome da imobiliária continua sendo exibido
-        em texto.
+        Recomendado: PNG ou WEBP com fundo transparente e formato retangular
+        (proporção até 3:1), até 10MB. A imagem é redimensionada
+        automaticamente para caber na altura escolhida (entre{" "}
+        {LOGO_ALTURA_MIN}px e {LOGO_ALTURA_MAX}px) sem distorcer nem quebrar
+        o layout. Se nenhum logotipo for enviado, o nome da imobiliária
+        continua sendo exibido em texto.
       </p>
     </div>
   );

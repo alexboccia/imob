@@ -5,9 +5,12 @@ import { withOrganization } from "@/lib/tenant-context";
 import { SiteHeader } from "@/components/SiteHeader";
 import { BotaoContatoFlutuante } from "@/components/BotaoContatoFlutuante";
 
-// Garante que o cabeçalho (nome/logo/whatsapp) sempre reflita o que está em
-// Configurações, sem depender de revalidação de cache por instância.
-export const dynamic = "force-dynamic";
+// Sem force-dynamic global: o cabeçalho (nome/logo/whatsapp) usa
+// buscarConfiguracaoContato, que já é cacheada por organização com
+// invalidação explícita (updateTag) em salvarConfiguracaoContato —
+// isso garante a mesma atualização imediata que o force-dynamic dava,
+// sem forçar toda página pública (inclusive /contato, que não tem
+// nenhum dado dinâmico próprio) a renderizar do zero em toda requisição.
 
 const NAV_LINKS = [
   { href: "/imoveis?finalidade=SALE", label: "Comprar" },

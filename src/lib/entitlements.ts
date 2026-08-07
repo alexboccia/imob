@@ -24,24 +24,45 @@ const carregarPlano = cache(async (organizationId: string) => {
   return organization.plan;
 });
 
-export async function hasModule(
-  organizationId: string,
+// Lógica pura (sem Prisma) — testável sem banco de dados.
+
+export function moduloHabilitado(
+  planModules: { module: { code: string }; enabled: boolean }[],
   moduleCode: string
-): Promise<boolean> {
-  const plano = await carregarPlano(organizationId);
-  const planModule = plano.planModules.find((pm) => pm.module.code === moduleCode);
+): boolean {
+  const planModule = planModules.find((pm) => pm.module.code === moduleCode);
   return planModule?.enabled ?? false;
 }
 
 // null = sem limite (ilimitado, seja por config explícita ou por ausência
 // de linha pra essa feature nesse plano).
+export function limiteDoCatalogo(
+  planLimits: { feature: string; limit: number | null }[],
+  feature: string
+): number | null {
+  const planLimit = planLimits.find((l) => l.feature === feature);
+  return planLimit?.limit ?? null;
+}
+
+export function limiteExcedido(total: number, limite: number | null): boolean {
+  if (limite === null) return false;
+  return total >= limite;
+}
+
+export async function hasModule(
+  organizationId: string,
+  moduleCode: string
+): Promise<boolean> {
+  const plano = await carregarPlano(organizationId);
+  return moduloHabilitado(plano.planModules, moduleCode);
+}
+
 export async function getLimit(
   organizationId: string,
   feature: string
 ): Promise<number | null> {
   const plano = await carregarPlano(organizationId);
-  const planLimit = plano.planLimits.find((l) => l.feature === feature);
-  return planLimit?.limit ?? null;
+  return limiteDoCatalogo(plano.planLimits, feature);
 }
 
 export class LimiteDoPlanoError extends Error {}
@@ -53,7 +74,7 @@ export async function verificarLimiteImoveis(organizationId: string): Promise<vo
   const total = await prisma.property.count({
     where: { organizationId, status: { in: [...STATUS_IMOVEL_ATIVO] } },
   });
-  if (total >= limite) {
+  if (limiteExcedido(total, limite)) {
     throw new LimiteDoPlanoError(
       `Seu plano permite até ${limite} imóveis ativos. Encerre ou remova um imóvel, ou faça upgrade de plano, para cadastrar um novo.`
     );
@@ -67,7 +88,7 @@ export async function verificarLimiteUsuarios(organizationId: string): Promise<v
   const total = await prisma.organizationMember.count({
     where: { organizationId, status: "ACTIVE" },
   });
-  if (total >= limite) {
+  if (limiteExcedido(total, limite)) {
     throw new LimiteDoPlanoError(
       `Seu plano permite até ${limite} usuários ativos. Desative um usuário ou faça upgrade de plano para cadastrar um novo.`
     );

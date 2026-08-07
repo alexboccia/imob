@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { ContatoForm } from "@/components/ContatoForm";
+import { metadataPaginaPublica } from "@/lib/seo";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = metadataPaginaPublica({
   title: "Contato",
   description:
     "Envie sua mensagem e um de nossos corretores retornará em breve.",
-};
+  path: "/contato",
+});
 
 export default function ContatoPage() {
   return (

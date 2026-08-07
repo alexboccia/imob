@@ -1,25 +1,69 @@
 "use server";
 
-import { z } from "zod";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { enviarEmailContato } from "@/lib/email";
-import { telefoneValido } from "@/lib/telefone";
+import { contatoSchema, anuncieSchema } from "@/lib/contato-schema";
 import { getPublicOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
+import { obterIpCliente } from "@/lib/client-ip";
+import { obterKvStore } from "@/lib/kv-store";
+import { verificarLimiteFormulario, normalizarContato, type FormularioTipo } from "@/lib/rate-limit";
+import { registrarAbuso } from "@/lib/abuse-log";
+import { hashCurto } from "@/lib/hash";
 
-const contatoSchema = z.object({
-  nome: z.string().min(2),
-  email: z.string().email().optional().or(z.literal("")),
-  telefone: z
-    .string()
-    .refine((v) => telefoneValido(v), "Telefone inválido")
-    .optional()
-    .or(z.literal("")),
-  mensagem: z.string().min(5),
-  imovelId: z.string().optional(),
-});
+// Menos de 1.5s entre o formulário aparecer na tela e ser enviado não é
+// tempo humano realista de preencher nome/telefone/mensagem — quase
+// sempre é um bot que já chega com o payload pronto.
+const LIMIAR_MUITO_RAPIDO_MS = 1500;
+const MENSAGEM_LIMITE_EXCEDIDO = "Muitas tentativas. Tente novamente mais tarde.";
+
+async function protecoesAntiSpam(params: {
+  formulario: FormularioTipo;
+  formData: FormData;
+  organizationId: string;
+  contatoNormalizado: string;
+}): Promise<{ bloqueado: true; erro: string } | { bloqueado: false }> {
+  const ip = obterIpCliente(await headers());
+
+  // Honeypot: campo invisível pra humanos. Preenchido = bot. Devolve
+  // "sucesso" sem gravar nada, pra não ensinar o bot a se adaptar.
+  const honeypot = params.formData.get("website");
+  if (typeof honeypot === "string" && honeypot.trim() !== "") {
+    registrarAbuso({ tipo: params.formulario, motivo: "honeypot", organizationId: params.organizationId, ip });
+    return { bloqueado: true, erro: "" }; // erro vazio = chamador trata como sucesso silencioso
+  }
+
+  const renderizadoEm = Number(params.formData.get("renderizadoEm"));
+  if (Number.isFinite(renderizadoEm) && Date.now() - renderizadoEm < LIMIAR_MUITO_RAPIDO_MS) {
+    registrarAbuso({ tipo: params.formulario, motivo: "muito_rapido", organizationId: params.organizationId, ip });
+    return { bloqueado: true, erro: "Envio muito rápido. Tente novamente." };
+  }
+
+  const store = obterKvStore();
+  if (store) {
+    const limite = await verificarLimiteFormulario(store, {
+      formulario: params.formulario,
+      ip,
+      organizationId: params.organizationId,
+      contatoNormalizado: params.contatoNormalizado,
+    });
+    if (!limite.permitido) {
+      registrarAbuso({
+        tipo: params.formulario,
+        motivo: `rate_limit_${limite.motivo}`,
+        organizationId: params.organizationId,
+        ip,
+        identificadorHash: params.contatoNormalizado ? hashCurto(params.contatoNormalizado) : undefined,
+      });
+      return { bloqueado: true, erro: MENSAGEM_LIMITE_EXCEDIDO };
+    }
+  }
+
+  return { bloqueado: false };
+}
 
 export async function enviarContato(_prevState: unknown, formData: FormData) {
   const parsed = contatoSchema.safeParse({
@@ -35,8 +79,17 @@ export async function enviarContato(_prevState: unknown, formData: FormData) {
   }
 
   const { nome, email, telefone, mensagem, imovelId } = parsed.data;
-
   const organizationId = await getPublicOrganizationId();
+
+  const protecao = await protecoesAntiSpam({
+    formulario: "contato",
+    formData,
+    organizationId,
+    contatoNormalizado: normalizarContato(email, telefone),
+  });
+  if (protecao.bloqueado) {
+    return protecao.erro ? { sucesso: false, erro: protecao.erro } : { sucesso: true };
+  }
 
   const { imovel, configContato } = await withOrganization(organizationId, async () => {
     const pessoa = await prisma.person.create({
@@ -91,13 +144,6 @@ export async function enviarContato(_prevState: unknown, formData: FormData) {
   return { sucesso: true };
 }
 
-const anuncieSchema = z.object({
-  nome: z.string().min(2),
-  email: z.string().email().optional().or(z.literal("")),
-  telefone: z.string().refine((v) => telefoneValido(v), "Telefone inválido"),
-  descricaoImovel: z.string().min(5),
-});
-
 export async function enviarAnuncioProprietario(
   _prevState: unknown,
   formData: FormData
@@ -114,8 +160,18 @@ export async function enviarAnuncioProprietario(
   }
 
   const { nome, email, telefone, descricaoImovel } = parsed.data;
-
   const organizationId = await getPublicOrganizationId();
+
+  const protecao = await protecoesAntiSpam({
+    formulario: "anuncie",
+    formData,
+    organizationId,
+    contatoNormalizado: normalizarContato(email, telefone),
+  });
+  if (protecao.bloqueado) {
+    return protecao.erro ? { sucesso: false, erro: protecao.erro } : { sucesso: true };
+  }
+
   await withOrganization(organizationId, async () => {
     await prisma.person.create({
       data: {

@@ -9,13 +9,17 @@ import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { verificarLimiteUsuarios, LimiteDoPlanoError } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
+import { temPapel, PAPEIS_GESTAO_USUARIOS } from "@/lib/authorization";
+import {
+  type ActionState,
+  erroAcessoNegado,
+  erroGenerico,
+  erroValidacao,
+} from "@/lib/action-result";
 
 const ROLES = ["OWNER", "ADMIN", "MANAGER", "BROKER", "ASSISTANT"] as const;
-const PAPEIS_COM_GESTAO_DE_USUARIOS = new Set(["OWNER", "ADMIN"]);
 
 const booleanCheckbox = z.preprocess((v) => v === "on", z.boolean());
-
-type EstadoFormulario = { sucesso: boolean; erro?: string };
 
 const criarUsuarioSchema = z.object({
   nome: z.string().min(2, "Informe o nome."),
@@ -25,29 +29,32 @@ const criarUsuarioSchema = z.object({
 });
 
 export async function criarUsuario(
-  _prevState: EstadoFormulario,
+  _prevState: ActionState,
   formData: FormData
-): Promise<EstadoFormulario> {
+): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
-  if (!PAPEIS_COM_GESTAO_DE_USUARIOS.has(session.user.role ?? "")) {
-    return { sucesso: false, erro: "Apenas administradores podem criar usuários." };
+  if (!temPapel(session.user.role, PAPEIS_GESTAO_USUARIOS)) {
+    return erroAcessoNegado();
   }
 
   const parsed = criarUsuarioSchema.safeParse(Object.fromEntries(formData.entries()));
-  if (!parsed.success) {
-    return {
-      sucesso: false,
-      erro: parsed.error.issues[0]?.message ?? "Dados inválidos.",
-    };
-  }
+  if (!parsed.success) return erroValidacao(parsed.error);
   const dados = parsed.data;
+
+  // Só quem já é OWNER pode conceder o papel de OWNER a alguém — um ADMIN
+  // não pode criar um usuário já nascendo com o papel mais alto.
+  if (dados.papel === "OWNER" && session.user.role !== "OWNER") {
+    return erroAcessoNegado(
+      "Apenas o proprietário pode conceder o papel de proprietário."
+    );
+  }
 
   const existente = await prisma.user.findUnique({
     where: { email: dados.email },
   });
   if (existente) {
-    return { sucesso: false, erro: "Já existe um usuário com esse e-mail." };
+    return erroGenerico("Já existe um usuário com esse e-mail.");
   }
 
   const organizationId = await requireOrganizationId();
@@ -55,7 +62,7 @@ export async function criarUsuario(
     await verificarLimiteUsuarios(organizationId);
   } catch (erro) {
     if (erro instanceof LimiteDoPlanoError) {
-      return { sucesso: false, erro: erro.message };
+      return erroGenerico(erro.message);
     }
     throw erro;
   }
@@ -107,22 +114,17 @@ const atualizarUsuarioSchema = z.object({
 
 export async function atualizarUsuario(
   membershipId: string,
-  _prevState: EstadoFormulario,
+  _prevState: ActionState,
   formData: FormData
-): Promise<EstadoFormulario> {
+): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
-  if (!PAPEIS_COM_GESTAO_DE_USUARIOS.has(session.user.role ?? "")) {
-    return { sucesso: false, erro: "Apenas administradores podem editar usuários." };
+  if (!temPapel(session.user.role, PAPEIS_GESTAO_USUARIOS)) {
+    return erroAcessoNegado();
   }
 
   const parsed = atualizarUsuarioSchema.safeParse(Object.fromEntries(formData.entries()));
-  if (!parsed.success) {
-    return {
-      sucesso: false,
-      erro: parsed.error.issues[0]?.message ?? "Dados inválidos.",
-    };
-  }
+  if (!parsed.success) return erroValidacao(parsed.error);
   const dados = parsed.data;
 
   const organizationId = await requireOrganizationId();
@@ -130,22 +132,34 @@ export async function atualizarUsuario(
     where: { id: membershipId, organizationId },
   });
   if (!membershipAlvo) {
-    return { sucesso: false, erro: "Usuário não encontrado." };
+    return erroGenerico("Usuário não encontrado.");
   }
 
   const ehVoceMesmo = membershipId === session.user.organizationMemberId;
+
+  // Defesa em profundidade: um usuário nunca altera o próprio papel por
+  // esta action, mesmo que o cliente envie um valor diferente no FormData
+  // (o formulário já esconde esse campo na edição de si mesmo, mas a
+  // garantia de verdade tem que ser no servidor). Isso também elimina
+  // qualquer caminho de autoescalação de privilégio.
+  const papelFinal = ehVoceMesmo ? membershipAlvo.role : dados.papel;
+
+  // Só quem já é OWNER pode conceder OU remover o papel de OWNER de
+  // alguém — cobre tanto promover um membro para OWNER quanto rebaixar um
+  // OWNER existente.
+  const envolveOwner = membershipAlvo.role === "OWNER" || papelFinal === "OWNER";
+  if (envolveOwner && session.user.role !== "OWNER") {
+    return erroAcessoNegado(
+      "Apenas o proprietário pode conceder ou remover o papel de proprietário."
+    );
+  }
+
   const eraAdmin = membershipAlvo.role === "OWNER" || membershipAlvo.role === "ADMIN";
-  const continuaAdmin = dados.papel === "OWNER" || dados.papel === "ADMIN";
+  const continuaAdmin = papelFinal === "OWNER" || papelFinal === "ADMIN";
 
   if (ehVoceMesmo) {
     if (!dados.ativo) {
-      return { sucesso: false, erro: "Você não pode desativar sua própria conta." };
-    }
-    if (!continuaAdmin) {
-      return {
-        sucesso: false,
-        erro: "Você não pode remover seu próprio acesso de administrador.",
-      };
+      return erroGenerico("Você não pode desativar sua própria conta.");
     }
   } else if (eraAdmin && (!continuaAdmin || !dados.ativo)) {
     const outrosAdmins = await prisma.organizationMember.count({
@@ -157,7 +171,7 @@ export async function atualizarUsuario(
       },
     });
     if (outrosAdmins === 0) {
-      return { sucesso: false, erro: "Precisa haver ao menos um administrador ativo." };
+      return erroGenerico("Precisa haver ao menos um administrador ativo.");
     }
   }
 
@@ -175,7 +189,7 @@ export async function atualizarUsuario(
   await prisma.organizationMember.update({
     where: { id: membershipId, organizationId },
     data: {
-      role: dados.papel,
+      role: papelFinal,
       status: dados.ativo ? "ACTIVE" : "SUSPENDED",
       whatsapp: dados.whatsapp ? dados.whatsapp.replace(/\D/g, "") : null,
       contactEmail: dados.emailContato || null,

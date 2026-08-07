@@ -5,6 +5,8 @@ import { criarUsuario } from "@/app/app/usuarios/actions";
 import { FormDisclosure } from "@/components/admin/FormDisclosure";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ErroCampo } from "@/components/admin/ErroCampo";
+import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import {
   Select,
   SelectContent,
@@ -13,23 +15,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const estadoInicial = { sucesso: false, erro: undefined as string | undefined };
-
 export function CriarUsuarioForm() {
-  const [estado, formAction, pendente] = useActionState(criarUsuario, estadoInicial);
+  const [estado, formAction, pendente] = useActionState(
+    criarUsuario,
+    ESTADO_INICIAL_ACAO
+  );
 
   return (
     <FormDisclosure titulo="+ Cadastrar novo usuário">
       <form action={formAction} className="grid grid-cols-2 gap-3 text-sm">
-        <Input name="nome" placeholder="Nome" required />
-        <Input name="email" type="email" placeholder="E-mail" required />
-        <Input
-          name="senha"
-          type="password"
-          placeholder="Senha (mín. 6 caracteres)"
-          required
-          minLength={6}
-        />
+        <div>
+          <Input name="nome" placeholder="Nome" required />
+          <ErroCampo erros={estado.fieldErrors?.nome} />
+        </div>
+        <div>
+          <Input name="email" type="email" placeholder="E-mail" required />
+          <ErroCampo erros={estado.fieldErrors?.email} />
+        </div>
+        <div>
+          <Input
+            name="senha"
+            type="password"
+            placeholder="Senha (mín. 6 caracteres)"
+            required
+            minLength={6}
+          />
+          <ErroCampo erros={estado.fieldErrors?.senha} />
+        </div>
         <Select name="papel" defaultValue="BROKER">
           <SelectTrigger className="w-full">
             <SelectValue />
@@ -41,8 +53,8 @@ export function CriarUsuarioForm() {
             <SelectItem value="ASSISTANT">Assistente</SelectItem>
           </SelectContent>
         </Select>
-        {estado.erro && (
-          <p className="col-span-2 text-sm text-destructive">{estado.erro}</p>
+        {!estado.success && estado.message && (
+          <p className="col-span-2 text-sm text-destructive">{estado.message}</p>
         )}
         <Button
           type="submit"

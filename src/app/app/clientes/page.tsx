@@ -2,12 +2,40 @@ import { prisma } from "@/lib/prisma";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
+import {
+  interpretarPaginacao,
+  interpretarOrdenacao,
+  interpretarFiltros,
+  normalizarBusca,
+} from "@/lib/pagination";
+import { construirWhereClientes } from "@/lib/listagens-admin-query";
 import { DataTable } from "@/components/admin/data-table/DataTable";
-import { clienteColumns, type ClienteRow } from "./columns";
+import { FiltroDropdown } from "@/components/admin/data-table/FiltroDropdown";
+import { clienteColumns, ESTAGIO_LABEL, type ClienteRow } from "./columns";
 import { CriarClienteForm } from "@/components/admin/CriarClienteForm";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 
-export default async function ClientesPage() {
+const SORT_MAP: Record<string, string> = {
+  nome: "name",
+  estagioFunil: "pipelineStage",
+};
+const CAMPOS_ORDENAVEIS = Object.values(SORT_MAP);
+
+const ESTAGIOS_VALIDOS = new Set(Object.keys(ESTAGIO_LABEL));
+
+type SearchParams = {
+  page?: string;
+  pageSize?: string;
+  search?: string;
+  sort?: string;
+  filters?: string;
+};
+
+export default async function ClientesPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
   const organizationId = await requireOrganizationId();
 
   if (!(await hasModule(organizationId, "crm"))) {
@@ -22,12 +50,41 @@ export default async function ClientesPage() {
     );
   }
 
-  const pessoas = await withOrganization(organizationId, () =>
-    prisma.person.findMany({
-      where: { organizationId },
-      orderBy: { createdAt: "desc" },
-      include: { assignedMember: { include: { user: { select: { name: true } } } } },
-    })
+  const params = await searchParams;
+  const { page, pageSize, skip, take } = interpretarPaginacao(params);
+  const busca = normalizarBusca(params.search);
+  const filtros = interpretarFiltros(params.filters, ["estagioFunil"] as const);
+  const estagioFiltro =
+    filtros.estagioFunil && ESTAGIOS_VALIDOS.has(filtros.estagioFunil)
+      ? filtros.estagioFunil
+      : undefined;
+  const ordenacao = interpretarOrdenacao(params.sort, CAMPOS_ORDENAVEIS, {
+    campo: "createdAt",
+    direcao: "desc",
+  });
+
+  const where = construirWhereClientes({ organizationId, busca, estagioFiltro });
+
+  const [pessoas, totalCount] = await withOrganization(organizationId, () =>
+    Promise.all([
+      prisma.person.findMany({
+        where,
+        orderBy: { [ordenacao.campo]: ordenacao.direcao },
+        skip,
+        take,
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+          roles: true,
+          pipelineStage: true,
+          source: true,
+          assignedMember: { select: { user: { select: { name: true } } } },
+        },
+      }),
+      prisma.person.count({ where }),
+    ])
   );
 
   const linhas: ClienteRow[] = pessoas.map((pessoa) => ({
@@ -46,10 +103,22 @@ export default async function ClientesPage() {
 
       <CriarClienteForm />
 
+      <div className="mb-3">
+        <FiltroDropdown
+          chave="estagioFunil"
+          label="Estágio"
+          opcoes={Object.entries(ESTAGIO_LABEL).map(([value, label]) => ({ value, label }))}
+        />
+      </div>
+
       <DataTable
         columns={clienteColumns}
         data={linhas}
-        searchPlaceholder="Buscar por nome, contato, origem..."
+        totalCount={totalCount}
+        page={page}
+        pageSize={pageSize}
+        sortableColumns={SORT_MAP}
+        searchPlaceholder="Buscar por nome, telefone ou e-mail..."
         emptyMessage="Nenhum cliente cadastrado ainda."
       />
     </div>

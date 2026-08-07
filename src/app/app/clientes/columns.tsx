@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { DataTableColumn } from "@/components/admin/data-table/DataTable";
 
-const ESTAGIO_LABEL: Record<string, string> = {
+export const ESTAGIO_LABEL: Record<string, string> = {
   NEW_LEAD: "Novo lead",
   CONTACTED: "Contato feito",
   VISIT_SCHEDULED: "Visita agendada",

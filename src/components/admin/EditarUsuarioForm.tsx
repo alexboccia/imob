@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
+import { ErroCampo } from "@/components/admin/ErroCampo";
+import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import {
   Select,
   SelectContent,
@@ -17,11 +19,10 @@ import {
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
 import { FotoCorretorUpload } from "@/components/admin/FotoCorretorUpload";
 
-const estadoInicial = { sucesso: false, erro: undefined as string | undefined };
-
 export function EditarUsuarioForm({
   usuario,
   ehVoceMesmo,
+  podeGerenciarOwner,
 }: {
   usuario: {
     id: string;
@@ -34,11 +35,12 @@ export function EditarUsuarioForm({
     emailContato: string | null;
   };
   ehVoceMesmo: boolean;
+  podeGerenciarOwner: boolean;
 }) {
   const atualizarComId = atualizarUsuario.bind(null, usuario.id);
   const [estado, formAction, pendente] = useActionState(
     atualizarComId,
-    estadoInicial
+    ESTADO_INICIAL_ACAO
   );
 
   return (
@@ -53,6 +55,7 @@ export function EditarUsuarioForm({
           <div className="space-y-1.5">
             <Label htmlFor="nome">Nome</Label>
             <Input id="nome" name="nome" defaultValue={usuario.nome} required />
+            <ErroCampo erros={estado.fieldErrors?.nome} />
           </div>
 
           <FotoCorretorUpload fotoInicial={usuario.foto} />
@@ -69,6 +72,7 @@ export function EditarUsuarioForm({
               Se vazio, os botões de WhatsApp dos imóveis deste corretor usam
               o número configurado em Configurações.
             </p>
+            <ErroCampo erros={estado.fieldErrors?.whatsapp} />
           </div>
 
           <div className="space-y-1.5">
@@ -85,6 +89,7 @@ export function EditarUsuarioForm({
               deste corretor. Se vazio, usa o e-mail configurado em
               Configurações.
             </p>
+            <ErroCampo erros={estado.fieldErrors?.emailContato} />
           </div>
 
           {ehVoceMesmo ? (
@@ -111,13 +116,20 @@ export function EditarUsuarioForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="OWNER">Proprietário</SelectItem>
+                    {/* Só quem já é proprietário pode conceder esse papel a
+                        outro membro — a regra de verdade é sempre checada de
+                        novo no servidor, isso aqui só evita oferecer uma
+                        opção que vai ser recusada. */}
+                    {(podeGerenciarOwner || usuario.papel === "OWNER") && (
+                      <SelectItem value="OWNER">Proprietário</SelectItem>
+                    )}
                     <SelectItem value="ADMIN">Administrador</SelectItem>
                     <SelectItem value="MANAGER">Gestor</SelectItem>
                     <SelectItem value="BROKER">Corretor</SelectItem>
                     <SelectItem value="ASSISTANT">Assistente</SelectItem>
                   </SelectContent>
                 </Select>
+                <ErroCampo erros={estado.fieldErrors?.papel} />
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox name="ativo" defaultChecked={usuario.ativo} />
@@ -135,10 +147,11 @@ export function EditarUsuarioForm({
               placeholder="Deixe em branco para manter a senha atual"
               minLength={6}
             />
+            <ErroCampo erros={estado.fieldErrors?.novaSenha} />
           </div>
 
-          {estado.erro && (
-            <p className="text-sm text-destructive">{estado.erro}</p>
+          {!estado.success && estado.message && (
+            <p className="text-sm text-destructive">{estado.message}</p>
           )}
 
           <Button type="submit" disabled={pendente}>
