@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
 import { hasModule } from "@/lib/entitlements";
+import { logActivity } from "@/lib/activity-log";
 
 const NAV_LINKS = [
   { href: "/app", label: "Dashboard" },
@@ -78,6 +79,14 @@ export default async function AdminLayout({
           <form
             action={async () => {
               "use server";
+              if (session.user.organizationId) {
+                await logActivity({
+                  organizationId: session.user.organizationId,
+                  userId: session.user.id,
+                  entity: "Session",
+                  action: "logout",
+                });
+              }
               await signOut({ redirectTo: "/app/login" });
             }}
           >

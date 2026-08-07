@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { verificarLimiteImoveis } from "@/lib/entitlements";
+import { logActivity } from "@/lib/activity-log";
 
 const numeroOpcional = z.preprocess(
   (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
@@ -162,6 +163,15 @@ export async function criarImovel(formData: FormData) {
     })
   );
 
+  await logActivity({
+    organizationId,
+    userId: session.user.id,
+    entity: "Property",
+    entityId: imovel.id,
+    action: "created",
+    payload: { title: imovel.title },
+  });
+
   revalidatePath("/app/imoveis");
   redirect(`/app/imoveis/${imovel.id}?salvo=1`);
 }
@@ -240,6 +250,14 @@ export async function atualizarImovel(imovelId: string, formData: FormData) {
         },
       }),
     ]);
+  });
+
+  await logActivity({
+    organizationId,
+    userId: session.user.id,
+    entity: "Property",
+    entityId: imovelId,
+    action: "updated",
   });
 
   revalidatePath("/app/imoveis");

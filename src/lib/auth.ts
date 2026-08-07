@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { authConfig } from "@/lib/auth.config";
+import { logActivity } from "@/lib/activity-log";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -29,6 +30,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { userId: user.id, status: "ACTIVE" },
         });
         if (!membership) return null;
+
+        await logActivity({
+          organizationId: membership.organizationId,
+          userId: user.id,
+          entity: "Session",
+          action: "login",
+        });
 
         return {
           id: user.id,

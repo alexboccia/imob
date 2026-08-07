@@ -3,6 +3,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { auth } from "@/lib/auth";
 import { getR2Client } from "@/lib/r2";
 import { requireOrganizationId } from "@/lib/tenant";
+import { logActivity } from "@/lib/activity-log";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -51,11 +52,26 @@ export async function POST(request: Request) {
       })
     );
   } catch (erro) {
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "Media",
+      action: "error",
+      payload: { erro: erro instanceof Error ? erro.message : String(erro), pasta },
+    });
     return NextResponse.json(
       { erro: erro instanceof Error ? erro.message : "Falha no upload" },
       { status: 500 }
     );
   }
+
+  await logActivity({
+    organizationId,
+    userId: session.user.id,
+    entity: "Media",
+    action: "upload",
+    payload: { pasta, chave },
+  });
 
   return NextResponse.json({ url: `${publicUrl}/${chave}` });
 }

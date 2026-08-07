@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { verificarLimiteUsuarios, LimiteDoPlanoError } from "@/lib/entitlements";
+import { logActivity } from "@/lib/activity-log";
 
 const ROLES = ["OWNER", "ADMIN", "MANAGER", "BROKER", "ASSISTANT"] as const;
 const PAPEIS_COM_GESTAO_DE_USUARIOS = new Set(["OWNER", "ADMIN"]);
@@ -71,6 +72,15 @@ export async function criarUsuario(
 
   await prisma.organizationMember.create({
     data: { organizationId, userId: user.id, role: dados.papel },
+  });
+
+  await logActivity({
+    organizationId,
+    userId: session.user.id,
+    entity: "User",
+    entityId: user.id,
+    action: "created",
+    payload: { email: user.email, role: dados.papel },
   });
 
   revalidatePath("/app/usuarios");
@@ -170,6 +180,14 @@ export async function atualizarUsuario(
       whatsapp: dados.whatsapp ? dados.whatsapp.replace(/\D/g, "") : null,
       contactEmail: dados.emailContato || null,
     },
+  });
+
+  await logActivity({
+    organizationId,
+    userId: session.user.id,
+    entity: "User",
+    entityId: membershipAlvo.userId,
+    action: "updated",
   });
 
   revalidatePath("/app/usuarios");

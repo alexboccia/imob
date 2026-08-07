@@ -9,6 +9,7 @@ import { telefoneValido } from "@/lib/telefone";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
+import { logActivity } from "@/lib/activity-log";
 
 type EstadoFormulario = { sucesso: boolean; erro?: string };
 
@@ -52,8 +53,8 @@ export async function criarPessoa(
     return { sucesso: false, erro: "CRM não incluído no seu plano." };
   }
 
-  await withOrganization(organizationId, async () => {
-    await prisma.person.create({
+  const pessoa = await withOrganization(organizationId, () =>
+    prisma.person.create({
       data: {
         organizationId,
         name: dados.nome,
@@ -64,10 +65,19 @@ export async function criarPessoa(
         notes: dados.observacoes || null,
         assignedMemberId: session.user.organizationMemberId ?? null,
       },
-    });
+    })
+  );
 
-    revalidatePath("/app/clientes");
+  await logActivity({
+    organizationId,
+    userId: session.user.id,
+    entity: "Person",
+    entityId: pessoa.id,
+    action: "created",
+    payload: { name: pessoa.name },
   });
+
+  revalidatePath("/app/clientes");
   redirect("/app/clientes");
 }
 
