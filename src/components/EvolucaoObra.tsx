@@ -7,7 +7,7 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip";
 
-const ORDEM = ["NA_PLANTA", "EM_CONSTRUCAO", "PRONTO_PARA_MORAR"] as const;
+const ORDEM = ["PRE_CONSTRUCTION", "UNDER_CONSTRUCTION", "READY_TO_MOVE"] as const;
 
 export function EvolucaoObra({
   estagioObra,
@@ -66,7 +66,7 @@ export function EvolucaoObra({
                     <span className="text-green-600">
                       <IconeCheck className="w-5 h-5" />
                     </span>
-                  ) : estagio === "PRONTO_PARA_MORAR" ? (
+                  ) : estagio === "READY_TO_MOVE" ? (
                     <KeyRound
                       className={`w-5 h-5 ${
                         status === "atual" ? "text-white" : "text-gray-400"
@@ -92,7 +92,7 @@ export function EvolucaoObra({
                 >
                   {ESTAGIO_OBRA_LABEL[estagio]}
                 </p>
-                {estagio === "PRONTO_PARA_MORAR" &&
+                {estagio === "READY_TO_MOVE" &&
                   status !== "concluido" &&
                   previsaoEntrega && (
                     <p className="text-xs text-gray-400 mt-0.5">

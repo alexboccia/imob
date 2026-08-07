@@ -37,7 +37,7 @@ Site público (vitrine de imóveis) + painel administrativo (cadastro de imóvei
    ```
 
    - Site público: http://localhost:3000
-   - Painel admin: http://localhost:3000/admin/login
+   - Painel admin: http://localhost:3000/app/login
 
 ## Configuração do Cloudflare R2 (upload de fotos)
 
@@ -57,7 +57,7 @@ Centralizada em `src/lib/site-config.ts`, lida a partir de variáveis de ambient
 
 ```
 src/app/(public)/     site público (home, /imoveis, /imoveis/[id], /vendidos, /anuncie, /contato)
-src/app/admin/        painel administrativo (protegido por login)
+src/app/app/          painel administrativo, em /app (protegido por login)
 src/app/api/          rotas de API (auth, upload de mídia)
 src/components/       componentes de UI compartilhados
 src/components/admin/ componentes específicos do painel admin
