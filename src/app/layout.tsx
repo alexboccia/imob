@@ -48,7 +48,10 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      {/* suppressHydrationWarning: extensões de navegador (Grammarly,
+          tradutores etc.) injetam atributos no <body> antes do React
+          hidratar — não é um mismatch real de conteúdo, só ruído. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>
