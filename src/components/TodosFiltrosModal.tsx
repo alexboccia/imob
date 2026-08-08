@@ -6,6 +6,7 @@ import { normalizarTexto } from "@/lib/texto";
 import { FaixaDupla } from "@/components/FaixaDupla";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CampoBuscaImoveis } from "@/components/CampoBuscaImoveis";
 import {
   Dialog,
   DialogTrigger,
@@ -201,11 +202,10 @@ export function TodosFiltrosModal({
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
           <div className="flex gap-2">
-            <Input
-              type="text"
+            <CampoBuscaImoveis
               value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Código, bairro ou empreendimento"
+              onChange={setBusca}
+              onEnter={buscar}
               className="flex-1"
             />
             <Button onClick={buscar} aria-label="Buscar" size="icon" className="shrink-0">
