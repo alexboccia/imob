@@ -204,9 +204,9 @@ export default async function ListaImoveisPage({
           precoMin: params.precoMin ?? "",
           precoMax: params.precoMax ?? "",
           caracteristicas,
+          busca: params.busca ?? "",
         }}
         paramsExtras={{
-          busca: params.busca ?? "",
           areaMin: params.areaMin ?? "",
           areaMax: params.areaMax ?? "",
           quartos: params.quartos ?? "",

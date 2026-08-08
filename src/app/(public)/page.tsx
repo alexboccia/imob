@@ -3,16 +3,13 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { ImovelCard } from "@/components/ImovelCard";
 import { SlideshowHome } from "@/components/SlideshowHome";
-import { TodosFiltrosModal } from "@/components/TodosFiltrosModal";
+import { BuscaHome } from "@/components/BuscaHome";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
 import { getPublicOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
-import { IconeBusca } from "@/components/icons";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { Prisma } from "@/generated/prisma/client";
-import type { TipoComCategoria } from "@/lib/filtros-imoveis-data";
 
 // Sem force-dynamic (removido do layout): as listas de imóveis desta
 // página (slideshow/lançamentos/destaques/oportunidades) não têm tag de
@@ -25,44 +22,6 @@ export const revalidate = 60;
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
-
-function BuscaHome({
-  tipos,
-  bairros,
-  caracteristicas,
-}: {
-  tipos: TipoComCategoria[];
-  bairros: string[];
-  caracteristicas: string[];
-}) {
-  return (
-    <section className="border-b">
-      <div className="mx-auto max-w-6xl px-4 py-6 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-        <h2 className="text-xl font-semibold shrink-0">
-          Descubra o imóvel perfeito para você
-        </h2>
-        <div className="flex flex-1 flex-col sm:flex-row gap-3">
-          <form action="/imoveis" method="GET" className="flex flex-1 gap-2">
-            <Input
-              type="text"
-              name="busca"
-              placeholder="Código, bairro ou empreendimento"
-              className="flex-1"
-            />
-            <Button type="submit" aria-label="Buscar" size="icon" className="shrink-0">
-              <IconeBusca className="w-4 h-4" />
-            </Button>
-          </form>
-          <TodosFiltrosModal
-            tipos={tipos}
-            bairros={bairros}
-            caracteristicas={caracteristicas}
-          />
-        </div>
-      </div>
-    </section>
-  );
-}
 
 function buscarImoveis(
   organizationId: string,
@@ -103,6 +62,7 @@ function SecaoImoveis({
           <Button
             variant="link"
             className="h-auto p-0"
+            nativeButton={false}
             render={<Link href={verTudoHref} />}
           >
             Ver tudo
@@ -183,7 +143,12 @@ export default async function HomePage() {
             <p className="mt-4 text-gray-600">
               Apartamentos, casas e imóveis comerciais selecionados para você.
             </p>
-            <Button size="lg" className="mt-8" render={<Link href="/imoveis" />}>
+            <Button
+              size="lg"
+              className="mt-8"
+              nativeButton={false}
+              render={<Link href="/imoveis" />}
+            >
               Ver imóveis disponíveis
             </Button>
           </div>

@@ -1,22 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-function paraDigitos(valor: string | number | null | undefined): string {
-  if (valor === null || valor === undefined || valor === "") return "";
-  const numero = Number(valor);
-  if (Number.isNaN(numero)) return "";
-  return String(Math.round(numero * 100));
-}
-
-function formatarExibicao(digitos: string): string {
-  if (!digitos) return "";
-  const numero = Number(digitos) / 100;
-  return numero.toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
+import { paraDigitosMoeda, formatarExibicaoMoeda } from "@/lib/format";
 
 export function CampoMoeda({
   id,
@@ -31,7 +16,7 @@ export function CampoMoeda({
   placeholder?: string;
   className?: string;
 }) {
-  const [digitos, setDigitos] = useState(() => paraDigitos(defaultValue));
+  const [digitos, setDigitos] = useState(() => paraDigitosMoeda(defaultValue));
   const valorNumerico = digitos ? Number(digitos) / 100 : null;
 
   return (
@@ -45,7 +30,7 @@ export function CampoMoeda({
         id={id}
         type="text"
         inputMode="decimal"
-        value={formatarExibicao(digitos)}
+        value={formatarExibicaoMoeda(digitos)}
         onChange={(e) => {
           setDigitos(e.target.value.replace(/\D/g, "").slice(0, 12));
         }}

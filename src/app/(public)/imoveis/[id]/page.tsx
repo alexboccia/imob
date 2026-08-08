@@ -442,6 +442,7 @@ export default async function DetalheImovelPage({
             <Button
               size="lg"
               className="w-full bg-green-600 hover:bg-green-700 active:bg-green-800"
+              nativeButton={false}
               render={
                 <a href={whatsappHref} target="_blank" rel="noopener noreferrer" />
               }

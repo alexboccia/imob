@@ -16,6 +16,26 @@ export function formatarPreco(valor: unknown) {
   });
 }
 
+// Estado interno de um campo de moeda mascarado (ex: CampoMoeda,
+// FiltrosImoveis) é a string de dígitos em centavos, nunca o número
+// float direto — evita os bugs de arredondamento clássicos de máscara
+// de moeda digitada da direita pra esquerda.
+export function paraDigitosMoeda(valor: string | number | null | undefined): string {
+  if (valor === null || valor === undefined || valor === "") return "";
+  const numero = Number(valor);
+  if (Number.isNaN(numero)) return "";
+  return String(Math.round(numero * 100));
+}
+
+export function formatarExibicaoMoeda(digitos: string): string {
+  if (!digitos) return "";
+  const numero = Number(digitos) / 100;
+  return numero.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function formatarTempoRelativo(data: Date) {
   const segundos = Math.max(0, (Date.now() - data.getTime()) / 1000);
 

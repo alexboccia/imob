@@ -7,6 +7,7 @@ import { FINALIDADE_LABEL, formatarPreco } from "@/lib/format";
 import { IconeFiltros, IconeChevronBaixo, IconeFechar } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CampoBuscaImoveis } from "@/components/CampoBuscaImoveis";
 import {
   Popover,
   PopoverContent,
@@ -20,6 +21,7 @@ type FiltrosIniciais = {
   precoMin: string;
   precoMax: string;
   caracteristicas: string[];
+  busca: string;
 };
 
 type PainelAberto =
@@ -172,7 +174,7 @@ function PainelMultiSelecao({
 }
 
 function pillTriggerClassName(aberto: boolean) {
-  return `flex flex-col items-start text-left px-3 py-1.5 rounded-lg border shrink-0 ${
+  return `flex flex-col items-start justify-center text-left min-h-8 px-3 py-1 rounded-lg border shrink-0 ${
     aberto ? "border-gray-900" : "border-gray-200 hover:border-gray-300"
   }`;
 }
@@ -194,11 +196,22 @@ function FiltroPillLabel({
           className={`w-3 h-3 transition-transform ${aberto ? "rotate-180" : ""}`}
         />
       </span>
-      <span className="text-sm font-medium truncate max-w-[160px]">
-        {valor}
-      </span>
+      {valor && (
+        <span className="text-sm font-medium truncate max-w-[160px]">
+          {valor}
+        </span>
+      )}
     </>
   );
+}
+
+// Faixa de preço é sempre em reais inteiros — diferente do CampoMoeda
+// (usado no cadastro do imóvel), que mascara centavos dígito a dígito.
+// Aqui o texto digitado já É o valor em reais, só formatado com
+// separador de milhar pra leitura.
+function formatarMilhar(valor: string): string {
+  if (!valor) return "";
+  return Number(valor).toLocaleString("pt-BR");
 }
 
 function rotuloMultiplo(
@@ -232,7 +245,9 @@ export function FiltrosImoveis({
   const [precoMin, setPrecoMin] = useState(inicial.precoMin);
   const [precoMax, setPrecoMax] = useState(inicial.precoMax);
   const [caract, setCaract] = useState(inicial.caracteristicas);
+  const [busca, setBusca] = useState(inicial.busca);
   const [aberto, setAberto] = useState<PainelAberto>(null);
+  const [mobileExpandido, setMobileExpandido] = useState(false);
 
   function alternar(
     lista: string[],
@@ -258,6 +273,7 @@ export function FiltrosImoveis({
     if (precoMin) query.set("precoMin", precoMin);
     if (precoMax) query.set("precoMax", precoMax);
     caract.forEach((c) => query.append("caracteristicas", c));
+    if (busca) query.set("busca", busca);
     Object.entries(paramsExtras).forEach(([chave, valor]) => {
       if (valor) query.set(chave, valor);
     });
@@ -265,35 +281,80 @@ export function FiltrosImoveis({
     router.push(`/imoveis?${query.toString()}`);
   }
 
-  const labelTipo = rotuloMultiplo(tipo, (v) => v, "Não definido");
-  const labelBairro = rotuloMultiplo(bairro, (v) => v, "Não definido");
-  const labelCaract = rotuloMultiplo(caract, (v) => v, "Não definido");
+  function limparFiltros() {
+    setTipo([]);
+    setFinalidade("");
+    setBairro([]);
+    setPrecoMin("");
+    setPrecoMax("");
+    setCaract([]);
+    setBusca("");
+    setAberto(null);
+    router.push("/imoveis");
+  }
+
+  const labelTipo = rotuloMultiplo(tipo, (v) => v, "");
+  const labelBairro = rotuloMultiplo(bairro, (v) => v, "");
+  const labelCaract = rotuloMultiplo(caract, (v) => v, "");
   const labelNegocio = finalidade
     ? FINALIDADE_LABEL[finalidade] ?? finalidade
-    : "Comprar ou Alugar";
+    : "";
   const labelValor =
     precoMin || precoMax
       ? `${precoMin ? formatarPreco(precoMin) : "Qualquer"} - ${
           precoMax ? formatarPreco(precoMax) : "Qualquer"
         }`
-      : "Não definido";
+      : "";
 
   return (
     <div className="border rounded-lg sticky top-[var(--site-header-height)] z-20 bg-background">
       <div className="flex items-center gap-2 flex-wrap px-3 py-2.5">
-        <div className="flex items-center gap-2 pr-3 border-r shrink-0">
-          <IconeFiltros className="w-5 h-5 text-gray-400 shrink-0" />
-          <div className="leading-tight">
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
-              Filtros rápidos
-            </p>
-            <p className="text-sm font-medium">Refine a sua busca</p>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setMobileExpandido((v) => !v)}
+          aria-label={mobileExpandido ? "Ocultar filtros" : "Mostrar filtros"}
+          aria-expanded={mobileExpandido}
+          className="sm:hidden flex items-center justify-center size-8 rounded-lg border border-gray-200 hover:border-gray-300 shrink-0"
+        >
+          <IconeFiltros className="w-4 h-4 text-gray-500" />
+        </button>
+
+        <div
+          className={`${
+            mobileExpandido ? "contents" : "hidden"
+          } sm:contents`}
+        >
+        <Popover
+          open={aberto === "negocio"}
+          onOpenChange={abrirPainel("negocio")}
+        >
+          <PopoverTrigger className={pillTriggerClassName(aberto === "negocio")}>
+            <FiltroPillLabel
+              label="Tipo de negócio"
+              valor={labelNegocio}
+              aberto={aberto === "negocio"}
+            />
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[280px] p-4">
+            <div className="flex flex-col gap-2">
+              {Object.entries(FINALIDADE_LABEL).map(([value, label]) => (
+                <Chip
+                  key={value}
+                  ativo={finalidade === value}
+                  onClick={() =>
+                    setFinalidade(finalidade === value ? "" : value)
+                  }
+                >
+                  {label}
+                </Chip>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
 
         <Popover open={aberto === "tipo"} onOpenChange={abrirPainel("tipo")}>
           <PopoverTrigger className={pillTriggerClassName(aberto === "tipo")}>
-            <FiltroPillLabel label="Tipo" valor={labelTipo} aberto={aberto === "tipo"} />
+            <FiltroPillLabel label="Tipo de Imóvel" valor={labelTipo} aberto={aberto === "tipo"} />
           </PopoverTrigger>
           <PopoverContent align="start" className="w-auto p-0">
             <PainelMultiSelecao
@@ -303,35 +364,6 @@ export function FiltrosImoveis({
               selecionados={tipo}
               onToggle={(valor) => alternar(tipo, setTipo, valor)}
             />
-          </PopoverContent>
-        </Popover>
-
-        <Popover
-          open={aberto === "negocio"}
-          onOpenChange={abrirPainel("negocio")}
-        >
-          <PopoverTrigger className={pillTriggerClassName(aberto === "negocio")}>
-            <FiltroPillLabel
-              label="Negócio"
-              valor={labelNegocio}
-              aberto={aberto === "negocio"}
-            />
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-[280px] p-4">
-            <div className="flex flex-col gap-2">
-              <Chip ativo={finalidade === ""} onClick={() => setFinalidade("")}>
-                Comprar ou Alugar
-              </Chip>
-              {Object.entries(FINALIDADE_LABEL).map(([value, label]) => (
-                <Chip
-                  key={value}
-                  ativo={finalidade === value}
-                  onClick={() => setFinalidade(value)}
-                >
-                  {label}
-                </Chip>
-              ))}
-            </div>
           </PopoverContent>
         </Popover>
 
@@ -372,19 +404,37 @@ export function FiltrosImoveis({
               Faixa de preço
             </p>
             <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                value={precoMin}
-                onChange={(e) => setPrecoMin(e.target.value)}
-                placeholder="Mínimo"
-              />
+              <div className="relative flex-1">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">
+                  R$
+                </span>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={formatarMilhar(precoMin)}
+                  onChange={(e) =>
+                    setPrecoMin(e.target.value.replace(/\D/g, "").slice(0, 12))
+                  }
+                  placeholder="Mínimo"
+                  className="pl-8"
+                />
+              </div>
               <span className="text-gray-400">–</span>
-              <Input
-                type="number"
-                value={precoMax}
-                onChange={(e) => setPrecoMax(e.target.value)}
-                placeholder="Máximo"
-              />
+              <div className="relative flex-1">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">
+                  R$
+                </span>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={formatarMilhar(precoMax)}
+                  onChange={(e) =>
+                    setPrecoMax(e.target.value.replace(/\D/g, "").slice(0, 12))
+                  }
+                  placeholder="Máximo"
+                  className="pl-8"
+                />
+              </div>
             </div>
           </PopoverContent>
         </Popover>
@@ -412,8 +462,25 @@ export function FiltrosImoveis({
             />
           </PopoverContent>
         </Popover>
+        </div>
 
-        <Button onClick={buscar} size="lg" className="ml-auto shrink-0">
+        <CampoBuscaImoveis
+          value={busca}
+          onChange={setBusca}
+          onEnter={buscar}
+          className="ml-auto min-w-[200px] flex-1"
+        />
+
+        <Button
+          onClick={limparFiltros}
+          variant="outline"
+          size="lg"
+          className="shrink-0"
+        >
+          Limpar filtros
+        </Button>
+
+        <Button onClick={buscar} size="lg" className="shrink-0">
           Buscar
         </Button>
       </div>

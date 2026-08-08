@@ -90,6 +90,7 @@ export function SlideshowHome({ imoveis }: { imoveis: ImovelSlide[] }) {
                     <Button
                       size="lg"
                       className="mt-4 w-fit bg-white text-gray-900 hover:bg-gray-100"
+                      nativeButton={false}
                       render={<Link href={`/imoveis/${imovel.id}`} />}
                     >
                       Ver detalhes
