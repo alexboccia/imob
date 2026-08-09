@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { DataTableColumn } from "@/components/admin/data-table/DataTable";
 
@@ -13,6 +14,7 @@ export type OrganizationRow = {
   membersCount: number;
   propertiesCount: number;
   createdAt: string;
+  siteUrl: string;
 };
 
 export const organizationColumns: DataTableColumn<OrganizationRow>[] = [
@@ -62,5 +64,20 @@ export const organizationColumns: DataTableColumn<OrganizationRow>[] = [
     header: "Criada em",
     cell: ({ row }) =>
       new Date(row.original.createdAt).toLocaleDateString("pt-BR"),
+  },
+  {
+    accessorKey: "siteUrl",
+    header: "Ver site",
+    cell: ({ row }) => (
+      <a
+        href={row.original.siteUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
+      >
+        <ExternalLink className="w-3.5 h-3.5" />
+        Ver
+      </a>
+    ),
   },
 ];

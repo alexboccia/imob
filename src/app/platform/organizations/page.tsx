@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requirePlatformOperator } from "@/lib/platform/auth";
 import { prisma } from "@/lib/prisma";
+import { getSiteUrl, resolverBasePath } from "@/lib/site-url";
 import {
   interpretarPaginacao,
   interpretarFiltros,
@@ -77,6 +78,10 @@ export default async function PlatformOrganizationsPage({
     membersCount: org._count.members,
     propertiesCount: org._count.properties,
     createdAt: org.createdAt.toISOString(),
+    // resolverBasePath/getSiteUrl calculados aqui (server) e não em
+    // columns.tsx ("use client") — PUBLIC_ORG_SLUG não tem prefixo
+    // NEXT_PUBLIC_, não estaria disponível no bundle do client.
+    siteUrl: getSiteUrl(resolverBasePath(org.slug) || "/"),
   }));
 
   return (
