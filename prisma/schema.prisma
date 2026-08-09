@@ -184,7 +184,7 @@ model Property {
   @@index([organizationId, purpose, type])
   @@index([organizationId, isLaunch])
   // GIN: propertyFeatures/condoFeatures são filtrados com `hasSome` na
-  // busca pública (src/app/(public)/imoveis/page.tsx) e no cálculo de
+  // busca pública (src/app/[orgSlug]/imoveis/page.tsx) e no cálculo de
   // facetas (filtros-imoveis-data.ts) — mesma justificativa do índice de
   // Person.roles acima.
   @@index([propertyFeatures], type: Gin)
@@ -346,7 +346,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships OrganizationMember[]
+  memberships       OrganizationMember[]
+  ownerInviteTokens OwnerInviteToken[]
 
   @@map("users")
 }
@@ -379,6 +380,7 @@ model Organization {
   slug           String   @unique
   name           String
   customDomain   String?  @unique
+  cnpj           String?
   planId         String
   plan           Plan     @relation(fields: [planId], references: [id])
   active         Boolean  @default(true)
@@ -402,6 +404,7 @@ model Organization {
   portalListings        PortalListing[]
   featureOptions        FeatureOption[]
   propertyTypeOptions   PropertyTypeOption[]
+  ownerInviteTokens     OwnerInviteToken[]
 
   @@map("organizations")
 }
@@ -667,6 +670,8 @@ model AiUsage {
 enum PlatformRole {
   PLATFORM_ADMIN
   PLATFORM_SUPPORT
+  SUPER_ADMIN // único usado no MVP do painel /platform; os outros dois ficam
+              // preparados no enum, sem UI de permissão diferenciada ainda.
 }
 
 model PlatformOperator {
@@ -679,5 +684,51 @@ model PlatformOperator {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
+  auditLogs PlatformAuditLog[]
+
   @@map("platform_operators")
+}
+
+// Auditoria de ações administrativas da PLATAFORMA (não de uma organização)
+// — separada de ActivityLog de propósito: ActivityLog exige organizationId
+// obrigatório (é tenant-scoped), mas ações como "criei um novo operador da
+// plataforma" não têm organização nenhuma associada. Ver plano em
+// /Users/alexboccia/.claude/plans/glittery-noodling-harp.md, decisão #5.
+// Deliberadamente FORA de TENANT_SCOPED_MODELS (src/lib/prisma.ts) — é
+// consultada de forma cross-tenant por natureza.
+model PlatformAuditLog {
+  id                 String           @id @default(cuid())
+  platformOperatorId String
+  platformOperator   PlatformOperator @relation(fields: [platformOperatorId], references: [id])
+  action             String // "ORGANIZATION_CREATED", "PLAN_CHANGED", "PLATFORM_OPERATOR_CREATED"...
+  entity             String // "Organization", "PlatformOperator", "Plan"...
+  entityId           String?
+  organizationId     String? // solto, sem relation — só pra filtro (Organization não é tenant-scoped)
+  metadata           Json? // nunca senha/token/cookie/secret/connection string
+  createdAt          DateTime         @default(now())
+
+  @@index([platformOperatorId, createdAt])
+  @@index([entity, entityId])
+  @@index([organizationId, createdAt])
+  @@map("platform_audit_logs")
+}
+
+// Token de convite pro primeiro OWNER definir a própria senha — o Super
+// Admin nunca define nem vê a senha permanente do cliente. Ver plano,
+// decisão #6. Deliberadamente FORA de TENANT_SCOPED_MODELS: o lookup no
+// momento de aceitar o convite é só por tokenHash, sem contexto de tenant
+// estabelecido ainda (usuário nem logou).
+model OwnerInviteToken {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  tokenHash      String       @unique // sha256 completo (64 hex) do token bruto — o token bruto NUNCA é persistido
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([userId])
+  @@map("owner_invite_tokens")
 }

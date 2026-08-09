@@ -33,14 +33,18 @@ export function normalizarContato(email: string | null | undefined, telefone: st
 // Login: por IP e por e-mail normalizado, com bloqueio progressivo.
 // ---------------------------------------------------------------------
 
-function chaveLoginContador(dimensao: "ip" | "email", valor: string) {
-  return `rl:login:contador:${dimensao}:${valor}`;
+// `prefixo` (default "login") separa o balde de tentativas entre
+// superfícies de login diferentes — ex: "platform-login" pro /platform,
+// pra uma conta de PlatformOperator comprometida não compartilhar
+// contador por IP com o login normal de tenant, e vice-versa.
+function chaveLoginContador(dimensao: "ip" | "email", valor: string, prefixo = "login") {
+  return `rl:${prefixo}:contador:${dimensao}:${valor}`;
 }
-function chaveLoginBloqueio(dimensao: "ip" | "email", valor: string) {
-  return `rl:login:bloqueio:${dimensao}:${valor}`;
+function chaveLoginBloqueio(dimensao: "ip" | "email", valor: string, prefixo = "login") {
+  return `rl:${prefixo}:bloqueio:${dimensao}:${valor}`;
 }
-function chaveLoginViolacoes(dimensao: "ip" | "email", valor: string) {
-  return `rl:login:violacoes:${dimensao}:${valor}`;
+function chaveLoginViolacoes(dimensao: "ip" | "email", valor: string, prefixo = "login") {
+  return `rl:${prefixo}:violacoes:${dimensao}:${valor}`;
 }
 
 type DimensaoLogin = { tipo: "ip" | "email"; valor: string };
@@ -55,11 +59,12 @@ function dimensoesLogin(params: { ip: string; email: string | null }): DimensaoL
 // NextAuth, pra devolver 429 sem gastar bcrypt/consulta ao banco.
 export async function verificarBloqueioLogin(
   store: KvStore,
-  params: { ip: string; email: string | null }
+  params: { ip: string; email: string | null },
+  prefixo = "login"
 ): Promise<ResultadoLimite> {
   let piorTtl = 0;
   for (const { tipo, valor } of dimensoesLogin(params)) {
-    const ttl = await store.ttl(chaveLoginBloqueio(tipo, valor));
+    const ttl = await store.ttl(chaveLoginBloqueio(tipo, valor, prefixo));
     if (ttl > piorTtl) piorTtl = ttl;
   }
   if (piorTtl > 0) {
@@ -73,21 +78,23 @@ export async function verificarBloqueioLogin(
 // escala o bloqueio progressivo (5min → 15min → 1h → 24h).
 export async function registrarFalhaLogin(
   store: KvStore,
-  params: { ip: string; email: string | null }
+  params: { ip: string; email: string | null },
+  prefixo = "login",
+  tentativasPermitidas: number = LIMITES.login.tentativas
 ): Promise<void> {
   for (const { tipo, valor } of dimensoesLogin(params)) {
     const { contagem } = await store.incrementarComJanela(
-      chaveLoginContador(tipo, valor),
+      chaveLoginContador(tipo, valor, prefixo),
       LIMITES.login.janelaSegundos
     );
-    if (contagem > LIMITES.login.tentativas) {
+    if (contagem > tentativasPermitidas) {
       const { contagem: violacoes } = await store.incrementarComJanela(
-        chaveLoginViolacoes(tipo, valor),
+        chaveLoginViolacoes(tipo, valor, prefixo),
         LIMITES.loginViolacoesJanelaSegundos
       );
       const indice = Math.min(violacoes - 1, LIMITES.loginNiveisBloqueioSegundos.length - 1);
       const duracao = LIMITES.loginNiveisBloqueioSegundos[indice];
-      await store.definir(chaveLoginBloqueio(tipo, valor), "1", duracao);
+      await store.definir(chaveLoginBloqueio(tipo, valor, prefixo), "1", duracao);
       registrarAbuso({
         tipo: "login",
         motivo: `bloqueio_progressivo_${tipo}`,
@@ -103,10 +110,11 @@ export async function registrarFalhaLogin(
 // o abuso recomeçar).
 export async function registrarSucessoLogin(
   store: KvStore,
-  params: { ip: string; email: string | null }
+  params: { ip: string; email: string | null },
+  prefixo = "login"
 ): Promise<void> {
   for (const { tipo, valor } of dimensoesLogin(params)) {
-    await store.remover(chaveLoginContador(tipo, valor));
+    await store.remover(chaveLoginContador(tipo, valor, prefixo));
   }
 }
 

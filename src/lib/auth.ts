@@ -44,8 +44,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // enquanto, usamos o primeiro vínculo ativo.
         const membership = await prisma.organizationMember.findFirst({
           where: { userId: user.id, status: "ACTIVE" },
+          include: { organization: { select: { active: true } } },
         });
-        if (!membership) return falhou();
+        // Checagem é da organização DESTE vínculo específico, não global —
+        // suspender uma org não pode travar acesso do usuário a outra onde
+        // ele também seja membro ativo. Ver plano, decisão #7.
+        if (!membership || !membership.organization.active) return falhou();
 
         if (store) await registrarSucessoLogin(store, { ip, email: emailNormalizado });
 

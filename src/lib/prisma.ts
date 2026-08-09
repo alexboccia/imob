@@ -66,10 +66,11 @@ function resolverOrganizationId(model: string, operation: string): string {
   return organizationId;
 }
 
-function buildPrismaClient() {
+function buildPrismaClients() {
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  const base = new PrismaClient({ adapter });
 
-  return new PrismaClient({ adapter }).$extends({
+  const scoped = base.$extends({
     name: "tenant-scoping",
     query: {
       $allModels: {
@@ -124,16 +125,40 @@ function buildPrismaClient() {
       },
     },
   });
+
+  return { base, scoped };
 }
 
-type ScopedPrismaClient = ReturnType<typeof buildPrismaClient>;
+type ScopedPrismaClient = ReturnType<typeof buildPrismaClients>["scoped"];
+type BasePrismaClient = ReturnType<typeof buildPrismaClients>["base"];
 
 const globalForPrisma = globalThis as unknown as {
   prisma: ScopedPrismaClient | undefined;
+  prismaPlatform: BasePrismaClient | undefined;
 };
 
-export const prisma = globalForPrisma.prisma ?? buildPrismaClient();
+const clients =
+  globalForPrisma.prisma && globalForPrisma.prismaPlatform
+    ? { scoped: globalForPrisma.prisma, base: globalForPrisma.prismaPlatform }
+    : buildPrismaClients();
+
+export const prisma = clients.scoped;
+
+// Via de escape cross-tenant explícita — deriva do MESMO client base (mesmo
+// adapter/pool de conexão) que `prisma`, nunca instancia um segundo
+// PrismaPg (isso dobraria o pool contra o Postgres/Neon por nada).
+// Só deve ser importado dentro de src/app/platform/** ou
+// src/lib/platform/**, e só depois de requirePlatformOperator() já ter
+// validado a sessão — não é um atalho geral, é a única via cross-tenant
+// prevista pra consultas que genuinamente precisam ignorar o escopo de
+// organização (ex: contagem global de um model tenant-scoped). Toda
+// consulta a um model NÃO tenant-scoped (Organization, Plan, User,
+// OrganizationMember...) ou com organizationId explícito no where/data já
+// funciona com o `prisma` normal, sem precisar disto. Ver plano em
+// /Users/alexboccia/.claude/plans/glittery-noodling-harp.md, decisão #4.
+export const prismaPlatform = clients.base;
 
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+  globalForPrisma.prisma = clients.scoped;
+  globalForPrisma.prismaPlatform = clients.base;
 }

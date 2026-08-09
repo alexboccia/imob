@@ -72,3 +72,57 @@ export async function enviarEmailContato({
     logger.error("Falha ao enviar e-mail de contato", erro, { modulo: "email" });
   }
 }
+
+// Diferente de enviarEmailContato: aqui o chamador (Create Organization,
+// src/app/platform/organizations/nova/actions.ts) TRATA o resultado
+// explicitamente — se `enviado: false`, mostra o link de convite na tela
+// pra cópia manual, em vez de deixar o convite silenciosamente sem
+// ninguém saber que ele nunca chegou. Ver plano, decisão #6.
+export async function enviarEmailConviteOwner({
+  para,
+  nomeOrganizacao,
+  linkConvite,
+}: {
+  para: string;
+  nomeOrganizacao: string;
+  linkConvite: string;
+}): Promise<{ enviado: boolean }> {
+  const cliente = obterCliente();
+  if (!cliente) {
+    logger.warn("RESEND_API_KEY não configurada — e-mail de convite não foi enviado", {
+      modulo: "email",
+    });
+    return { enviado: false };
+  }
+
+  const remetente = process.env.RESEND_FROM_EMAIL;
+  if (!remetente) {
+    logger.warn("RESEND_FROM_EMAIL não configurado — e-mail de convite não foi enviado", {
+      modulo: "email",
+    });
+    return { enviado: false };
+  }
+
+  const linhas = [
+    `Você foi convidado a administrar "${nomeOrganizacao}" no EasyMob.`,
+    "",
+    "Defina sua senha e ative sua conta pelo link abaixo:",
+    linkConvite,
+    "",
+    "Este link expira em 7 dias e só pode ser usado uma vez.",
+  ];
+
+  try {
+    await cliente.emails.send({
+      from: remetente,
+      to: para,
+      subject: "Bem-vindo ao EasyMob — configure sua conta",
+      text: linhas.join("\n"),
+    });
+    return { enviado: true };
+  } catch (erro) {
+    // Nunca logar o linkConvite (contém o token bruto) como contexto.
+    logger.error("Falha ao enviar e-mail de convite", erro, { modulo: "email" });
+    return { enviado: false };
+  }
+}

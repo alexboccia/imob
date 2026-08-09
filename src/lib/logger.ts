@@ -23,6 +23,7 @@ export type NivelLog = "debug" | "info" | "warn" | "error";
 export interface ContextoLog {
   organizationId?: string;
   userId?: string;
+  platformOperatorId?: string;
   route?: string;
   action?: string;
   modulo?: string;
@@ -66,7 +67,15 @@ function escreverLinha(nivel: NivelLog, mensagem: string, contexto?: ContextoLog
 // que a Sentry recomenda pra filtro/busca, não pra payload livre.
 function tagsPermitidas(contexto?: ContextoLog): Record<string, string> {
   if (!contexto) return {};
-  const permitidas: (keyof ContextoLog)[] = ["organizationId", "userId", "route", "action", "modulo", "requestId"];
+  const permitidas: (keyof ContextoLog)[] = [
+    "organizationId",
+    "userId",
+    "platformOperatorId",
+    "route",
+    "action",
+    "modulo",
+    "requestId",
+  ];
   const saida: Record<string, string> = {};
   for (const chave of permitidas) {
     const valor = contexto[chave];
