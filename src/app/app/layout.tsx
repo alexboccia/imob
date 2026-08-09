@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import { auth, signOut } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { getSiteUrl, resolverBasePath } from "@/lib/site-url";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
@@ -39,10 +42,33 @@ export default async function AdminLayout({
     }
   }
 
+  // "Ver site" precisa do slug da organização (a sessão só carrega
+  // organizationId) — busca direta, Organization não é tenant-scoped.
+  const organization = organizationId
+    ? await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { slug: true },
+      })
+    : null;
+  const siteUrl = organization
+    ? getSiteUrl(resolverBasePath(organization.slug) || "/")
+    : null;
+
   return (
     <div className="min-h-screen flex">
       <aside className="w-56 border-r bg-gray-50 flex flex-col">
         <div className="px-4 py-4 font-semibold border-b">Painel</div>
+        {siteUrl && (
+          <a
+            href={siteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border-b"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Ver site
+          </a>
+        )}
         <nav className="flex-1 px-2 py-4 space-y-1 text-sm">
           {NAV_LINKS.map((link) => {
             const liberado = !link.modulo || modulosHabilitados.get(link.modulo);
