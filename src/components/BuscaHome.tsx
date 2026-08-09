@@ -11,10 +11,14 @@ export function BuscaHome({
   tipos,
   bairros,
   caracteristicas,
+  orgSlug,
+  basePath,
 }: {
   tipos: TipoComCategoria[];
   bairros: string[];
   caracteristicas: string[];
+  orgSlug: string;
+  basePath: string;
 }) {
   const [busca, setBusca] = useState("");
 
@@ -25,12 +29,18 @@ export function BuscaHome({
           Descubra o imóvel perfeito para você
         </h2>
         <div className="flex flex-1 flex-col sm:flex-row gap-3">
-          <form action="/imoveis" method="GET" className="flex flex-1 gap-2">
+          <form
+            action={`${basePath}/imoveis`}
+            method="GET"
+            className="flex flex-1 gap-2"
+          >
             <CampoBuscaImoveis
               value={busca}
               onChange={setBusca}
               name="busca"
               className="flex-1"
+              orgSlug={orgSlug}
+              basePath={basePath}
             />
             <Button type="submit" aria-label="Buscar" size="icon" className="shrink-0">
               <IconeBusca className="w-4 h-4" />
@@ -40,6 +50,8 @@ export function BuscaHome({
             tipos={tipos}
             bairros={bairros}
             caracteristicas={caracteristicas}
+            orgSlug={orgSlug}
+            basePath={basePath}
           />
         </div>
       </div>

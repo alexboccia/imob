@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 import { construirHeadersSeguranca, R2_IMAGE_HOST } from "@/lib/security-headers";
+import { PUBLIC_ORG_SLUG } from "@/lib/site-url";
 
 const nextConfig: NextConfig = {
   images: {
@@ -12,6 +13,24 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
     return [{ source: "/(.*)", headers: construirHeadersSeguranca() }];
+  },
+  // Compatibilidade com as URLs atuais em produção, agora que o site
+  // público vive em /{orgSlug}/... — rewrite (não redirect), a URL na
+  // barra do navegador não muda, zero impacto pra quem já tem essas URLs
+  // indexadas/salvas. Cada [orgSlug]/page.tsx aponta o `canonical` de
+  // volta pra cá quando orgSlug === PUBLIC_ORG_SLUG (resolverBasePath),
+  // então não há conteúdo duplicado do ponto de vista do Google mesmo com
+  // as duas formas de URL tecnicamente respondendo. Ver plano, decisões
+  // #3 e #4.
+  async rewrites() {
+    return [
+      { source: "/", destination: `/${PUBLIC_ORG_SLUG}` },
+      { source: "/imoveis", destination: `/${PUBLIC_ORG_SLUG}/imoveis` },
+      { source: "/imoveis/:id", destination: `/${PUBLIC_ORG_SLUG}/imoveis/:id` },
+      { source: "/vendidos", destination: `/${PUBLIC_ORG_SLUG}/vendidos` },
+      { source: "/contato", destination: `/${PUBLIC_ORG_SLUG}/contato` },
+      { source: "/anuncie", destination: `/${PUBLIC_ORG_SLUG}/anuncie` },
+    ];
   },
 };
 

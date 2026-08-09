@@ -26,7 +26,13 @@ type ImovelSlide = {
 
 const INTERVALO_MS = 6000;
 
-export function SlideshowHome({ imoveis }: { imoveis: ImovelSlide[] }) {
+export function SlideshowHome({
+  imoveis,
+  basePath,
+}: {
+  imoveis: ImovelSlide[];
+  basePath: string;
+}) {
   const [indice, setIndice] = useState(0);
   const swiperRef = useRef<SwiperType | null>(null);
 
@@ -91,7 +97,7 @@ export function SlideshowHome({ imoveis }: { imoveis: ImovelSlide[] }) {
                       size="lg"
                       className="mt-4 w-fit bg-white text-gray-900 hover:bg-gray-100"
                       nativeButton={false}
-                      render={<Link href={`/imoveis/${imovel.id}`} />}
+                      render={<Link href={`${basePath}/imoveis/${imovel.id}`} />}
                     >
                       Ver detalhes
                     </Button>

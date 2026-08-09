@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { CheckCircle2, AlertCircle } from "lucide-react";
-import { enviarContato } from "@/app/(public)/actions";
+import { enviarContato } from "@/app/[orgSlug]/actions";
 import { CamposAntiSpam } from "@/components/CamposAntiSpam";
 import { Input } from "@/components/ui/input";
 import { CampoTelefone } from "@/components/CampoTelefone";
@@ -13,9 +13,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const estadoInicial = { sucesso: false, erro: undefined as string | undefined };
 
-export function ContatoForm() {
+export function ContatoForm({ orgSlug }: { orgSlug: string }) {
   const [estado, formAction, pendente] = useActionState(
-    enviarContato,
+    enviarContato.bind(null, orgSlug),
     estadoInicial
   );
 

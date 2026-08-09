@@ -1,21 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getPublicOrganizationId } from "@/lib/tenant";
+import { getOrganizationBySlug } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { normalizarBusca } from "@/lib/pagination";
 import { formatarPreco } from "@/lib/format";
 
 // Autocomplete do campo de busca pública (/imoveis) — mesma lógica de
-// texto de src/app/(public)/imoveis/page.tsx (título/bairro por
+// texto de src/app/[orgSlug]/imoveis/page.tsx (título/bairro por
 // `contains`, código por igualdade exata), só que com `take` pequeno e
 // sem paginação/contagem, já que é sugestão, não listagem.
+//
+// Fora da árvore [orgSlug] de propósito (é chamado via fetch client-side,
+// não tem acesso a params de rota) — orgSlug chega por query string, então
+// é input do navegador como qualquer outro: sempre resolvido e revalidado
+// aqui, nunca aceito como organizationId direto. Ver plano, seção "Modelo
+// de isolamento e fronteira de segurança".
 export async function GET(request: NextRequest) {
   const busca = normalizarBusca(request.nextUrl.searchParams.get("busca") ?? undefined);
-  if (!busca) {
+  const orgSlug = request.nextUrl.searchParams.get("orgSlug") ?? "";
+  if (!busca || !orgSlug) {
     return NextResponse.json({ sugestoes: [] });
   }
 
-  const organizationId = await getPublicOrganizationId();
+  const organization = await getOrganizationBySlug(orgSlug);
+
+  // Organização inexistente ou suspensa não deve continuar servindo
+  // autocomplete pro site público.
+  if (!organization || !organization.active) {
+    return NextResponse.json({ sugestoes: [] });
+  }
+  const organizationId = organization.id;
+
   const digitosBusca = busca.replace(/\D/g, "");
   const buscaCodigo = digitosBusca ? Number(digitosBusca) : NaN;
 

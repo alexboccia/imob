@@ -1,9 +1,7 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
-import { getPublicOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
-
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+import { getSiteUrl, resolverBasePath } from "@/lib/site-url";
 
 // Sem isso, o arquivo é gerado uma vez no build e fica estático — imóvel
 // novo, vendido ou atualizado só apareceria/sumiria no sitemap no próximo
@@ -19,7 +17,7 @@ export const revalidate = 3600;
 const LIMITE_IMOVEIS_NO_SITEMAP = 5000;
 
 // Só imóveis "disponíveis" entram no sitemap — mesma regra de status já
-// aplicada pela listagem pública (src/app/(public)/imoveis/page.tsx).
+// aplicada pela listagem pública (src/app/[orgSlug]/imoveis/page.tsx).
 // Rascunho (DRAFT) e inativo (INACTIVE) nem são acessíveis publicamente
 // (a página de detalhe devolve 404); vendido (SOLD) e alugado (RENTED)
 // são acessíveis (aparecem em /vendidos) mas deliberadamente ficam fora
@@ -30,25 +28,24 @@ const LIMITE_IMOVEIS_NO_SITEMAP = 5000;
 // não aparece em nenhuma navegação normal do site.
 const STATUS_INCLUIDO_NO_SITEMAP = "AVAILABLE" as const;
 
-// Páginas públicas estáticas (não-imóvel).
-function paginasEstaticas(): MetadataRoute.Sitemap {
+// Páginas públicas estáticas (não-imóvel) de UMA organização.
+function paginasEstaticas(basePath: string): MetadataRoute.Sitemap {
   const agora = new Date();
   return [
-    { url: SITE_URL, lastModified: agora, changeFrequency: "daily", priority: 1 },
-    { url: `${SITE_URL}/imoveis`, lastModified: agora, changeFrequency: "daily", priority: 0.9 },
-    { url: `${SITE_URL}/vendidos`, lastModified: agora, changeFrequency: "weekly", priority: 0.3 },
-    { url: `${SITE_URL}/anuncie`, lastModified: agora, changeFrequency: "monthly", priority: 0.5 },
-    { url: `${SITE_URL}/contato`, lastModified: agora, changeFrequency: "monthly", priority: 0.5 },
+    { url: getSiteUrl(basePath || "/"), lastModified: agora, changeFrequency: "daily", priority: 1 },
+    { url: getSiteUrl(`${basePath}/imoveis`), lastModified: agora, changeFrequency: "daily", priority: 0.9 },
+    { url: getSiteUrl(`${basePath}/vendidos`), lastModified: agora, changeFrequency: "weekly", priority: 0.3 },
+    { url: getSiteUrl(`${basePath}/anuncie`), lastModified: agora, changeFrequency: "monthly", priority: 0.5 },
+    { url: getSiteUrl(`${basePath}/contato`), lastModified: agora, changeFrequency: "monthly", priority: 0.5 },
   ];
 }
 
-// TODO quando o roteamento público por organização (/{orgSlug}/...) for
-// implementado: este arquivo passa a precisar gerar um conjunto de
-// sitemaps por organização, não um único global — hoje existe uma única
-// organização pública (getPublicOrganizationId, resolvida por
-// PUBLIC_ORG_SLUG), então "não misturar tenants" já é garantido por
-// definição: só existe UM tenant no sitemap público hoje, e a consulta
-// abaixo é sempre explicitamente filtrada por organizationId.
+// Um único sitemap.xml cobrindo todas as Organizations ativas — cada uma
+// com suas URLs prefixadas por slug (org padrão sem prefixo, demais com
+// /{slug}, via resolverBasePath). Organização suspensa fica de fora por
+// completo (não deve continuar anunciando imóveis pra buscadores). Cada
+// query de imóveis é explicitamente filtrada por organizationId — nunca
+// mistura tenants mesmo iterando várias organizations na mesma resposta.
 //
 // Paginação: deliberadamente NÃO uso generateSitemaps() aqui ainda — API
 // do Next pra dividir em vários arquivos (app/sitemap.ts vira
@@ -60,28 +57,38 @@ function paginasEstaticas(): MetadataRoute.Sitemap {
 // quebraria a URL convencional sem nenhum ganho real, já que o catálogo
 // atual está muito abaixo do limite. Quando o volume justificar: trocar
 // `export default async function sitemap()` abaixo por um par
-// `generateSitemaps()` + `sitemap({ id })` que fatia `buscarImoveis` por
-// `skip`/`take` de LIMITE_IMOVEIS_NO_SITEMAP em LIMITE_IMOVEIS_NO_SITEMAP
-// — a query já está isolada nesse formato de propósito, é só mover pra
-// dentro dos dois exports.
+// `generateSitemaps()` + `sitemap({ id })` que fatia por organização e por
+// `skip`/`take` de LIMITE_IMOVEIS_NO_SITEMAP.
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const organizationId = await getPublicOrganizationId();
+  const organizacoesAtivas = await prisma.organization.findMany({
+    where: { active: true },
+    select: { id: true, slug: true },
+    orderBy: { slug: "asc" },
+  });
 
-  const imoveis = await withOrganization(organizationId, () =>
-    prisma.property.findMany({
-      where: { organizationId, status: STATUS_INCLUIDO_NO_SITEMAP },
-      select: { id: true, updatedAt: true },
-      orderBy: { id: "asc" },
-      take: LIMITE_IMOVEIS_NO_SITEMAP,
+  const entradasPorOrganizacao = await Promise.all(
+    organizacoesAtivas.map(async (organization) => {
+      const basePath = resolverBasePath(organization.slug);
+
+      const imoveis = await withOrganization(organization.id, () =>
+        prisma.property.findMany({
+          where: { organizationId: organization.id, status: STATUS_INCLUIDO_NO_SITEMAP },
+          select: { id: true, updatedAt: true },
+          orderBy: { id: "asc" },
+          take: LIMITE_IMOVEIS_NO_SITEMAP,
+        })
+      );
+
+      const entradasImoveis: MetadataRoute.Sitemap = imoveis.map((imovel) => ({
+        url: getSiteUrl(`${basePath}/imoveis/${imovel.id}`),
+        lastModified: imovel.updatedAt,
+        changeFrequency: "weekly",
+        priority: 0.7,
+      }));
+
+      return [...paginasEstaticas(basePath), ...entradasImoveis];
     })
   );
 
-  const entradasImoveis: MetadataRoute.Sitemap = imoveis.map((imovel) => ({
-    url: `${SITE_URL}/imoveis/${imovel.id}`,
-    lastModified: imovel.updatedAt,
-    changeFrequency: "weekly",
-    priority: 0.7,
-  }));
-
-  return [...paginasEstaticas(), ...entradasImoveis];
+  return entradasPorOrganizacao.flat();
 }

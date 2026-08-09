@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ImovelCard } from "@/components/ImovelCard";
 import { SeletorOrdenacao } from "@/components/SeletorOrdenacao";
@@ -6,7 +7,8 @@ import { FiltrosImoveis } from "@/components/FiltrosImoveis";
 import { PaginacaoPublica } from "@/components/PaginacaoPublica";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
-import { getPublicOrganizationId } from "@/lib/tenant";
+import { getOrganizationBySlug } from "@/lib/tenant";
+import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
 import { interpretarPaginacao, normalizarBusca, totalDePaginas } from "@/lib/pagination";
 import { metadataPaginaPublica } from "@/lib/seo";
@@ -15,13 +17,22 @@ import type { Prisma } from "@/generated/prisma/client";
 // Canonical aponta sempre pra URL base, sem os parâmetros de
 // busca/filtro/página — evita conteúdo duplicado no Google entre as
 // várias combinações de filtro que renderizam a mesma "página" do ponto
-// de vista de SEO.
-export const metadata: Metadata = metadataPaginaPublica({
-  title: "Imóveis disponíveis",
-  description:
-    "Busque apartamentos, casas e imóveis comerciais para comprar ou alugar, com filtros por localização, preço e características.",
-  path: "/imoveis",
-});
+// de vista de SEO. org padrão sem prefixo, demais orgs com prefixo — ver
+// plano, decisão #4.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ orgSlug: string }>;
+}): Promise<Metadata> {
+  const { orgSlug } = await params;
+  const basePath = resolverBasePath(orgSlug);
+  return metadataPaginaPublica({
+    title: "Imóveis disponíveis",
+    description:
+      "Busque apartamentos, casas e imóveis comerciais para comprar ou alugar, com filtros por localização, preço e características.",
+    path: `${basePath}/imoveis`,
+  });
+}
 
 // Grade de 3 colunas — 12 é um múltiplo redondo de linhas completas.
 const PAGE_SIZE_PADRAO_PUBLICO = 12;
@@ -61,12 +72,18 @@ const ORDENACOES: Record<string, Prisma.PropertyOrderByWithRelationInput> = {
 };
 
 export default async function ListaImoveisPage({
+  params: routeParams,
   searchParams,
 }: {
+  params: Promise<{ orgSlug: string }>;
   searchParams: Promise<SearchParams>;
 }) {
+  const { orgSlug } = await routeParams;
+  const organization = await getOrganizationBySlug(orgSlug);
+  if (!organization) notFound();
+  const organizationId = organization.id;
+  const basePath = resolverBasePath(orgSlug);
   const params = await searchParams;
-  const organizationId = await getPublicOrganizationId();
 
   const { page, skip, take } = interpretarPaginacao(params, {
     pageSizePadrao: PAGE_SIZE_PADRAO_PUBLICO,
@@ -197,6 +214,8 @@ export default async function ListaImoveisPage({
         tipos={dadosFiltros.tipos.map((t) => t.nome)}
         bairros={dadosFiltros.bairros}
         caracteristicas={dadosFiltros.caracteristicas}
+        orgSlug={orgSlug}
+        basePath={basePath}
         inicial={{
           tipo: tipos,
           finalidade: params.finalidade ?? "",
@@ -244,11 +263,15 @@ export default async function ListaImoveisPage({
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {imoveis.map((imovel) => (
-              <ImovelCard key={imovel.id} imovel={paraImovelCard(imovel)} />
+              <ImovelCard
+                key={imovel.id}
+                imovel={paraImovelCard(imovel)}
+                basePath={basePath}
+              />
             ))}
           </div>
           <PaginacaoPublica
-            basePath="/imoveis"
+            basePath={`${basePath}/imoveis`}
             paginaAtual={page}
             totalPaginas={paginas}
             searchParams={params}

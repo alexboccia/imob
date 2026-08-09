@@ -76,10 +76,14 @@ export function TodosFiltrosModal({
   tipos,
   bairros,
   caracteristicas,
+  orgSlug,
+  basePath,
 }: {
   tipos: TipoComCategoria[];
   bairros: string[];
   caracteristicas: string[];
+  orgSlug: string;
+  basePath: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -158,7 +162,7 @@ export function TodosFiltrosModal({
     if (areaMax) query.set("areaMax", areaMax);
     caractSelecionadas.forEach((c) => query.append("caracteristicas", c));
     setOpen(false);
-    router.push(`/imoveis?${query.toString()}`);
+    router.push(`${basePath}/imoveis?${query.toString()}`);
   }
 
   const tiposFiltrados = categoriaTipo
@@ -207,6 +211,8 @@ export function TodosFiltrosModal({
               onChange={setBusca}
               onEnter={buscar}
               className="flex-1"
+              orgSlug={orgSlug}
+              basePath={basePath}
             />
             <Button onClick={buscar} aria-label="Buscar" size="icon" className="shrink-0">
               <IconeBusca className="w-4 h-4" />

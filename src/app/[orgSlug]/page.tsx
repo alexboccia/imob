@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ImovelCard } from "@/components/ImovelCard";
 import { SlideshowHome } from "@/components/SlideshowHome";
 import { BuscaHome } from "@/components/BuscaHome";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
-import { getPublicOrganizationId } from "@/lib/tenant";
+import { getOrganizationBySlug } from "@/lib/tenant";
+import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
 import { Button } from "@/components/ui/button";
 import type { Prisma } from "@/generated/prisma/client";
@@ -19,9 +21,19 @@ import type { Prisma } from "@/generated/prisma/client";
 // no último build.
 export const revalidate = 60;
 
-export const metadata: Metadata = {
-  alternates: { canonical: "/" },
-};
+// Canonical relativo (resolvido contra metadataBase no root layout): org
+// padrão aponta pra URL sem prefixo, demais orgs pra versão prefixada —
+// evita conteúdo duplicado indexável entre as duas formas de acessar a
+// mesma organização. Ver plano, decisão #4.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ orgSlug: string }>;
+}): Promise<Metadata> {
+  const { orgSlug } = await params;
+  const basePath = resolverBasePath(orgSlug);
+  return { alternates: { canonical: basePath || "/" } };
+}
 
 function buscarImoveis(
   organizationId: string,
@@ -47,10 +59,12 @@ function SecaoImoveis({
   titulo,
   imoveis,
   verTudoHref,
+  basePath,
 }: {
   titulo: string;
   imoveis: ReturnType<typeof paraImovelCard>[];
   verTudoHref?: string;
+  basePath: string;
 }) {
   if (imoveis.length === 0) return null;
 
@@ -71,15 +85,23 @@ function SecaoImoveis({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {imoveis.map((imovel) => (
-          <ImovelCard key={imovel.id} imovel={imovel} />
+          <ImovelCard key={imovel.id} imovel={imovel} basePath={basePath} />
         ))}
       </div>
     </section>
   );
 }
 
-export default async function HomePage() {
-  const organizationId = await getPublicOrganizationId();
+export default async function HomePage({
+  params,
+}: {
+  params: Promise<{ orgSlug: string }>;
+}) {
+  const { orgSlug } = await params;
+  const organization = await getOrganizationBySlug(orgSlug);
+  if (!organization) notFound();
+  const organizationId = organization.id;
+  const basePath = resolverBasePath(orgSlug);
   const ultimosCadastrados = { createdAt: "desc" } as const;
 
   const [imoveisSlideshow, lancamentos, destaques, oportunidades, dadosFiltros] =
@@ -133,6 +155,7 @@ export default async function HomePage() {
             precoAluguel: imovel.rentPrice?.toString() ?? null,
             midias: imovel.media.map((m) => ({ url: m.url })),
           }))}
+          basePath={basePath}
         />
       ) : (
         <section className="border-b bg-gray-50">
@@ -147,7 +170,7 @@ export default async function HomePage() {
               size="lg"
               className="mt-8"
               nativeButton={false}
-              render={<Link href="/imoveis" />}
+              render={<Link href={`${basePath}/imoveis`} />}
             >
               Ver imóveis disponíveis
             </Button>
@@ -159,22 +182,27 @@ export default async function HomePage() {
         tipos={dadosFiltros.tipos}
         bairros={dadosFiltros.bairros}
         caracteristicas={dadosFiltros.caracteristicas}
+        orgSlug={orgSlug}
+        basePath={basePath}
       />
 
       <SecaoImoveis
         titulo="Lançamentos"
         imoveis={lancamentos.map(paraImovelCard)}
-        verTudoHref="/imoveis?lancamento=1"
+        verTudoHref={`${basePath}/imoveis?lancamento=1`}
+        basePath={basePath}
       />
       <SecaoImoveis
         titulo="Destaques"
         imoveis={destaques.map(paraImovelCard)}
-        verTudoHref="/imoveis?destaque=1"
+        verTudoHref={`${basePath}/imoveis?destaque=1`}
+        basePath={basePath}
       />
       <SecaoImoveis
         titulo="Oportunidades"
         imoveis={oportunidades.map(paraImovelCard)}
-        verTudoHref="/imoveis?oportunidade=1"
+        verTudoHref={`${basePath}/imoveis?oportunidade=1`}
+        basePath={basePath}
       />
 
       {temRotulos ? null : geral.length === 0 ? (
@@ -189,7 +217,8 @@ export default async function HomePage() {
         <SecaoImoveis
           titulo="Imóveis disponíveis"
           imoveis={geral.map(paraImovelCard)}
-          verTudoHref="/imoveis"
+          verTudoHref={`${basePath}/imoveis`}
+          basePath={basePath}
         />
       )}
     </div>

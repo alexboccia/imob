@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { telefoneValido } from "@/lib/telefone";
 
-// Extraído de src/app/(public)/actions.ts: Server Actions ("use server") só
+// Extraído de src/app/[orgSlug]/actions.ts: Server Actions ("use server") só
 // podem exportar funções async, então esses schemas não podiam ser
 // importados/testados diretamente de lá.
 

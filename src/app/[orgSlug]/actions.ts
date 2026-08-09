@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { enviarEmailContato } from "@/lib/email";
 import { contatoSchema, anuncieSchema } from "@/lib/contato-schema";
-import { getPublicOrganizationId } from "@/lib/tenant";
+import { getOrganizationBySlug } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
 import { obterIpCliente } from "@/lib/client-ip";
@@ -13,6 +13,27 @@ import { obterKvStore } from "@/lib/kv-store";
 import { verificarLimiteFormulario, normalizarContato, type FormularioTipo } from "@/lib/rate-limit";
 import { registrarAbuso } from "@/lib/abuse-log";
 import { hashCurto } from "@/lib/hash";
+
+// orgSlug chega via .bind(null, orgSlug) nos Client Components que chamam
+// estas actions (ContatoForm/AnuncieForm/FormularioContato) — é input do
+// navegador como qualquer outro (o bind pode ser reescrito via DevTools),
+// então é sempre resolvido e revalidado aqui, nunca aceito como
+// organizationId direto. Ver plano, seção "Modelo de isolamento e
+// fronteira de segurança".
+async function resolverOrganizacaoAtiva(
+  orgSlug: string
+): Promise<{ organizationId: string } | { erro: string }> {
+  const organization = await getOrganizationBySlug(orgSlug);
+  if (!organization) {
+    return { erro: "Organização não encontrada." };
+  }
+  // Organização suspensa não deve continuar recebendo leads — ver plano,
+  // seção "Modelo de isolamento". Mensagem genérica, não revela suspensão.
+  if (!organization.active) {
+    return { erro: "Formulário indisponível no momento." };
+  }
+  return { organizationId: organization.id };
+}
 
 // Menos de 1.5s entre o formulário aparecer na tela e ser enviado não é
 // tempo humano realista de preencher nome/telefone/mensagem — quase
@@ -65,7 +86,11 @@ async function protecoesAntiSpam(params: {
   return { bloqueado: false };
 }
 
-export async function enviarContato(_prevState: unknown, formData: FormData) {
+export async function enviarContato(
+  orgSlug: string,
+  _prevState: unknown,
+  formData: FormData
+) {
   const parsed = contatoSchema.safeParse({
     nome: formData.get("nome"),
     email: formData.get("email"),
@@ -79,7 +104,10 @@ export async function enviarContato(_prevState: unknown, formData: FormData) {
   }
 
   const { nome, email, telefone, mensagem, imovelId } = parsed.data;
-  const organizationId = await getPublicOrganizationId();
+
+  const org = await resolverOrganizacaoAtiva(orgSlug);
+  if ("erro" in org) return { sucesso: false, erro: org.erro };
+  const { organizationId } = org;
 
   const protecao = await protecoesAntiSpam({
     formulario: "contato",
@@ -92,6 +120,23 @@ export async function enviarContato(_prevState: unknown, formData: FormData) {
   }
 
   const { imovel, configContato } = await withOrganization(organizationId, async () => {
+    // O imovelId chega do formulário (input não confiável) — precisa
+    // pertencer a ESTA organização antes de virar o propertyId de uma
+    // Interaction. Sem essa checagem, um imovelId de outra organização
+    // criaria uma Interaction cruzando tenants (organizationId correto,
+    // mas propertyId apontando pra um Property de outra org). Ver plano,
+    // seção "Modelo de isolamento e fronteira de segurança".
+    const imovel = imovelId
+      ? await prisma.property.findUnique({
+          where: { id: imovelId, organizationId },
+          select: {
+            title: true,
+            responsibleMember: { select: { contactEmail: true } },
+          },
+        })
+      : null;
+    const imovelIdValidado = imovelId && imovel ? imovelId : null;
+
     const pessoa = await prisma.person.create({
       data: {
         organizationId,
@@ -107,21 +152,11 @@ export async function enviarContato(_prevState: unknown, formData: FormData) {
       data: {
         organizationId,
         personId: pessoa.id,
-        propertyId: imovelId || null,
+        propertyId: imovelIdValidado,
         type: "MESSAGE",
         notes: mensagem,
       },
     });
-
-    const imovel = imovelId
-      ? await prisma.property.findUnique({
-          where: { id: imovelId, organizationId },
-          select: {
-            title: true,
-            responsibleMember: { select: { contactEmail: true } },
-          },
-        })
-      : null;
 
     const configContato = await buscarConfiguracaoContato(organizationId);
 
@@ -145,6 +180,7 @@ export async function enviarContato(_prevState: unknown, formData: FormData) {
 }
 
 export async function enviarAnuncioProprietario(
+  orgSlug: string,
   _prevState: unknown,
   formData: FormData
 ) {
@@ -160,7 +196,10 @@ export async function enviarAnuncioProprietario(
   }
 
   const { nome, email, telefone, descricaoImovel } = parsed.data;
-  const organizationId = await getPublicOrganizationId();
+
+  const org = await resolverOrganizacaoAtiva(orgSlug);
+  if ("erro" in org) return { sucesso: false, erro: org.erro };
+  const { organizationId } = org;
 
   const protecao = await protecoesAntiSpam({
     formulario: "anuncie",

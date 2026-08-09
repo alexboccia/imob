@@ -29,6 +29,7 @@ export function GaleriaFotos({
   whatsappHref,
   mensagemContato,
   temVideo = false,
+  orgSlug,
 }: {
   fotos: Foto[];
   titulo: string;
@@ -36,6 +37,7 @@ export function GaleriaFotos({
   whatsappHref: string;
   mensagemContato: string;
   temVideo?: boolean;
+  orgSlug: string;
 }) {
   const router = useRouter();
   const [indice, setIndice] = useState(0);
@@ -435,6 +437,7 @@ export function GaleriaFotos({
               mensagemPreenchida={mensagemContato}
               whatsappHref={whatsappHref}
               className="bg-white text-gray-900 rounded-md px-4 py-2 text-sm font-medium hover:bg-gray-100"
+              orgSlug={orgSlug}
             >
               Enviar mensagem
             </ModalContato>

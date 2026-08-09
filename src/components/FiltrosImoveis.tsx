@@ -230,12 +230,16 @@ export function FiltrosImoveis({
   caracteristicas,
   inicial,
   paramsExtras,
+  orgSlug,
+  basePath,
 }: {
   tipos: string[];
   bairros: string[];
   caracteristicas: string[];
   inicial: FiltrosIniciais;
   paramsExtras: Record<string, string>;
+  orgSlug: string;
+  basePath: string;
 }) {
   const router = useRouter();
 
@@ -278,7 +282,7 @@ export function FiltrosImoveis({
       if (valor) query.set(chave, valor);
     });
     setAberto(null);
-    router.push(`/imoveis?${query.toString()}`);
+    router.push(`${basePath}/imoveis?${query.toString()}`);
   }
 
   function limparFiltros() {
@@ -290,7 +294,7 @@ export function FiltrosImoveis({
     setCaract([]);
     setBusca("");
     setAberto(null);
-    router.push("/imoveis");
+    router.push(`${basePath}/imoveis`);
   }
 
   const labelTipo = rotuloMultiplo(tipo, (v) => v, "");
@@ -469,6 +473,8 @@ export function FiltrosImoveis({
           onChange={setBusca}
           onEnter={buscar}
           className="ml-auto min-w-[200px] flex-1"
+          orgSlug={orgSlug}
+          basePath={basePath}
         />
 
         <Button

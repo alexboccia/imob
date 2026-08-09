@@ -36,7 +36,11 @@ type ImovelCardProps = {
   distancia?: string;
 };
 
-export function ImovelCard({ imovel, distancia }: ImovelCardProps) {
+export function ImovelCard({
+  imovel,
+  distancia,
+  basePath,
+}: ImovelCardProps & { basePath: string }) {
   const [indice, setIndice] = useState(0);
   const fotos = imovel.midias;
   const swiperRef = useRef<SwiperType | null>(null);
@@ -53,7 +57,7 @@ export function ImovelCard({ imovel, distancia }: ImovelCardProps) {
 
   return (
     <Link
-      href={`/imoveis/${imovel.id}`}
+      href={`${basePath}/imoveis/${imovel.id}`}
       className="block rounded-lg border overflow-hidden hover:shadow-md transition-shadow"
     >
       <div className="relative aspect-[4/3] bg-gray-100 group">

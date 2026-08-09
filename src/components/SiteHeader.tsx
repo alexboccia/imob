@@ -14,11 +14,13 @@ export function SiteHeader({
   logo,
   logoAltura,
   navLinks,
+  basePath,
 }: {
   nome: string;
   logo?: string | null;
   logoAltura?: number | null;
   navLinks: NavLink[];
+  basePath: string;
 }) {
   const [aberto, setAberto] = useState(false);
   const altura = logoAltura && logoAltura > 0 ? logoAltura : 40;
@@ -56,7 +58,7 @@ export function SiteHeader({
     >
       <div className="mx-auto max-w-6xl flex items-center justify-between px-4 py-4">
         <Link
-          href="/"
+          href={basePath || "/"}
           className="flex items-center"
           onClick={() => setAberto(false)}
         >

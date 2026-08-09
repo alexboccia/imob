@@ -14,7 +14,8 @@ import { siteConfig } from "@/lib/site-config";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { distanciaEmKm, formatarDistancia } from "@/lib/geo";
 import { paraImovelCard } from "@/lib/imovel-card";
-import { getPublicOrganizationId } from "@/lib/tenant";
+import { getOrganizationBySlug } from "@/lib/tenant";
+import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
 import { GaleriaFotos } from "@/components/GaleriaFotos";
 import { FormularioContato } from "@/components/FormularioContato";
@@ -141,10 +142,13 @@ async function buscarImoveisProximos(
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ orgSlug: string; id: string }>;
 }): Promise<Metadata> {
-  const { id } = await params;
-  const organizationId = await getPublicOrganizationId();
+  const { orgSlug, id } = await params;
+  const organization = await getOrganizationBySlug(orgSlug);
+  if (!organization) return {};
+  const organizationId = organization.id;
+  const basePath = resolverBasePath(orgSlug);
   const imovel = await withOrganization(organizationId, () =>
     buscarImovel(id, organizationId)
   );
@@ -161,7 +165,7 @@ export async function generateMetadata({
   return {
     title: imovel.title,
     description: descricao,
-    alternates: { canonical: `/imoveis/${id}` },
+    alternates: { canonical: `${basePath}/imoveis/${id}` },
     openGraph: {
       title: imovel.title,
       description: descricao,
@@ -180,10 +184,13 @@ export async function generateMetadata({
 export default async function DetalheImovelPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ orgSlug: string; id: string }>;
 }) {
-  const { id } = await params;
-  const organizationId = await getPublicOrganizationId();
+  const { orgSlug, id } = await params;
+  const organization = await getOrganizationBySlug(orgSlug);
+  if (!organization) notFound();
+  const organizationId = organization.id;
+  const basePath = resolverBasePath(orgSlug);
 
   const { imovel, configContato, imoveisProximos } = await withOrganization(
     organizationId,
@@ -254,6 +261,7 @@ export default async function DetalheImovelPage({
         whatsappHref={whatsappHref}
         mensagemContato={mensagemContato}
         temVideo={videos.length > 0}
+        orgSlug={orgSlug}
       />
 
       <div className="mx-auto max-w-6xl px-4 py-10">
@@ -477,6 +485,7 @@ export default async function DetalheImovelPage({
                 imovelId={imovel.id}
                 mensagemPreenchida={mensagemContato}
                 idPrefixo="aside-"
+                orgSlug={orgSlug}
               />
             </div>
           </CardContent>
@@ -496,6 +505,7 @@ export default async function DetalheImovelPage({
                 distancia={
                   distanciaKm != null ? formatarDistancia(distanciaKm) : undefined
                 }
+                basePath={basePath}
               />
             ))}
           </div>

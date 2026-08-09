@@ -26,6 +26,8 @@ export function CampoBuscaImoveis({
   name,
   placeholder = "Código, bairro ou empreendimento",
   className,
+  orgSlug,
+  basePath,
 }: {
   value: string;
   onChange: (valor: string) => void;
@@ -33,6 +35,8 @@ export function CampoBuscaImoveis({
   name?: string;
   placeholder?: string;
   className?: string;
+  orgSlug: string;
+  basePath: string;
 }) {
   const [sugestoes, setSugestoes] = useState<Sugestao[]>([]);
   const [abertas, setAbertas] = useState(false);
@@ -51,7 +55,7 @@ export function CampoBuscaImoveis({
       }
       try {
         const resp = await fetch(
-          `/api/imoveis/sugestoes?busca=${encodeURIComponent(termo)}`,
+          `/api/imoveis/sugestoes?busca=${encodeURIComponent(termo)}&orgSlug=${encodeURIComponent(orgSlug)}`,
           { signal: controller.signal }
         );
         if (!resp.ok) return;
@@ -66,7 +70,7 @@ export function CampoBuscaImoveis({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [value]);
+  }, [value, orgSlug]);
 
   useEffect(() => {
     function aoClicarFora(e: MouseEvent) {
@@ -102,7 +106,7 @@ export function CampoBuscaImoveis({
           {sugestoes.map((s) => (
             <Link
               key={s.id}
-              href={`/imoveis/${s.id}`}
+              href={`${basePath}/imoveis/${s.id}`}
               onClick={() => setAbertas(false)}
               className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 border-b last:border-b-0"
             >

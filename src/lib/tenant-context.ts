@@ -6,7 +6,7 @@ const storage = new AsyncLocalStorage<TenantStore>();
 
 // Cada página/action de entrada (não cada query individual) deve envolver seu
 // corpo nesta função, logo após resolver o organizationId (via
-// requireOrganizationId ou getPublicOrganizationId, em @/lib/tenant). A
+// requireOrganizationId ou getOrganizationBySlug, em @/lib/tenant). A
 // extension do Prisma Client (@/lib/prisma) lê esse contexto para injetar
 // organizationId automaticamente em toda query dos models tenant-aware.
 export function withOrganization<T>(

@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { CheckCircle2, AlertCircle } from "lucide-react";
-import { enviarAnuncioProprietario } from "@/app/(public)/actions";
+import { enviarAnuncioProprietario } from "@/app/[orgSlug]/actions";
 import { CamposAntiSpam } from "@/components/CamposAntiSpam";
 import { Input } from "@/components/ui/input";
 import { CampoTelefone } from "@/components/CampoTelefone";
@@ -13,9 +13,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const estadoInicial = { sucesso: false, erro: undefined as string | undefined };
 
-export function AnuncieForm() {
+export function AnuncieForm({ orgSlug }: { orgSlug: string }) {
   const [estado, formAction, pendente] = useActionState(
-    enviarAnuncioProprietario,
+    enviarAnuncioProprietario.bind(null, orgSlug),
     estadoInicial
   );
 

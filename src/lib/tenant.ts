@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -10,14 +11,17 @@ export async function requireOrganizationId(): Promise<string> {
   return session.user.organizationId;
 }
 
-// TODO Fase 3: resolver por orgSlug na URL (easymob.com/{orgSlug}). Até lá,
-// o site público inteiro resolve para a única organização configurada.
-const PUBLIC_ORG_SLUG = process.env.PUBLIC_ORG_SLUG ?? "boccia";
-
-export async function getPublicOrganizationId(): Promise<string> {
-  const organization = await prisma.organization.findUniqueOrThrow({
-    where: { slug: PUBLIC_ORG_SLUG },
-    select: { id: true },
+// Resolução do site público por slug de URL. cache() por request: várias
+// pages/actions da mesma árvore [orgSlug] chamam isso na mesma requisição.
+// Retorna null (não lança) pra slug inexistente — cada chamador decide o
+// que fazer (layout faz notFound(), uma Server Action devolve erro
+// genérico). NUNCA tratar o resultado desta função como "seguro só por ter
+// vindo do banco" sem checar o campo `active` quando a operação exigir
+// organização ativa — ver plano, seção "Modelo de isolamento e fronteira de
+// segurança".
+export const getOrganizationBySlug = cache(async (slug: string) => {
+  return prisma.organization.findUnique({
+    where: { slug },
+    select: { id: true, slug: true, name: true, active: true },
   });
-  return organization.id;
-}
+});
