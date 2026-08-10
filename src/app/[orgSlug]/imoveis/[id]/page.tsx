@@ -51,7 +51,7 @@ function ItemCaracteristica({
 }) {
   return (
     <li className="flex items-center gap-2">
-      <Icone className="w-4 h-4 text-green-600 shrink-0" />
+      <Icone className="w-4 h-4 text-success shrink-0" />
       <span>{children}</span>
     </li>
   );
@@ -62,7 +62,7 @@ function ItemCaracteristicaCatalogo({ nome }: { nome: string }) {
     <li className="flex items-center gap-2">
       <IconeCaracteristica
         nome={nome}
-        className="w-4 h-4 text-green-600 shrink-0"
+        className="w-4 h-4 text-success shrink-0"
       />
       <span>{nome}</span>
     </li>
@@ -449,7 +449,7 @@ export default async function DetalheImovelPage({
             )}
             <Button
               size="lg"
-              className="w-full bg-green-600 hover:bg-green-700 active:bg-green-800"
+              className="w-full bg-whatsapp-brand hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active"
               nativeButton={false}
               render={
                 <a href={whatsappHref} target="_blank" rel="noopener noreferrer" />
@@ -468,7 +468,7 @@ export default async function DetalheImovelPage({
                       className="object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-black text-white font-semibold">
+                    <div className="w-full h-full flex items-center justify-center bg-primary text-primary-foreground font-semibold">
                       {imovel.responsibleMember.user.name.charAt(0).toUpperCase()}
                     </div>
                   )}

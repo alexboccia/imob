@@ -31,9 +31,9 @@ export function FormularioContato({
 
   if (estado.sucesso) {
     return (
-      <Alert className="border-green-200 bg-green-50 text-green-700">
+      <Alert className="border-success-muted-border bg-success-muted text-success-muted-foreground">
         <CheckCircle2 />
-        <AlertDescription className="text-green-700">
+        <AlertDescription className="text-success-muted-foreground">
           Mensagem enviada com sucesso! Em breve entraremos em contato.
         </AlertDescription>
       </Alert>

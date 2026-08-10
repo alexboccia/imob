@@ -102,12 +102,20 @@ export const PAPEL_USUARIO_LABEL: Record<string, string> = {
 };
 
 export const ROTULOS_IMOVEL = [
-  { chave: "lancamento", label: "Lançamento", className: "bg-black text-white" },
-  { chave: "destaque", label: "Destaque", className: "bg-blue-600 text-white" },
+  {
+    chave: "lancamento",
+    label: "Lançamento",
+    className: "bg-label-launch text-label-launch-foreground",
+  },
+  {
+    chave: "destaque",
+    label: "Destaque",
+    className: "bg-label-featured text-label-featured-foreground",
+  },
   {
     chave: "oportunidade",
     label: "Oportunidade",
-    className: "bg-orange-500 text-white",
+    className: "bg-label-opportunity text-label-opportunity-foreground",
   },
 ] as const;
 

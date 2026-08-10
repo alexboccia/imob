@@ -36,7 +36,7 @@ function Chip({
       onClick={onClick}
       className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${
         ativo
-          ? "bg-black text-white border-black"
+          ? "bg-primary text-primary-foreground border-primary"
           : "border-gray-300 text-gray-700 hover:border-gray-400"
       } ${className}`}
     >

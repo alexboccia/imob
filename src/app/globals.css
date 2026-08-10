@@ -39,6 +39,23 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* Tokens semânticos e de marca de terceiro/marketing — fixos de
+     propósito, nunca sobrescritos pelo tema de marca por organização (ver
+     plano de branding). */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-muted: var(--success-muted);
+  --color-success-muted-border: var(--success-muted-border);
+  --color-success-muted-foreground: var(--success-muted-foreground);
+  --color-whatsapp-brand: var(--whatsapp-brand);
+  --color-whatsapp-brand-hover: var(--whatsapp-brand-hover);
+  --color-whatsapp-brand-active: var(--whatsapp-brand-active);
+  --color-label-launch: var(--label-launch);
+  --color-label-launch-foreground: var(--label-launch-foreground);
+  --color-label-featured: var(--label-featured);
+  --color-label-featured-foreground: var(--label-featured-foreground);
+  --color-label-opportunity: var(--label-opportunity);
+  --color-label-opportunity-foreground: var(--label-opportunity-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -84,6 +101,30 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Semânticos (success) — não dependem de marca, valem igual em qualquer
+     organização. Mesmos tons de verde já usados antes, agora centralizados. */
+  --success: var(--color-green-600);
+  --success-foreground: var(--color-white);
+  --success-muted: var(--color-green-50);
+  --success-muted-border: var(--color-green-200);
+  --success-muted-foreground: var(--color-green-700);
+
+  /* Verde do WhatsApp — marca de terceiro, não é "sucesso" nem marca da
+     organização, fica sempre reconhecível igual em qualquer tema. */
+  --whatsapp-brand: var(--color-green-600);
+  --whatsapp-brand-hover: var(--color-green-700);
+  --whatsapp-brand-active: var(--color-green-800);
+
+  /* Rótulos de imóvel (Lançamento/Destaque/Oportunidade) — sinal visual
+     consistente entre organizações diferentes, deliberadamente não
+     amarrado à cor de marca de nenhuma organização específica. */
+  --label-launch: var(--color-black);
+  --label-launch-foreground: var(--color-white);
+  --label-featured: var(--color-blue-600);
+  --label-featured-foreground: var(--color-white);
+  --label-opportunity: var(--color-orange-500);
+  --label-opportunity-foreground: var(--color-white);
 }
 
 .dark {

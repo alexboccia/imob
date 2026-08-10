@@ -37,7 +37,7 @@ export function ModalContato({
       <DialogContent className="max-w-2xl p-0 sm:grid sm:grid-cols-[220px_1fr]">
         <DialogTitle className="sr-only">Enviar mensagem</DialogTitle>
         <div className="bg-gray-50 rounded-t-xl p-6 flex flex-col gap-3 border-b sm:rounded-t-none sm:rounded-l-xl sm:border-b-0 sm:border-r">
-          <div className="w-14 h-14 rounded-md bg-black text-white flex items-center justify-center font-bold text-xl">
+          <div className="w-14 h-14 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-xl">
             {nome.charAt(0).toUpperCase()}
           </div>
           <p className="font-semibold">{nome}</p>

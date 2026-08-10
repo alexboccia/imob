@@ -22,9 +22,9 @@ export function AnuncieForm({ orgSlug }: { orgSlug: string }) {
   return (
     <>
       {estado.sucesso ? (
-        <Alert className="border-green-200 bg-green-50 text-green-700">
+        <Alert className="border-success-muted-border bg-success-muted text-success-muted-foreground">
           <CheckCircle2 />
-          <AlertDescription className="text-green-700">
+          <AlertDescription className="text-success-muted-foreground">
             Recebemos seus dados! Em breve um corretor entrará em contato.
           </AlertDescription>
         </Alert>

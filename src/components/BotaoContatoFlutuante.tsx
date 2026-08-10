@@ -31,7 +31,7 @@ function OpcaoContato({
       rel={externo ? "noopener noreferrer" : undefined}
       className="flex items-center gap-3 border rounded-xl p-3 hover:bg-gray-50 transition-colors"
     >
-      <span className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center shrink-0">
+      <span className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
         {icone}
       </span>
       <span>
@@ -122,7 +122,7 @@ export function BotaoContatoFlutuante({
             orgSlug={orgSlug}
             nome={nome}
           >
-            <span className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center shrink-0">
+            <span className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
               <IconeEmail className="w-5 h-5" />
             </span>
             <span>

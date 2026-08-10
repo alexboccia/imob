@@ -261,7 +261,7 @@ export function GaleriaFotos({
                   setZoom(1);
                 }}
                 className={`relative w-20 h-20 flex-shrink-0 snap-start rounded-md overflow-hidden border-2 ${
-                  i === indice ? "border-black" : "border-transparent"
+                  i === indice ? "border-primary" : "border-transparent"
                 }`}
               >
                 <Image
@@ -426,7 +426,7 @@ export function GaleriaFotos({
             onClick={(e) => e.stopPropagation()}
           >
             <Button
-              className="bg-green-600 hover:bg-green-700 active:bg-green-800"
+              className="bg-whatsapp-brand hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active"
               nativeButton={false}
               render={
                 <a href={whatsappHref} target="_blank" rel="noopener noreferrer" />

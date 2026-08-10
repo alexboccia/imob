@@ -44,7 +44,7 @@ export function EvolucaoObra({
                 <span
                   className={`mb-1 h-5 flex items-center justify-center text-[10px] font-semibold px-2 rounded ${
                     status === "atual"
-                      ? "bg-gray-900 text-white"
+                      ? "bg-primary text-primary-foreground"
                       : status === "futuro"
                         ? "bg-gray-200 text-gray-600"
                         : "invisible"
@@ -56,26 +56,26 @@ export function EvolucaoObra({
                 <div
                   className={`w-full h-16 rounded-lg flex items-center justify-center border ${
                     status === "concluido"
-                      ? "bg-green-50 border-green-300"
+                      ? "bg-success-muted border-success-muted-border"
                       : status === "atual"
-                        ? "bg-gray-900 border-gray-900"
+                        ? "bg-primary border-primary"
                         : "bg-gray-100 border-gray-200"
                   }`}
                 >
                   {status === "concluido" ? (
-                    <span className="text-green-600">
+                    <span className="text-success">
                       <IconeCheck className="w-5 h-5" />
                     </span>
                   ) : estagio === "READY_TO_MOVE" ? (
                     <KeyRound
                       className={`w-5 h-5 ${
-                        status === "atual" ? "text-white" : "text-gray-400"
+                        status === "atual" ? "text-primary-foreground" : "text-gray-400"
                       }`}
                     />
                   ) : (
                     <Wrench
                       className={`w-5 h-5 ${
-                        status === "atual" ? "text-white" : "text-gray-400"
+                        status === "atual" ? "text-primary-foreground" : "text-gray-400"
                       }`}
                     />
                   )}
@@ -84,9 +84,9 @@ export function EvolucaoObra({
                 <p
                   className={`mt-2 text-xs font-semibold text-center uppercase ${
                     status === "concluido"
-                      ? "text-green-700"
+                      ? "text-success-muted-foreground"
                       : status === "atual"
-                        ? "text-gray-900"
+                        ? "text-primary"
                         : "text-gray-400"
                   }`}
                 >
@@ -105,7 +105,7 @@ export function EvolucaoObra({
                 <div
                   className={`flex-1 h-0.5 mt-14 mx-1 ${
                     i < indiceAtual
-                      ? "bg-green-400"
+                      ? "bg-success"
                       : "border-t-2 border-dashed border-gray-300"
                   }`}
                 />

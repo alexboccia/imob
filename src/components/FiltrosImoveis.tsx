@@ -49,7 +49,7 @@ function Chip({
       onClick={onClick}
       className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${
         ativo
-          ? "bg-black text-white border-black"
+          ? "bg-primary text-primary-foreground border-primary"
           : "border-gray-300 text-gray-700 hover:border-gray-400"
       }`}
     >
@@ -175,7 +175,7 @@ function PainelMultiSelecao({
 
 function pillTriggerClassName(aberto: boolean) {
   return `flex flex-col items-start justify-center text-left min-h-8 px-3 py-1 rounded-lg border shrink-0 ${
-    aberto ? "border-gray-900" : "border-gray-200 hover:border-gray-300"
+    aberto ? "border-primary" : "border-gray-200 hover:border-gray-300"
   }`;
 }
 

@@ -51,7 +51,7 @@ export function PaginacaoPublica({
             aria-current={pagina === paginaAtual ? "page" : undefined}
             className={`px-3 py-2 rounded-md border text-sm ${
               pagina === paginaAtual
-                ? "bg-black text-white border-black"
+                ? "bg-primary text-primary-foreground border-primary"
                 : "hover:bg-gray-50"
             }`}
           >
