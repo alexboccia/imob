@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { siteConfig } from "@/lib/site-config";
+import { prisma } from "@/lib/prisma";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
@@ -25,17 +26,19 @@ export async function GET(request: Request) {
   // O Nominatim exige um identificador válido (política de uso). O domínio
   // "example.com" (valor padrão até cadastrar um e-mail em Configurações) é
   // bloqueado por eles, então usamos um identificador genérico nesse caso.
-  const configContato = await withOrganization(organizationId, () =>
-    buscarConfiguracaoContato(organizationId)
-  );
+  const [configContato, organization] = await Promise.all([
+    withOrganization(organizationId, () => buscarConfiguracaoContato(organizationId)),
+    prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
+  ]);
+  const nomeOrganizacao = organization?.name ?? siteConfig.nome;
   const emailConfigurado = configContato.email || siteConfig.emailContato;
   const contatoValido =
     emailConfigurado && emailConfigurado !== "contato@example.com"
       ? emailConfigurado
       : null;
   const userAgent = contatoValido
-    ? `${siteConfig.nome} (${contatoValido})`
-    : `${siteConfig.nome} - sistema de gestão imobiliária`;
+    ? `${nomeOrganizacao} (${contatoValido})`
+    : `${nomeOrganizacao} - sistema de gestão imobiliária`;
 
   let resposta: Response;
   try {

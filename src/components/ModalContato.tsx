@@ -1,6 +1,5 @@
 "use client";
 
-import { siteConfig } from "@/lib/site-config";
 import { FormularioContato } from "@/components/FormularioContato";
 import {
   Dialog,
@@ -17,6 +16,7 @@ export function ModalContato({
   aoAbrir,
   children,
   orgSlug,
+  nome,
 }: {
   imovelId?: string;
   mensagemPreenchida?: string;
@@ -25,6 +25,7 @@ export function ModalContato({
   aoAbrir?: () => void;
   children: React.ReactNode;
   orgSlug: string;
+  nome: string;
 }) {
   return (
     <Dialog
@@ -37,9 +38,9 @@ export function ModalContato({
         <DialogTitle className="sr-only">Enviar mensagem</DialogTitle>
         <div className="bg-gray-50 rounded-t-xl p-6 flex flex-col gap-3 border-b sm:rounded-t-none sm:rounded-l-xl sm:border-b-0 sm:border-r">
           <div className="w-14 h-14 rounded-md bg-black text-white flex items-center justify-center font-bold text-xl">
-            {siteConfig.nome.charAt(0).toUpperCase()}
+            {nome.charAt(0).toUpperCase()}
           </div>
-          <p className="font-semibold">{siteConfig.nome}</p>
+          <p className="font-semibold">{nome}</p>
           {whatsappHref && (
             <a
               href={whatsappHref}

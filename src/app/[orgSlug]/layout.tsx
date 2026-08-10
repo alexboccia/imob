@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { siteConfig } from "@/lib/site-config";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
@@ -68,7 +67,7 @@ export default async function PublicLayout({
   return (
     <>
       <SiteHeader
-        nome={siteConfig.nome}
+        nome={organization.name}
         logo={config.logo}
         logoAltura={config.logoAltura}
         navLinks={navLinks(basePath)}
@@ -77,12 +76,12 @@ export default async function PublicLayout({
       <main className="flex-1">{children}</main>
       <footer className="border-t mt-16">
         <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-gray-500">
-          © {new Date().getFullYear()} {siteConfig.nome}. Todos os direitos
+          © {new Date().getFullYear()} {organization.name}. Todos os direitos
           reservados.
         </div>
       </footer>
       <BotaoContatoFlutuante
-        nome={siteConfig.nome}
+        nome={organization.name}
         whatsapp={config.whatsapp}
         telefone={config.telefone || config.whatsapp}
         orgSlug={orgSlug}

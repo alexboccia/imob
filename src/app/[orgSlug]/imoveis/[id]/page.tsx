@@ -10,7 +10,6 @@ import {
   formatarTempoRelativo,
   rotulosAtivos,
 } from "@/lib/format";
-import { siteConfig } from "@/lib/site-config";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { distanciaEmKm, formatarDistancia } from "@/lib/geo";
 import { paraImovelCard } from "@/lib/imovel-card";
@@ -250,7 +249,7 @@ export default async function DetalheImovelPage({
     imovel.type.toLowerCase()
   }, ${formatarPreco(precoPrincipal)}, ${enderecoCompleto ? `${enderecoCompleto}, ` : ""}${
     imovel.city
-  } - ${imovel.state} que encontrei no site da ${siteConfig.nome}. Aguardo seu contato.`;
+  } - ${imovel.state} que encontrei no site da ${organization.name}. Aguardo seu contato.`;
 
   return (
     <>
@@ -262,6 +261,7 @@ export default async function DetalheImovelPage({
         mensagemContato={mensagemContato}
         temVideo={videos.length > 0}
         orgSlug={orgSlug}
+        nome={organization.name}
       />
 
       <div className="mx-auto max-w-6xl px-4 py-10">
