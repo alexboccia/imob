@@ -23,10 +23,6 @@ export async function generateMetadata({
   const organization = await getOrganizationBySlug(orgSlug);
   if (!organization) return {};
 
-  const branding = await withOrganization(organization.id, () =>
-    buscarBranding(organization.id)
-  );
-
   return {
     title: {
       default: organization.name,
@@ -44,7 +40,10 @@ export async function generateMetadata({
       title: organization.name,
       description: DESCRICAO_PADRAO_SITE,
     },
-    icons: branding.faviconUrl ? { icon: branding.faviconUrl } : undefined,
+    // Favicon por organização: NÃO dá pra usar o campo `icons` aqui —
+    // favicon.ico na raiz de app/ tem prioridade absoluta sobre
+    // generateMetadata (ver icon.tsx neste mesmo diretório, que resolve
+    // isso via convenção de arquivo por segmento).
   };
 }
 

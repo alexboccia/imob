@@ -21,7 +21,9 @@ export default async function ConfiguracoesPage() {
         imóveis e outros pontos de contato do site público.
       </p>
 
-      <ConfiguracaoContatoForm config={{ ...config, themeId: branding.themeId }} />
+      <ConfiguracaoContatoForm
+        config={{ ...config, themeId: branding.themeId, favicon: branding.faviconUrl }}
+      />
     </div>
   );
 }

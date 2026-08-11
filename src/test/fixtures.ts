@@ -209,6 +209,7 @@ export async function limparOrganizacao(
 
   await prisma.organizationMember.deleteMany({ where: { organizationId } });
   await prisma.organizationSettings.deleteMany({ where: { organizationId } });
+  await prisma.organizationBranding.deleteMany({ where: { organizationId } });
   await prisma.organization.delete({ where: { id: organizationId } });
 
   if (opcoes.userIds?.length) {

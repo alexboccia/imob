@@ -11,6 +11,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ErroCampo } from "@/components/admin/ErroCampo";
 import { LogoUpload } from "@/components/admin/LogoUpload";
+import { FaviconUpload } from "@/components/admin/FaviconUpload";
 import { SeletorTema } from "@/components/admin/SeletorTema";
 
 type ConfiguracaoInicial = {
@@ -25,6 +26,7 @@ type ConfiguracaoInicial = {
   logo: string | null;
   logoAltura: number;
   themeId: string | null;
+  favicon: string | null;
 };
 
 export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicial }) {
@@ -47,6 +49,7 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
         </CardHeader>
         <CardContent className="space-y-6">
           <LogoUpload logoInicial={config.logo} alturaInicial={config.logoAltura} />
+          <FaviconUpload faviconInicial={config.favicon} />
           <SeletorTema themeIdAtual={config.themeId} />
         </CardContent>
       </Card>

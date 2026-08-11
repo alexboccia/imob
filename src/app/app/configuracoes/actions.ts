@@ -12,11 +12,13 @@ import { temPapel, PAPEIS_GESTAO_CONFIGURACOES } from "@/lib/authorization";
 import {
   type ActionState,
   erroAcessoNegado,
+  erroGenerico,
   erroValidacao,
   sucesso,
 } from "@/lib/action-result";
 import { tagConfiguracao, tagBranding } from "@/lib/cache-tags";
 import { CATALOGO_TEMAS } from "@/lib/branding/temas";
+import { validarFaviconUrl } from "@/lib/branding/favicon-url";
 
 const vazioParaNulo = (v: unknown) =>
   typeof v === "string" && v.trim() ? v.trim() : undefined;
@@ -50,6 +52,7 @@ const configuracaoSchema = z.object({
     Object.keys(CATALOGO_TEMAS) as [string, ...string[]],
     { message: "Tema inválido." }
   ),
+  favicon: z.preprocess(vazioParaNulo, z.string().optional()),
 });
 
 function alturaLogo(valor: number | undefined) {
@@ -69,9 +72,25 @@ export async function salvarConfiguracaoContato(
     return erroAcessoNegado();
   }
 
+  // Antes do parse: validarFaviconUrl precisa do organizationId da sessão
+  // pra checar o prefixo do objeto no R2 (ver favicon-url.ts) — nunca do
+  // organizationId de qualquer outro lugar.
+  const organizationId = await requireOrganizationId();
+
   const parsed = configuracaoSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return erroValidacao(parsed.error);
   const campos = parsed.data;
+
+  // Defesa contra SSRF/proxy arbitrário: favicon só pode apontar pro
+  // bucket R2 oficial da aplicação, dentro do prefixo desta organização —
+  // nunca uma URL externa arbitrária nem o objeto de outro tenant. Ver
+  // validarFaviconUrl (revalidado de novo em [orgSlug]/icon.tsx, que nunca
+  // confia só nesta checagem).
+  if (campos.favicon && !validarFaviconUrl(campos.favicon, organizationId)) {
+    return erroGenerico(
+      "Favicon inválido — envie a imagem novamente pelo formulário."
+    );
+  }
 
   const dados = {
     phone: campos.telefone ?? null,
@@ -86,7 +105,6 @@ export async function salvarConfiguracaoContato(
     logoHeight: alturaLogo(campos.logoAltura),
   };
 
-  const organizationId = await requireOrganizationId();
   await withOrganization(organizationId, async () => {
     await prisma.$transaction([
       prisma.organizationSettings.upsert({
@@ -96,8 +114,12 @@ export async function salvarConfiguracaoContato(
       }),
       prisma.organizationBranding.upsert({
         where: { organizationId },
-        update: { themeId: campos.themeId },
-        create: { organizationId, themeId: campos.themeId },
+        update: { themeId: campos.themeId, faviconUrl: campos.favicon ?? null },
+        create: {
+          organizationId,
+          themeId: campos.themeId,
+          faviconUrl: campos.favicon ?? null,
+        },
       }),
     ]);
 

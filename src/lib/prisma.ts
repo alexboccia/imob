@@ -27,6 +27,7 @@ const TENANT_SCOPED_MODELS = new Set([
   "FeatureOption",
   "PropertyTypeOption",
   "OrganizationSettings",
+  "OrganizationBranding",
   "ActivityLog",
   "Notification",
   "AiUsage",
