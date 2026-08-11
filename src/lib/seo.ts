@@ -9,6 +9,11 @@ export function metadataPaginaPublica(opcoes: {
   title: string;
   description: string;
   path: string;
+  // Opcional: nome da organização pra popular og:site_name — sem isso o
+  // preview de compartilhamento (WhatsApp/Twitter) não mostra a marca,
+  // já que openGraph não herda campo a campo do layout pai quando a
+  // própria página define seu openGraph.
+  siteName?: string;
 }): Metadata {
   return {
     title: opcoes.title,
@@ -19,6 +24,7 @@ export function metadataPaginaPublica(opcoes: {
       description: opcoes.description,
       type: "website",
       url: opcoes.path,
+      siteName: opcoes.siteName,
     },
     twitter: {
       card: "summary_large_image",

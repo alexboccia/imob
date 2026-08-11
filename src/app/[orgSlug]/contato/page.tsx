@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ContatoForm } from "@/components/ContatoForm";
 import { metadataPaginaPublica } from "@/lib/seo";
+import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
 
 export async function generateMetadata({
@@ -9,12 +10,14 @@ export async function generateMetadata({
   params: Promise<{ orgSlug: string }>;
 }): Promise<Metadata> {
   const { orgSlug } = await params;
+  const organization = await getOrganizationBySlug(orgSlug);
   const basePath = resolverBasePath(orgSlug);
   return metadataPaginaPublica({
     title: "Contato",
     description:
       "Envie sua mensagem e um de nossos corretores retornará em breve.",
     path: `${basePath}/contato`,
+    siteName: organization?.name,
   });
 }
 

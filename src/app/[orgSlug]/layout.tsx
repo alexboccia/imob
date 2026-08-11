@@ -1,10 +1,45 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
+import { DESCRICAO_PADRAO_SITE } from "@/lib/site-config";
 import { SiteHeader } from "@/components/SiteHeader";
 import { BotaoContatoFlutuante } from "@/components/BotaoContatoFlutuante";
+
+// Sobrescreve o title/openGraph genéricos do layout raiz pro nome da
+// organização — aplica-se a toda página pública que não define seu
+// próprio title (herda o template) ou openGraph (herda por inteiro,
+// já que openGraph não faz merge campo a campo entre segmentos).
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ orgSlug: string }>;
+}): Promise<Metadata> {
+  const { orgSlug } = await params;
+  const organization = await getOrganizationBySlug(orgSlug);
+  if (!organization) return {};
+
+  return {
+    title: {
+      default: organization.name,
+      template: `%s | ${organization.name}`,
+    },
+    openGraph: {
+      type: "website",
+      locale: "pt_BR",
+      siteName: organization.name,
+      title: organization.name,
+      description: DESCRICAO_PADRAO_SITE,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: organization.name,
+      description: DESCRICAO_PADRAO_SITE,
+    },
+  };
+}
 
 // Sem force-dynamic global: o cabeçalho (nome/logo/whatsapp) usa
 // buscarConfiguracaoContato, que já é cacheada por organização com

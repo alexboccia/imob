@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { siteConfig } from "@/lib/site-config";
+import { siteConfig, DESCRICAO_PADRAO_SITE } from "@/lib/site-config";
 import { getSiteUrl } from "@/lib/site-url";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -15,26 +15,24 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const DESCRICAO_PADRAO = "Encontre o imóvel ideal para comprar ou alugar.";
-
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl("")),
   title: {
     default: siteConfig.nome,
     template: `%s | ${siteConfig.nome}`,
   },
-  description: DESCRICAO_PADRAO,
+  description: DESCRICAO_PADRAO_SITE,
   openGraph: {
     type: "website",
     locale: "pt_BR",
     siteName: siteConfig.nome,
     title: siteConfig.nome,
-    description: DESCRICAO_PADRAO,
+    description: DESCRICAO_PADRAO_SITE,
   },
   twitter: {
     card: "summary_large_image",
     title: siteConfig.nome,
-    description: DESCRICAO_PADRAO,
+    description: DESCRICAO_PADRAO_SITE,
   },
 };
 

@@ -7,3 +7,9 @@ export const siteConfig = {
     process.env.NEXT_PUBLIC_WHATSAPP_NUMERO ??
     "",
 };
+
+// Compartilhada entre o layout raiz (fallback genérico) e o layout de
+// [orgSlug] (metadata por organização) — mesma descrição padrão nos dois
+// níveis, só o nome muda.
+export const DESCRICAO_PADRAO_SITE =
+  "Encontre o imóvel ideal para comprar ou alugar.";

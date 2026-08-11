@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AnuncieForm } from "@/components/AnuncieForm";
 import { metadataPaginaPublica } from "@/lib/seo";
+import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
 
 export async function generateMetadata({
@@ -9,12 +10,14 @@ export async function generateMetadata({
   params: Promise<{ orgSlug: string }>;
 }): Promise<Metadata> {
   const { orgSlug } = await params;
+  const organization = await getOrganizationBySlug(orgSlug);
   const basePath = resolverBasePath(orgSlug);
   return metadataPaginaPublica({
     title: "Anuncie seu imóvel",
     description:
       "Conte um pouco sobre o seu imóvel e um corretor entrará em contato para avaliar e preparar o anúncio.",
     path: `${basePath}/anuncie`,
+    siteName: organization?.name,
   });
 }
 

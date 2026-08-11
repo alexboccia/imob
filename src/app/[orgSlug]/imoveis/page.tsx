@@ -25,12 +25,14 @@ export async function generateMetadata({
   params: Promise<{ orgSlug: string }>;
 }): Promise<Metadata> {
   const { orgSlug } = await params;
+  const organization = await getOrganizationBySlug(orgSlug);
   const basePath = resolverBasePath(orgSlug);
   return metadataPaginaPublica({
     title: "Imóveis disponíveis",
     description:
       "Busque apartamentos, casas e imóveis comerciais para comprar ou alugar, com filtros por localização, preço e características.",
     path: `${basePath}/imoveis`,
+    siteName: organization?.name,
   });
 }
 

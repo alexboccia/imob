@@ -16,11 +16,13 @@ export async function generateMetadata({
   params: Promise<{ orgSlug: string }>;
 }): Promise<Metadata> {
   const { orgSlug } = await params;
+  const organization = await getOrganizationBySlug(orgSlug);
   const basePath = resolverBasePath(orgSlug);
   return metadataPaginaPublica({
     title: "Vendidos e Alugados",
     description: "Confira alguns dos negócios que já concretizamos.",
     path: `${basePath}/vendidos`,
+    siteName: organization?.name,
   });
 }
 

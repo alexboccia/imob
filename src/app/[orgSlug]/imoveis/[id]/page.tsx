@@ -169,6 +169,7 @@ export async function generateMetadata({
       title: imovel.title,
       description: descricao,
       type: "website",
+      siteName: organization.name,
       images: capa ? [{ url: capa, width: 1200, height: 900 }] : undefined,
     },
     twitter: {
