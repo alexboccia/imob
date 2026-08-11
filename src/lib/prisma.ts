@@ -18,6 +18,7 @@ import { getCurrentOrganizationId } from "@/lib/tenant-context";
 // esquecer de passar organizationId explicitamente.
 const TENANT_SCOPED_MODELS = new Set([
   "Person",
+  "PersonPreference",
   "Property",
   "Media",
   "PropertyStatusHistory",

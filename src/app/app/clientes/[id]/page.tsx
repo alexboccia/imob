@@ -7,11 +7,15 @@ import {
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
+import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
+import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
+import { buscarSugestoesLocalizacao } from "@/lib/sugestoes-localizacao";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
+import { PreferenciaImovelForm } from "@/components/admin/PreferenciaImovelForm";
 import {
   Select,
   SelectContent,
@@ -65,19 +69,27 @@ export default async function DetalheClientePage({
     );
   }
 
-  const pessoa = await withOrganization(organizationId, () =>
-    prisma.person.findUnique({
-      where: { id, organizationId },
-      include: {
-        interactions: { orderBy: { occurredAt: "desc" }, include: { property: true } },
-      },
-    })
-  );
+  const [pessoa, { opcoesImovel, opcoesCondominio }, { opcoesResidencial, opcoesComercial }, sugestoesLocalizacao] =
+    await withOrganization(organizationId, () =>
+      Promise.all([
+        prisma.person.findUnique({
+          where: { id, organizationId },
+          include: {
+            interactions: { orderBy: { occurredAt: "desc" }, include: { property: true } },
+            preference: true,
+          },
+        }),
+        buscarOpcoesCaracteristicas(organizationId),
+        buscarOpcoesTiposImovel(organizationId),
+        buscarSugestoesLocalizacao(organizationId),
+      ])
+    );
 
   if (!pessoa) notFound();
 
   const atualizarEstagioComId = atualizarEstagioFunil.bind(null, pessoa.id);
   const registrarInteracaoComId = registrarInteracao.bind(null, pessoa.id);
+  const preferencia = pessoa.preference;
 
   return (
     <div className="max-w-3xl">
@@ -126,6 +138,46 @@ export default async function DetalheClientePage({
           </CardContent>
         </Card>
       )}
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">
+            Preferências de imóvel
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PreferenciaImovelForm
+            pessoaId={pessoa.id}
+            existe={preferencia != null}
+            valoresIniciais={
+              preferencia
+                ? {
+                    transactionType: preferencia.transactionType,
+                    propertyTypes: preferencia.propertyTypes,
+                    cities: preferencia.cities,
+                    neighborhoods: preferencia.neighborhoods,
+                    minPrice: preferencia.minPrice?.toString() ?? null,
+                    maxPrice: preferencia.maxPrice?.toString() ?? null,
+                    minBedrooms: preferencia.minBedrooms,
+                    minBathrooms: preferencia.minBathrooms,
+                    minParkingSpots: preferencia.minParkingSpots,
+                    minArea: preferencia.minArea,
+                    maxArea: preferencia.maxArea,
+                    desiredPropertyFeatures: preferencia.desiredPropertyFeatures,
+                    desiredCondoFeatures: preferencia.desiredCondoFeatures,
+                    notes: preferencia.notes,
+                  }
+                : undefined
+            }
+            opcoesTiposResidencial={opcoesResidencial}
+            opcoesTiposComercial={opcoesComercial}
+            opcoesCaracteristicasImovel={opcoesImovel}
+            opcoesCaracteristicasCondominio={opcoesCondominio}
+            sugestoesCidades={sugestoesLocalizacao.cidades}
+            sugestoesBairros={sugestoesLocalizacao.bairros}
+          />
+        </CardContent>
+      </Card>
 
       <Card className="mb-6">
         <CardHeader>

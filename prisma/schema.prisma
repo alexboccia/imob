@@ -119,6 +119,7 @@ model Person {
   ownedProperties Property[]    @relation("PropertyOwner")
   interactions    Interaction[]
   deals           DealPerson[]
+  preference      PersonPreference?
 
   @@unique([organizationId, emailNormalized])
   @@unique([organizationId, phoneNormalized])
@@ -128,6 +129,74 @@ model Person {
   // array, só GIN.
   @@index([roles], type: Gin)
   @@map("people")
+}
+
+// Perfil de busca estruturado (Fase C do CRM) — V1: no máximo UMA
+// preferência ativa por Person, por isso personId é a própria chave
+// primária (mesmo padrão de OrganizationSettings/OrganizationBranding
+// pra relação 1:1 — mais forte que @@unique, é garantia estrutural do
+// banco). organizationId é redundante em relação a person.organizationId
+// de propósito: todo model tenant-scoped deste projeto carrega sua
+// própria coluna de organizationId (nunca só via join), e aqui isso é
+// ainda mais importante porque não existe FK composta (personId,
+// organizationId) — o isolamento cross-tenant desta tabela depende
+// inteiramente da checagem em nível de aplicação (ver
+// salvarPreferenciaPessoa em src/app/app/clientes/actions.ts), mesmo
+// padrão já usado por registrarInteracao.
+model PersonPreference {
+  personId       String       @id
+  person         Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // Reaproveita PropertyPurpose (Property.purpose) — mesmo vocabulário,
+  // sem enum irmão. SALE_AND_RENT existe no enum por causa de Property,
+  // mas a UI de preferência só oferece SALE/RENT como opção selecionável
+  // (não faz sentido produto uma pessoa "querer comprar E alugar" ao
+  // mesmo tempo) — a validação em person-preference-schema.ts reforça
+  // isso, não é só uma escolha de UI.
+  transactionType PropertyPurpose?
+
+  // Mesmo vocabulário livre de Property.type (catálogo PropertyTypeOption
+  // por organização, não é enum).
+  propertyTypes String[] @default([])
+  // Mesmo vocabulário livre de Property.city/Property.neighborhood (texto
+  // livre, sem tabela City/Neighborhood — nem aqui nem em Property).
+  cities        String[] @default([])
+  neighborhoods String[] @default([])
+
+  // Mesmo tipo de Property.price/Property.rentPrice — evita mismatch
+  // Decimal-vs-Float no matching futuro.
+  minPrice Decimal? @db.Decimal(14, 2)
+  maxPrice Decimal? @db.Decimal(14, 2)
+
+  minBedrooms     Int?
+  minBathrooms    Int?
+  minParkingSpots Int?
+
+  // V1: representa preferência sobre Property.privateArea especificamente
+  // (não totalArea) — mesmo tipo Float da coluna real. Se um dia precisar
+  // também de preferência por área total, é campo novo, não reaproveitar
+  // este.
+  minArea Float?
+  maxArea Float?
+
+  // Espelha a separação real de Property (propertyFeatures/condoFeatures,
+  // dois catálogos/categorias distintos em FeatureOption) — matching
+  // futuro compara cada array contra o campo correspondente do imóvel,
+  // sem precisar decidir a categoria de cada string em tempo de match.
+  desiredPropertyFeatures String[] @default([])
+  desiredCondoFeatures    String[] @default([])
+
+  // Observações específicas do que a pessoa procura no imóvel — nunca
+  // confundir com Person.notes (observações gerais sobre a pessoa).
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("person_preferences")
 }
 
 model Property {
@@ -410,6 +479,7 @@ model Organization {
   notifications         Notification[]
   aiUsages              AiUsage[]
   people                Person[]
+  personPreferences     PersonPreference[]
   properties            Property[]
   media                 Media[]
   propertyStatusHistory PropertyStatusHistory[]

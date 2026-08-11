@@ -12,8 +12,65 @@ import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
+import { erroAcessoNegado, sucesso, type ActionState } from "@/lib/action-result";
+import {
+  parsePersonPreferenceFormData,
+  camposPreferencia,
+} from "@/lib/person-preference-schema";
 
 type EstadoFormulario = { sucesso: boolean; erro?: string };
+
+// Confirma que todo item de propertyTypes/desiredPropertyFeatures/
+// desiredCondoFeatures pertence a um catálogo (PropertyTypeOption/
+// FeatureOption) da MESMA organizationId da sessão — nunca confia na UI
+// nem no FormData sozinhos. Escopo por organizationId em toda query:
+// um valor que só existe no catálogo de OUTRA organização é tratado como
+// inexistente (mesmo efeito de não existir em lugar nenhum). Categoria
+// importa: uma FeatureOption PROPERTY nunca valida um item de
+// desiredCondoFeatures, e vice-versa, mesmo que o nome coincida — cada
+// array é checado só contra o Set da categoria correspondente.
+async function validarCatalogosPreferencia(
+  organizationId: string,
+  dados: { propertyTypes: string[]; desiredPropertyFeatures: string[]; desiredCondoFeatures: string[] }
+): Promise<ActionState | null> {
+  const [tipos, featuresImovel, featuresCondominio] = await Promise.all([
+    prisma.propertyTypeOption.findMany({
+      where: { organizationId },
+      select: { name: true },
+    }),
+    prisma.featureOption.findMany({
+      where: { organizationId, category: "PROPERTY" },
+      select: { name: true },
+    }),
+    prisma.featureOption.findMany({
+      where: { organizationId, category: "CONDO" },
+      select: { name: true },
+    }),
+  ]);
+
+  const setTipos = new Set(tipos.map((t) => t.name));
+  const setFeaturesImovel = new Set(featuresImovel.map((f) => f.name));
+  const setFeaturesCondominio = new Set(featuresCondominio.map((f) => f.name));
+
+  const fieldErrors: Record<string, string[]> = {};
+
+  if (dados.propertyTypes.some((tipo) => !setTipos.has(tipo))) {
+    fieldErrors.propertyTypes = ["Tipo de imóvel não cadastrado nesta organização."];
+  }
+  if (dados.desiredPropertyFeatures.some((f) => !setFeaturesImovel.has(f))) {
+    fieldErrors.desiredPropertyFeatures = [
+      "Característica de imóvel não cadastrada nesta organização.",
+    ];
+  }
+  if (dados.desiredCondoFeatures.some((f) => !setFeaturesCondominio.has(f))) {
+    fieldErrors.desiredCondoFeatures = [
+      "Característica de condomínio não cadastrada nesta organização.",
+    ];
+  }
+
+  if (Object.keys(fieldErrors).length === 0) return null;
+  return { success: false, message: "Verifique os campos destacados.", fieldErrors };
+}
 
 const pessoaSchema = z.object({
   nome: z.string().min(2, "Informe o nome."),
@@ -178,5 +235,76 @@ export async function registrarInteracao(pessoaId: string, formData: FormData) {
     });
 
     revalidatePath(`/app/clientes/${pessoaId}`);
+  });
+}
+
+// Cria ou atualiza a preferência de busca da Person (Fase C do CRM) —
+// upsert único por personId (V1: no máximo uma preferência ativa por
+// Person). organizationId nunca vem do formData (nem é lido de lá), só
+// da sessão via requireOrganizationId().
+export async function salvarPreferenciaPessoa(
+  pessoaId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  const parsedFormData = parsePersonPreferenceFormData(formData);
+  if (!parsedFormData.ok) return parsedFormData.estado;
+  const { dados } = parsedFormData;
+
+  return withOrganization(organizationId, async () => {
+    // pessoaId chega como argumento bindado de Server Action — input do
+    // navegador como qualquer outro. Confirma que a Person pertence a
+    // ESTA organização ANTES de qualquer escrita em PersonPreference —
+    // mesma defesa de registrarInteracao acima. Auditoria explícita da
+    // Fase C (upsert × TENANT_SCOPED_MODELS): a extensão de tenant-scoping
+    // (src/lib/prisma.ts) só garante que ALGUM organizationId é
+    // preenchido quando ausente do where/create de um upsert — ela NÃO
+    // garante que esse organizationId é o dono real da Person referenciada
+    // por personId (não existe FK composta pra isso). Sem esta checagem
+    // explícita antes do upsert, uma primeira gravação (Person ainda sem
+    // PersonPreference) poderia criar uma linha com personId de outra
+    // organização e organizationId da sessão atual — a checagem abaixo é
+    // a única coisa que impede isso, não a extensão.
+    const pessoa = await prisma.person.findUnique({
+      where: { id: pessoaId, organizationId },
+      select: { id: true },
+    });
+    if (!pessoa) {
+      return erroAcessoNegado("Cliente não encontrado.");
+    }
+
+    // Nunca confiar que a UI só deixa selecionar valores do catálogo —
+    // FormData é input do navegador como qualquer outro. Rejeita antes do
+    // upsert, sem criar nada no catálogo automaticamente.
+    const erroCatalogo = await validarCatalogosPreferencia(organizationId, dados);
+    if (erroCatalogo) return erroCatalogo;
+
+    // where/create com organizationId explícito nos dois — nunca depender
+    // da extensão pra preencher isso aqui, mesmo já sendo redundante com
+    // ela (ver comentário acima).
+    await prisma.personPreference.upsert({
+      where: { personId: pessoaId, organizationId },
+      create: { personId: pessoaId, organizationId, ...camposPreferencia(dados) },
+      update: camposPreferencia(dados),
+    });
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "PersonPreference",
+      entityId: pessoaId,
+      action: "saved",
+    });
+
+    revalidatePath(`/app/clientes/${pessoaId}`);
+    return sucesso("Preferências salvas.");
   });
 }
