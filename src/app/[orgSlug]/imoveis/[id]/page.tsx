@@ -404,7 +404,7 @@ export default async function DetalheImovelPage({
               href={linkGoogleMaps}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm text-link hover:underline"
             >
               Ver no Google Maps
             </a>

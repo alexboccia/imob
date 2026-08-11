@@ -389,6 +389,7 @@ model Organization {
 
   members             OrganizationMember[]
   settings             OrganizationSettings?
+  branding             OrganizationBranding?
   subscriptions         Subscription[]
   invoices              Invoice[]
   billingEvents         BillingEvent[]
@@ -426,6 +427,22 @@ model OrganizationSettings {
   updatedAt          DateTime     @updatedAt
 
   @@map("organization_settings")
+}
+
+// Tema visual do site público — só a escolha (themeId aponta pro catálogo
+// fixo em código, ver src/lib/branding/temas.ts) e o favicon. Logo
+// continua vindo só de OrganizationSettings.logoUrl (não duplicar). A
+// ausência desta linha é um estado válido: resolverTema() trata como
+// "classic-blue" — nenhum tenant existente quebra por não ter branding
+// configurado.
+model OrganizationBranding {
+  organizationId String       @id
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  themeId         String       @default("classic-blue")
+  faviconUrl      String?
+  updatedAt       DateTime     @updatedAt
+
+  @@map("organization_branding")
 }
 
 // ---------- Permissões (RBAC preparado, não hardcoded) ----------

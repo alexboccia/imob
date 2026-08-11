@@ -254,7 +254,7 @@ export function TodosFiltrosModal({
               <button
                 type="button"
                 onClick={() => setMostrarTodosBairros(true)}
-                className="mt-3 text-sm text-blue-600 hover:underline block"
+                className="mt-3 text-sm text-link hover:underline block"
               >
                 Ver as outras {restantesBairros} localizações
               </button>
@@ -446,7 +446,7 @@ export function TodosFiltrosModal({
                 <button
                   type="button"
                   onClick={() => setMostrarTodasCaract(true)}
-                  className="mt-3 text-sm text-blue-600 hover:underline block"
+                  className="mt-3 text-sm text-link hover:underline block"
                 >
                   Ver as outras {restantesCaract} características
                 </button>

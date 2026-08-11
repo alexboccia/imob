@@ -129,7 +129,7 @@ function PainelMultiSelecao({
         <button
           type="button"
           onClick={() => setMostrarTodas(true)}
-          className="mt-3 text-sm text-blue-600 hover:underline block"
+          className="mt-3 text-sm text-link hover:underline block"
         >
           Ver as outras {restantesCount} opções
         </button>
@@ -138,7 +138,7 @@ function PainelMultiSelecao({
         <button
           type="button"
           onClick={() => setMostrarTodas(false)}
-          className="mt-3 text-sm text-blue-600 hover:underline block"
+          className="mt-3 text-sm text-link hover:underline block"
         >
           Ver menos
         </button>

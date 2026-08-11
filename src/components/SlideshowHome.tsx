@@ -95,7 +95,7 @@ export function SlideshowHome({
                     </p>
                     <Button
                       size="lg"
-                      className="mt-4 w-fit bg-white text-gray-900 hover:bg-gray-100"
+                      className="mt-4 w-fit bg-primary-light text-foreground hover:opacity-90"
                       nativeButton={false}
                       render={<Link href={`${basePath}/imoveis/${imovel.id}`} />}
                     >

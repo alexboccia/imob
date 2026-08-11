@@ -1,12 +1,16 @@
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
+import { buscarBranding } from "@/lib/branding";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { ConfiguracaoContatoForm } from "@/components/admin/ConfiguracaoContatoForm";
 
 export default async function ConfiguracoesPage() {
   const organizationId = await requireOrganizationId();
-  const config = await withOrganization(organizationId, () =>
-    buscarConfiguracaoContato(organizationId)
+  const [config, branding] = await withOrganization(organizationId, () =>
+    Promise.all([
+      buscarConfiguracaoContato(organizationId),
+      buscarBranding(organizationId),
+    ])
   );
 
   return (
@@ -17,7 +21,7 @@ export default async function ConfiguracoesPage() {
         imóveis e outros pontos de contato do site público.
       </p>
 
-      <ConfiguracaoContatoForm config={config} />
+      <ConfiguracaoContatoForm config={{ ...config, themeId: branding.themeId }} />
     </div>
   );
 }

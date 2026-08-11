@@ -15,7 +15,8 @@ import {
   erroValidacao,
   sucesso,
 } from "@/lib/action-result";
-import { tagConfiguracao } from "@/lib/cache-tags";
+import { tagConfiguracao, tagBranding } from "@/lib/cache-tags";
+import { CATALOGO_TEMAS } from "@/lib/branding/temas";
 
 const vazioParaNulo = (v: unknown) =>
   typeof v === "string" && v.trim() ? v.trim() : undefined;
@@ -39,6 +40,15 @@ const configuracaoSchema = z.object({
   logoAltura: z.preprocess(
     (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
     z.number().optional()
+  ),
+  // Só um dos 6 temas pré-definidos do catálogo — nunca cor livre. Um
+  // valor fora do catálogo (ex: manipulação do formulário) falha a
+  // validação e a submissão inteira é rejeitada, em vez de gravar um
+  // themeId inválido (resolverTema() cairia no padrão de qualquer forma,
+  // mas rejeitar aqui evita gravar lixo no banco).
+  themeId: z.enum(
+    Object.keys(CATALOGO_TEMAS) as [string, ...string[]],
+    { message: "Tema inválido." }
   ),
 });
 
@@ -78,15 +88,23 @@ export async function salvarConfiguracaoContato(
 
   const organizationId = await requireOrganizationId();
   await withOrganization(organizationId, async () => {
-    await prisma.organizationSettings.upsert({
-      where: { organizationId },
-      update: dados,
-      create: { ...dados, organizationId },
-    });
+    await prisma.$transaction([
+      prisma.organizationSettings.upsert({
+        where: { organizationId },
+        update: dados,
+        create: { ...dados, organizationId },
+      }),
+      prisma.organizationBranding.upsert({
+        where: { organizationId },
+        update: { themeId: campos.themeId },
+        create: { organizationId, themeId: campos.themeId },
+      }),
+    ]);
 
     revalidatePath("/app/configuracoes");
     revalidatePath("/app/imoveis");
     updateTag(tagConfiguracao(organizationId));
+    updateTag(tagBranding(organizationId));
     // Redundância deliberada: não consegui verificar ao vivo (limitação
     // de ferramental pra invocar Server Actions fora do navegador, mesma
     // limitação já documentada em fases anteriores desta sessão) que

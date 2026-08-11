@@ -35,6 +35,13 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  /* Tema por organização (site público [orgSlug] apenas) — primary/
+     primary-foreground/secondary/border acima são os mesmos vars do
+     shadcn, sobrescritos num wrapper escopado em [orgSlug]/layout.tsx.
+     Estes três não existem no shadcn, só no tema de marca. */
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+  --color-link: var(--link);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -87,6 +94,15 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+
+  /* Fallback fora do [orgSlug] (nunca sobrescrito lá) — mesmos valores do
+     tema classic-blue, ver src/lib/branding/temas.ts. Só existe pra
+     --primary-hover/--primary-light/--link nunca ficarem "unset" se algum
+     componente os usar fora do wrapper de tema. */
+  --primary-hover: oklch(0.47 0.19 255);
+  --primary-light: oklch(0.93 0.03 255);
+  --link: oklch(0.55 0.18 255);
+
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);

@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
+import { buscarBranding } from "@/lib/branding";
+import { resolverTema } from "@/lib/branding/temas";
 import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
@@ -21,6 +23,10 @@ export async function generateMetadata({
   const organization = await getOrganizationBySlug(orgSlug);
   if (!organization) return {};
 
+  const branding = await withOrganization(organization.id, () =>
+    buscarBranding(organization.id)
+  );
+
   return {
     title: {
       default: organization.name,
@@ -38,6 +44,7 @@ export async function generateMetadata({
       title: organization.name,
       description: DESCRICAO_PADRAO_SITE,
     },
+    icons: branding.faviconUrl ? { icon: branding.faviconUrl } : undefined,
   };
 }
 
@@ -95,12 +102,34 @@ export default async function PublicLayout({
 
   const organizationId = organization.id;
   const basePath = resolverBasePath(orgSlug);
-  const config = await withOrganization(organizationId, () =>
-    buscarConfiguracaoContato(organizationId)
+  const [config, branding] = await withOrganization(organizationId, () =>
+    Promise.all([
+      buscarConfiguracaoContato(organizationId),
+      buscarBranding(organizationId),
+    ])
   );
+  const tema = resolverTema(branding.themeId);
 
   return (
-    <>
+    // display:contents — este wrapper só existe pra escopar os CSS vars
+    // do tema no subtree público; não pode virar um novo item flex dentro
+    // do body.flex.flex-col do layout raiz, senão quebra o flex-1 do
+    // <main>. /app e /platform nunca renderizam este wrapper, então nunca
+    // veem estes vars — é isso que garante que o tema não vaza pra lá.
+    <div
+      className="contents"
+      style={
+        {
+          "--primary": tema.primary,
+          "--primary-foreground": tema.onPrimary,
+          "--primary-hover": tema.primaryHover,
+          "--primary-light": tema.primaryLight,
+          "--secondary": tema.secondary,
+          "--border": tema.border,
+          "--link": tema.link,
+        } as React.CSSProperties
+      }
+    >
       <SiteHeader
         nome={organization.name}
         logo={config.logo}
@@ -121,6 +150,6 @@ export default async function PublicLayout({
         telefone={config.telefone || config.whatsapp}
         orgSlug={orgSlug}
       />
-    </>
+    </div>
   );
 }

@@ -46,7 +46,7 @@ export function ModalContato({
               href={whatsappHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm text-link hover:underline"
             >
               Falar no WhatsApp
             </a>

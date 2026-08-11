@@ -9,3 +9,7 @@ export function tagConfiguracao(organizationId: string): string {
 export function tagFacetas(organizationId: string): string {
   return `org:${organizationId}:facetas`;
 }
+
+export function tagBranding(organizationId: string): string {
+  return `org:${organizationId}:branding`;
+}

@@ -11,6 +11,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ErroCampo } from "@/components/admin/ErroCampo";
 import { LogoUpload } from "@/components/admin/LogoUpload";
+import { SeletorTema } from "@/components/admin/SeletorTema";
 
 type ConfiguracaoInicial = {
   telefone: string;
@@ -23,6 +24,7 @@ type ConfiguracaoInicial = {
   codigoImovelPrefixo: string;
   logo: string | null;
   logoAltura: number;
+  themeId: string | null;
 };
 
 export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicial }) {
@@ -43,8 +45,9 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
         <CardHeader>
           <CardTitle className="text-base">Identidade visual</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           <LogoUpload logoInicial={config.logo} alturaInicial={config.logoAltura} />
+          <SeletorTema themeIdAtual={config.themeId} />
         </CardContent>
       </Card>
 
