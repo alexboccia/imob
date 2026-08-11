@@ -131,6 +131,20 @@ export async function registrarInteracao(pessoaId: string, formData: FormData) {
   if (!(await hasModule(organizationId, "crm"))) return;
 
   await withOrganization(organizationId, async () => {
+    // pessoaId chega como argumento bindado de Server Action — input do
+    // navegador como qualquer outro, não confiável. Sem essa checagem, um
+    // personId de outra organização criaria uma Interaction cruzando
+    // tenants (organizationId correto, mas personId apontando pra um
+    // Person de outra org). Mesmo padrão de defesa já usado pro
+    // propertyId em src/app/[orgSlug]/actions.ts. Falha silenciosa de
+    // propósito (mesmo tratamento do hasModule acima): não revela se o
+    // Person existe em outra organização.
+    const pessoa = await prisma.person.findUnique({
+      where: { id: pessoaId, organizationId },
+      select: { id: true },
+    });
+    if (!pessoa) return;
+
     await prisma.interaction.create({
       data: {
         organizationId,
