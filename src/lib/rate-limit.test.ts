@@ -358,6 +358,18 @@ describe("normalizarContato / normalizarEmail", () => {
   test("normalizarEmail baixa a caixa e remove espaços", () => {
     expect(normalizarEmail("  Fulano@Exemplo.COM  ")).toBe("fulano@exemplo.com");
   });
+
+  test("normalizarEmail retorna null (nunca string vazia) pra valor só com espaços", () => {
+    expect(normalizarEmail("   ")).toBeNull();
+  });
+
+  test("normalizarContato cai pro telefone quando o e-mail normaliza pra vazio", () => {
+    expect(normalizarContato("   ", "11999998888")).toBe("11999998888");
+  });
+
+  test("normalizarContato retorna vazio quando e-mail e telefone normalizam pra vazio", () => {
+    expect(normalizarContato("   ", "abc")).toBe("");
+  });
 });
 
 describe("obterIpCliente", () => {

@@ -102,6 +102,17 @@ model Person {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
+  // Deduplicação de leads públicos (Fase B do CRM) — só pra achar Person
+  // já existente na mesma organização, nunca exibidos/editáveis
+  // diretamente. NULL de propósito quando o valor colide com outra Person
+  // já existente na mesma organização (duplicata histórica pré-migration,
+  // ou Person criada durante um conflito de identidade — ver
+  // src/lib/person-dedup.ts) — nesses casos a Person correspondente
+  // simplesmente não participa da deduplicação automática, nunca se
+  // escolhe arbitrariamente qual das duas "vence" o valor normalizado.
+  emailNormalized String?
+  phoneNormalized String?
+
   assignedMemberId String?
   assignedMember    OrganizationMember? @relation("PersonAssignedMember", fields: [assignedMemberId], references: [id])
 
@@ -109,6 +120,8 @@ model Person {
   interactions    Interaction[]
   deals           DealPerson[]
 
+  @@unique([organizationId, emailNormalized])
+  @@unique([organizationId, phoneNormalized])
   @@index([organizationId])
   // GIN: `roles` é filtrado com `has`/`hasSome` (ex: dashboard, roles: {
   // has: "LEAD" }) — índice B-tree comum não serve pra containment de

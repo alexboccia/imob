@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { formatarTelefone, telefoneValido } from "@/lib/telefone";
+import { formatarTelefone, telefoneValido, normalizarTelefone } from "@/lib/telefone";
 
 describe("formatarTelefone", () => {
   test("formata celular com 11 dígitos", () => {
@@ -49,5 +49,25 @@ describe("telefoneValido", () => {
 
   test("recusa vazio", () => {
     expect(telefoneValido("")).toBe(false);
+  });
+});
+
+describe("normalizarTelefone", () => {
+  test("formatos diferentes do mesmo número resolvem pro mesmo valor", () => {
+    expect(normalizarTelefone("(11) 99999-9999")).toBe(normalizarTelefone("11999999999"));
+    expect(normalizarTelefone("11999999999")).toBe("11999999999");
+  });
+
+  test("não inventa DDI — só remove o que não é dígito", () => {
+    expect(normalizarTelefone("(11) 3333-4444")).toBe("1133334444");
+  });
+
+  test("telefone legado sem nenhum dígito retorna null, nunca string vazia", () => {
+    expect(normalizarTelefone("abc")).toBeNull();
+    expect(normalizarTelefone(" - ")).toBeNull();
+  });
+
+  test("string vazia retorna null", () => {
+    expect(normalizarTelefone("")).toBeNull();
   });
 });

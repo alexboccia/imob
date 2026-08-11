@@ -1,6 +1,8 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import type { OrganizationRole } from "@/generated/prisma/client";
+import { normalizarEmail } from "@/lib/rate-limit";
+import { normalizarTelefone } from "@/lib/telefone";
 
 // Fábrica de dados pra testes de integração — decoupled de prisma/seed.ts
 // de propósito: o seed de produção não é feito pra ser reutilizado (função
@@ -131,13 +133,23 @@ export async function criarPessoa(opcoes: {
   organizationId: string;
   name?: string;
   email?: string;
+  phone?: string;
   roles?: ("LEAD" | "CLIENT" | "OWNER")[];
 }): Promise<{ id: string }> {
+  // emailNormalized/phoneNormalized populados igual a todo call site real
+  // (enviarContato, enviarAnuncioProprietario, criarPessoa em
+  // src/app/app/clientes/actions.ts) — sem isso, uma Person criada só por
+  // este fixture fica invisível pra resolverPessoaParaFormularioPublico
+  // (src/lib/person-dedup.ts), que busca por esses campos, não pelos
+  // brutos.
   const pessoa = await prisma.person.create({
     data: {
       organizationId: opcoes.organizationId,
       name: opcoes.name ?? "Pessoa de teste",
       email: opcoes.email,
+      phone: opcoes.phone,
+      emailNormalized: opcoes.email ? normalizarEmail(opcoes.email) : undefined,
+      phoneNormalized: opcoes.phone ? normalizarTelefone(opcoes.phone) : undefined,
       roles: opcoes.roles ?? ["LEAD"],
     },
   });

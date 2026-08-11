@@ -19,6 +19,7 @@ export async function enviarEmailContato({
   telefoneLead,
   mensagem,
   imovelTitulo,
+  avisoConflitoDedup,
 }: {
   para: string;
   nomeLead: string;
@@ -26,6 +27,12 @@ export async function enviarEmailContato({
   telefoneLead: string | null;
   mensagem: string;
   imovelTitulo?: string;
+  // true quando a deduplicação de leads (src/lib/person-dedup.ts) detectou
+  // conflito de identidade (e-mail bate numa Person, telefone bate em
+  // outra) e por isso não vinculou este contato a nenhum Person/Interaction
+  // — o corretor ainda recebe o contato, só precisa associar manualmente.
+  // Nunca inclui ID interno nenhum, só o aviso.
+  avisoConflitoDedup?: boolean;
 }) {
   const cliente = obterCliente();
   if (!cliente) {
@@ -55,6 +62,9 @@ export async function enviarEmailContato({
     "",
     "Mensagem:",
     mensagem,
+    avisoConflitoDedup
+      ? "\nEste contato não foi vinculado automaticamente ao CRM. Revise os dados antes de associá-lo a um cliente."
+      : null,
   ].filter((linha): linha is string => linha !== null);
 
   try {

@@ -1,6 +1,7 @@
 import type { KvStore } from "@/lib/kv-store";
 import { hashCurto } from "@/lib/hash";
 import { registrarAbuso } from "@/lib/abuse-log";
+import { normalizarTelefone } from "@/lib/telefone";
 
 export type ResultadoLimite =
   | { permitido: true }
@@ -19,13 +20,24 @@ export const LIMITES = {
   uploadPorOrganizacao: { limite: 100, janelaSegundos: 10 * 60 },
 } as const;
 
-export function normalizarEmail(email: string): string {
-  return email.trim().toLowerCase();
+// null quando o valor normaliza pra string vazia (só espaços, por
+// exemplo) — nunca retorna "". Isso importa pra deduplicação de Person
+// (src/lib/person-dedup.ts): "" é um valor real pra fins de unique
+// constraint (diferente de NULL), então um e-mail "sujo" que normalizasse
+// pra "" faria toda Person com contato inválido colidir entre si.
+export function normalizarEmail(email: string): string | null {
+  return email.trim().toLowerCase() || null;
 }
 
 export function normalizarContato(email: string | null | undefined, telefone: string | null | undefined): string {
-  if (email && email.trim()) return normalizarEmail(email);
-  if (telefone && telefone.trim()) return telefone.replace(/\D/g, "");
+  if (email) {
+    const normalizado = normalizarEmail(email);
+    if (normalizado) return normalizado;
+  }
+  if (telefone) {
+    const normalizado = normalizarTelefone(telefone);
+    if (normalizado) return normalizado;
+  }
   return "";
 }
 
@@ -51,7 +63,8 @@ type DimensaoLogin = { tipo: "ip" | "email"; valor: string };
 
 function dimensoesLogin(params: { ip: string; email: string | null }): DimensaoLogin[] {
   const dims: DimensaoLogin[] = [{ tipo: "ip", valor: params.ip }];
-  if (params.email) dims.push({ tipo: "email", valor: hashCurto(normalizarEmail(params.email)) });
+  const emailNormalizado = params.email ? normalizarEmail(params.email) : null;
+  if (emailNormalizado) dims.push({ tipo: "email", valor: hashCurto(emailNormalizado) });
   return dims;
 }
 

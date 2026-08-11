@@ -13,6 +13,7 @@ import { obterKvStore } from "@/lib/kv-store";
 import { verificarLimiteFormulario, normalizarContato, type FormularioTipo } from "@/lib/rate-limit";
 import { registrarAbuso } from "@/lib/abuse-log";
 import { hashCurto } from "@/lib/hash";
+import { resolverPessoaParaFormularioPublico } from "@/lib/person-dedup";
 
 // orgSlug chega via .bind(null, orgSlug) nos Client Components que chamam
 // estas actions (ContatoForm/AnuncieForm/FormularioContato) — é input do
@@ -119,7 +120,7 @@ export async function enviarContato(
     return protecao.erro ? { sucesso: false, erro: protecao.erro } : { sucesso: true };
   }
 
-  const { imovel, configContato } = await withOrganization(organizationId, async () => {
+  const { imovel, configContato, conflitoDedup } = await withOrganization(organizationId, async () => {
     // O imovelId chega do formulário (input não confiável) — precisa
     // pertencer a ESTA organização antes de virar o propertyId de uma
     // Interaction. Sem essa checagem, um imovelId de outra organização
@@ -137,35 +138,45 @@ export async function enviarContato(
       : null;
     const imovelIdValidado = imovelId && imovel ? imovelId : null;
 
-    const pessoa = await prisma.person.create({
-      data: {
-        organizationId,
-        name: nome,
-        email: email || null,
-        phone: telefone || null,
-        roles: ["LEAD"],
-        source: "WEBSITE",
-      },
+    // Deduplicação (Fase B do CRM): mesmo e-mail/telefone normalizado
+    // dentro desta organização reutiliza a Person existente em vez de
+    // criar uma nova a cada submissão. Em caso de conflito de identidade
+    // (e-mail bate numa Person, telefone bate em outra), NÃO cria
+    // Interaction nenhuma — decisão de produto explícita, ver
+    // src/lib/person-dedup.ts. O visitante nunca sabe a diferença: a
+    // resposta pública continua genérica de qualquer forma.
+    const resolucao = await resolverPessoaParaFormularioPublico({
+      organizationId,
+      nome,
+      email: email || null,
+      telefone: telefone || null,
+      role: "LEAD",
+      source: "WEBSITE",
     });
 
-    await prisma.interaction.create({
-      data: {
-        organizationId,
-        personId: pessoa.id,
-        propertyId: imovelIdValidado,
-        type: "MESSAGE",
-        notes: mensagem,
-      },
-    });
+    if (resolucao.tipo !== "conflito") {
+      await prisma.interaction.create({
+        data: {
+          organizationId,
+          personId: resolucao.personId,
+          propertyId: imovelIdValidado,
+          type: "MESSAGE",
+          notes: mensagem,
+        },
+      });
+    }
 
     const configContato = await buscarConfiguracaoContato(organizationId);
 
-    return { imovel, configContato };
+    return { imovel, configContato, conflitoDedup: resolucao.tipo === "conflito" };
   });
 
   const emailDestino = imovel?.responsibleMember?.contactEmail || configContato.email;
 
   if (emailDestino && (await hasModule(organizationId, "email"))) {
+    // O corretor continua sendo notificado mesmo em conflito de
+    // deduplicação — o contato não pode se perder, só não é vinculado
+    // automaticamente a nenhum Person/Interaction (ver comentário acima).
     await enviarEmailContato({
       para: emailDestino,
       nomeLead: nome,
@@ -173,6 +184,7 @@ export async function enviarContato(
       telefoneLead: telefone || null,
       mensagem,
       imovelTitulo: imovel?.title,
+      avisoConflitoDedup: conflitoDedup,
     });
   }
 
@@ -212,16 +224,18 @@ export async function enviarAnuncioProprietario(
   }
 
   await withOrganization(organizationId, async () => {
-    await prisma.person.create({
-      data: {
-        organizationId,
-        name: nome,
-        email: email || null,
-        phone: telefone,
-        roles: ["OWNER"],
-        source: "WEBSITE",
-        notes: `Quer anunciar imóvel: ${descricaoImovel}`,
-      },
+    // Mesma deduplicação de enviarContato — se a Person já existir (por
+    // e-mail ou telefone), só adiciona o role OWNER (sem remover
+    // LEAD/CLIENT que já existam); em conflito de identidade, não cria
+    // nada, mesma decisão de produto.
+    await resolverPessoaParaFormularioPublico({
+      organizationId,
+      nome,
+      email: email || null,
+      telefone,
+      role: "OWNER",
+      source: "WEBSITE",
+      notesNaCriacao: `Quer anunciar imóvel: ${descricaoImovel}`,
     });
   });
 

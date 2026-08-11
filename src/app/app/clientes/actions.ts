@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
-import { telefoneValido } from "@/lib/telefone";
+import { telefoneValido, normalizarTelefone } from "@/lib/telefone";
+import { normalizarEmail } from "@/lib/rate-limit";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
@@ -53,20 +55,40 @@ export async function criarPessoa(
     return { sucesso: false, erro: "CRM não incluído no seu plano." };
   }
 
-  const pessoa = await withOrganization(organizationId, () =>
-    prisma.person.create({
-      data: {
-        organizationId,
-        name: dados.nome,
-        email: dados.email || null,
-        phone: dados.telefone || null,
-        roles: [dados.papel],
-        source: dados.origem || null,
-        notes: dados.observacoes || null,
-        assignedMemberId: session.user.organizationMemberId ?? null,
-      },
-    })
-  );
+  // emailNormalized/phoneNormalized populados aqui só por consistência de
+  // dado (senão uma Person cadastrada manualmente nunca seria encontrada
+  // por uma deduplicação futura do formulário público) — cadastro manual
+  // não tenta deduplicar sozinho, é uma ação explícita do corretor.
+  let pessoa;
+  try {
+    pessoa = await withOrganization(organizationId, () =>
+      prisma.person.create({
+        data: {
+          organizationId,
+          name: dados.nome,
+          email: dados.email || null,
+          phone: dados.telefone || null,
+          emailNormalized: dados.email ? normalizarEmail(dados.email) : null,
+          phoneNormalized: dados.telefone ? normalizarTelefone(dados.telefone) : null,
+          roles: [dados.papel],
+          source: dados.origem || null,
+          notes: dados.observacoes || null,
+          assignedMemberId: session.user.organizationMemberId ?? null,
+        },
+      })
+    );
+  } catch (erro) {
+    // Já existe uma Person com esse e-mail ou telefone nesta organização
+    // (unique constraint em emailNormalized/phoneNormalized) — erro
+    // esperado e tratado, nunca deve virar 500.
+    if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
+      return {
+        sucesso: false,
+        erro: "Já existe um cliente com esse e-mail ou telefone nesta organização.",
+      };
+    }
+    throw erro;
+  }
 
   await logActivity({
     organizationId,
