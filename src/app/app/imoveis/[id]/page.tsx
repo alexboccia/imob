@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { ESTAGIO_INTERESSE_LABEL } from "@/components/admin/InteresseImovelItem";
 import { RecomendacaoClienteItem } from "@/components/admin/RecomendacaoClienteItem";
 import { buscarClientesCompativeis } from "@/lib/property-matching";
+import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 
 const MEDIA_TYPE_PARA_TIPO_MIDIA = {
   PHOTO: "FOTO",
@@ -140,25 +141,36 @@ export default async function EditarImovelPage({
             </p>
           ) : (
             <ul className="space-y-2">
-              {interesses.map((interesse) => (
-                <li
-                  key={interesse.id}
-                  className="flex items-center justify-between text-sm border-b pb-2 last:border-b-0 last:pb-0"
-                >
-                  <Link
-                    href={`/app/clientes/${interesse.person.id}`}
-                    className="text-blue-600 hover:underline"
+              {interesses.map((interesse) => {
+                const proximaAcao = obterProximaAcaoComercial(interesse.stage, imovel.status);
+                return (
+                  <li
+                    key={interesse.id}
+                    className="text-sm border-b pb-2 last:border-b-0 last:pb-0 space-y-1"
                   >
-                    {interesse.person.name}
-                  </Link>
-                  <div className="flex items-center gap-2">
-                    {interesse.favorited && <span title="Favoritado">★</span>}
-                    <Badge variant="secondary">
-                      {ESTAGIO_INTERESSE_LABEL[interesse.stage] ?? interesse.stage}
-                    </Badge>
-                  </div>
-                </li>
-              ))}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <Link
+                        href={`/app/clientes/${interesse.person.id}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        {interesse.person.name}
+                      </Link>
+                      <div className="flex items-center gap-2">
+                        {interesse.favorited && <span title="Favoritado">★</span>}
+                        <Badge variant="secondary">
+                          {ESTAGIO_INTERESSE_LABEL[interesse.stage] ?? interesse.stage}
+                        </Badge>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Próxima ação:{" "}
+                      <span className={proximaAcao.ativa ? "font-medium text-foreground" : ""}>
+                        {proximaAcao.label}
+                      </span>
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </CardContent>

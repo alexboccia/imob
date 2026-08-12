@@ -9,6 +9,8 @@ import {
 } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { formatarPreco } from "@/lib/format";
+import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
+import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,12 +37,13 @@ export function InteresseImovelItem({
 }: {
   interesse: {
     id: string;
-    stage: string;
+    stage: PropertyInterestStage;
     favorited: boolean;
     notes: string | null;
-    property: { id: string; title: string; price: unknown; rentPrice: unknown };
+    property: { id: string; title: string; price: unknown; rentPrice: unknown; status: PropertyStatus };
   };
 }) {
+  const proximaAcao = obterProximaAcaoComercial(interesse.stage, interesse.property.status);
   const atualizarAcao = atualizarEstagioInteresse.bind(null, interesse.id);
   const [estadoEstagio, formActionEstagio, pendenteEstagio] = useActionState(
     atualizarAcao,
@@ -83,6 +86,13 @@ export function InteresseImovelItem({
             </form>
           </div>
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          Próxima ação:{" "}
+          <span className={proximaAcao.ativa ? "font-medium text-foreground" : ""}>
+            {proximaAcao.label}
+          </span>
+        </p>
 
         <form action={formActionEstagio} className="flex flex-wrap items-center gap-2">
           <Label htmlFor={stageId} className="sr-only">

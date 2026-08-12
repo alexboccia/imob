@@ -93,7 +93,9 @@ export default async function DetalheClientePage({
           propertyInterests: {
             where: { organizationId },
             orderBy: { updatedAt: "desc" },
-            include: { property: { select: { id: true, title: true, price: true, rentPrice: true } } },
+            include: {
+              property: { select: { id: true, title: true, price: true, rentPrice: true, status: true } },
+            },
           },
         },
       }),
@@ -244,6 +246,7 @@ export default async function DetalheClientePage({
                       title: interesse.property.title,
                       price: interesse.property.price,
                       rentPrice: interesse.property.rentPrice,
+                      status: interesse.property.status,
                     },
                   }}
                 />

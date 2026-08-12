@@ -5,6 +5,8 @@ import Link from "next/link";
 import { criarInteressePessoa } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { ESTAGIO_INTERESSE_LABEL } from "@/components/admin/InteresseImovelItem";
+import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
+import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 import type { CriterioMatch } from "@/lib/property-matching";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,18 +23,21 @@ export function RecomendacaoClienteItem({
   // aparece. Novo PropertyInterest só pode ser criado com imóvel
   // AVAILABLE (mesma regra aplicada server-side em criarInteressePessoa,
   // que é a fonte de verdade real; isso aqui é só refletir na UI).
-  propertyStatus: string;
+  propertyStatus: PropertyStatus;
   recomendacao: {
     score: number;
     activeSoftCriteriaCount: number;
     criteria: CriterioMatch[];
-    existingInterest: { stage: string; favorited: boolean } | null;
+    existingInterest: { stage: PropertyInterestStage; favorited: boolean } | null;
     person: { id: string; name: string };
   };
 }) {
   const acao = criarInteressePessoa.bind(null, recomendacao.person.id);
   const [, formAction, pendente] = useActionState(acao, ESTADO_INICIAL_ACAO);
   const propertyDisponivel = propertyStatus === "AVAILABLE";
+  const proximaAcao = recomendacao.existingInterest
+    ? obterProximaAcaoComercial(recomendacao.existingInterest.stage, propertyStatus)
+    : null;
 
   // Requisitos (hard filters, weight=0) vs. Compatibilidade (soft
   // criteria, weight>0) — mesma separação da Fase E, ver
@@ -90,11 +95,21 @@ export function RecomendacaoClienteItem({
             // Relacionamento histórico nunca some, mesmo se o imóvel virou
             // indisponível depois — só o formulário de NOVO relacionamento
             // é condicionado a propertyDisponivel.
-            <span className="text-sm text-muted-foreground">
-              Já relacionado — {ESTAGIO_INTERESSE_LABEL[recomendacao.existingInterest.stage] ??
-                recomendacao.existingInterest.stage}
-              {recomendacao.existingInterest.favorited && " ★"}
-            </span>
+            <div className="text-sm text-muted-foreground text-right">
+              <p>
+                Já relacionado — {ESTAGIO_INTERESSE_LABEL[recomendacao.existingInterest.stage] ??
+                  recomendacao.existingInterest.stage}
+                {recomendacao.existingInterest.favorited && " ★"}
+              </p>
+              {proximaAcao && (
+                <p className="text-xs">
+                  Próxima ação:{" "}
+                  <span className={proximaAcao.ativa ? "font-medium text-foreground" : ""}>
+                    {proximaAcao.label}
+                  </span>
+                </p>
+              )}
+            </div>
           ) : propertyDisponivel ? (
             <form action={formAction}>
               <input type="hidden" name="propertyId" value={propertyId} />

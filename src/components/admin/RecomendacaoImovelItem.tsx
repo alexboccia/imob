@@ -6,6 +6,8 @@ import { criarInteressePessoa } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { ESTAGIO_INTERESSE_LABEL } from "@/components/admin/InteresseImovelItem";
 import { formatarPreco } from "@/lib/format";
+import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
+import type { PropertyInterestStage } from "@/generated/prisma/client";
 import type { CriterioMatch } from "@/lib/property-matching";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +22,18 @@ export function RecomendacaoImovelItem({
     score: number;
     activeSoftCriteriaCount: number;
     criteria: CriterioMatch[];
-    existingInterest: { stage: string; favorited: boolean } | null;
+    existingInterest: { stage: PropertyInterestStage; favorited: boolean } | null;
     property: { id: string; title: string; price: unknown; rentPrice: unknown };
   };
 }) {
+  // buscarImoveisCompativeis só recomenda Property com status AVAILABLE
+  // (pré-filtro SQL, property-matching.ts) — o imóvel deste card nunca
+  // chega aqui em outro status, por isso não precisa de um propertyStatus
+  // vindo de fora (property-matching.ts não expõe status em
+  // PropertyParaMatching, e esta fase não altera esse arquivo).
+  const proximaAcao = recomendacao.existingInterest
+    ? obterProximaAcaoComercial(recomendacao.existingInterest.stage, "AVAILABLE")
+    : null;
   const acao = criarInteressePessoa.bind(null, pessoaId);
   const [, formAction, pendente] = useActionState(acao, ESTADO_INICIAL_ACAO);
 
@@ -89,11 +99,21 @@ export function RecomendacaoImovelItem({
           </Link>
 
           {recomendacao.existingInterest ? (
-            <span className="text-sm text-muted-foreground">
-              Já relacionado — {ESTAGIO_INTERESSE_LABEL[recomendacao.existingInterest.stage] ??
-                recomendacao.existingInterest.stage}
-              {recomendacao.existingInterest.favorited && " ★"}
-            </span>
+            <div className="text-sm text-muted-foreground text-right">
+              <p>
+                Já relacionado — {ESTAGIO_INTERESSE_LABEL[recomendacao.existingInterest.stage] ??
+                  recomendacao.existingInterest.stage}
+                {recomendacao.existingInterest.favorited && " ★"}
+              </p>
+              {proximaAcao && (
+                <p className="text-xs">
+                  Próxima ação:{" "}
+                  <span className={proximaAcao.ativa ? "font-medium text-foreground" : ""}>
+                    {proximaAcao.label}
+                  </span>
+                </p>
+              )}
+            </div>
           ) : (
             <form action={formAction}>
               <input type="hidden" name="propertyId" value={recomendacao.property.id} />
