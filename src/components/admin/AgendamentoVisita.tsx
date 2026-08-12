@@ -31,7 +31,12 @@ export function AgendamentoVisita({
   podeAgendar,
   atividadeAgendada,
 }: {
-  propertyInterestId: string;
+  // Opcional: só é lido pelo branch de criação (CriarVisitaForm) abaixo.
+  // Callers que só EXIBEM uma atividade já existente (ex: a Agenda, Fase
+  // H.3 — nunca oferece "criar visita" solta) podem reutilizar este
+  // componente sem esse dado, já que nesse caso `atividadeAgendada` nunca
+  // é null e o branch de criação nunca é alcançado.
+  propertyInterestId?: string;
   // Já considera: stage !== REJECTED, Property.status === AVAILABLE, e
   // ausência de visita SCHEDULED — calculado pelo caller (página), que já
   // tem os dados de PropertyInterest/Property carregados.
@@ -41,7 +46,7 @@ export function AgendamentoVisita({
   if (atividadeAgendada) {
     return <VisitaAgendadaCard atividade={atividadeAgendada} />;
   }
-  if (!podeAgendar) return null;
+  if (!podeAgendar || !propertyInterestId) return null;
   return <CriarVisitaForm propertyInterestId={propertyInterestId} />;
 }
 

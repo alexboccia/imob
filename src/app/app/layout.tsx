@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: "/app", label: "Dashboard" },
   { href: "/app/imoveis", label: "Imóveis" },
   { href: "/app/clientes", label: "Clientes", modulo: "crm" },
+  { href: "/app/agenda", label: "Agenda", modulo: "crm" },
   { href: "/app/caracteristicas", label: "Características" },
   { href: "/app/tipos-imovel", label: "Tipos de imóvel" },
   { href: "/app/usuarios", label: "Usuários" },
