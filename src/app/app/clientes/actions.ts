@@ -12,11 +12,21 @@ import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
-import { erroAcessoNegado, sucesso, type ActionState } from "@/lib/action-result";
+import {
+  erroAcessoNegado,
+  erroGenerico,
+  erroValidacao,
+  sucesso,
+  type ActionState,
+} from "@/lib/action-result";
 import {
   parsePersonPreferenceFormData,
   camposPreferencia,
 } from "@/lib/person-preference-schema";
+import {
+  criarInteresseSchema,
+  atualizarEstagioInteresseSchema,
+} from "@/lib/property-interest-schema";
 
 type EstadoFormulario = { sucesso: boolean; erro?: string };
 
@@ -306,5 +316,252 @@ export async function salvarPreferenciaPessoa(
 
     revalidatePath(`/app/clientes/${pessoaId}`);
     return sucesso("Preferências salvas.");
+  });
+}
+
+// ---------------------------------------------------------------------
+// PropertyInterest (Fase D do CRM) — estado ATUAL do relacionamento
+// Person↔Property. Nunca cria Interaction automaticamente (decisão
+// explícita da Fase D — ver auditoria): mudança de stage/favorited só
+// gera ActivityLog, nunca histórico de interação.
+// ---------------------------------------------------------------------
+
+// Cria (ou confirma, se já existir) o relacionamento entre a Person da
+// ficha e um Property escolhido no formulário. Idempotente: a
+// @@unique([organizationId, personId, propertyId]) garante no máximo uma
+// linha por par — reenviar o mesmo propertyId nunca cria uma segunda
+// linha nem reseta stage/favorited/notes já existentes (update: {} é
+// proposital, um no-op sobre os campos de estado).
+export async function criarInteressePessoa(
+  pessoaId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  const parsed = criarInteresseSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!parsed.success) return erroValidacao(parsed.error);
+  const { propertyId, notes } = parsed.data;
+
+  return withOrganization(organizationId, async () => {
+    // Person e Property validados INDEPENDENTEMENTE contra o organizationId
+    // da sessão — nenhum dos dois IDs vindos do formulário é confiável
+    // sozinho. Mensagem de erro genérica de propósito: não revela qual dos
+    // dois (ou se algum) existe em outra organização. Mesmo padrão de
+    // enviarContato (src/app/[orgSlug]/actions.ts) validando personId e
+    // propertyId separadamente antes de criar uma Interaction.
+    const [pessoa, imovel] = await Promise.all([
+      prisma.person.findUnique({ where: { id: pessoaId, organizationId }, select: { id: true } }),
+      prisma.property.findUnique({ where: { id: propertyId, organizationId }, select: { id: true } }),
+    ]);
+    if (!pessoa || !imovel) {
+      return erroGenerico("Cliente ou imóvel não encontrado.");
+    }
+
+    // create() direto (não upsert): precisamos saber com certeza se a linha
+    // foi criada AGORA ou já existia, pra só logar property_interest_created
+    // quando algo de fato aconteceu — reenvio idempotente ou corrida
+    // recuperada não são eventos novos, não geram ActivityLog (nada mudou).
+    //
+    // Corrida possível: duas submissões idênticas (duplo clique, ou duas
+    // abas) podem colidir no unique constraint entre o create de uma e o
+    // commit da outra — a segunda estoura P2002 mesmo sem ninguém ter
+    // "errado" nada. Mesmo padrão de retry único de person-dedup.ts (Fase
+    // B): uma única re-consulta pós-catch, nunca um loop.
+    let interesse;
+    let foiCriadoAgora = false;
+    try {
+      interesse = await prisma.propertyInterest.create({
+        data: { organizationId, personId: pessoaId, propertyId, notes: notes || null },
+      });
+      foiCriadoAgora = true;
+    } catch (erro) {
+      if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
+        // organizationId também como campo de nível superior do where
+        // (redundante com o mesmo valor já dentro da chave composta) — a
+        // extensão de tenant-scoping (src/lib/prisma.ts) só reconhece
+        // "organizationId" como chave direta do objeto where, não aninhada
+        // dentro de organizationId_personId_propertyId. Sem isso, ela
+        // tentaria preencher via AsyncLocalStorage, que o próprio prisma.ts
+        // documenta como não confiável neste projeto.
+        interesse = await prisma.propertyInterest.findUniqueOrThrow({
+          where: {
+            organizationId_personId_propertyId: { organizationId, personId: pessoaId, propertyId },
+            organizationId,
+          },
+        });
+      } else {
+        throw erro;
+      }
+    }
+
+    if (foiCriadoAgora) {
+      await logActivity({
+        organizationId,
+        userId: session.user.id,
+        entity: "PropertyInterest",
+        entityId: interesse.id,
+        action: "property_interest_created",
+      });
+    }
+
+    revalidatePath(`/app/clientes/${pessoaId}`);
+    revalidatePath(`/app/imoveis/${propertyId}`);
+    return sucesso("Imóvel relacionado.");
+  });
+}
+
+// Atualiza stage + notes de um relacionamento já existente. Não valida
+// transição (INTERESTED → PROPOSAL é permitido de propósito — decisão da
+// Fase D, MVP sem máquina de estado rígida, mesmo nível de simplicidade
+// de atualizarEstagioFunil).
+export async function atualizarEstagioInteresse(
+  interesseId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  const parsed = atualizarEstagioInteresseSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!parsed.success) return erroValidacao(parsed.error);
+  const { stage, notes } = parsed.data;
+
+  return withOrganization(organizationId, async () => {
+    // Confirma que o PropertyInterest pertence a ESTA organização antes de
+    // alterar — interesseId é input do navegador como qualquer outro.
+    const atual = await prisma.propertyInterest.findUnique({
+      where: { id: interesseId, organizationId },
+      select: { stage: true, personId: true },
+    });
+    if (!atual) return erroAcessoNegado("Relacionamento não encontrado.");
+
+    // notes ausente do FormData chega como undefined do Zod (schema com
+    // .optional()) — nesse caso a chave nem entra no `data`, e o Prisma não
+    // toca a coluna, preservando o valor existente. notes==="" (campo
+    // enviado vazio) grava null de propósito (limpa a observação). Nunca
+    // usar `notes ?? null`/`notes || null` direto no data: isso apagaria
+    // notes existente sempre que o chamador não reenviasse o campo — a UI
+    // atual sempre reenvia (Textarea populada com defaultValue), mas a
+    // action não deve depender disso pra não perder dado silenciosamente.
+    const dadosAtualizacao: { stage: typeof stage; notes?: string | null } = { stage };
+    if (notes !== undefined) {
+      dadosAtualizacao.notes = notes || null;
+    }
+
+    await prisma.propertyInterest.update({
+      where: { id: interesseId, organizationId },
+      data: dadosAtualizacao,
+    });
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "PropertyInterest",
+      entityId: interesseId,
+      action: "property_interest_stage_changed",
+      payload: { from: atual.stage, to: stage },
+    });
+
+    revalidatePath(`/app/clientes/${atual.personId}`);
+    return sucesso("Estágio atualizado.");
+  });
+}
+
+// Alterna favorited (nunca toca stage). Sempre relê o valor atual do
+// banco antes de inverter — não confia em nenhum valor vindo do
+// navegador/estado do form pra decidir o próximo valor.
+export async function alternarFavoritoInteresse(
+  interesseId: string,
+  // Assinatura exigida por useActionState — não lê prevState/formData de
+  // propósito, o próximo valor sempre vem de reler o banco (comentário
+  // acima), nunca do form.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  return withOrganization(organizationId, async () => {
+    const atual = await prisma.propertyInterest.findUnique({
+      where: { id: interesseId, organizationId },
+      select: { favorited: true, personId: true },
+    });
+    if (!atual) return erroAcessoNegado("Relacionamento não encontrado.");
+
+    const novoValor = !atual.favorited;
+    await prisma.propertyInterest.update({
+      where: { id: interesseId, organizationId },
+      data: { favorited: novoValor },
+    });
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "PropertyInterest",
+      entityId: interesseId,
+      action: "property_interest_favorite_changed",
+      payload: { from: atual.favorited, to: novoValor },
+    });
+
+    revalidatePath(`/app/clientes/${atual.personId}`);
+    return sucesso(novoValor ? "Favoritado." : "Desfavoritado.");
+  });
+}
+
+// Remove só a linha de PropertyInterest — nunca toca Person, Property,
+// Interaction ou PersonPreference.
+export async function removerInteresse(
+  interesseId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  return withOrganization(organizationId, async () => {
+    const atual = await prisma.propertyInterest.findUnique({
+      where: { id: interesseId, organizationId },
+      select: { personId: true },
+    });
+    if (!atual) return erroAcessoNegado("Relacionamento não encontrado.");
+
+    await prisma.propertyInterest.delete({ where: { id: interesseId, organizationId } });
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "PropertyInterest",
+      entityId: interesseId,
+      action: "property_interest_removed",
+    });
+
+    revalidatePath(`/app/clientes/${atual.personId}`);
+    return sucesso("Relacionamento removido.");
   });
 }

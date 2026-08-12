@@ -85,6 +85,19 @@ enum InteractionType {
   OTHER
 }
 
+// Estágio do relacionamento Person↔Property (Fase D do CRM). Deliberadamente
+// SEM FAVORITED/RECOMMENDED/NEGOTIATING/CLOSED — ver PropertyInterest.favorited
+// (dimensão independente) e o comentário do model abaixo. Nenhuma transição é
+// validada nesta fase (mesmo nível de simplicidade já usado em
+// Person.pipelineStage — atualizarEstagioFunil também aceita qualquer valor).
+enum PropertyInterestStage {
+  INTERESTED
+  VISIT_SCHEDULED
+  VISITED
+  PROPOSAL
+  REJECTED
+}
+
 // ---------- Modelos de domínio ----------
 
 model Person {
@@ -120,6 +133,7 @@ model Person {
   interactions    Interaction[]
   deals           DealPerson[]
   preference      PersonPreference?
+  propertyInterests PropertyInterest[]
 
   @@unique([organizationId, emailNormalized])
   @@unique([organizationId, phoneNormalized])
@@ -259,6 +273,7 @@ model Property {
   interactions   Interaction[]
   deals          Deal[]
   portalListings PortalListing[]
+  interests      PropertyInterest[]
 
   @@unique([organizationId, code])
   @@index([organizationId, status])
@@ -323,6 +338,63 @@ model Interaction {
 
   @@index([personId])
   @@map("interactions")
+}
+
+// Estado ATUAL do relacionamento entre uma Person e um Property (Fase D do
+// CRM) — nunca histórico. Histórico de eventos reais continua em Interaction
+// (CALL/MESSAGE/EMAIL/VISIT/OTHER), sem nenhuma criação automática de
+// Interaction a partir de mudanças aqui (decisão explícita: alterar stage ou
+// favorited não gera Interaction — só ActivityLog).
+//
+// id próprio (não personId como PK, diferente de PersonPreference): a
+// relação aqui é N:N — uma Person pode se interessar por vários Property, um
+// Property pode interessar várias Person. A unicidade real é o PAR
+// (organizationId, personId, propertyId), garantida pelo @@unique abaixo,
+// nunca pela PK.
+model PropertyInterest {
+  id             String       @id @default(cuid())
+  // Sem onDelete explícito: relação obrigatória (String, não String?) sem
+  // anotação já resolve pra RESTRICT por padrão no Prisma — mesmo
+  // comportamento (silencioso) de Person.organizationId/Property.organizationId
+  // em todo o schema. Organização nunca pode ser apagada com PropertyInterest
+  // pendurado nela.
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  // RESTRICT (padrão implícito, relação obrigatória sem anotação — não
+  // Cascade, não SetNull): diferente de Interaction.propertyId (opcional,
+  // sobrevive à exclusão do imóvel porque uma Interaction pode ser um
+  // contato genérico sem imóvel nenhum, e por isso é SET NULL), PropertyInterest
+  // É sobre um imóvel específico — sem propertyId o registro perde todo o
+  // sentido. Segue o mesmo precedente de Deal.propertyId (RESTRICT), não o
+  // de Media/PropertyStatusHistory/PortalListing (CASCADE, que são conteúdo
+  // do imóvel, não uma relação de negócio).
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  stage     PropertyInterestStage @default(INTERESTED)
+  // Dimensão independente do stage — um cliente pode favoritar em qualquer
+  // estágio, e desfavoritar não é uma "regressão" de funil. Nunca combinar
+  // num único enum com stage (ver comentário de PropertyInterestStage).
+  favorited Boolean               @default(false)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // @@unique([organizationId, personId, propertyId]) já serve, por prefixo
+  // esquerdo, tanto consultas só por organizationId quanto por
+  // (organizationId, personId) — índices próprios pra esses dois casos
+  // seriam redundantes. propertyId é a terceira coluna da unique (não
+  // prefixo), por isso o índice (organizationId, propertyId) continua
+  // sendo o único jeito de servir a ficha do imóvel eficientemente.
+  @@unique([organizationId, personId, propertyId])
+  @@index([organizationId, propertyId])
+  @@map("property_interests")
 }
 
 model Deal {
@@ -480,6 +552,7 @@ model Organization {
   aiUsages              AiUsage[]
   people                Person[]
   personPreferences     PersonPreference[]
+  propertyInterests     PropertyInterest[]
   properties            Property[]
   media                 Media[]
   propertyStatusHistory PropertyStatusHistory[]

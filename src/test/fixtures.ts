@@ -212,6 +212,11 @@ export async function limparOrganizacao(
   // precisam sair antes do Property.
   await prisma.deal.deleteMany({ where: { organizationId } });
   await prisma.interaction.deleteMany({ where: { organizationId } });
+  // PropertyInterest.propertyId também é RESTRICT (Fase D) — mesma razão,
+  // precisa sair antes do Property. (personId é CASCADE, sairia sozinho
+  // com o Person.deleteMany abaixo, mas isso não ajuda aqui porque
+  // Property.deleteMany roda antes do Person.deleteMany nesta função.)
+  await prisma.propertyInterest.deleteMany({ where: { organizationId } });
   // Property cascateia Media, PropertyStatusHistory e PortalListing.
   await prisma.property.deleteMany({ where: { organizationId } });
   await prisma.person.deleteMany({ where: { organizationId } });

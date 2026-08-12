@@ -16,6 +16,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { PreferenciaImovelForm } from "@/components/admin/PreferenciaImovelForm";
+import { InteresseImovelItem } from "@/components/admin/InteresseImovelItem";
+import { RelacionarImovelForm } from "@/components/admin/RelacionarImovelForm";
 import {
   Select,
   SelectContent,
@@ -69,21 +71,52 @@ export default async function DetalheClientePage({
     );
   }
 
-  const [pessoa, { opcoesImovel, opcoesCondominio }, { opcoesResidencial, opcoesComercial }, sugestoesLocalizacao] =
-    await withOrganization(organizationId, () =>
-      Promise.all([
-        prisma.person.findUnique({
-          where: { id, organizationId },
-          include: {
-            interactions: { orderBy: { occurredAt: "desc" }, include: { property: true } },
-            preference: true,
+  const [
+    pessoa,
+    { opcoesImovel, opcoesCondominio },
+    { opcoesResidencial, opcoesComercial },
+    sugestoesLocalizacao,
+    imoveisDisponiveis,
+  ] = await withOrganization(organizationId, () =>
+    Promise.all([
+      prisma.person.findUnique({
+        where: { id, organizationId },
+        include: {
+          interactions: { orderBy: { occurredAt: "desc" }, include: { property: true } },
+          preference: true,
+          // where: { organizationId } explícito na sub-relação — nunca
+          // depender só da integridade implícita do relacionamento
+          // Prisma (Person → propertyInterests). Redundante com o
+          // invariante de que todo PropertyInterest.organizationId já
+          // confere com o do Person referenciado, mas essa é exatamente a
+          // defesa que não deve depender só de invariante de aplicação.
+          propertyInterests: {
+            where: { organizationId },
+            orderBy: { updatedAt: "desc" },
+            include: { property: { select: { id: true, title: true, price: true, rentPrice: true } } },
           },
-        }),
-        buscarOpcoesCaracteristicas(organizationId),
-        buscarOpcoesTiposImovel(organizationId),
-        buscarSugestoesLocalizacao(organizationId),
-      ])
-    );
+        },
+      }),
+      buscarOpcoesCaracteristicas(organizationId),
+      buscarOpcoesTiposImovel(organizationId),
+      buscarSugestoesLocalizacao(organizationId),
+      // Mesmo critério de "ativo" já usado pelo site público
+      // (src/app/[orgSlug]/imoveis/page.tsx) — só imóveis AVAILABLE fazem
+      // sentido como opção pra relacionar um novo interesse. Exclui
+      // imóveis que a Person já tem PropertyInterest — só UX (a constraint
+      // unique + o upsert idempotente já protegem a integridade mesmo que
+      // um já-relacionado aparecesse aqui).
+      prisma.property.findMany({
+        where: {
+          organizationId,
+          status: "AVAILABLE",
+          NOT: { interests: { some: { personId: id, organizationId } } },
+        },
+        select: { id: true, title: true },
+        orderBy: { title: "asc" },
+      }),
+    ])
+  );
 
   if (!pessoa) notFound();
 
@@ -176,6 +209,46 @@ export default async function DetalheClientePage({
             sugestoesCidades={sugestoesLocalizacao.cidades}
             sugestoesBairros={sugestoesLocalizacao.bairros}
           />
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">
+            Imóveis relacionados
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {pessoa.propertyInterests.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              Nenhum imóvel relacionado ainda.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {pessoa.propertyInterests.map((interesse) => (
+                <InteresseImovelItem
+                  key={interesse.id}
+                  interesse={{
+                    id: interesse.id,
+                    stage: interesse.stage,
+                    favorited: interesse.favorited,
+                    notes: interesse.notes,
+                    property: {
+                      id: interesse.property.id,
+                      title: interesse.property.title,
+                      price: interesse.property.price,
+                      rentPrice: interesse.property.rentPrice,
+                    },
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="border-t pt-4">
+            <p className="text-sm font-medium mb-2">Relacionar imóvel</p>
+            <RelacionarImovelForm pessoaId={pessoa.id} imoveisDisponiveis={imoveisDisponiveis} />
+          </div>
         </CardContent>
       </Card>
 
