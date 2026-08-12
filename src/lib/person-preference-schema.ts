@@ -72,8 +72,14 @@ export const personPreferenceSchema = z
     minParkingSpots: numeroInteiroOpcional,
     minArea: numeroOpcional,
     maxArea: numeroOpcional,
-    desiredPropertyFeatures: arrayDeTags(50),
-    desiredCondoFeatures: arrayDeTags(50),
+    // arrayDeTagsUnicas (não arrayDeTags) — mesma proteção já aplicada a
+    // cities/neighborhoods: os valores normalmente vêm do catálogo fechado
+    // (checkboxes de SeletorCaracteristicas), mas nada impede um FormData
+    // adulterado de repetir o mesmo valor várias vezes, o que infla
+    // artificialmente o denominador do matching (Fase E) sem mudar o
+    // resultado real de compatibilidade.
+    desiredPropertyFeatures: arrayDeTagsUnicas(50, "Máximo de 50 características do imóvel."),
+    desiredCondoFeatures: arrayDeTagsUnicas(50, "Máximo de 50 características do condomínio."),
     notes: z
       .string()
       .trim()
@@ -116,6 +122,16 @@ export const personPreferenceSchema = z
   .refine((d) => d.minParkingSpots == null || d.minParkingSpots >= 0, {
     message: "Vagas não pode ser negativo.",
     path: ["minParkingSpots"],
+  })
+  // Sem finalidade, o matching (Fase E) não sabe se compara contra
+  // Property.price ou Property.rentPrice — nunca inventa qual campo usar,
+  // então ignora a faixa de preço inteira em silêncio. Bloqueado aqui na
+  // origem, não no matching: erro aparece em "transactionType" (o campo
+  // que falta preencher), não em minPrice/maxPrice (que já estão
+  // corretos).
+  .refine((d) => (d.minPrice == null && d.maxPrice == null) || d.transactionType != null, {
+    message: "Selecione Comprar ou Alugar para usar uma faixa de preço.",
+    path: ["transactionType"],
   });
 
 export type DadosPreferenciaFormulario = z.infer<typeof personPreferenceSchema>;

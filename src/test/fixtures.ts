@@ -112,18 +112,38 @@ export async function criarImovel(opcoes: {
   responsibleMemberId?: string;
   title?: string;
   status?: "DRAFT" | "AVAILABLE" | "RESERVED" | "SOLD" | "RENTED" | "INACTIVE";
+  type?: string;
+  purpose?: "SALE" | "RENT" | "SALE_AND_RENT";
+  city?: string;
+  neighborhood?: string;
+  price?: number | null;
+  rentPrice?: number | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  parkingSpots?: number | null;
+  privateArea?: number | null;
+  propertyFeatures?: string[];
+  condoFeatures?: string[];
 }): Promise<{ id: string }> {
   const imovel = await prisma.property.create({
     data: {
       organizationId: opcoes.organizationId,
       responsibleMemberId: opcoes.responsibleMemberId,
       title: opcoes.title ?? "Apartamento de teste",
-      type: "Apartamento",
-      purpose: "SALE",
+      type: opcoes.type ?? "Apartamento",
+      purpose: opcoes.purpose ?? "SALE",
       status: opcoes.status ?? "AVAILABLE",
-      neighborhood: "Bairro de teste",
-      city: "Cidade de teste",
+      neighborhood: opcoes.neighborhood ?? "Bairro de teste",
+      city: opcoes.city ?? "Cidade de teste",
       state: "SP",
+      price: opcoes.price,
+      rentPrice: opcoes.rentPrice,
+      bedrooms: opcoes.bedrooms,
+      bathrooms: opcoes.bathrooms,
+      parkingSpots: opcoes.parkingSpots,
+      privateArea: opcoes.privateArea,
+      propertyFeatures: opcoes.propertyFeatures ?? [],
+      condoFeatures: opcoes.condoFeatures ?? [],
     },
   });
   return { id: imovel.id };

@@ -165,7 +165,11 @@ describe("salvarPreferenciaPessoa — preferências de imóvel (Fase C do CRM)",
     autenticarComo(cenario);
     const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
 
-    const resultado = await salvar(pessoa.id, { minPrice: "800000", maxPrice: "500000" });
+    const resultado = await salvar(pessoa.id, {
+      transactionType: "SALE",
+      minPrice: "800000",
+      maxPrice: "500000",
+    });
 
     expect(resultado.success).toBe(false);
     const linha = await prisma.personPreference.findUnique({
@@ -413,13 +417,13 @@ describe("salvarPreferenciaPessoa — preferências de imóvel (Fase C do CRM)",
     const pessoaDeA = await criarPessoa({ organizationId: cenario.organization.id });
 
     autenticarComo(cenario);
-    await salvar(pessoaDeA.id, { minBedrooms: "2", maxPrice: "700000" });
+    await salvar(pessoaDeA.id, { transactionType: "SALE", minBedrooms: "2", maxPrice: "700000" });
     const antes = await prisma.personPreference.findUnique({
       where: { personId: pessoaDeA.id, organizationId: cenario.organization.id },
     });
 
     autenticarComo(cenarioB);
-    await salvar(pessoaDeA.id, { minBedrooms: "99", maxPrice: "1" });
+    await salvar(pessoaDeA.id, { transactionType: "SALE", minBedrooms: "99", maxPrice: "1" });
 
     const depois = await prisma.personPreference.findUnique({
       where: { personId: pessoaDeA.id, organizationId: cenario.organization.id },
@@ -560,6 +564,83 @@ describe("salvarPreferenciaPessoa — preferências de imóvel (Fase C do CRM)",
       where: { personId: pessoa.id, organizationId: cenario.organization.id },
     });
     expect(linha?.cities).toEqual(["São Paulo"]);
+  });
+
+  test("AR) preço sem finalidade é rejeitado — erro aparece em transactionType", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+
+    const resultado = await salvar(pessoa.id, { minPrice: "500000" });
+
+    expect(resultado.success).toBe(false);
+    expect(resultado.fieldErrors?.transactionType).toBeTruthy();
+    const linha = await prisma.personPreference.findUnique({
+      where: { personId: pessoa.id, organizationId: cenario.organization.id },
+    });
+    expect(linha).toBeNull();
+  });
+
+  test("AS) minPrice=0 com finalidade continua válido e é persistido", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+
+    const resultado = await salvar(pessoa.id, { transactionType: "SALE", minPrice: "0" });
+
+    expect(resultado.success).toBe(true);
+    const linha = await prisma.personPreference.findUnique({
+      where: { personId: pessoa.id, organizationId: cenario.organization.id },
+    });
+    expect(Number(linha?.minPrice)).toBe(0);
+  });
+
+  test("AT) maxPrice=0 com finalidade continua válido e é persistido", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+
+    const resultado = await salvar(pessoa.id, { transactionType: "SALE", maxPrice: "0" });
+
+    expect(resultado.success).toBe(true);
+    const linha = await prisma.personPreference.findUnique({
+      where: { personId: pessoa.id, organizationId: cenario.organization.id },
+    });
+    expect(Number(linha?.maxPrice)).toBe(0);
+  });
+
+  test("BC) desiredPropertyFeatures duplicadas (case-insensitive) persistem como uma única entrada", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    await criarFeature(cenario.organization.id, "Varanda", "PROPERTY");
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+
+    const resultado = await salvar(pessoa.id, {
+      desiredPropertyFeatures: ["Varanda", "varanda", " VARANDA "],
+    });
+
+    expect(resultado.success).toBe(true);
+    const linha = await prisma.personPreference.findUnique({
+      where: { personId: pessoa.id, organizationId: cenario.organization.id },
+    });
+    expect(linha?.desiredPropertyFeatures).toEqual(["Varanda"]);
+  });
+
+  test("BD) desiredCondoFeatures duplicadas (case-insensitive) persistem como uma única entrada", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    await criarFeature(cenario.organization.id, "Academia", "CONDO");
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+
+    const resultado = await salvar(pessoa.id, {
+      desiredCondoFeatures: ["Academia", "academia", " ACADEMIA "],
+    });
+
+    expect(resultado.success).toBe(true);
+    const linha = await prisma.personPreference.findUnique({
+      where: { personId: pessoa.id, organizationId: cenario.organization.id },
+    });
+    expect(linha?.desiredCondoFeatures).toEqual(["Academia"]);
   });
 
   test("AC) minBedrooms/minBathrooms/minParkingSpots decimais são rejeitados", async () => {

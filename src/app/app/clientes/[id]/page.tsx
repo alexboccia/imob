@@ -18,6 +18,8 @@ import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { PreferenciaImovelForm } from "@/components/admin/PreferenciaImovelForm";
 import { InteresseImovelItem } from "@/components/admin/InteresseImovelItem";
 import { RelacionarImovelForm } from "@/components/admin/RelacionarImovelForm";
+import { RecomendacaoImovelItem } from "@/components/admin/RecomendacaoImovelItem";
+import { buscarImoveisCompativeis } from "@/lib/property-matching";
 import {
   Select,
   SelectContent,
@@ -72,12 +74,10 @@ export default async function DetalheClientePage({
   }
 
   const [
-    pessoa,
-    { opcoesImovel, opcoesCondominio },
-    { opcoesResidencial, opcoesComercial },
-    sugestoesLocalizacao,
-    imoveisDisponiveis,
-  ] = await withOrganization(organizationId, () =>
+    [pessoa, { opcoesImovel, opcoesCondominio }, { opcoesResidencial, opcoesComercial }, sugestoesLocalizacao, imoveisDisponiveis],
+    recomendacoes,
+  ] = await Promise.all([
+    withOrganization(organizationId, () =>
     Promise.all([
       prisma.person.findUnique({
         where: { id, organizationId },
@@ -116,7 +116,13 @@ export default async function DetalheClientePage({
         orderBy: { title: "asc" },
       }),
     ])
-  );
+    ),
+    // buscarImoveisCompativeis gerencia seu próprio withOrganization/
+    // hasModule/validação de Person internamente — chamada como irmã do
+    // bloco acima em vez de aninhada, evita withOrganization dentro de
+    // withOrganization pro mesmo organizationId.
+    buscarImoveisCompativeis(organizationId, id),
+  ]);
 
   if (!pessoa) notFound();
 
@@ -251,6 +257,33 @@ export default async function DetalheClientePage({
           </div>
         </CardContent>
       </Card>
+
+      {preferencia && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">
+              Imóveis recomendados
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recomendacoes.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                Nenhum imóvel com compatibilidade suficiente no momento.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {recomendacoes.map((recomendacao) => (
+                  <RecomendacaoImovelItem
+                    key={recomendacao.property.id}
+                    pessoaId={pessoa.id}
+                    recomendacao={recomendacao}
+                  />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mb-6">
         <CardHeader>
