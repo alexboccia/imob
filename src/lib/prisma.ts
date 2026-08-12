@@ -24,6 +24,7 @@ const TENANT_SCOPED_MODELS = new Set([
   "Media",
   "PropertyStatusHistory",
   "Interaction",
+  "ScheduledActivity",
   "Deal",
   "PortalListing",
   "FeatureOption",

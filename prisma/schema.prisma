@@ -98,6 +98,21 @@ enum PropertyInterestStage {
   REJECTED
 }
 
+// Agenda de atividades futuras (Fase H do CRM) — deliberadamente SEPARADA de
+// Interaction: Interaction é histórico do que JÁ aconteceu, ScheduledActivity
+// é o que está agendado para acontecer. V1 só agenda VISIT; o enum
+// ScheduledActivityType já é genérico para tipos futuros (FOLLOW_UP, CALL...)
+// sem exigir migration de schema quando chegarem, só de dado.
+enum ScheduledActivityType {
+  VISIT
+}
+
+enum ScheduledActivityStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
 // ---------- Modelos de domínio ----------
 
 model Person {
@@ -127,13 +142,14 @@ model Person {
   phoneNormalized String?
 
   assignedMemberId String?
-  assignedMember    OrganizationMember? @relation("PersonAssignedMember", fields: [assignedMemberId], references: [id])
+  assignedMember   OrganizationMember? @relation("PersonAssignedMember", fields: [assignedMemberId], references: [id])
 
-  ownedProperties Property[]    @relation("PropertyOwner")
-  interactions    Interaction[]
-  deals           DealPerson[]
-  preference      PersonPreference?
-  propertyInterests PropertyInterest[]
+  ownedProperties     Property[]          @relation("PropertyOwner")
+  interactions        Interaction[]
+  deals               DealPerson[]
+  preference          PersonPreference?
+  propertyInterests   PropertyInterest[]
+  scheduledActivities ScheduledActivity[]
 
   @@unique([organizationId, emailNormalized])
   @@unique([organizationId, phoneNormalized])
@@ -214,19 +230,19 @@ model PersonPreference {
 }
 
 model Property {
-  id             String          @id @default(cuid())
-  organizationId String
-  organization   Organization    @relation(fields: [organizationId], references: [id])
-  code           Int             @default(autoincrement())
-  title          String
-  description    String?
-  type           String
-  purpose        PropertyPurpose
-  status         PropertyStatus  @default(DRAFT)
-  isLaunch       Boolean         @default(false)
-  isFeatured     Boolean         @default(false)
-  isOpportunity  Boolean         @default(false)
-  hasSlideshow   Boolean         @default(false)
+  id                String             @id @default(cuid())
+  organizationId    String
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  code              Int                @default(autoincrement())
+  title             String
+  description       String?
+  type              String
+  purpose           PropertyPurpose
+  status            PropertyStatus     @default(DRAFT)
+  isLaunch          Boolean            @default(false)
+  isFeatured        Boolean            @default(false)
+  isOpportunity     Boolean            @default(false)
+  hasSlideshow      Boolean            @default(false)
   constructionStage ConstructionStage?
   deliveryForecast  DateTime?
   developer         String?
@@ -268,12 +284,13 @@ model Property {
   ownerId String?
   owner   Person? @relation("PropertyOwner", fields: [ownerId], references: [id])
 
-  media          Media[]
-  statusHistory  PropertyStatusHistory[]
-  interactions   Interaction[]
-  deals          Deal[]
-  portalListings PortalListing[]
-  interests      PropertyInterest[]
+  media               Media[]
+  statusHistory       PropertyStatusHistory[]
+  interactions        Interaction[]
+  deals               Deal[]
+  portalListings      PortalListing[]
+  interests           PropertyInterest[]
+  scheduledActivities ScheduledActivity[]
 
   @@unique([organizationId, code])
   @@index([organizationId, status])
@@ -386,6 +403,8 @@ model PropertyInterest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  scheduledActivities ScheduledActivity[]
+
   // @@unique([organizationId, personId, propertyId]) já serve, por prefixo
   // esquerdo, tanto consultas só por organizationId quanto por
   // (organizationId, personId) — índices próprios pra esses dois casos
@@ -395,6 +414,50 @@ model PropertyInterest {
   @@unique([organizationId, personId, propertyId])
   @@index([organizationId, propertyId])
   @@map("property_interests")
+}
+
+// Agenda de atividades futuras vinculadas a uma Person (Fase H do CRM) —
+// nunca reaproveita Interaction como agenda: Interaction é histórico do que
+// já ocorreu, ScheduledActivity é o que está marcado pra ocorrer. V1 só cria
+// type=VISIT (ver ScheduledActivityType). completedAt/cancelledAt registram
+// quando o status mudou de SCHEDULED — nunca ambos preenchidos ao mesmo
+// tempo, mas isso não é validado em nível de banco nesta fase (mesmo nível
+// de simplicidade de PropertyInterestStage/Person.pipelineStage: nenhuma
+// transição de status é validada no schema).
+model ScheduledActivity {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id])
+
+  propertyInterestId String?
+  propertyInterest   PropertyInterest? @relation(fields: [propertyInterestId], references: [id])
+
+  createdByMemberId String?
+  createdByMember   OrganizationMember? @relation("ScheduledActivityCreatedByMember", fields: [createdByMemberId], references: [id])
+
+  type   ScheduledActivityType   @default(VISIT)
+  status ScheduledActivityStatus @default(SCHEDULED)
+
+  scheduledAt DateTime
+  completedAt DateTime?
+  cancelledAt DateTime?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, personId, scheduledAt])
+  @@index([organizationId, propertyId, scheduledAt])
+  @@index([organizationId, propertyInterestId, scheduledAt])
+  @@index([organizationId, status, scheduledAt])
+  @@map("scheduled_activities")
 }
 
 model Deal {
@@ -429,15 +492,15 @@ model DealPerson {
 
 // Registro de envio/sincronização de um imóvel para um portal externo (ZAP, VivaReal, OLX, Imovelweb, Mercado Livre).
 model PortalListing {
-  id                 String       @id @default(cuid())
-  organizationId     String
-  organization       Organization @relation(fields: [organizationId], references: [id])
-  propertyId         String
-  property           Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  portal             String
-  externalListingId  String?
-  lastSyncedAt       DateTime?
-  lastError          String?
+  id                String       @id @default(cuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  propertyId        String
+  property          Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  portal            String
+  externalListingId String?
+  lastSyncedAt      DateTime?
+  lastError         String?
 
   @@unique([propertyId, portal])
   @@map("portal_listings")
@@ -519,31 +582,32 @@ model OrganizationMember {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  notificationPreferences NotificationPreference[]
-  responsibleProperties   Property[]    @relation("PropertyResponsibleMember")
-  assignedPeople          Person[]      @relation("PersonAssignedMember")
-  interactions            Interaction[] @relation("InteractionMember")
-  deals                   Deal[]        @relation("DealMember")
+  notificationPreferences    NotificationPreference[]
+  responsibleProperties      Property[]               @relation("PropertyResponsibleMember")
+  assignedPeople             Person[]                 @relation("PersonAssignedMember")
+  interactions               Interaction[]            @relation("InteractionMember")
+  deals                      Deal[]                   @relation("DealMember")
+  createdScheduledActivities ScheduledActivity[]      @relation("ScheduledActivityCreatedByMember")
 
   @@unique([organizationId, userId])
   @@map("organization_members")
 }
 
 model Organization {
-  id             String   @id @default(cuid())
-  slug           String   @unique
-  name           String
-  customDomain   String?  @unique
-  cnpj           String?
-  planId         String
-  plan           Plan     @relation(fields: [planId], references: [id])
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  customDomain String?  @unique
+  cnpj         String?
+  planId       String
+  plan         Plan     @relation(fields: [planId], references: [id])
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  members             OrganizationMember[]
-  settings             OrganizationSettings?
-  branding             OrganizationBranding?
+  members               OrganizationMember[]
+  settings              OrganizationSettings?
+  branding              OrganizationBranding?
   subscriptions         Subscription[]
   invoices              Invoice[]
   billingEvents         BillingEvent[]
@@ -553,6 +617,7 @@ model Organization {
   people                Person[]
   personPreferences     PersonPreference[]
   propertyInterests     PropertyInterest[]
+  scheduledActivities   ScheduledActivity[]
   properties            Property[]
   media                 Media[]
   propertyStatusHistory PropertyStatusHistory[]
@@ -593,10 +658,10 @@ model OrganizationSettings {
 // configurado.
 model OrganizationBranding {
   organizationId String       @id
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  themeId         String       @default("classic-blue")
-  faviconUrl      String?
-  updatedAt       DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  themeId        String       @default("classic-blue")
+  faviconUrl     String?
+  updatedAt      DateTime     @updatedAt
 
   @@map("organization_branding")
 }
@@ -670,7 +735,7 @@ model PlanLimit {
   planId  String
   plan    Plan   @relation(fields: [planId], references: [id])
   feature String // "PROPERTIES","USERS","PHOTOS","VIDEOS","IA_CREDITS"... string livre, não enum
-  limit   Int?   // null = ilimitado
+  limit   Int? // null = ilimitado
 
   @@unique([planId, feature])
   @@map("plan_limits")
@@ -807,13 +872,13 @@ model Notification {
 }
 
 model NotificationPreference {
-  id                   String               @id @default(cuid())
+  id                   String              @id @default(cuid())
   organizationMemberId String
-  organizationMember   OrganizationMember   @relation(fields: [organizationMemberId], references: [id])
+  organizationMember   OrganizationMember  @relation(fields: [organizationMemberId], references: [id])
   channelId            String
-  channel              NotificationChannel  @relation(fields: [channelId], references: [id])
+  channel              NotificationChannel @relation(fields: [channelId], references: [id])
   notificationType     String
-  enabled              Boolean              @default(true)
+  enabled              Boolean             @default(true)
 
   @@unique([organizationMemberId, channelId, notificationType])
   @@map("notification_preferences")
@@ -844,7 +909,7 @@ enum PlatformRole {
   PLATFORM_ADMIN
   PLATFORM_SUPPORT
   SUPER_ADMIN // único usado no MVP do painel /platform; os outros dois ficam
-              // preparados no enum, sem UI de permissão diferenciada ainda.
+  // preparados no enum, sem UI de permissão diferenciada ainda.
 }
 
 model PlatformOperator {
