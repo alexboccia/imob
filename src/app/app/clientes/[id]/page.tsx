@@ -95,6 +95,14 @@ export default async function DetalheClientePage({
             orderBy: { updatedAt: "desc" },
             include: {
               property: { select: { id: true, title: true, price: true, rentPrice: true, status: true } },
+              // Visita SCHEDULED mais próxima por scheduledAt — batch numa
+              // única query (Fase H.2), nunca uma consulta por card.
+              scheduledActivities: {
+                where: { organizationId, status: "SCHEDULED" },
+                orderBy: { scheduledAt: "asc" },
+                take: 1,
+                select: { id: true, scheduledAt: true },
+              },
             },
           },
         },
@@ -248,6 +256,12 @@ export default async function DetalheClientePage({
                       rentPrice: interesse.property.rentPrice,
                       status: interesse.property.status,
                     },
+                    proximaVisita: interesse.scheduledActivities[0]
+                      ? {
+                          id: interesse.scheduledActivities[0].id,
+                          scheduledAtISO: interesse.scheduledActivities[0].scheduledAt.toISOString(),
+                        }
+                      : null,
                   }}
                 />
               ))}

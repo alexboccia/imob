@@ -13,6 +13,7 @@ import { hasModule } from "@/lib/entitlements";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ESTAGIO_INTERESSE_LABEL } from "@/components/admin/InteresseImovelItem";
+import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
 import { RecomendacaoClienteItem } from "@/components/admin/RecomendacaoClienteItem";
 import { buscarClientesCompativeis } from "@/lib/property-matching";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
@@ -49,7 +50,17 @@ export default async function EditarImovelPage({
         prisma.propertyInterest.findMany({
           where: { organizationId, propertyId: id },
           orderBy: { updatedAt: "desc" },
-          include: { person: { select: { id: true, name: true } } },
+          include: {
+            person: { select: { id: true, name: true } },
+            // Visita SCHEDULED mais próxima por scheduledAt — batch numa
+            // única query (Fase H.2), nunca uma consulta por item da lista.
+            scheduledActivities: {
+              where: { organizationId, status: "SCHEDULED" },
+              orderBy: { scheduledAt: "asc" },
+              take: 1,
+              select: { id: true, scheduledAt: true },
+            },
+          },
         }),
       ])
     ),
@@ -143,6 +154,16 @@ export default async function EditarImovelPage({
             <ul className="space-y-2">
               {interesses.map((interesse) => {
                 const proximaAcao = obterProximaAcaoComercial(interesse.stage, imovel.status);
+                // Mesma regra de InteresseImovelItem.tsx (Fase H.2): só
+                // REJECTED bloqueia agendar nova visita, independente da
+                // "próxima ação" textual da Fase G já ter avançado.
+                const podeAgendarVisita = interesse.stage !== "REJECTED" && imovel.status === "AVAILABLE";
+                const proximaVisita = interesse.scheduledActivities[0]
+                  ? {
+                      id: interesse.scheduledActivities[0].id,
+                      scheduledAtISO: interesse.scheduledActivities[0].scheduledAt.toISOString(),
+                    }
+                  : null;
                 return (
                   <li
                     key={interesse.id}
@@ -168,6 +189,11 @@ export default async function EditarImovelPage({
                         {proximaAcao.label}
                       </span>
                     </p>
+                    <AgendamentoVisita
+                      propertyInterestId={interesse.id}
+                      podeAgendar={podeAgendarVisita}
+                      atividadeAgendada={proximaVisita}
+                    />
                   </li>
                 );
               })}

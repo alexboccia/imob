@@ -10,6 +10,7 @@ import {
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { formatarPreco } from "@/lib/format";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
+import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
 import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,9 +42,20 @@ export function InteresseImovelItem({
     favorited: boolean;
     notes: string | null;
     property: { id: string; title: string; price: unknown; rentPrice: unknown; status: PropertyStatus };
+    // Visita SCHEDULED mais próxima deste relacionamento, se houver — já
+    // vem pronta da query da página (batch, sem N+1 por card). scheduledAt
+    // trafega como string ISO, nunca Date (ver AgendamentoVisita.tsx).
+    proximaVisita: { id: string; scheduledAtISO: string } | null;
   };
 }) {
   const proximaAcao = obterProximaAcaoComercial(interesse.stage, interesse.property.status);
+  // Agendar visita continua permitido pra VISITED/PROPOSAL (múltiplas
+  // visitas foram aprovadas estruturalmente na H.1 — ver AGENTS.md da
+  // H.2, decisão #8) mesmo que a "próxima ação" da Fase G já tenha
+  // avançado pra outro texto; só REJECTED bloqueia, e só quando não há
+  // visita SCHEDULED em aberto (uma nova só faz sentido depois que a
+  // anterior foi concluída/cancelada).
+  const podeAgendarVisita = interesse.stage !== "REJECTED" && interesse.property.status === "AVAILABLE";
   const atualizarAcao = atualizarEstagioInteresse.bind(null, interesse.id);
   const [estadoEstagio, formActionEstagio, pendenteEstagio] = useActionState(
     atualizarAcao,
@@ -94,11 +106,24 @@ export function InteresseImovelItem({
           </span>
         </p>
 
+        <AgendamentoVisita
+          propertyInterestId={interesse.id}
+          podeAgendar={podeAgendarVisita}
+          atividadeAgendada={interesse.proximaVisita}
+        />
+
         <form action={formActionEstagio} className="flex flex-wrap items-center gap-2">
           <Label htmlFor={stageId} className="sr-only">
             Estágio
           </Label>
-          <Select name="stage" defaultValue={interesse.stage}>
+          {/* key={interesse.stage}: força o React a remontar o Select
+              quando o stage muda por uma via diferente deste próprio form
+              (ex: AgendamentoVisita avançando INTERESTED → VISIT_SCHEDULED
+              automaticamente na H.2) — sem isso, o defaultValue de um
+              componente uncontrolled não se atualiza sozinho, e o
+              corretor poderia clicar "Salvar" e regredir o stage sem
+              perceber, mesmo sem tocar no dropdown. */}
+          <Select key={interesse.stage} name="stage" defaultValue={interesse.stage}>
             <SelectTrigger id={stageId} className="w-[180px]">
               <SelectValue />
             </SelectTrigger>
