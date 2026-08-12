@@ -9,9 +9,12 @@ import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
 import { ToastSalvo } from "@/components/admin/ToastSalvo";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
+import { hasModule } from "@/lib/entitlements";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ESTAGIO_INTERESSE_LABEL } from "@/components/admin/InteresseImovelItem";
+import { RecomendacaoClienteItem } from "@/components/admin/RecomendacaoClienteItem";
+import { buscarClientesCompativeis } from "@/lib/property-matching";
 
 const MEDIA_TYPE_PARA_TIPO_MIDIA = {
   PHOTO: "FOTO",
@@ -27,8 +30,12 @@ export default async function EditarImovelPage({
   const { id } = await params;
   const organizationId = await requireOrganizationId();
 
-  const [imovel, { opcoesImovel, opcoesCondominio }, { opcoesResidencial, opcoesComercial }, interesses] =
-    await withOrganization(organizationId, () =>
+  const [
+    [imovel, { opcoesImovel, opcoesCondominio }, { opcoesResidencial, opcoesComercial }, interesses],
+    clientesCompativeis,
+    crmHabilitado,
+  ] = await Promise.all([
+    withOrganization(organizationId, () =>
       Promise.all([
         prisma.property.findUnique({
           where: { id, organizationId },
@@ -44,7 +51,22 @@ export default async function EditarImovelPage({
           include: { person: { select: { id: true, name: true } } },
         }),
       ])
-    );
+    ),
+    // buscarClientesCompativeis gerencia seu próprio withOrganization/
+    // hasModule/validação de Property internamente — chamada como irmã
+    // do bloco acima em vez de aninhada, mesmo racional da Fase E: evita
+    // withOrganization dentro de withOrganization pro mesmo organizationId.
+    buscarClientesCompativeis(organizationId, id),
+    // Só pra decidir se a seção "Clientes compatíveis" renderiza — não é
+    // um novo entitlement, é a mesma checagem que buscarClientesCompativeis
+    // já faz internamente. hasModule é React.cache()-deduplicado por
+    // request (mesmo organizationId+"crm"), então essa chamada paralela
+    // não gera uma segunda query real. "Clientes interessados" (seção
+    // irmã, pré-existente) deliberadamente NÃO ganhou esse gate agora —
+    // fora do escopo desta correção, pra não mexer em comportamento já
+    // estabelecido.
+    hasModule(organizationId, "crm"),
+  ]);
 
   if (!imovel) notFound();
 
@@ -141,6 +163,38 @@ export default async function EditarImovelPage({
           )}
         </CardContent>
       </Card>
+
+      {crmHabilitado && (
+        <Card className="mt-6 max-w-3xl">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">
+              Clientes compatíveis
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {clientesCompativeis.totalPreferenciasNaOrganizacao === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                Nenhum cliente com preferências cadastradas para comparar.
+              </p>
+            ) : clientesCompativeis.recomendacoes.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                Nenhum cliente compatível encontrado para este imóvel.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {clientesCompativeis.recomendacoes.map((recomendacao) => (
+                  <RecomendacaoClienteItem
+                    key={recomendacao.person.id}
+                    propertyId={imovel.id}
+                    propertyStatus={imovel.status}
+                    recomendacao={recomendacao}
+                  />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -358,10 +358,34 @@ export async function criarInteressePessoa(
     // propertyId separadamente antes de criar uma Interaction.
     const [pessoa, imovel] = await Promise.all([
       prisma.person.findUnique({ where: { id: pessoaId, organizationId }, select: { id: true } }),
-      prisma.property.findUnique({ where: { id: propertyId, organizationId }, select: { id: true } }),
+      prisma.property.findUnique({ where: { id: propertyId, organizationId }, select: { id: true, status: true } }),
     ]);
     if (!pessoa || !imovel) {
       return erroGenerico("Cliente ou imóvel não encontrado.");
+    }
+
+    // Novo relacionamento só pode ser criado com Property AVAILABLE (Fase
+    // F, decisão de produto) — a ficha do cliente já só oferece imóveis
+    // AVAILABLE no seletor (ver imoveisDisponiveis em
+    // /app/clientes/[id]/page.tsx), mas isso é só UX: o propertyId chega
+    // via FormData, que pode ser adulterado, então a regra precisa estar
+    // aqui, não só escondendo o botão na tela (Fase F, ficha do imóvel,
+    // RecomendacaoClienteItem). Relacionamento HISTÓRICO (já existente)
+    // nunca é bloqueado por isso — se o imóvel virou SOLD/RENTED/etc.
+    // depois de já relacionado, o reenvio idempotente do mesmo par
+    // continua funcionando normalmente (cai no catch de P2002 abaixo,
+    // sem nunca chegar a tentar um create novo).
+    if (imovel.status !== "AVAILABLE") {
+      const jaRelacionado = await prisma.propertyInterest.findUnique({
+        where: {
+          organizationId_personId_propertyId: { organizationId, personId: pessoaId, propertyId },
+          organizationId,
+        },
+        select: { id: true },
+      });
+      if (!jaRelacionado) {
+        return erroGenerico("Este imóvel não está disponível para novo relacionamento.");
+      }
     }
 
     // create() direto (não upsert): precisamos saber com certeza se a linha

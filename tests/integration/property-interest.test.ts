@@ -810,4 +810,135 @@ describe("PropertyInterest — relacionamento Person↔Property (Fase D do CRM)"
 
     expect(disponiveis.map((p) => p.id)).not.toContain(imovel.id);
   });
+
+  // Fase F, correção pós-auditoria: novo PropertyInterest só pode ser
+  // criado com Property.status === "AVAILABLE" — regra adicionada aqui
+  // (não só na UI da ficha do imóvel) porque propertyId chega via
+  // FormData, que pode ser adulterado. Relacionamento HISTÓRICO nunca é
+  // bloqueado por isso (ver BM).
+
+  test("BE) Property AVAILABLE + Person compatível — cria relacionamento normalmente", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+
+    const resultado = await relacionar(pessoa.id, { propertyId: imovel.id });
+
+    expect(resultado.success).toBe(true);
+    const linha = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(linha).not.toBeNull();
+  });
+
+  test("BF) Property SOLD — action rejeita novo relacionamento", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "SOLD" });
+
+    const resultado = await relacionar(pessoa.id, { propertyId: imovel.id });
+
+    expect(resultado.success).toBe(false);
+    const linha = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(linha).toBeNull();
+  });
+
+  test("BG) Property RENTED — action rejeita novo relacionamento", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "RENTED" });
+
+    const resultado = await relacionar(pessoa.id, { propertyId: imovel.id });
+
+    expect(resultado.success).toBe(false);
+    const linha = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(linha).toBeNull();
+  });
+
+  test("BH) Property INACTIVE — action rejeita novo relacionamento", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "INACTIVE" });
+
+    const resultado = await relacionar(pessoa.id, { propertyId: imovel.id });
+
+    expect(resultado.success).toBe(false);
+    const linha = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(linha).toBeNull();
+  });
+
+  test("BI) Property RESERVED — action rejeita novo relacionamento", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "RESERVED" });
+
+    const resultado = await relacionar(pessoa.id, { propertyId: imovel.id });
+
+    expect(resultado.success).toBe(false);
+    const linha = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(linha).toBeNull();
+  });
+
+  test("BJ) Property DRAFT — action rejeita novo relacionamento", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "DRAFT" });
+
+    const resultado = await relacionar(pessoa.id, { propertyId: imovel.id });
+
+    expect(resultado.success).toBe(false);
+    const linha = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(linha).toBeNull();
+  });
+
+  test("BK) rejeição por status não cria ActivityLog", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "SOLD" });
+
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+
+    const total = await prisma.activityLog.count({
+      where: { organizationId: cenario.organization.id, action: "property_interest_created" },
+    });
+    expect(total).toBe(0);
+  });
+
+  // BL) "Property status != AVAILABLE continua retornando clientes
+  // compatíveis no matching reverso" já é coberto em
+  // tests/integration/property-matching-reverso.test.ts (teste E) — não
+  // duplicado aqui porque é sobre buscarClientesCompativeis, não sobre
+  // criarInteressePessoa.
+
+  test("BM) existingInterest já existente continua aparecendo mesmo se Property depois virar SOLD/RENTED/etc.", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const primeiro = await relacionar(pessoa.id, { propertyId: imovel.id });
+    expect(primeiro.success).toBe(true);
+
+    await prisma.property.update({
+      where: { id: imovel.id, organizationId: cenario.organization.id },
+      data: { status: "SOLD" },
+    });
+
+    // Reenvio idempotente do MESMO par (ex: página recarregada, duplo
+    // clique) depois que o imóvel já não está mais AVAILABLE — não pode
+    // ser tratado como tentativa de relacionamento NOVO nem falhar.
+    const reenvio = await relacionar(pessoa.id, { propertyId: imovel.id });
+    expect(reenvio.success).toBe(true);
+
+    const linha = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(linha).not.toBeNull();
+    const total = await prisma.propertyInterest.count({
+      where: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id },
+    });
+    expect(total).toBe(1);
+  });
 });

@@ -484,3 +484,123 @@ export async function buscarImoveisCompativeis(
     return resultados.slice(0, limite);
   });
 }
+
+// ---------------------------------------------------------------------
+// Matching reverso (Fase F) — Imóvel → Clientes compatíveis. Reusa
+// calcularCompatibilidade sem nenhuma alteração: a função pura é
+// agnóstica de direção (não sabe se está avaliando "um Property contra
+// várias preferências" ou "uma preferência contra vários Properties").
+// status do Property (AVAILABLE etc.) NÃO é filtrado aqui de propósito —
+// diferente de buscarImoveisCompativeis, aquele filtro nunca fez parte do
+// algoritmo em si (calcularCompatibilidade nunca leu Property.status),
+// era só uma decisão de produto do pré-filtro SQL da Fase E ("recomendar
+// imóveis disponíveis pro cliente"). Aqui o corretor já abriu um Property
+// específico e já vê o status dele na tela — inventar esse filtro seria
+// adicionar um hard filter que não existe no algoritmo reusado.
+// ---------------------------------------------------------------------
+
+export type PessoaParaMatching = {
+  id: string;
+  name: string;
+};
+
+export type ResultadoMatchingCliente = MatchingResult & {
+  person: PessoaParaMatching;
+  existingInterest: { id: string; stage: PropertyInterestStage; favorited: boolean } | null;
+};
+
+export type ResultadoBuscaClientesCompativeis = {
+  // Total de PersonPreference da organização inteira (não filtrado por
+  // este Property) — permite a UI distinguir "nenhuma preferência
+  // cadastrada na organização" de "preferências existem mas nenhuma
+  // bateu o threshold", sem precisar de uma query extra (Fase F, decisão
+  // de UI — ver seção 18 da autorização).
+  totalPreferenciasNaOrganizacao: number;
+  recomendacoes: ResultadoMatchingCliente[];
+};
+
+export async function buscarClientesCompativeis(
+  organizationId: string,
+  propertyId: string,
+  opcoes: { limite?: number } = {}
+): Promise<ResultadoBuscaClientesCompativeis> {
+  const limite = opcoes.limite ?? TOP_N_PADRAO;
+  const vazio: ResultadoBuscaClientesCompativeis = { totalPreferenciasNaOrganizacao: 0, recomendacoes: [] };
+
+  // Mesmo módulo do matching direto — checado aqui também (não só na
+  // página) como defesa em profundidade.
+  if (!(await hasModule(organizationId, "crm"))) return vazio;
+
+  return withOrganization(organizationId, async () => {
+    // Property validado por id + organizationId — igual ao personId em
+    // buscarImoveisCompativeis, o propertyId de uma rota dinâmica
+    // (/app/imoveis/[id]) é input do navegador como qualquer outro. Sem
+    // `select`: precisa do row completo pra satisfazer PropertyParaMatching,
+    // mesmo padrão do candidatos de buscarImoveisCompativeis.
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId, organizationId },
+    });
+    if (!property) return vazio;
+
+    // ETAPA 1 — todas as PersonPreference da organização, com a Person
+    // correspondente inclusa numa única query (sem loop, sem N+1).
+    // PersonPreference não tem FK composta (personId, organizationId) —
+    // o `where: { organizationId }` já escopa pela coluna própria da
+    // tabela (mesma coluna que TENANT_SCOPED_MODELS protege), mas o
+    // filtro explícito logo abaixo (`person.organizationId === organizationId`)
+    // é a defesa em profundidade documentada no schema: nunca confiar só
+    // na FK/relação pra isolamento cross-tenant desta tabela em
+    // particular, porque uma inconsistência histórica poderia (em tese)
+    // deixar personId apontando pra Person de outra organização.
+    const preferencias = await prisma.personPreference.findMany({
+      where: { organizationId },
+      include: { person: { select: { id: true, name: true, organizationId: true } } },
+    });
+    const preferenciasValidas = preferencias.filter((p) => p.person.organizationId === organizationId);
+
+    if (preferenciasValidas.length === 0) return vazio;
+
+    // ETAPA 2 — PropertyInterest existente pros candidatos, também em
+    // batch (uma query só, nunca dentro do loop de score).
+    const interesses = await prisma.propertyInterest.findMany({
+      where: {
+        organizationId,
+        propertyId,
+        personId: { in: preferenciasValidas.map((p) => p.personId) },
+      },
+      select: { id: true, personId: true, stage: true, favorited: true },
+    });
+    const interesseMap = new Map(interesses.map((i) => [i.personId, i]));
+    const preferenceUpdatedAtMap = new Map(preferenciasValidas.map((p) => [p.personId, p.updatedAt]));
+
+    // ETAPA 3 — score em TypeScript, só sobre o conjunto já carregado.
+    // Nenhuma query Prisma dentro deste .map() — property, preferencias e
+    // interesses já foram todos buscados em batch acima.
+    const resultados: ResultadoMatchingCliente[] = preferenciasValidas
+      .map((preferencia) => {
+        const matching = calcularCompatibilidade(preferencia, property);
+        const interesse = interesseMap.get(preferencia.personId);
+        return {
+          ...matching,
+          person: { id: preferencia.person.id, name: preferencia.person.name },
+          existingInterest: interesse
+            ? { id: interesse.id, stage: interesse.stage, favorited: interesse.favorited }
+            : null,
+        };
+      })
+      .filter((r) => r.compatible && r.score >= SCORE_MINIMO_RECOMENDACAO)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const diffUpdated =
+          preferenceUpdatedAtMap.get(b.person.id)!.getTime() -
+          preferenceUpdatedAtMap.get(a.person.id)!.getTime();
+        if (diffUpdated !== 0) return diffUpdated;
+        return a.person.id < b.person.id ? -1 : a.person.id > b.person.id ? 1 : 0;
+      });
+
+    return {
+      totalPreferenciasNaOrganizacao: preferenciasValidas.length,
+      recomendacoes: resultados.slice(0, limite),
+    };
+  });
+}
