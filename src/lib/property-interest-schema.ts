@@ -35,6 +35,30 @@ export function estagioInteresseEncerrado(stage: string): boolean {
   return stage === "WON" || stage === "REJECTED";
 }
 
+// Label de APRESENTAÇÃO (badges/histórico, sempre somente leitura) —
+// inclui WON e REJECTED de propósito, mesmo os dois nunca aparecendo como
+// opção no Select (ver ESTAGIOS_INTERESSE acima). As duas nunca devem ser
+// fundidas de volta numa só constante.
+//
+// Movida de InteresseImovelItem.tsx pra cá na Fase P.4 (achado corrigido,
+// não redesenho): definida num arquivo "use client", ESTAGIO_INTERESSE_LABEL
+// só resolvia corretamente DENTRO do próprio InteresseImovelItem.tsx —
+// qualquer outro consumidor (Server Component como imoveis/[id]/page.tsx,
+// ou até outro Client Component como RecomendacaoImovelItem.tsx) recebia
+// `undefined` de volta e caía no fallback `?? stage`, mostrando o enum
+// bruto ("INTERESTED") em vez do rótulo. Um módulo plano (sem "use
+// client"), como este arquivo já era pra ESTAGIOS_INTERESSE/
+// estagioInteresseEncerrado, é a forma correta de compartilhar uma
+// constante entre Server e Client Components neste projeto.
+export const ESTAGIO_INTERESSE_LABEL: Record<string, string> = {
+  INTERESTED: "Interessado",
+  VISIT_SCHEDULED: "Visita agendada",
+  VISITED: "Visitado",
+  PROPOSAL: "Proposta",
+  REJECTED: "Perdido",
+  WON: "Ganho",
+};
+
 // Limite defensivo — mesmo valor já usado em PersonPreference.notes (Fase C),
 // sem precedente de um número "oficial" no projeto além desse.
 const notesSchema = z

@@ -12,13 +12,12 @@ import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ESTAGIO_INTERESSE_LABEL } from "@/components/admin/InteresseImovelItem";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
 import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
 import { RecomendacaoClienteItem } from "@/components/admin/RecomendacaoClienteItem";
 import { buscarClientesCompativeis } from "@/lib/property-matching";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
-import { estagioInteresseEncerrado } from "@/lib/property-interest-schema";
+import { estagioInteresseEncerrado, ESTAGIO_INTERESSE_LABEL } from "@/lib/property-interest-schema";
 
 const MEDIA_TYPE_PARA_TIPO_MIDIA = {
   PHOTO: "FOTO",

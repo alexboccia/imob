@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import type { ItemAgenda } from "@/lib/agenda";
 
 // Labels amigáveis de status (Fase H.3) — mesmo padrão de
-// ESTAGIO_INTERESSE_LABEL em InteresseImovelItem.tsx: só apresentação, o
+// ESTAGIO_INTERESSE_LABEL em src/lib/property-interest-schema.ts: só apresentação, o
 // enum continua sendo a fonte lógica (nunca comparado por label em
 // nenhuma regra).
 export const STATUS_VISITA_LABEL: Record<string, string> = {

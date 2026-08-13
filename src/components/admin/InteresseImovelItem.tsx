@@ -12,7 +12,11 @@ import { formatarPreco } from "@/lib/format";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
 import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
-import { ESTAGIOS_INTERESSE, estagioInteresseEncerrado } from "@/lib/property-interest-schema";
+import {
+  ESTAGIOS_INTERESSE,
+  ESTAGIO_INTERESSE_LABEL,
+  estagioInteresseEncerrado,
+} from "@/lib/property-interest-schema";
 import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,24 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-// Label de APRESENTAÇÃO (badges/histórico, sempre somente leitura) — inclui
-// WON e REJECTED de propósito, mesmo os dois nunca aparecendo como opção no
-// Select abaixo (ver ESTAGIOS_INTERESSE, a lista separada que alimenta as
-// opções editáveis). As duas nunca devem ser fundidas de volta numa só
-// constante.
-//
-// REJECTED: "Perdido" (Fase P.3) — renomeado de "Descartado" pra bater com
-// o texto usado no fechamento (FechamentoInteresse.tsx); é só rótulo de
-// apresentação, o valor técnico do enum continua REJECTED, sem migration.
-export const ESTAGIO_INTERESSE_LABEL: Record<string, string> = {
-  INTERESTED: "Interessado",
-  VISIT_SCHEDULED: "Visita agendada",
-  VISITED: "Visitado",
-  PROPOSAL: "Proposta",
-  REJECTED: "Perdido",
-  WON: "Ganho",
-};
 
 export function InteresseImovelItem({
   interesse,

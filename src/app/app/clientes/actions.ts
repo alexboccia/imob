@@ -500,6 +500,11 @@ export async function atualizarEstagioInteresse(
     });
 
     revalidatePath(`/app/clientes/${atual.personId}`);
+    // Fase P.4: esta action é reaproveitada sem alteração de regra pelo
+    // controle "Mover" do Kanban (src/app/app/pipeline) — precisa
+    // revalidar a própria tela do Pipeline também, senão o card fica
+    // preso na coluna antiga até um reload manual.
+    revalidatePath("/app/pipeline");
     return sucesso("Estágio atualizado.");
   });
 }
@@ -685,6 +690,12 @@ async function fecharInteresse(
 
     revalidatePath(`/app/clientes/${resultado.personId}`);
     revalidatePath(`/app/imoveis/${resultado.propertyId}`);
+    // Fase P.4: FechamentoInteresse (P.3) é reaproveitado sem alteração
+    // dentro do card do Kanban — precisa que o fechamento também
+    // revalide /app/pipeline, senão o card não sai da coluna aberta até
+    // um reload manual (mesmo racional do revalidatePath adicionado em
+    // atualizarEstagioInteresse acima).
+    revalidatePath("/app/pipeline");
 
     switch (resultado.tipo) {
       case "ja_fechado":
@@ -716,7 +727,7 @@ export async function marcarInteresseComoGanho(
 
 // Marca o relacionamento como perdido (stage=REJECTED, closedAt=agora).
 // REJECTED continua sendo o valor técnico do enum — a UI exibe "Perdido"
-// (ESTAGIO_INTERESSE_LABEL, InteresseImovelItem.tsx), nenhum enum novo.
+// (ESTAGIO_INTERESSE_LABEL, src/lib/property-interest-schema.ts), nenhum enum novo.
 export async function marcarInteresseComoPerdido(
   interesseId: string,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

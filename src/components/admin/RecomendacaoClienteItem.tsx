@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { criarInteressePessoa } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
-import { ESTAGIO_INTERESSE_LABEL } from "@/components/admin/InteresseImovelItem";
+import { ESTAGIO_INTERESSE_LABEL } from "@/lib/property-interest-schema";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 import type { CriterioMatch } from "@/lib/property-matching";
