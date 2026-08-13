@@ -7,10 +7,12 @@ import {
   buscarAgendaProximas,
   buscarAgendaAnteriores,
   contarAgenda,
+  contarResumoDiario,
   interpretarFiltrosAgenda,
   type ItemAgenda,
   type FiltroStatusAgenda,
 } from "@/lib/agenda";
+import { periodoDaVisita, proximaVisita, type PeriodoDia } from "@/lib/scheduled-activity-date";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { AgendaItemCard } from "@/components/admin/AgendaItemCard";
 import { Input } from "@/components/ui/input";
@@ -52,6 +54,15 @@ const STATUS_FILTRO_OPCOES: FiltroStatusAgenda[] = [
   "CANCELADAS",
   "ATRASADAS",
 ];
+
+// Agrupamento da aba Hoje (Fase H.5) — ordem de exibição fixa
+// Manhã/Tarde/Noite, nunca reordenada por status/cliente/imóvel.
+const PERIODOS_DIA: PeriodoDia[] = ["MANHA", "TARDE", "NOITE"];
+const PERIODO_DIA_LABEL: Record<PeriodoDia, string> = {
+  MANHA: "Manhã",
+  TARDE: "Tarde",
+  NOITE: "Noite",
+};
 
 type SearchParams = {
   aba?: string;
@@ -138,6 +149,25 @@ export default async function AgendaPage({
     itens = await buscarAgendaAnteriores(organizationId, { agora, skip, take, filtros });
   }
 
+  // Resumo diário (H.5) — só calculado/exibido na aba Hoje, sempre
+  // GLOBAL (não aplica filtros H.4, decisão explícita da H.5 seção 12):
+  // uma busca por "João" não pode fazer "Agendadas hoje" parecer 1
+  // quando na verdade são 5.
+  const resumoDiario = aba === "hoje" ? await contarResumoDiario(organizationId, { agora }) : null;
+
+  // Próxima visita e agrupamento por período (H.5) — calculados em
+  // memória sobre `itens` (já filtrado pelos parâmetros H.4 ativos),
+  // nunca via query própria. "Próxima visita" reflete o conjunto VISÍVEL
+  // após os filtros, não o conjunto total do dia (decisão H.5 seção 13).
+  const proximaVisitaItem = aba === "hoje" ? proximaVisita(itens, agora) : null;
+  const gruposDoDia =
+    aba === "hoje"
+      ? PERIODOS_DIA.map((periodo) => ({
+          periodo,
+          itens: itens.filter((item) => periodoDaVisita(item.scheduledAt) === periodo),
+        })).filter((grupo) => grupo.itens.length > 0)
+      : null;
+
   const mensagemVazia: Record<Aba, string> = {
     hoje: "Nenhuma visita agendada para hoje.",
     proximas: "Nenhuma próxima visita agendada.",
@@ -165,6 +195,23 @@ export default async function AgendaPage({
           Atrasadas: <span className="font-medium text-foreground">{contadores.atrasadas}</span>
         </span>
       </div>
+
+      {/* Resumo diário (H.5) — distinto do resumo global acima: só na
+          aba Hoje, sempre baseado em scheduledAt (data da visita), nunca
+          filtrado pelos parâmetros de busca/período/status. */}
+      {resumoDiario && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mb-4 border-t pt-3">
+          <span>
+            Agendadas hoje: <span className="font-medium text-foreground">{resumoDiario.agendadas}</span>
+          </span>
+          <span>
+            Concluídas hoje: <span className="font-medium text-foreground">{resumoDiario.concluidas}</span>
+          </span>
+          <span>
+            Canceladas hoje: <span className="font-medium text-foreground">{resumoDiario.canceladas}</span>
+          </span>
+        </div>
+      )}
 
       <form method="get" className="flex flex-wrap items-end gap-2 mb-3 border rounded-md p-3">
         <input type="hidden" name="aba" value={aba} />
@@ -251,6 +298,24 @@ export default async function AgendaPage({
 
       {itens.length === 0 ? (
         <p className="text-muted-foreground text-sm">{mensagemVaziaFinal}</p>
+      ) : gruposDoDia ? (
+        <div className="space-y-6">
+          {gruposDoDia.map((grupo) => (
+            <div key={grupo.periodo} className="space-y-3">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                {PERIODO_DIA_LABEL[grupo.periodo]}
+              </h2>
+              {grupo.itens.map((item) => (
+                <AgendaItemCard
+                  key={item.id}
+                  item={item}
+                  agora={agora}
+                  ehProximaVisita={proximaVisitaItem?.id === item.id}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="space-y-3">
           {itens.map((item) => (

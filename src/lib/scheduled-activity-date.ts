@@ -105,3 +105,61 @@ export function parseDataUTC(valor: string): Date | null {
   }
   return data;
 }
+
+// -----------------------------------------------------------------------
+// Visão diária da aba Hoje (Fase H.5) — agrupamento por período,
+// "horário passou" e "próxima visita". Tudo derivado em memória sobre a
+// lista de Hoje já carregada por src/lib/agenda.ts; nada aqui persiste
+// estado nem dispara query própria.
+// -----------------------------------------------------------------------
+
+export type PeriodoDia = "MANHA" | "TARDE" | "NOITE";
+
+// Classifica pelo horário UTC-literal (getUTCHours — nunca o fuso local
+// do navegador/processo, mesma convenção do resto do arquivo). Faixas:
+// Manhã [00:00, 12:00), Tarde [12:00, 18:00), Noite [18:00, 24:00).
+export function periodoDaVisita(scheduledAt: Date): PeriodoDia {
+  const hora = scheduledAt.getUTCHours();
+  if (hora < 12) return "MANHA";
+  if (hora < 18) return "TARDE";
+  return "NOITE";
+}
+
+// "Horário passou" (H.5) é deliberadamente DIFERENTE de "Atrasada"
+// (estaAtrasada, H.3): atrasada exige que o DIA calendário já tenha
+// passado; horário passou exige só que o HORÁRIO de hoje já tenha
+// passado, no MESMO dia. Uma visita SCHEDULED de ontem nunca passa aqui
+// como "horário passou" — classificarPeriodoAgenda já a classifica como
+// ANTERIORES (não HOJE), então a checagem abaixo a exclui
+// estruturalmente, sem precisar de lógica extra pra não confundir os
+// dois conceitos. Continua SCHEDULED no banco; isto é só rótulo visual.
+export function horarioJaPassouHoje(
+  atividade: { status: StatusScheduledActivity; scheduledAt: Date },
+  agora: Date = new Date()
+): boolean {
+  return (
+    atividade.status === "SCHEDULED" &&
+    classificarPeriodoAgenda(atividade, agora) === "HOJE" &&
+    atividade.scheduledAt < agora
+  );
+}
+
+// Primeira visita SCHEDULED cujo horário ainda não chegou
+// (scheduledAt >= agora), a mais próxima no tempo. Genérico sobre
+// qualquer lista com {status, scheduledAt} — não importa o tipo
+// ItemAgenda de src/lib/agenda.ts (evitaria inverter a direção de
+// dependência entre os dois arquivos). Sempre calculado sobre uma lista
+// já carregada (o resultado filtrado/visível da aba Hoje), nunca
+// dispara uma query própria.
+export function proximaVisita<T extends { status: StatusScheduledActivity; scheduledAt: Date }>(
+  itens: readonly T[],
+  agora: Date = new Date()
+): T | null {
+  let escolhida: T | null = null;
+  for (const item of itens) {
+    if (item.status !== "SCHEDULED") continue;
+    if (item.scheduledAt < agora) continue;
+    if (!escolhida || item.scheduledAt < escolhida.scheduledAt) escolhida = item;
+  }
+  return escolhida;
+}

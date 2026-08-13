@@ -378,3 +378,42 @@ export async function contarAgenda(
     return { hoje, proximas, anteriores, atrasadas };
   });
 }
+
+// -----------------------------------------------------------------------
+// Resumo diário da aba Hoje (Fase H.5) — decoupled do resumo global de
+// contarAgenda (Hoje/Próximas/Atrasadas, seção 9 da H.4): "Agendadas
+// hoje" é o mesmo conceito de contadores.hoje, mas calculado aqui de
+// novo por clareza (a intenção semântica dos dois resumos é diferente,
+// mesmo a query de "agendadas" coincidindo). Baseado exclusivamente em
+// scheduledAt (a DATA DA VISITA), nunca em completedAt/cancelledAt — ou
+// seja, "Concluídas hoje"/"Canceladas hoje" significam "visitas cujo
+// horário marcado era hoje e que terminaram concluídas/canceladas", não
+// "ações realizadas hoje" (uma visita de ontem concluída agora NÃO entra
+// aqui). Sempre GLOBAL: não aplica busca/período/status — os filtros
+// visuais da H.4 nunca mudam este número (decisão H.5, seção 12).
+// -----------------------------------------------------------------------
+
+export type ResumoDiario = { agendadas: number; concluidas: number; canceladas: number };
+
+export async function contarResumoDiario(
+  organizationId: string,
+  opcoes: { agora?: Date } = {}
+): Promise<ResumoDiario> {
+  const agora = opcoes.agora ?? new Date();
+  const inicioHoje = inicioDoDiaUTC(agora);
+  const fimHoje = fimDoDiaUTC(agora);
+  return withOrganization(organizationId, async () => {
+    const [agendadas, concluidas, canceladas] = await Promise.all([
+      prisma.scheduledActivity.count({
+        where: { organizationId, type: "VISIT", status: "SCHEDULED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
+      }),
+      prisma.scheduledActivity.count({
+        where: { organizationId, type: "VISIT", status: "COMPLETED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
+      }),
+      prisma.scheduledActivity.count({
+        where: { organizationId, type: "VISIT", status: "CANCELLED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
+      }),
+    ]);
+    return { agendadas, concluidas, canceladas };
+  });
+}

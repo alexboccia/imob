@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
-import { formatarDataHora, estaAtrasada } from "@/lib/scheduled-activity-date";
+import { formatarDataHora, estaAtrasada, horarioJaPassouHoje } from "@/lib/scheduled-activity-date";
+import { cn } from "@/lib/utils";
 import type { ItemAgenda } from "@/lib/agenda";
 
 // Labels amigáveis de status (Fase H.3) — mesmo padrão de
@@ -23,12 +24,30 @@ export const STATUS_VISITA_LABEL: Record<string, string> = {
 // COMPLETED/CANCELLED são só leitura (as ações da H.2 rejeitariam essas
 // transições de qualquer forma — não faz sentido oferecer botões que só
 // vão erroar).
-export function AgendaItemCard({ item, agora }: { item: ItemAgenda; agora: Date }) {
+// `ehProximaVisita` só faz sentido na aba Hoje (H.5): calculado uma vez
+// pelo caller (page.tsx) via proximaVisita() sobre a lista já carregada
+// e filtrada — nunca recalculado por card, nunca dispara query própria.
+// Callers pré-existentes (ficha do cliente/imóvel) simplesmente não
+// passam essa prop, sem nenhuma mudança de comportamento pra eles.
+export function AgendaItemCard({
+  item,
+  agora,
+  ehProximaVisita = false,
+}: {
+  item: ItemAgenda;
+  agora: Date;
+  ehProximaVisita?: boolean;
+}) {
   const acionavel = item.status === "SCHEDULED";
   const atrasada = acionavel && estaAtrasada({ status: item.status, scheduledAt: item.scheduledAt }, agora);
+  // Distinto de "atrasada" (H.3: dia calendário anterior) — "horário
+  // passou" (H.5) é só o horário de HOJE já ter passado; nunca aparece
+  // junto com "Atrasada" no mesmo card, já que uma exclui a outra por
+  // construção (ver horarioJaPassouHoje).
+  const horarioPassou = horarioJaPassouHoje({ status: item.status, scheduledAt: item.scheduledAt }, agora);
 
   return (
-    <Card>
+    <Card className={cn(ehProximaVisita && "border-primary ring-1 ring-primary")}>
       <CardContent className="text-sm space-y-2">
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div>
@@ -38,10 +57,25 @@ export function AgendaItemCard({ item, agora }: { item: ItemAgenda; agora: Date 
               {item.property ? ` — ${item.property.title}` : ""}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Texto curto ("Próxima", sem "visita") de propósito — o
+                card, alguns parágrafos abaixo, já tem "Próxima visita:
+                <data>" vindo do H.2 (AgendamentoVisita), que significa
+                outra coisa (a data desta visita). Um rótulo idêntico
+                aqui confundiria os dois conceitos. */}
+            {ehProximaVisita && (
+              <Badge variant="default" className="text-[10px]">
+                Próxima
+              </Badge>
+            )}
             {atrasada && (
               <Badge variant="destructive" className="text-[10px]">
                 Atrasada
+              </Badge>
+            )}
+            {horarioPassou && (
+              <Badge variant="outline" className="text-[10px]">
+                Horário passou
               </Badge>
             )}
             <Badge variant="secondary">{STATUS_VISITA_LABEL[item.status] ?? item.status}</Badge>

@@ -8,6 +8,9 @@ import {
   classificarPeriodoAgenda,
   estaAtrasada,
   parseDataUTC,
+  periodoDaVisita,
+  horarioJaPassouHoje,
+  proximaVisita,
 } from "./scheduled-activity-date";
 
 // Testes unitários puros (sem banco) — mesma pirâmide de testes do
@@ -145,5 +148,133 @@ describe("parseDataUTC (Fase H.4 — filtro de período)", () => {
       const resultado = comTimezoneDoProcesso(tz, () => parseDataUTC("2026-08-20"));
       expect(resultado?.toISOString()).toBe("2026-08-20T00:00:00.000Z");
     }
+  });
+});
+
+describe("periodoDaVisita (Fase H.5 — agrupamento da aba Hoje)", () => {
+  const casos: Array<{ letra: string; hora: string; esperado: "MANHA" | "TARDE" | "NOITE" }> = [
+    { letra: "A", hora: "00:00:00.000Z", esperado: "MANHA" },
+    { letra: "B", hora: "11:59:59.999Z", esperado: "MANHA" },
+    { letra: "C", hora: "12:00:00.000Z", esperado: "TARDE" },
+    { letra: "D", hora: "17:59:59.999Z", esperado: "TARDE" },
+    { letra: "E", hora: "18:00:00.000Z", esperado: "NOITE" },
+    { letra: "F", hora: "23:59:59.999Z", esperado: "NOITE" },
+  ];
+
+  for (const caso of casos) {
+    test(`${caso.letra}) 2026-08-20T${caso.hora} -> ${caso.esperado}`, () => {
+      expect(periodoDaVisita(new Date(`2026-08-20T${caso.hora}`))).toBe(caso.esperado);
+    });
+  }
+
+  test("determinístico sob TZ=UTC / America/Sao_Paulo / Asia/Tokyo (usa getUTCHours, nunca fuso local)", () => {
+    for (const tz of ["UTC", "America/Sao_Paulo", "Asia/Tokyo"]) {
+      for (const caso of casos) {
+        const resultado = comTimezoneDoProcesso(tz, () =>
+          periodoDaVisita(new Date(`2026-08-20T${caso.hora}`))
+        );
+        expect(resultado).toBe(caso.esperado);
+      }
+    }
+  });
+});
+
+describe("horarioJaPassouHoje (Fase H.5 — distinto de estaAtrasada/H.3)", () => {
+  const AGORA_H5 = new Date("2026-08-20T14:00:00.000Z");
+
+  test("G) visita hoje antes de agora -> horário passou", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-20T10:00:00.000Z") };
+    expect(horarioJaPassouHoje(atividade, AGORA_H5)).toBe(true);
+  });
+
+  test("H) visita hoje exatamente agora -> NÃO passou (scheduledAt >= agora)", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: AGORA_H5 };
+    expect(horarioJaPassouHoje(atividade, AGORA_H5)).toBe(false);
+  });
+
+  test("I) visita hoje depois de agora -> NÃO passou", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-20T18:00:00.000Z") };
+    expect(horarioJaPassouHoje(atividade, AGORA_H5)).toBe(false);
+  });
+
+  test("J) visita de ONTEM não é \"horário passou\" — é caso de estaAtrasada(), nunca deste helper", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-19T10:00:00.000Z") };
+    expect(horarioJaPassouHoje(atividade, AGORA_H5)).toBe(false);
+    // A mesma atividade É atrasada pelo helper correto (H.3) — confirma
+    // que os dois conceitos são distintos e mutuamente exclusivos, nunca
+    // um substituindo o outro.
+    expect(estaAtrasada(atividade, AGORA_H5)).toBe(true);
+  });
+
+  test("visita COMPLETED/CANCELLED hoje nunca é \"horário passou\" (rótulo só faz sentido pra SCHEDULED)", () => {
+    const completada = { status: "COMPLETED" as const, scheduledAt: new Date("2026-08-20T10:00:00.000Z") };
+    const cancelada = { status: "CANCELLED" as const, scheduledAt: new Date("2026-08-20T10:00:00.000Z") };
+    expect(horarioJaPassouHoje(completada, AGORA_H5)).toBe(false);
+    expect(horarioJaPassouHoje(cancelada, AGORA_H5)).toBe(false);
+  });
+
+  test("determinístico sob UTC / America/Sao_Paulo / Asia/Tokyo", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-20T10:00:00.000Z") };
+    for (const tz of ["UTC", "America/Sao_Paulo", "Asia/Tokyo"]) {
+      const resultado = comTimezoneDoProcesso(tz, () => horarioJaPassouHoje(atividade, AGORA_H5));
+      expect(resultado).toBe(true);
+    }
+  });
+});
+
+describe("proximaVisita (Fase H.5)", () => {
+  const AGORA_PV = new Date("2026-08-20T14:00:00.000Z");
+  type Item = { id: string; status: "SCHEDULED" | "COMPLETED" | "CANCELLED"; scheduledAt: Date };
+
+  test("K) lista vazia -> nenhuma próxima", () => {
+    expect(proximaVisita<Item>([], AGORA_PV)).toBeNull();
+  });
+
+  test("L) todas as visitas de hoje já passaram -> nenhuma próxima", () => {
+    const itens: Item[] = [
+      { id: "a", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T09:00:00.000Z") },
+      { id: "b", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T10:00:00.000Z") },
+    ];
+    expect(proximaVisita(itens, AGORA_PV)).toBeNull();
+  });
+
+  test("M) uma futura -> ela é a próxima", () => {
+    const itens: Item[] = [
+      { id: "a", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T09:00:00.000Z") },
+      { id: "b", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T16:00:00.000Z") },
+    ];
+    expect(proximaVisita(itens, AGORA_PV)?.id).toBe("b");
+  });
+
+  test("N) várias futuras -> a de menor scheduledAt", () => {
+    const itens: Item[] = [
+      { id: "tarde", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T20:00:00.000Z") },
+      { id: "logo", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T15:00:00.000Z") },
+      { id: "meio", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T18:00:00.000Z") },
+    ];
+    expect(proximaVisita(itens, AGORA_PV)?.id).toBe("logo");
+  });
+
+  test("O) mistura passado/futuro -> a primeira futura, ignorando as passadas", () => {
+    const itens: Item[] = [
+      { id: "passada1", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T08:00:00.000Z") },
+      { id: "passada2", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T10:00:00.000Z") },
+      { id: "futura", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T16:00:00.000Z") },
+    ];
+    expect(proximaVisita(itens, AGORA_PV)?.id).toBe("futura");
+  });
+
+  test("P) scheduledAt exatamente agora -> elegível como próxima", () => {
+    const itens: Item[] = [{ id: "agora", status: "SCHEDULED", scheduledAt: AGORA_PV }];
+    expect(proximaVisita(itens, AGORA_PV)?.id).toBe("agora");
+  });
+
+  test("COMPLETED/CANCELLED futuras nunca são elegíveis (só SCHEDULED)", () => {
+    const itens: Item[] = [
+      { id: "completada", status: "COMPLETED", scheduledAt: new Date("2026-08-20T16:00:00.000Z") },
+      { id: "cancelada", status: "CANCELLED", scheduledAt: new Date("2026-08-20T17:00:00.000Z") },
+      { id: "agendada", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T18:00:00.000Z") },
+    ];
+    expect(proximaVisita(itens, AGORA_PV)?.id).toBe("agendada");
   });
 });
