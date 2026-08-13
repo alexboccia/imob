@@ -45,7 +45,7 @@ export function InteresseImovelItem({
     // Visita SCHEDULED mais próxima deste relacionamento, se houver — já
     // vem pronta da query da página (batch, sem N+1 por card). scheduledAt
     // trafega como string ISO, nunca Date (ver AgendamentoVisita.tsx).
-    proximaVisita: { id: string; scheduledAtISO: string } | null;
+    proximaVisita: { id: string; scheduledAtISO: string; notes: string | null } | null;
   };
 }) {
   const proximaAcao = obterProximaAcaoComercial(interesse.stage, interesse.property.status);

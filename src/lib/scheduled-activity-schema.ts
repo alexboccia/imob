@@ -1,8 +1,10 @@
 import { z } from "zod";
 
 // Mesmo limite/racional de notesSchema em property-interest-schema.ts —
-// sem precedente de outro número "oficial" no projeto.
-const notesSchema = z
+// sem precedente de outro número "oficial" no projeto. Exportado (H.6)
+// porque atualizarObservacaoAgendamentoVisitaSchema, abaixo, reusa a
+// mesma regra — nunca uma segunda validação de "notes" divergente.
+export const notesSchema = z
   .string()
   .trim()
   .max(2000, "Observações muito longas (máximo 2.000 caracteres).")
@@ -28,8 +30,20 @@ export const remarcarAgendamentoVisitaSchema = z.object({
   scheduledAt: scheduledAtInputSchema,
 });
 
+// Observação do agendamento (Fase H.6) — só o campo `notes`, reaproveita
+// a MESMA validação usada em criarAgendamentoVisitaSchema (trim, máximo
+// 2.000, "" tratado como ausente). Quem chama (Server Action) converte
+// undefined/"" pra null antes de persistir — o schema em si não decide
+// isso, só valida forma.
+export const atualizarObservacaoAgendamentoVisitaSchema = z.object({
+  notes: notesSchema,
+});
+
 export type DadosCriarAgendamentoVisita = z.infer<typeof criarAgendamentoVisitaSchema>;
 export type DadosRemarcarAgendamentoVisita = z.infer<typeof remarcarAgendamentoVisitaSchema>;
+export type DadosAtualizarObservacaoAgendamentoVisita = z.infer<
+  typeof atualizarObservacaoAgendamentoVisitaSchema
+>;
 
 // Converte o valor de um <input type="datetime-local"> num Date real.
 //

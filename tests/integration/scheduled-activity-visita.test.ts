@@ -16,6 +16,7 @@ import {
   remarcarAgendamentoVisita,
   cancelarAgendamentoVisita,
   concluirAgendamentoVisita,
+  atualizarObservacaoAgendamentoVisita,
 } from "@/app/app/agendamentos/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import type { PropertyInterestStage } from "@/generated/prisma/client";
@@ -60,6 +61,13 @@ async function cancelar(scheduledActivityId: string) {
 }
 async function concluir(scheduledActivityId: string) {
   return concluirAgendamentoVisita(scheduledActivityId, ESTADO_INICIAL_ACAO, new FormData());
+}
+async function atualizarObservacao(scheduledActivityId: string, notes: string) {
+  return atualizarObservacaoAgendamentoVisita(
+    scheduledActivityId,
+    ESTADO_INICIAL_ACAO,
+    formData({ notes })
+  );
 }
 
 async function criarInteresseDireto(opcoes: {
@@ -1359,5 +1367,343 @@ describe("Agenda de visitas — Fase H.2 do CRM", () => {
     });
     // Nunca regride nem avança pra VISITED — REJECTED permanece REJECTED.
     expect(interesseFinal?.stage).toBe("REJECTED");
+  });
+
+  // -------------------------------------------------------------------
+  // Observação do agendamento (Fase H.6)
+  // -------------------------------------------------------------------
+
+  test("G/H) atualiza observação de null para texto", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    expect(original.notes).toBeNull();
+
+    const resultado = await atualizarObservacao(original.id, "Cliente pediu para ver a área de lazer.");
+
+    expect(resultado.success).toBe(true);
+    const atualizado = await prisma.scheduledActivity.findUnique({
+      where: { id: original.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(atualizado?.notes).toBe("Cliente pediu para ver a área de lazer.");
+  });
+
+  test("I) atualiza de um texto para outro texto", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro(), notes: "Texto original" });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+
+    const resultado = await atualizarObservacao(original.id, "Texto atualizado");
+
+    expect(resultado.success).toBe(true);
+    const atualizado = await prisma.scheduledActivity.findUnique({
+      where: { id: original.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(atualizado?.notes).toBe("Texto atualizado");
+  });
+
+  test("J) texto para vazio vira null", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro(), notes: "Será removido" });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+
+    const resultado = await atualizarObservacao(original.id, "   ");
+
+    expect(resultado.success).toBe(true);
+    const atualizado = await prisma.scheduledActivity.findUnique({
+      where: { id: original.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(atualizado?.notes).toBeNull();
+  });
+
+  test("K/L) no-op com o mesmo valor já persistido: sucesso, sem update real, sem ActivityLog novo", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro(), notes: "Valor estável" });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    const logsAntes = await prisma.activityLog.count({
+      where: {
+        organizationId: ctx.cenario.organization.id,
+        entity: "ScheduledActivity",
+        entityId: original.id,
+        action: "scheduled_activity_notes_updated",
+      },
+    });
+
+    const resultado = await atualizarObservacao(original.id, "Valor estável");
+
+    expect(resultado.success).toBe(true);
+    const logsDepois = await prisma.activityLog.count({
+      where: {
+        organizationId: ctx.cenario.organization.id,
+        entity: "ScheduledActivity",
+        entityId: original.id,
+        action: "scheduled_activity_notes_updated",
+      },
+    });
+    expect(logsDepois).toBe(logsAntes);
+    expect(logsDepois).toBe(0);
+  });
+
+  test("M/N/O) update real cria exatamente 1 ActivityLog, sem texto de notes, só flags booleanas em metadata", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro(), notes: "Telefone do cliente: 11999999999" });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+
+    const resultado = await atualizarObservacao(original.id, "Nova observação sem dado sensível");
+
+    expect(resultado.success).toBe(true);
+    const logs = await prisma.activityLog.findMany({
+      where: {
+        organizationId: ctx.cenario.organization.id,
+        entity: "ScheduledActivity",
+        entityId: original.id,
+        action: "scheduled_activity_notes_updated",
+      },
+    });
+    expect(logs).toHaveLength(1);
+    const log = logs[0];
+    expect(JSON.stringify(log)).not.toContain("Telefone do cliente");
+    expect(JSON.stringify(log)).not.toContain("Nova observação");
+    expect(JSON.stringify(log)).not.toContain("11999999999");
+    expect(log.payload).toEqual({ hadNotesBefore: true, hasNotesAfter: true });
+  });
+
+  test("P) COMPLETED rejeita alteração de observação", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro(), notes: "Antes de concluir" });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    await concluir(original.id);
+
+    const resultado = await atualizarObservacao(original.id, "Tentativa pós-conclusão");
+
+    expect(resultado.success).toBe(false);
+    const atual = await prisma.scheduledActivity.findUnique({
+      where: { id: original.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(atual?.notes).toBe("Antes de concluir");
+  });
+
+  test("Q) CANCELLED rejeita alteração de observação", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro(), notes: "Antes de cancelar" });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    await cancelar(original.id);
+
+    const resultado = await atualizarObservacao(original.id, "Tentativa pós-cancelamento");
+
+    expect(resultado.success).toBe(false);
+    const atual = await prisma.scheduledActivity.findUnique({
+      where: { id: original.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(atual?.notes).toBe("Antes de cancelar");
+  });
+
+  test("R) outro tenant não consegue alterar a observação", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro(), notes: "Pertence à org A" });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenarioB);
+
+    const resultado = await atualizarObservacao(original.id, "Invasão de outra org");
+
+    expect(resultado.success).toBe(false);
+    const atual = await prisma.scheduledActivity.findUnique({
+      where: { id: original.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(atual?.notes).toBe("Pertence à org A");
+  });
+
+  test("S) id inexistente retorna erro seguro, sem exception", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+
+    const resultado = await atualizarObservacao("id-que-nao-existe-nunca", "Qualquer coisa");
+
+    expect(resultado.success).toBe(false);
+  });
+
+  test("T/U) FormData não controla organizationId/personId/propertyId/memberId", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+
+    const fd = formData({
+      notes: "Texto legítimo",
+      organizationId: cenarioB.organization.id,
+      personId: "pessoa-forjada",
+      propertyId: "imovel-forjado",
+      memberId: "membro-forjado",
+      createdByMemberId: "membro-forjado",
+    });
+    const resultado = await atualizarObservacaoAgendamentoVisita(original.id, ESTADO_INICIAL_ACAO, fd);
+
+    expect(resultado.success).toBe(true);
+    const atualizado = await prisma.scheduledActivity.findUnique({
+      where: { id: original.id, organizationId: ctx.cenario.organization.id },
+    });
+    // organizationId/personId/propertyId continuam exatamente os
+    // originais — os campos forjados no FormData nunca são lidos pela
+    // action (só `notes` é extraído do schema).
+    expect(atualizado?.organizationId).toBe(ctx.cenario.organization.id);
+    expect(atualizado?.personId).toBe(ctx.pessoa.id);
+    expect(atualizado?.propertyId).toBe(ctx.imovel.id);
+    expect(atualizado?.notes).toBe("Texto legítimo");
+  });
+
+  test("V) concorrência: duas atualizações simultâneas terminam num estado válido e consistente", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+
+    const [r1, r2] = await Promise.all([
+      atualizarObservacao(original.id, "Primeira atualização concorrente"),
+      atualizarObservacao(original.id, "Segunda atualização concorrente"),
+    ]);
+
+    // V1 (last-write-wins, documentado): ambas podem retornar sucesso —
+    // não há detecção de conflito — mas o valor final tem que ser
+    // EXATAMENTE um dos dois textos enviados, nunca um valor corrompido/
+    // misturado, e a linha continua existindo e SCHEDULED.
+    expect(r1.success).toBe(true);
+    expect(r2.success).toBe(true);
+    const atual = await prisma.scheduledActivity.findUnique({
+      where: { id: original.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(["Primeira atualização concorrente", "Segunda atualização concorrente"]).toContain(
+      atual?.notes
+    );
+    expect(atual?.status).toBe("SCHEDULED");
+  });
+
+  test("W/X/Y/Z/AA) atualizar observação não altera scheduledAt, status, completedAt, cancelledAt, PropertyInterest.stage, nem cria Interaction", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    const interesseAntes = await prisma.propertyInterest.findUniqueOrThrow({
+      where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+    });
+    // Stage já avançou pra VISIT_SCHEDULED pelo próprio agendar() acima
+    // (H.2) — o que importa aqui é que atualizarObservacao não mexe
+    // nele de novo, nem em qualquer outro campo alheio a `notes`.
+    expect(interesseAntes.stage).toBe("VISIT_SCHEDULED");
+
+    await atualizarObservacao(original.id, "Só a observação deve mudar");
+
+    const atual = await prisma.scheduledActivity.findUniqueOrThrow({
+      where: { id: original.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(atual.scheduledAt.getTime()).toBe(original.scheduledAt.getTime());
+    expect(atual.status).toBe("SCHEDULED");
+    expect(atual.completedAt).toBeNull();
+    expect(atual.cancelledAt).toBeNull();
+
+    const interesseDepois = await prisma.propertyInterest.findUniqueOrThrow({
+      where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(interesseDepois.stage).toBe("VISIT_SCHEDULED");
+
+    const totalInteracoes = await prisma.interaction.count({
+      where: { organizationId: ctx.cenario.organization.id, personId: ctx.pessoa.id },
+    });
+    expect(totalInteracoes).toBe(0);
+  });
+
+  test("AB) reconfirmação de tenant: linha com organizationId correto mas relação Person anômala continua editável sem tocar/vazar a relação anômala", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoaB = await criarPessoa({ organizationId: cenarioB.organization.id, name: "Pessoa Sigilosa De B" });
+    const imovelA = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+
+    // Linha fora do fluxo normal da app (mesmo padrão da auditoria H.3):
+    // organizationId de A (legítima pra esta org), personId de B.
+    const anomala = await prisma.scheduledActivity.create({
+      data: {
+        organizationId: cenario.organization.id,
+        personId: pessoaB.id,
+        propertyId: imovelA.id,
+        status: "SCHEDULED",
+        scheduledAt: new Date(futuro() + ":00.000Z"),
+      },
+    });
+
+    const resultado = await atualizarObservacao(anomala.id, "Observação sobre linha anômala");
+
+    // A escrita é permitida (a ScheduledActivity É legitimamente de A) —
+    // o ponto crítico é que isso não lê nem expõe nada de Person/Property
+    // de B: nenhuma exception, nenhum dado de B tocado.
+    expect(resultado.success).toBe(true);
+    const atualizado = await prisma.scheduledActivity.findUnique({
+      where: { id: anomala.id, organizationId: cenario.organization.id },
+    });
+    expect(atualizado?.notes).toBe("Observação sobre linha anômala");
+    // Person de B nunca foi alterada.
+    const pessoaBAposUpdate = await prisma.person.findUnique({
+      where: { id: pessoaB.id, organizationId: cenarioB.organization.id },
+    });
+    expect(pessoaBAposUpdate?.name).toBe("Pessoa Sigilosa De B");
+
+    await prisma.scheduledActivity.deleteMany({
+      where: { id: anomala.id, organizationId: cenario.organization.id },
+    });
+  });
+
+  test("AD) concluir continua criando Interaction com notes = null, mesmo quando ScheduledActivity.notes tem texto", async () => {
+    const ctx = await cenarioPadrao();
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    await atualizarObservacao(original.id, "Observação detalhada da visita agendada");
+
+    await concluir(original.id);
+
+    const interacao = await prisma.interaction.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, personId: ctx.pessoa.id, type: "VISIT" },
+    });
+    expect(interacao.notes).toBeNull();
+    // A observação do agendamento continua intacta na própria
+    // ScheduledActivity, só nunca é copiada pra Interaction.
+    const atividadeFinal = await prisma.scheduledActivity.findUnique({
+      where: { id: original.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(atividadeFinal?.notes).toBe("Observação detalhada da visita agendada");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { parseScheduledAt } from "./scheduled-activity-schema";
+import { parseScheduledAt, atualizarObservacaoAgendamentoVisitaSchema } from "./scheduled-activity-schema";
 import {
   formatarDataHora,
   paraDatetimeLocal,
@@ -36,6 +36,48 @@ describe("parseScheduledAt", () => {
       const resultado = comTimezoneDoProcesso(tz, () => parseScheduledAt("2026-08-20T14:30"));
       expect(resultado.toISOString()).toBe("2026-08-20T14:30:00.000Z");
     }
+  });
+});
+
+// Normalização de `notes` (Fase H.6) — mesma conversão feita por
+// atualizarObservacaoAgendamentoVisita (`parsed.data.notes || null`),
+// replicada aqui pra testar exatamente o que a Server Action produz sem
+// precisar de banco/mocks de auth.
+function normalizarNotes(valor: string): string | null {
+  const parsed = atualizarObservacaoAgendamentoVisitaSchema.parse({ notes: valor });
+  return parsed.notes || null;
+}
+
+describe("atualizarObservacaoAgendamentoVisitaSchema / normalização de notes (Fase H.6)", () => {
+  test("A) texto normal é preservado", () => {
+    expect(normalizarNotes("Cliente pediu para ver a área de lazer.")).toBe(
+      "Cliente pediu para ver a área de lazer."
+    );
+  });
+
+  test("B) espaços nas bordas são removidos (trim)", () => {
+    expect(normalizarNotes("   Levar tabela de financiamento.   ")).toBe(
+      "Levar tabela de financiamento."
+    );
+  });
+
+  test("C) string vazia vira null", () => {
+    expect(normalizarNotes("")).toBeNull();
+  });
+
+  test("D) só espaços vira null (trim antes da checagem de vazio)", () => {
+    expect(normalizarNotes("   ")).toBeNull();
+  });
+
+  test("E) exatamente 2000 caracteres é aceito", () => {
+    const texto = "a".repeat(2000);
+    expect(normalizarNotes(texto)).toBe(texto);
+  });
+
+  test("F) mais de 2000 caracteres é rejeitado pelo schema", () => {
+    const texto = "a".repeat(2001);
+    const resultado = atualizarObservacaoAgendamentoVisitaSchema.safeParse({ notes: texto });
+    expect(resultado.success).toBe(false);
   });
 });
 

@@ -6,6 +6,7 @@ import {
   remarcarAgendamentoVisita,
   cancelarAgendamentoVisita,
   concluirAgendamentoVisita,
+  atualizarObservacaoAgendamentoVisita,
 } from "@/app/app/agendamentos/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { formatarDataHora, paraDatetimeLocal } from "@/lib/scheduled-activity-date";
@@ -24,7 +25,18 @@ import { Textarea } from "@/components/ui/textarea";
 // implícita de Date, que este projeto não usa em nenhum outro componente
 // cliente (ver auditoria da H.2).
 
-type AtividadeAgendada = { id: string; scheduledAtISO: string };
+// notes (Fase H.6): observação operacional do AGENDAMENTO em si (ex:
+// "cliente pediu para ver a área de lazer"), nunca confundir com
+// Interaction.notes (histórico comercial, sempre null na conclusão —
+// H.2, inalterado). Editável só enquanto a atividade é SCHEDULED — os 3
+// callers deste componente (ficha do cliente, ficha do imóvel, agenda)
+// só passam `atividadeAgendada` truthy quando existe uma visita
+// SCHEDULED, então o formulário de observação abaixo nunca é alcançável
+// pra uma visita já COMPLETED/CANCELLED por construção (não precisa de
+// um segundo modo "somente leitura" aqui — ver AgendaItemCard.tsx pra
+// como o histórico COMPLETED/CANCELLED exibe notes, fora deste
+// componente).
+type AtividadeAgendada = { id: string; scheduledAtISO: string; notes: string | null };
 
 export function AgendamentoVisita({
   propertyInterestId,
@@ -131,7 +143,14 @@ function VisitaAgendadaCard({ atividade }: { atividade: AtividadeAgendada }) {
     ESTADO_INICIAL_ACAO
   );
 
+  const observacaoAcao = atualizarObservacaoAgendamentoVisita.bind(null, atividade.id);
+  const [estadoObservacao, formActionObservacao, pendenteObservacao] = useActionState(
+    observacaoAcao,
+    ESTADO_INICIAL_ACAO
+  );
+
   const dataId = useId();
+  const notesId = useId();
   const erro = [estadoRemarcar, estadoCancelar, estadoConcluir].find(
     (e) => e.message && !e.success
   );
@@ -144,6 +163,38 @@ function VisitaAgendadaCard({ atividade }: { atividade: AtividadeAgendada }) {
       </p>
 
       {erro?.message && <p className="text-xs text-destructive">{erro.message}</p>}
+
+      {/* Observação do agendamento (Fase H.6) — sempre editável aqui
+          porque este componente só é montado com atividade SCHEDULED
+          (ver AtividadeAgendada acima). `key` no textarea força
+          remontagem quando o servidor confirma um novo valor
+          (revalidatePath → atividade.notes muda), descartando qualquer
+          edição não salva em favor do que está realmente persistido —
+          mesmo racional do reset de `remarcando` acima, sem duplicar
+          lógica de "valor visto" com useState. */}
+      <form action={formActionObservacao} className="space-y-1.5 border-t pt-2">
+        <Label htmlFor={notesId} className="text-xs">
+          Observações da visita
+        </Label>
+        <Textarea
+          key={atividade.notes ?? ""}
+          id={notesId}
+          name="notes"
+          rows={2}
+          maxLength={2000}
+          defaultValue={atividade.notes ?? ""}
+          placeholder="Ex: cliente pediu para conhecer a área de lazer."
+        />
+        {estadoObservacao.fieldErrors?.notes && (
+          <p className="text-xs text-destructive">{estadoObservacao.fieldErrors.notes[0]}</p>
+        )}
+        {estadoObservacao.message && !estadoObservacao.success && (
+          <p className="text-xs text-destructive">{estadoObservacao.message}</p>
+        )}
+        <Button type="submit" size="sm" variant="outline" disabled={pendenteObservacao}>
+          {pendenteObservacao ? "Salvando..." : "Salvar observação"}
+        </Button>
+      </form>
 
       {remarcando ? (
         <form action={formActionRemarcar} className="space-y-2">

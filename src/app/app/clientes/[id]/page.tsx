@@ -101,7 +101,7 @@ export default async function DetalheClientePage({
                 where: { organizationId, status: "SCHEDULED" },
                 orderBy: { scheduledAt: "asc" },
                 take: 1,
-                select: { id: true, scheduledAt: true },
+                select: { id: true, scheduledAt: true, notes: true },
               },
             },
           },
@@ -260,6 +260,7 @@ export default async function DetalheClientePage({
                       ? {
                           id: interesse.scheduledActivities[0].id,
                           scheduledAtISO: interesse.scheduledActivities[0].scheduledAt.toISOString(),
+                          notes: interesse.scheduledActivities[0].notes,
                         }
                       : null,
                   }}

@@ -18,6 +18,7 @@ import {
 import {
   criarAgendamentoVisitaSchema,
   remarcarAgendamentoVisitaSchema,
+  atualizarObservacaoAgendamentoVisitaSchema,
   parseScheduledAt,
 } from "@/lib/scheduled-activity-schema";
 
@@ -488,5 +489,103 @@ export async function concluirAgendamentoVisita(
       case "concluida_agora":
         return sucesso("Visita concluída.");
     }
+  });
+}
+
+// Atualiza a observação operacional de uma visita agendada (Fase H.6) —
+// texto livre do corretor sobre o AGENDAMENTO em si ("cliente pediu para
+// ver a área de lazer"), nunca confundir com Interaction (histórico
+// comercial, criado só na conclusão, com notes sempre null por decisão
+// da H.2 — ver concluirAgendamentoVisita acima, inalterada por esta
+// fase). Nenhuma outra tabela é tocada.
+//
+// Reconferência de tenant: diferente de criar/remarcar/concluir, esta
+// action NUNCA lê nem escreve nada de Person/Property — `notes` é um
+// campo escalar da própria ScheduledActivity, sem dependência de
+// conteúdo de nenhuma relação. Por isso `where: { id, organizationId }`
+// (reforçado pela extensão de tenant-scoping de src/lib/prisma.ts) já é
+// a defesa completa: não existe superfície adicional de leitura/escrita
+// cross-tenant a fechar aqui, mesmo que a linha tenha uma relação
+// anômala de Person/Property (H.3, seção 13-15) — essa anomalia nunca é
+// lida nem influencia esta operação.
+export async function atualizarObservacaoAgendamentoVisita(
+  scheduledActivityId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  const parsed = atualizarObservacaoAgendamentoVisitaSchema.safeParse(
+    Object.fromEntries(formData.entries())
+  );
+  if (!parsed.success) return erroValidacao(parsed.error);
+  // "" (ou só espaços, já removidos pelo trim do schema) nunca é
+  // persistido como conteúdo real — mesma normalização de
+  // criarAgendamentoVisita.
+  const notesNormalizado = parsed.data.notes || null;
+
+  return withOrganization(organizationId, async () => {
+    const atividade = await prisma.scheduledActivity.findUnique({
+      where: { id: scheduledActivityId, organizationId },
+      select: { id: true, status: true, notes: true, personId: true, propertyId: true },
+    });
+    if (!atividade) return erroAcessoNegado("Agendamento não encontrado.");
+
+    // Só SCHEDULED pode ter a observação alterada — depois de
+    // COMPLETED/CANCELLED, o texto vira parte do histórico encerrado do
+    // agendamento (seção 6 da H.6), somente leitura. Checado aqui
+    // (backend) independente de qualquer `disabled` da UI.
+    if (atividade.status !== "SCHEDULED") {
+      return erroGenerico("Só é possível alterar a observação de uma visita agendada.");
+    }
+
+    // No-op: valor novo idêntico ao já persistido (inclui os dois nulls
+    // sendo iguais) — nenhum update, nenhum ActivityLog. Comparação feita
+    // ANTES do updateMany de propósito, pra não gastar uma escrita (nem
+    // que seja um no-op no Postgres) só pra descobrir isso depois.
+    if (notesNormalizado === atividade.notes) {
+      return sucesso("Observação sem alterações.");
+    }
+
+    // Guard atômico (mesmo padrão de concluirAgendamentoVisita): o
+    // `status: "SCHEDULED"` dentro do WHERE do updateMany garante que,
+    // sob concorrência (ex: alguém cancela/conclui a visita bem entre o
+    // findUnique acima e este update), a escrita da observação nunca
+    // "vence a corrida" contra uma transição de status — count:0 sinaliza
+    // isso sem precisar de lock/versão/infra nova (V1: last-write-wins
+    // entre duas edições de notes concorrentes é aceitável; o que NÃO É
+    // aceitável, e este guard impede, é editar notes depois que o status
+    // já mudou).
+    const atualizado = await prisma.scheduledActivity.updateMany({
+      where: { id: atividade.id, organizationId, status: "SCHEDULED" },
+      data: { notes: notesNormalizado },
+    });
+    if (atualizado.count === 0) {
+      return erroGenerico("Só é possível alterar a observação de uma visita agendada.");
+    }
+
+    // payload só com flags booleanas — nunca o texto (antes ou depois),
+    // nunca nome/telefone/e-mail: notes pode conter PII, ActivityLog não
+    // é o lugar pra isso (seção 9 da H.6).
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "ScheduledActivity",
+      entityId: atividade.id,
+      action: "scheduled_activity_notes_updated",
+      payload: {
+        hadNotesBefore: atividade.notes !== null,
+        hasNotesAfter: notesNormalizado !== null,
+      },
+    });
+
+    revalidarPaginasAgendamento(atividade.personId, atividade.propertyId);
+    return sucesso("Observação atualizada.");
   });
 }

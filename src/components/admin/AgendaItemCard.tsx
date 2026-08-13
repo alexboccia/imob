@@ -82,7 +82,17 @@ export function AgendaItemCard({
           </div>
         </div>
 
-        {item.notes && <p className="text-foreground whitespace-pre-line">{item.notes}</p>}
+        {/* Observação (H.6): só exibida aqui em modo histórico/somente
+            leitura (item não-acionável, ou seja, COMPLETED/CANCELLED) —
+            quando acionável (SCHEDULED), a mesma observação já aparece
+            editável dentro de AgendamentoVisita abaixo; mostrar as duas
+            duplicaria o mesmo texto no card. */}
+        {!acionavel && item.notes && (
+          <div className="text-xs">
+            <p className="font-medium text-muted-foreground">Observação</p>
+            <p className="text-foreground whitespace-pre-line">{item.notes}</p>
+          </div>
+        )}
 
         {(item.person || item.property) && (
           <div className="flex items-center gap-3 text-xs">
@@ -103,7 +113,11 @@ export function AgendaItemCard({
           <AgendamentoVisita
             propertyInterestId={item.propertyInterestId ?? undefined}
             podeAgendar={false}
-            atividadeAgendada={{ id: item.id, scheduledAtISO: item.scheduledAt.toISOString() }}
+            atividadeAgendada={{
+              id: item.id,
+              scheduledAtISO: item.scheduledAt.toISOString(),
+              notes: item.notes,
+            }}
           />
         )}
       </CardContent>
