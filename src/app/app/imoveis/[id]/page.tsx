@@ -14,9 +14,11 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ESTAGIO_INTERESSE_LABEL } from "@/components/admin/InteresseImovelItem";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
+import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
 import { RecomendacaoClienteItem } from "@/components/admin/RecomendacaoClienteItem";
 import { buscarClientesCompativeis } from "@/lib/property-matching";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
+import { estagioInteresseEncerrado } from "@/lib/property-interest-schema";
 
 const MEDIA_TYPE_PARA_TIPO_MIDIA = {
   PHOTO: "FOTO",
@@ -154,14 +156,12 @@ export default async function EditarImovelPage({
             <ul className="space-y-2">
               {interesses.map((interesse) => {
                 const proximaAcao = obterProximaAcaoComercial(interesse.stage, imovel.status);
-                // Mesma regra de InteresseImovelItem.tsx (Fase H.2/P.2):
+                // Mesma regra de InteresseImovelItem.tsx (Fase H.2/P.2/P.3):
                 // relacionamento ENCERRADO (REJECTED ou WON) bloqueia
                 // agendar nova visita, independente da "próxima ação"
                 // textual da Fase G já ter avançado.
                 const podeAgendarVisita =
-                  interesse.stage !== "REJECTED" &&
-                  interesse.stage !== "WON" &&
-                  imovel.status === "AVAILABLE";
+                  !estagioInteresseEncerrado(interesse.stage) && imovel.status === "AVAILABLE";
                 const proximaVisita = interesse.scheduledActivities[0]
                   ? {
                       id: interesse.scheduledActivities[0].id,
@@ -198,6 +198,11 @@ export default async function EditarImovelPage({
                       propertyInterestId={interesse.id}
                       podeAgendar={podeAgendarVisita}
                       atividadeAgendada={proximaVisita}
+                    />
+                    <FechamentoInteresse
+                      interesseId={interesse.id}
+                      stage={interesse.stage}
+                      closedAtISO={interesse.closedAt ? interesse.closedAt.toISOString() : null}
                     />
                   </li>
                 );

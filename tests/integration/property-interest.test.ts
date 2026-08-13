@@ -17,8 +17,11 @@ import {
   atualizarEstagioInteresse,
   alternarFavoritoInteresse,
   removerInteresse,
+  marcarInteresseComoGanho,
+  marcarInteresseComoPerdido,
 } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
+import type { PropertyInterestStage } from "@/generated/prisma/client";
 
 function formData(campos: Record<string, string>) {
   const fd = new FormData();
@@ -51,6 +54,12 @@ async function favoritar(interesseId: string) {
 }
 async function remover(interesseId: string) {
   return removerInteresse(interesseId, ESTADO_INICIAL_ACAO, new FormData());
+}
+async function marcarGanho(interesseId: string) {
+  return marcarInteresseComoGanho(interesseId, ESTADO_INICIAL_ACAO, new FormData());
+}
+async function marcarPerdido(interesseId: string) {
+  return marcarInteresseComoPerdido(interesseId, ESTADO_INICIAL_ACAO, new FormData());
 }
 
 async function buscarInteresse(organizationId: string, personId: string, propertyId: string) {
@@ -1058,5 +1067,462 @@ describe("PropertyInterest — relacionamento Person↔Property (Fase D do CRM)"
     const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
     expect(atual?.stage).toBe("INTERESTED");
     expect(atual?.closedAt).toBeNull();
+  });
+
+  test("BV) atualizarEstagioInteresse (action manual/genérica) rejeita 'REJECTED' — só marcarInteresseComoPerdido pode setá-lo (Fase P.3)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+
+    const resultado = await mudarEstagio(interesse!.id, { stage: "REJECTED" });
+
+    expect(resultado.success).toBe(false);
+    const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(atual?.stage).toBe("INTERESTED");
+    expect(atual?.closedAt).toBeNull();
+  });
+
+  // -------------------------------------------------------------------
+  // Fechamento oficial da negociação — marcarInteresseComoGanho/Perdido
+  // (Fase P.3). Continua a numeração de letras da fundação de fechamento
+  // (BN-BV, Fase P.2) acima.
+  // -------------------------------------------------------------------
+
+  async function prepararInteresseNoStage(
+    cenarioAtual: Cenario,
+    stage: Exclude<PropertyInterestStage, "WON" | "REJECTED">
+  ) {
+    const pessoa = await criarPessoa({ organizationId: cenarioAtual.organization.id });
+    const imovel = await criarImovel({ organizationId: cenarioAtual.organization.id, status: "AVAILABLE" });
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = await buscarInteresse(cenarioAtual.organization.id, pessoa.id, imovel.id);
+    if (stage !== "INTERESTED") {
+      await mudarEstagio(interesse!.id, { stage });
+    }
+    return { pessoa, imovel, interesse: interesse! };
+  }
+
+  const STAGES_ABERTOS = ["INTERESTED", "VISIT_SCHEDULED", "VISITED", "PROPOSAL"] as const;
+
+  for (const stageOrigem of STAGES_ABERTOS) {
+    test(`CW-${stageOrigem}) marcarInteresseComoGanho a partir de ${stageOrigem} seta stage=WON e closedAt`, async () => {
+      cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+      autenticarComo(cenario);
+      const { pessoa, imovel } = await prepararInteresseNoStage(cenario, stageOrigem);
+      const antesDe = new Date();
+
+      const resultado = await marcarGanho((await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!.id);
+
+      expect(resultado.success).toBe(true);
+      const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+      expect(atual?.stage).toBe("WON");
+      expect(atual?.closedAt).not.toBeNull();
+      expect(atual!.closedAt!.getTime()).toBeGreaterThanOrEqual(antesDe.getTime());
+    });
+
+    test(`CX-${stageOrigem}) marcarInteresseComoPerdido a partir de ${stageOrigem} seta stage=REJECTED e closedAt`, async () => {
+      cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+      autenticarComo(cenario);
+      const { pessoa, imovel } = await prepararInteresseNoStage(cenario, stageOrigem);
+      const antesDe = new Date();
+
+      const resultado = await marcarPerdido((await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!.id);
+
+      expect(resultado.success).toBe(true);
+      const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+      expect(atual?.stage).toBe("REJECTED");
+      expect(atual?.closedAt).not.toBeNull();
+      expect(atual!.closedAt!.getTime()).toBeGreaterThanOrEqual(antesDe.getTime());
+    });
+  }
+
+  test("CY) idempotência: marcarInteresseComoGanho num interesse já WON é sucesso, não altera closedAt nem duplica ActivityLog", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { pessoa, imovel } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    const interesseId = (await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!.id;
+    await marcarGanho(interesseId);
+    const primeiro = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    const logsAntes = await prisma.activityLog.count({
+      where: { organizationId: cenario.organization.id, entityId: interesseId },
+    });
+
+    const resultado = await marcarGanho(interesseId);
+
+    expect(resultado.success).toBe(true);
+    const depois = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(depois?.stage).toBe("WON");
+    expect(depois?.closedAt?.getTime()).toBe(primeiro?.closedAt?.getTime());
+    const logsDepois = await prisma.activityLog.count({
+      where: { organizationId: cenario.organization.id, entityId: interesseId },
+    });
+    expect(logsDepois).toBe(logsAntes);
+  });
+
+  test("CZ) idempotência: marcarInteresseComoPerdido num interesse já REJECTED é sucesso, não altera closedAt nem duplica ActivityLog", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { pessoa, imovel } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    const interesseId = (await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!.id;
+    await marcarPerdido(interesseId);
+    const primeiro = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    const logsAntes = await prisma.activityLog.count({
+      where: { organizationId: cenario.organization.id, entityId: interesseId },
+    });
+
+    const resultado = await marcarPerdido(interesseId);
+
+    expect(resultado.success).toBe(true);
+    const depois = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(depois?.stage).toBe("REJECTED");
+    expect(depois?.closedAt?.getTime()).toBe(primeiro?.closedAt?.getTime());
+    const logsDepois = await prisma.activityLog.count({
+      where: { organizationId: cenario.organization.id, entityId: interesseId },
+    });
+    expect(logsDepois).toBe(logsAntes);
+  });
+
+  test("DA) transição inválida: marcarInteresseComoPerdido num interesse WON é rejeitado, stage/closedAt permanecem WON", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { pessoa, imovel } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    const interesseId = (await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!.id;
+    await marcarGanho(interesseId);
+    const fechado = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+
+    const resultado = await marcarPerdido(interesseId);
+
+    expect(resultado.success).toBe(false);
+    const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(atual?.stage).toBe("WON");
+    expect(atual?.closedAt?.getTime()).toBe(fechado?.closedAt?.getTime());
+  });
+
+  test("DB) transição inválida: marcarInteresseComoGanho num interesse REJECTED é rejeitado, stage/closedAt permanecem REJECTED", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { pessoa, imovel } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    const interesseId = (await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!.id;
+    await marcarPerdido(interesseId);
+    const fechado = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+
+    const resultado = await marcarGanho(interesseId);
+
+    expect(resultado.success).toBe(false);
+    const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(atual?.stage).toBe("REJECTED");
+    expect(atual?.closedAt?.getTime()).toBe(fechado?.closedAt?.getTime());
+  });
+
+  test("DC) cross-tenant: interesseId de outra organização não é fechado, mensagem genérica, nada muda", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenarioB);
+    const { interesse } = await prepararInteresseNoStage(cenarioB, "INTERESTED");
+
+    autenticarComo(cenario);
+    const resultado = await marcarGanho(interesse.id);
+
+    expect(resultado.success).toBe(false);
+    const atual = await prisma.propertyInterest.findUnique({
+      where: { id: interesse.id, organizationId: cenarioB.organization.id },
+    });
+    expect(atual?.stage).toBe("INTERESTED");
+    expect(atual?.closedAt).toBeNull();
+  });
+
+  test("DD) cross-tenant (anomalia de dado): PropertyInterest com Person de outro tenant é rejeitado por marcarInteresseComoGanho", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoaB = await criarPessoa({ organizationId: cenarioB.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    // Mesma técnica de anomalia usada em scheduled-activity-visita.test.ts
+    // (testes I/J): sem FK composta, o Postgres permite uma linha com
+    // organizationId correto mas personId de outro tenant.
+    const interesseAnomalo = await prisma.propertyInterest.create({
+      data: { organizationId: cenario.organization.id, personId: pessoaB.id, propertyId: imovel.id },
+    });
+
+    autenticarComo(cenario);
+    const resultado = await marcarGanho(interesseAnomalo.id);
+
+    expect(resultado.success).toBe(false);
+    const atual = await prisma.propertyInterest.findUnique({
+      where: { id: interesseAnomalo.id, organizationId: cenario.organization.id },
+    });
+    expect(atual?.stage).toBe("INTERESTED");
+    expect(atual?.closedAt).toBeNull();
+  });
+
+  test("DE) cross-tenant (anomalia de dado): PropertyInterest com Property de outro tenant é rejeitado por marcarInteresseComoPerdido", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovelB = await criarImovel({ organizationId: cenarioB.organization.id });
+    const interesseAnomalo = await prisma.propertyInterest.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovelB.id },
+    });
+
+    autenticarComo(cenario);
+    const resultado = await marcarPerdido(interesseAnomalo.id);
+
+    expect(resultado.success).toBe(false);
+    const atual = await prisma.propertyInterest.findUnique({
+      where: { id: interesseAnomalo.id, organizationId: cenario.organization.id },
+    });
+    expect(atual?.stage).toBe("INTERESTED");
+    expect(atual?.closedAt).toBeNull();
+  });
+
+  test("DF) concorrência real: duas chamadas simultâneas de marcarInteresseComoGanho na mesma linha resultam em exatamente 1 evento property_interest_won", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { pessoa, imovel } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    const interesseId = (await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!.id;
+
+    const [r1, r2] = await Promise.all([marcarGanho(interesseId), marcarGanho(interesseId)]);
+
+    expect(r1.success).toBe(true);
+    expect(r2.success).toBe(true);
+    const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(atual?.stage).toBe("WON");
+    const totalWon = await prisma.activityLog.count({
+      where: { organizationId: cenario.organization.id, entityId: interesseId, action: "property_interest_won" },
+    });
+    expect(totalWon).toBe(1);
+  });
+
+  test("DG) concorrência real: marcarInteresseComoGanho e marcarInteresseComoPerdido simultâneos na mesma linha nunca corrompem o stage (só um dos dois vence, nunca os dois logs de fechamento juntos)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { pessoa, imovel } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    const interesseId = (await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!.id;
+
+    const [r1, r2] = await Promise.all([marcarGanho(interesseId), marcarPerdido(interesseId)]);
+
+    // Exatamente um dos dois "venceu a corrida" (sucesso real), o outro
+    // perdeu — o Postgres serializa as duas transações, nunca deixa
+    // meio-caminho. Não afirmamos QUAL dos dois vence (não determinístico),
+    // só que o resultado final é consistente.
+    const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(["WON", "REJECTED"]).toContain(atual?.stage);
+    expect(atual?.closedAt).not.toBeNull();
+
+    const totalWon = await prisma.activityLog.count({
+      where: { organizationId: cenario.organization.id, entityId: interesseId, action: "property_interest_won" },
+    });
+    const totalLost = await prisma.activityLog.count({
+      where: { organizationId: cenario.organization.id, entityId: interesseId, action: "property_interest_lost" },
+    });
+    // Exatamente um dos dois eventos de fechamento foi gravado, nunca os
+    // dois (isso corromperia o histórico: um relacionamento não pode ter
+    // sido ganho E perdido na mesma corrida).
+    expect(totalWon + totalLost).toBe(1);
+    expect([r1.success, r2.success].filter(Boolean).length).toBe(1);
+  });
+
+  test("DH) ActivityLog duplo de marcarInteresseComoGanho: property_interest_stage_changed({from,to:WON}) e property_interest_won, nenhum PII", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({
+      organizationId: cenario.organization.id,
+      name: "Cliente Sigiloso Ganho",
+      email: "sigiloso-ganho@email.com",
+      phone: "11988887777",
+    });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+
+    await marcarGanho(interesse!.id);
+
+    const stageChanged = await prisma.activityLog.findFirst({
+      where: {
+        organizationId: cenario.organization.id,
+        entityId: interesse!.id,
+        action: "property_interest_stage_changed",
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(stageChanged?.payload).toEqual({ from: "INTERESTED", to: "WON" });
+
+    const won = await prisma.activityLog.findFirst({
+      where: { organizationId: cenario.organization.id, entityId: interesse!.id, action: "property_interest_won" },
+    });
+    expect(won).not.toBeNull();
+
+    const todosOsLogs = await prisma.activityLog.findMany({
+      where: { organizationId: cenario.organization.id, entityId: interesse!.id },
+    });
+    for (const log of todosOsLogs) {
+      const serializado = JSON.stringify(log.payload ?? {});
+      expect(serializado).not.toContain("Cliente Sigiloso Ganho");
+      expect(serializado).not.toContain("sigiloso-ganho@email.com");
+      expect(serializado).not.toContain("11988887777");
+    }
+  });
+
+  test("DI) ActivityLog duplo de marcarInteresseComoPerdido: property_interest_stage_changed({from,to:REJECTED}) e property_interest_lost, nenhum PII", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({
+      organizationId: cenario.organization.id,
+      name: "Cliente Sigiloso Perdido",
+      email: "sigiloso-perdido@email.com",
+      phone: "11977776666",
+    });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+
+    await marcarPerdido(interesse!.id);
+
+    const stageChanged = await prisma.activityLog.findFirst({
+      where: {
+        organizationId: cenario.organization.id,
+        entityId: interesse!.id,
+        action: "property_interest_stage_changed",
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(stageChanged?.payload).toEqual({ from: "INTERESTED", to: "REJECTED" });
+
+    const lost = await prisma.activityLog.findFirst({
+      where: { organizationId: cenario.organization.id, entityId: interesse!.id, action: "property_interest_lost" },
+    });
+    expect(lost).not.toBeNull();
+
+    const todosOsLogs = await prisma.activityLog.findMany({
+      where: { organizationId: cenario.organization.id, entityId: interesse!.id },
+    });
+    for (const log of todosOsLogs) {
+      const serializado = JSON.stringify(log.payload ?? {});
+      expect(serializado).not.toContain("Cliente Sigiloso Perdido");
+      expect(serializado).not.toContain("sigiloso-perdido@email.com");
+      expect(serializado).not.toContain("11977776666");
+    }
+  });
+
+  test("DJ) closedAt nunca vem de FormData — campos arbitrários (closedAt, stage, organizationId) no FormData são ignorados, closedAt sempre é o instante real do servidor", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { pessoa, imovel } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    const interesseId = (await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!.id;
+
+    const dataForjada = new Date("2000-01-01T00:00:00.000Z");
+    const antesDe = new Date();
+    const fd = new FormData();
+    fd.set("closedAt", dataForjada.toISOString());
+    fd.set("stage", "REJECTED");
+    fd.set("organizationId", cenarioB.organization.id);
+    const resultado = await marcarInteresseComoGanho(interesseId, ESTADO_INICIAL_ACAO, fd);
+
+    expect(resultado.success).toBe(true);
+    const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    // stage é sempre WON (a action que decide, nunca o "stage" do
+    // FormData) e closedAt é o instante real do servidor, nunca a data
+    // forjada de 2000.
+    expect(atual?.stage).toBe("WON");
+    expect(atual!.closedAt!.getTime()).toBeGreaterThanOrEqual(antesDe.getTime());
+  });
+
+  // -------------------------------------------------------------------
+  // Correção pós-auditoria — precisão do `from` sob mudança de stage
+  // aberto→aberto concorrente + concorrência Perdido×Perdido (achados
+  // MEDIUM/LOW da auditoria pré-commit da Fase P.3).
+  // -------------------------------------------------------------------
+
+  test("DK) from no ActivityLog reflete o stage MAIS RECENTE, não um valor obsoleto: mudança aberto→aberto (INTERESTED->VISITED) antes de marcarInteresseComoGanho", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { pessoa, imovel } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    const interesseId = (await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!.id;
+
+    // Simula uma mudança de stage aberto→aberto que aconteceu entre o
+    // instante em que um chamador hipotético teria "visto" o estado e o
+    // instante em que o fechamento de fato executa — grava direto via
+    // Prisma pra não depender de sincronizar duas Server Actions reais em
+    // paralelo (não determinístico em JS single-threaded); o fechamento
+    // em si usa a Server Action real, nunca um write direto.
+    await prisma.propertyInterest.update({
+      where: { id: interesseId, organizationId: cenario.organization.id },
+      data: { stage: "VISITED" },
+    });
+
+    const resultado = await marcarGanho(interesseId);
+
+    expect(resultado.success).toBe(true);
+    const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(atual?.stage).toBe("WON");
+    const log = await prisma.activityLog.findFirst({
+      where: {
+        organizationId: cenario.organization.id,
+        entityId: interesseId,
+        action: "property_interest_stage_changed",
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    // from deve ser VISITED (o stage real imediatamente anterior ao
+    // fechamento que venceu), nunca INTERESTED (o valor obsoleto de
+    // antes da mudança concorrente).
+    expect(log?.payload).toEqual({ from: "VISITED", to: "WON" });
+  });
+
+  test("DL) mesmo princípio pra marcarInteresseComoPerdido: from reflete o stage mais recente (INTERESTED->PROPOSAL antes do fechamento)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { pessoa, imovel } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    const interesseId = (await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!.id;
+
+    await prisma.propertyInterest.update({
+      where: { id: interesseId, organizationId: cenario.organization.id },
+      data: { stage: "PROPOSAL" },
+    });
+
+    const resultado = await marcarPerdido(interesseId);
+
+    expect(resultado.success).toBe(true);
+    const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(atual?.stage).toBe("REJECTED");
+    const log = await prisma.activityLog.findFirst({
+      where: {
+        organizationId: cenario.organization.id,
+        entityId: interesseId,
+        action: "property_interest_stage_changed",
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(log?.payload).toEqual({ from: "PROPOSAL", to: "REJECTED" });
+  });
+
+  test("DM) concorrência real: duas chamadas simultâneas de marcarInteresseComoPerdido na mesma linha resultam em exatamente 1 evento property_interest_lost (achado LOW da auditoria — faltava o par de DF)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { pessoa, imovel } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    const interesseId = (await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!.id;
+
+    const [r1, r2] = await Promise.all([marcarPerdido(interesseId), marcarPerdido(interesseId)]);
+
+    expect(r1.success).toBe(true);
+    expect(r2.success).toBe(true);
+    const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(atual?.stage).toBe("REJECTED");
+    expect(atual?.closedAt).not.toBeNull();
+    const totalLost = await prisma.activityLog.count({
+      where: { organizationId: cenario.organization.id, entityId: interesseId, action: "property_interest_lost" },
+    });
+    expect(totalLost).toBe(1);
+    const totalStageChanged = await prisma.activityLog.count({
+      where: {
+        organizationId: cenario.organization.id,
+        entityId: interesseId,
+        action: "property_interest_stage_changed",
+      },
+    });
+    expect(totalStageChanged).toBe(1);
   });
 });

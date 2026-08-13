@@ -249,6 +249,7 @@ export default async function DetalheClientePage({
                     stage: interesse.stage,
                     favorited: interesse.favorited,
                     notes: interesse.notes,
+                    closedAtISO: interesse.closedAt ? interesse.closedAt.toISOString() : null,
                     property: {
                       id: interesse.property.id,
                       title: interesse.property.title,

@@ -18,6 +18,10 @@ import {
   concluirAgendamentoVisita,
   atualizarObservacaoAgendamentoVisita,
 } from "@/app/app/agendamentos/actions";
+import {
+  marcarInteresseComoGanho,
+  marcarInteresseComoPerdido,
+} from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import type { PropertyInterestStage } from "@/generated/prisma/client";
 
@@ -68,6 +72,12 @@ async function atualizarObservacao(scheduledActivityId: string, notes: string) {
     ESTADO_INICIAL_ACAO,
     formData({ notes })
   );
+}
+async function marcarGanho(interesseId: string) {
+  return marcarInteresseComoGanho(interesseId, ESTADO_INICIAL_ACAO, new FormData());
+}
+async function marcarPerdido(interesseId: string) {
+  return marcarInteresseComoPerdido(interesseId, ESTADO_INICIAL_ACAO, new FormData());
 }
 
 async function criarInteresseDireto(opcoes: {
@@ -1838,5 +1848,69 @@ describe("Agenda de visitas — Fase H.2 do CRM", () => {
       where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
     });
     expect(interesseFinal?.closedAt).toBeNull();
+  });
+
+  // -------------------------------------------------------------------
+  // Interação com o fechamento oficial via action real (Fase P.3) — P2-D a
+  // P2-G acima já provam o mesmo com um UPDATE direto simulando WON; os
+  // testes abaixo repetem o essencial passando pela action de verdade
+  // (marcarInteresseComoGanho/Perdido), incluindo closedAt setado por ela.
+  // -------------------------------------------------------------------
+
+  test("P3-A) visita SCHEDULED criada antes do fechamento ainda pode ser concluída depois de marcarInteresseComoGanho", async () => {
+    const ctx = await cenarioPadrao("INTERESTED");
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    // agendar() avança INTERESTED -> VISIT_SCHEDULED (H.2); fechamento
+    // permitido a partir daí (V1, ver ESTAGIOS_INTERESSE).
+    const fechamento = await marcarGanho(ctx.interesse.id);
+    expect(fechamento.success).toBe(true);
+
+    const resultado = await concluir(original.id);
+
+    expect(resultado.success).toBe(true);
+    const atividadeFinal = await prisma.scheduledActivity.findUnique({
+      where: { id: original.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(atividadeFinal?.status).toBe("COMPLETED");
+  });
+
+  test("P3-B) concluir uma visita depois do fechamento via ação real não regride o stage nem apaga closedAt", async () => {
+    const ctx = await cenarioPadrao("INTERESTED");
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    await marcarGanho(ctx.interesse.id);
+    const fechado = await prisma.propertyInterest.findUniqueOrThrow({
+      where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+    });
+
+    await concluir(original.id);
+
+    const interesseFinal = await prisma.propertyInterest.findUnique({
+      where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(interesseFinal?.stage).toBe("WON");
+    expect(interesseFinal?.closedAt?.getTime()).toBe(fechado.closedAt?.getTime());
+  });
+
+  test("P3-C) marcarInteresseComoPerdido bloqueia nova visita, mesma regra já provada pra WON (P2-A)", async () => {
+    const ctx = await cenarioPadrao("INTERESTED");
+    cenario = ctx.cenario;
+    const fechamento = await marcarPerdido(ctx.interesse.id);
+    expect(fechamento.success).toBe(true);
+
+    const resultado = await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+
+    expect(resultado.success).toBe(false);
+    const total = await prisma.scheduledActivity.count({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    expect(total).toBe(0);
   });
 });

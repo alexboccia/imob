@@ -11,7 +11,8 @@ import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { formatarPreco } from "@/lib/format";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
-import { ESTAGIOS_INTERESSE } from "@/lib/property-interest-schema";
+import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
+import { ESTAGIOS_INTERESSE, estagioInteresseEncerrado } from "@/lib/property-interest-schema";
 import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,15 +28,20 @@ import {
 } from "@/components/ui/select";
 
 // Label de APRESENTAÇÃO (badges/histórico, sempre somente leitura) — inclui
-// WON de propósito, mesmo esse valor nunca aparecendo como opção no Select
-// abaixo (ver ESTAGIOS_INTERESSE, a lista separada que alimenta as opções
-// editáveis). As duas nunca devem ser fundidas de volta numa só constante.
+// WON e REJECTED de propósito, mesmo os dois nunca aparecendo como opção no
+// Select abaixo (ver ESTAGIOS_INTERESSE, a lista separada que alimenta as
+// opções editáveis). As duas nunca devem ser fundidas de volta numa só
+// constante.
+//
+// REJECTED: "Perdido" (Fase P.3) — renomeado de "Descartado" pra bater com
+// o texto usado no fechamento (FechamentoInteresse.tsx); é só rótulo de
+// apresentação, o valor técnico do enum continua REJECTED, sem migration.
 export const ESTAGIO_INTERESSE_LABEL: Record<string, string> = {
   INTERESTED: "Interessado",
   VISIT_SCHEDULED: "Visita agendada",
   VISITED: "Visitado",
   PROPOSAL: "Proposta",
-  REJECTED: "Descartado",
+  REJECTED: "Perdido",
   WON: "Ganho",
 };
 
@@ -47,6 +53,9 @@ export function InteresseImovelItem({
     stage: PropertyInterestStage;
     favorited: boolean;
     notes: string | null;
+    // Igual a scheduledAt: string ISO ou null, nunca Date (Fase P.3) — só
+    // preenchido depois de marcarInteresseComoGanho/Perdido.
+    closedAtISO: string | null;
     property: { id: string; title: string; price: unknown; rentPrice: unknown; status: PropertyStatus };
     // Visita SCHEDULED mais próxima deste relacionamento, se houver — já
     // vem pronta da query da página (batch, sem N+1 por card). scheduledAt
@@ -63,9 +72,7 @@ export function InteresseImovelItem({
   // agendamentos/actions.ts, replicada aqui só pra UX (o botão nem
   // aparece), nunca como única defesa.
   const podeAgendarVisita =
-    interesse.stage !== "REJECTED" &&
-    interesse.stage !== "WON" &&
-    interesse.property.status === "AVAILABLE";
+    !estagioInteresseEncerrado(interesse.stage) && interesse.property.status === "AVAILABLE";
   const atualizarAcao = atualizarEstagioInteresse.bind(null, interesse.id);
   const [estadoEstagio, formActionEstagio, pendenteEstagio] = useActionState(
     atualizarAcao,
@@ -122,47 +129,61 @@ export function InteresseImovelItem({
           atividadeAgendada={interesse.proximaVisita}
         />
 
-        <form action={formActionEstagio} className="flex flex-wrap items-center gap-2">
-          <Label htmlFor={stageId} className="sr-only">
-            Estágio
-          </Label>
-          {/* key={interesse.stage}: força o React a remontar o Select
-              quando o stage muda por uma via diferente deste próprio form
-              (ex: AgendamentoVisita avançando INTERESTED → VISIT_SCHEDULED
-              automaticamente na H.2) — sem isso, o defaultValue de um
-              componente uncontrolled não se atualiza sozinho, e o
-              corretor poderia clicar "Salvar" e regredir o stage sem
-              perceber, mesmo sem tocar no dropdown. */}
-          <Select key={interesse.stage} name="stage" defaultValue={interesse.stage}>
-            <SelectTrigger id={stageId} className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ESTAGIOS_INTERESSE.map((valor) => (
-                <SelectItem key={valor} value={valor}>
-                  {ESTAGIO_INTERESSE_LABEL[valor]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Label htmlFor={notesId} className="sr-only">
-            Observações
-          </Label>
-          <Textarea
-            id={notesId}
-            name="notes"
-            defaultValue={interesse.notes ?? ""}
-            placeholder="Observações"
-            className="flex-1 min-w-[160px]"
-            rows={1}
-          />
-          <Button type="submit" variant="outline" size="sm" disabled={pendenteEstagio}>
-            {pendenteEstagio ? "Salvando..." : "Salvar"}
-          </Button>
-          {estadoEstagio.message && !estadoEstagio.success && (
-            <p className="text-xs text-destructive w-full">{estadoEstagio.message}</p>
-          )}
-        </form>
+        {/* Form genérico de stage/notes só existe pra stage ABERTO — uma
+            vez encerrado (WON/REJECTED, Fase P.2/P.3), o Select não tem
+            mais opção correspondente ao valor atual (ver
+            ESTAGIOS_INTERESSE, que agora exclui os dois terminais), então
+            renderizar o form aqui quebraria o defaultValue. Fechamento
+            passa a ser só leitura via FechamentoInteresse abaixo. */}
+        {!estagioInteresseEncerrado(interesse.stage) && (
+          <form action={formActionEstagio} className="flex flex-wrap items-center gap-2">
+            <Label htmlFor={stageId} className="sr-only">
+              Estágio
+            </Label>
+            {/* key={interesse.stage}: força o React a remontar o Select
+                quando o stage muda por uma via diferente deste próprio form
+                (ex: AgendamentoVisita avançando INTERESTED → VISIT_SCHEDULED
+                automaticamente na H.2) — sem isso, o defaultValue de um
+                componente uncontrolled não se atualiza sozinho, e o
+                corretor poderia clicar "Salvar" e regredir o stage sem
+                perceber, mesmo sem tocar no dropdown. */}
+            <Select key={interesse.stage} name="stage" defaultValue={interesse.stage}>
+              <SelectTrigger id={stageId} className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ESTAGIOS_INTERESSE.map((valor) => (
+                  <SelectItem key={valor} value={valor}>
+                    {ESTAGIO_INTERESSE_LABEL[valor]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Label htmlFor={notesId} className="sr-only">
+              Observações
+            </Label>
+            <Textarea
+              id={notesId}
+              name="notes"
+              defaultValue={interesse.notes ?? ""}
+              placeholder="Observações"
+              className="flex-1 min-w-[160px]"
+              rows={1}
+            />
+            <Button type="submit" variant="outline" size="sm" disabled={pendenteEstagio}>
+              {pendenteEstagio ? "Salvando..." : "Salvar"}
+            </Button>
+            {estadoEstagio.message && !estadoEstagio.success && (
+              <p className="text-xs text-destructive w-full">{estadoEstagio.message}</p>
+            )}
+          </form>
+        )}
+
+        <FechamentoInteresse
+          interesseId={interesse.id}
+          stage={interesse.stage}
+          closedAtISO={interesse.closedAtISO}
+        />
 
         <div className="flex items-center justify-between">
           <Link

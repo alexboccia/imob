@@ -26,6 +26,7 @@ import {
 import {
   criarInteresseSchema,
   atualizarEstagioInteresseSchema,
+  estagioInteresseEncerrado,
 } from "@/lib/property-interest-schema";
 
 type EstadoFormulario = { sucesso: boolean; erro?: string };
@@ -501,6 +502,229 @@ export async function atualizarEstagioInteresse(
     revalidatePath(`/app/clientes/${atual.personId}`);
     return sucesso("Estágio atualizado.");
   });
+}
+
+// ---------------------------------------------------------------------
+// Fechamento (Fase P.3) — marcar um PropertyInterest como ganho (WON) ou
+// perdido (REJECTED), preenchendo closedAt atomicamente junto do stage.
+// Rotas dedicadas, independentes de atualizarEstagioInteresse acima (que
+// agora rejeita WON/REJECTED via ESTAGIOS_INTERESSE, ver
+// property-interest-schema.ts) — nunca reaproveitar aquela action pra
+// fechamento, o closedAt precisa ser server-side (new Date()) e nunca vir
+// de FormData.
+//
+// Regras de transição V1 (auditadas, sem impedimento técnico encontrado
+// pra restringir WON só a partir de PROPOSAL — qualquer stage aberto pode
+// fechar como ganho ou perdido, mesma flexibilidade que já existe pra
+// avançar stage manualmente antes desta fase):
+//   INTERESTED / VISIT_SCHEDULED / VISITED / PROPOSAL -> WON       permitido
+//   INTERESTED / VISIT_SCHEDULED / VISITED / PROPOSAL -> REJECTED  permitido
+//   WON -> WON e REJECTED -> REJECTED (mesma action)                idempotente, sem novo write/log
+//   WON -> REJECTED e REJECTED -> WON (via estas actions)           não permitido — reabertura fica pra fase futura
+// ---------------------------------------------------------------------
+
+type ResultadoFechamento =
+  | { tipo: "fechado_agora"; from: string; personId: string; propertyId: string }
+  | { tipo: "ja_fechado"; personId: string; propertyId: string }
+  | { tipo: "transicao_invalida"; personId: string; propertyId: string }
+  | { tipo: "nao_encontrado"; personId: string; propertyId: string }
+  | { tipo: "corrida_nao_resolvida"; personId: string; propertyId: string };
+
+// Limite de tentativas do guard read-then-write abaixo — nomeado, nunca
+// número mágico. Cada tentativa perdida significa que outra transação
+// mudou o stage entre a leitura e o updateMany desta; 3 é generoso pra
+// uma janela de milissegundos dentro de uma única transação, sem virar
+// loop infinito sob corrida hostil/patológica.
+const MAX_TENTATIVAS_FECHAMENTO = 3;
+
+async function fecharInteresse(
+  interesseId: string,
+  destino: "WON" | "REJECTED"
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  return withOrganization(organizationId, async () => {
+    // Person e Property reconferidos independentemente, mesmo padrão de
+    // criarAgendamentoVisita (agendamentos/actions.ts) — PropertyInterest
+    // tem FKs simples, nunca compostas (auditoria H.1/P.1, decisão #18),
+    // então o organizationId da própria linha não é suficiente sozinho.
+    // Esta leitura só serve pra validação de tenant e pra existência —
+    // NUNCA pro `stage` (relido dentro da transação abaixo, ver
+    // correção pós-auditoria: um `stage` capturado aqui fora da
+    // transação podia ficar stale entre esta leitura e o guard atômico,
+    // fazendo o ActivityLog gravar um `from` desatualizado mesmo com o
+    // dado final sempre correto).
+    const interesse = await prisma.propertyInterest.findUnique({
+      where: { id: interesseId, organizationId },
+      select: {
+        id: true,
+        personId: true,
+        propertyId: true,
+        person: { select: { organizationId: true } },
+        property: { select: { organizationId: true } },
+      },
+    });
+    if (
+      !interesse ||
+      interesse.person.organizationId !== organizationId ||
+      interesse.property.organizationId !== organizationId
+    ) {
+      return erroAcessoNegado("Relacionamento não encontrado.");
+    }
+
+    const resultado = await prisma.$transaction(async (tx): Promise<ResultadoFechamento> => {
+      // Guard read-then-write, vinculando a leitura ao update: em vez de
+      // aceitar qualquer stage aberto (stage:{in:...}) e só depois
+      // descobrir qual era, relemos o stage ATUAL a cada tentativa e o
+      // usamos LITERALMENTE no WHERE do updateMany — se outra transação
+      // mudou o stage entre esta leitura e este update (mesmo pra outro
+      // stage aberto), o WHERE não casa mais, count:0, e tentamos de novo
+      // com o valor mais recente. Isso garante que o `from` gravado no
+      // ActivityLog é sempre exatamente o stage substituído, nunca um
+      // valor obsoleto. Postgres serializa updates concorrentes na mesma
+      // linha (a segunda espera a primeira commitar e reavalia o WHERE
+      // contra o valor já commitado) — mesma garantia de row-lock que já
+      // sustenta o guard atômico de concluirAgendamentoVisita, só que
+      // agora a condição do WHERE é o valor exato relido, não um
+      // conjunto fixo.
+      for (let tentativa = 0; tentativa < MAX_TENTATIVAS_FECHAMENTO; tentativa++) {
+        const atual = await tx.propertyInterest.findUnique({
+          where: { id: interesse.id, organizationId },
+          select: { stage: true },
+        });
+        if (!atual) {
+          return {
+            tipo: "nao_encontrado",
+            personId: interesse.personId,
+            propertyId: interesse.propertyId,
+          };
+        }
+        if (atual.stage === destino) {
+          return { tipo: "ja_fechado", personId: interesse.personId, propertyId: interesse.propertyId };
+        }
+        if (estagioInteresseEncerrado(atual.stage)) {
+          // Terminal oposto (WON<->REJECTED) — nunca alcançável por este
+          // fluxo, reabertura fica pra fase futura.
+          return {
+            tipo: "transicao_invalida",
+            personId: interesse.personId,
+            propertyId: interesse.propertyId,
+          };
+        }
+
+        const atualizado = await tx.propertyInterest.updateMany({
+          where: { id: interesse.id, organizationId, stage: atual.stage },
+          data: { stage: destino, closedAt: new Date() },
+        });
+
+        if (atualizado.count === 0) {
+          // Perdeu a corrida desta tentativa — outra transação mudou o
+          // stage entre a leitura acima e este update. Tenta de novo lendo
+          // o valor mais recente (loop), sem gravar nenhum log agora.
+          continue;
+        }
+
+        // ActivityLog DENTRO da transação — mesmo desvio deliberado do
+        // padrão best-effort documentado em concluirAgendamentoVisita: o
+        // update de stage/closedAt e os dois registros de log precisam
+        // ficar consistentes juntos ou não ficar aplicados de jeito nenhum.
+        // Dois eventos por escolha explícita do produto: um genérico de
+        // mudança de estágio (mesmo formato {from,to} de toda mudança de
+        // stage no projeto) e um dedicado ao fechamento em si (útil pra
+        // filtrar "todos os ganhos/perdas" sem precisar inspecionar
+        // payload.to de property_interest_stage_changed). Payload
+        // deliberadamente sem closedAt/motivo textual/nada de PII —
+        // createdAt do próprio ActivityLog já registra o instante.
+        // `from: atual.stage` é o mesmo valor literal que acabou de casar
+        // no WHERE do updateMany acima — nunca um valor lido antes da
+        // transação.
+        await tx.activityLog.create({
+          data: {
+            organizationId,
+            userId: session.user.id,
+            entity: "PropertyInterest",
+            entityId: interesse.id,
+            action: "property_interest_stage_changed",
+            payload: { from: atual.stage, to: destino },
+          },
+        });
+        await tx.activityLog.create({
+          data: {
+            organizationId,
+            userId: session.user.id,
+            entity: "PropertyInterest",
+            entityId: interesse.id,
+            action: destino === "WON" ? "property_interest_won" : "property_interest_lost",
+          },
+        });
+
+        return {
+          tipo: "fechado_agora",
+          from: atual.stage,
+          personId: interesse.personId,
+          propertyId: interesse.propertyId,
+        };
+      }
+
+      // Esgotou as tentativas — corrida anormalmente persistente (nunca
+      // observada em teste real, só uma rede de segurança). Zero write,
+      // zero log; a mensagem pede nova tentativa em vez de mentir sobre
+      // o resultado.
+      return {
+        tipo: "corrida_nao_resolvida",
+        personId: interesse.personId,
+        propertyId: interesse.propertyId,
+      };
+    });
+
+    revalidatePath(`/app/clientes/${resultado.personId}`);
+    revalidatePath(`/app/imoveis/${resultado.propertyId}`);
+
+    switch (resultado.tipo) {
+      case "ja_fechado":
+        return sucesso(destino === "WON" ? "Já estava marcado como ganho." : "Já estava marcado como perdido.");
+      case "transicao_invalida":
+        return erroGenerico("Este relacionamento já foi encerrado com outro resultado.");
+      case "nao_encontrado":
+        return erroAcessoNegado("Relacionamento não encontrado.");
+      case "corrida_nao_resolvida":
+        return erroGenerico("Não foi possível concluir agora devido a uma alteração concorrente — tente novamente.");
+      case "fechado_agora":
+        return sucesso(destino === "WON" ? "Negociação marcada como ganha." : "Negociação marcada como perdida.");
+    }
+  });
+}
+
+// Marca o relacionamento como ganho (stage=WON, closedAt=agora). Input
+// único: propertyInterestId (bindado) — nenhum outro dado vem do
+// FormData/cliente, stage e closedAt são sempre decididos aqui.
+export async function marcarInteresseComoGanho(
+  interesseId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  return fecharInteresse(interesseId, "WON");
+}
+
+// Marca o relacionamento como perdido (stage=REJECTED, closedAt=agora).
+// REJECTED continua sendo o valor técnico do enum — a UI exibe "Perdido"
+// (ESTAGIO_INTERESSE_LABEL, InteresseImovelItem.tsx), nenhum enum novo.
+export async function marcarInteresseComoPerdido(
+  interesseId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  return fecharInteresse(interesseId, "REJECTED");
 }
 
 // Alterna favorited (nunca toca stage). Sempre relê o valor atual do
