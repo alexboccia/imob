@@ -16,7 +16,12 @@ import {
   marcarInteresseComoPerdido,
 } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
-import { buscarPipelineAberto, buscarPipelineEncerrado, COLUNAS_ABERTAS } from "@/lib/pipeline";
+import {
+  buscarPipelineAberto,
+  buscarPipelineEncerrado,
+  buscarMetricasPipeline,
+  COLUNAS_ABERTAS,
+} from "@/lib/pipeline";
 import type { PropertyInterestStage } from "@/generated/prisma/client";
 
 type Cenario = Awaited<ReturnType<typeof criarCenario>>;
@@ -456,5 +461,216 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     expect(item?.person).toBeNull();
     // Nunca vaza o nome de B em nenhum lugar da resposta.
     expect(JSON.stringify(colunas)).not.toContain("Pessoa Sigilosa De B");
+  });
+
+  // -------------------------------------------------------------------
+  // Métricas do Pipeline (Fase P.5) — buscarMetricasPipeline.
+  // -------------------------------------------------------------------
+
+  async function criarEncerradoDireto(opcoes: {
+    organizationId: string;
+    personId: string;
+    propertyId: string;
+    stage: "WON" | "REJECTED";
+    closedAt: Date | null;
+  }) {
+    return prisma.propertyInterest.create({
+      data: {
+        organizationId: opcoes.organizationId,
+        personId: opcoes.personId,
+        propertyId: opcoes.propertyId,
+        stage: opcoes.stage,
+        closedAt: opcoes.closedAt,
+      },
+    });
+  }
+
+  test("P) organização A não conta PropertyInterest de B nas métricas", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoaA = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovelA = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarInteresseDireto({ organizationId: cenario.organization.id, personId: pessoaA.id, propertyId: imovelA.id });
+
+    const pessoaB1 = await criarPessoa({ organizationId: cenarioB.organization.id });
+    const pessoaB2 = await criarPessoa({ organizationId: cenarioB.organization.id });
+    const imovelB = await criarImovel({ organizationId: cenarioB.organization.id, status: "AVAILABLE" });
+    await criarInteresseDireto({ organizationId: cenarioB.organization.id, personId: pessoaB1.id, propertyId: imovelB.id });
+    await criarInteresseDireto({ organizationId: cenarioB.organization.id, personId: pessoaB2.id, propertyId: imovelB.id, stage: "PROPOSAL" });
+
+    const metricasA = await buscarMetricasPipeline(cenario.organization.id);
+    expect(metricasA.emAndamento).toBe(1);
+  });
+
+  test("Q/T) quatro stages abertos contados corretamente, total em andamento é a soma exata", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    for (const [stage, quantas] of [
+      ["INTERESTED", 3],
+      ["VISIT_SCHEDULED", 2],
+      ["VISITED", 1],
+      ["PROPOSAL", 4],
+    ] as const) {
+      for (let i = 0; i < quantas; i++) {
+        const p = await criarPessoa({ organizationId: cenario.organization.id });
+        await criarInteresseDireto({ organizationId: cenario.organization.id, personId: p.id, propertyId: imovel.id, stage });
+      }
+    }
+
+    const metricas = await buscarMetricasPipeline(cenario.organization.id);
+    expect(metricas.porStage).toEqual({ INTERESTED: 3, VISIT_SCHEDULED: 2, VISITED: 1, PROPOSAL: 4 });
+    expect(metricas.emAndamento).toBe(10);
+  });
+
+  test("R/S) WON e REJECTED contados no período 'todos' (global)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa1 = await criarPessoa({ organizationId: cenario.organization.id });
+    const pessoa2 = await criarPessoa({ organizationId: cenario.organization.id });
+    const pessoa3 = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: pessoa1.id, propertyId: imovel.id, stage: "WON", closedAt: new Date() });
+    await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: pessoa2.id, propertyId: imovel.id, stage: "WON", closedAt: new Date() });
+    await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: pessoa3.id, propertyId: imovel.id, stage: "REJECTED", closedAt: new Date() });
+
+    const metricas = await buscarMetricasPipeline(cenario.organization.id, { periodo: "TODOS" });
+    expect(metricas.ganhos).toBe(2);
+    expect(metricas.perdidos).toBe(1);
+    expect(metricas.encerradas).toBe(3);
+  });
+
+  test("U/V) 30d conta WON dentro do período e exclui WON anterior ao período", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const agora = new Date("2026-06-15T12:00:00.000Z");
+    const dentro = new Date("2026-06-01T00:00:00.000Z"); // 14 dias atrás, dentro de 30d
+    const fora = new Date("2026-04-01T00:00:00.000Z"); // muito antes dos 30d
+    const pessoaDentro = await criarPessoa({ organizationId: cenario.organization.id });
+    const pessoaFora = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: pessoaDentro.id, propertyId: imovel.id, stage: "WON", closedAt: dentro });
+    await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: pessoaFora.id, propertyId: imovel.id, stage: "WON", closedAt: fora });
+
+    const metricas = await buscarMetricasPipeline(cenario.organization.id, { periodo: "30d", agora });
+    expect(metricas.ganhos).toBe(1);
+  });
+
+  test("W) 30d conta REJECTED dentro do período", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const agora = new Date("2026-06-15T12:00:00.000Z");
+    const dentro = new Date("2026-06-10T00:00:00.000Z");
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, stage: "REJECTED", closedAt: dentro });
+
+    const metricas = await buscarMetricasPipeline(cenario.organization.id, { periodo: "30d", agora });
+    expect(metricas.perdidos).toBe(1);
+  });
+
+  test("X) closedAt null é excluído do período 30d (legado sem data real, nunca inferida)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, stage: "REJECTED", closedAt: null });
+
+    const metricas = await buscarMetricasPipeline(cenario.organization.id, { periodo: "30d" });
+    expect(metricas.perdidos).toBe(0);
+    expect(metricas.ganhos).toBe(0);
+  });
+
+  test("Y) período 'todos' inclui terminal com closedAt null (total histórico, não janela de tempo)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, stage: "REJECTED", closedAt: null });
+
+    const metricas = await buscarMetricasPipeline(cenario.organization.id, { periodo: "TODOS" });
+    expect(metricas.perdidos).toBe(1);
+  });
+
+  test("Z) taxa de ganho correta no período (2 ganhos, 1 perdido -> ~66,7%)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const agora = new Date("2026-06-15T12:00:00.000Z");
+    const dentro = new Date("2026-06-10T00:00:00.000Z");
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    for (let i = 0; i < 2; i++) {
+      const p = await criarPessoa({ organizationId: cenario.organization.id });
+      await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: p.id, propertyId: imovel.id, stage: "WON", closedAt: dentro });
+    }
+    const pPerdido = await criarPessoa({ organizationId: cenario.organization.id });
+    await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: pPerdido.id, propertyId: imovel.id, stage: "REJECTED", closedAt: dentro });
+
+    const metricas = await buscarMetricasPipeline(cenario.organization.id, { periodo: "30d", agora });
+    expect(metricas.ganhos).toBe(2);
+    expect(metricas.perdidos).toBe(1);
+    expect(metricas.taxaGanho).not.toBeNull();
+    expect(metricas.taxaGanho!).toBeCloseTo(66.6666, 3);
+  });
+
+  test("AA) zero encerradas no período -> taxaGanho null (nunca 0%)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarInteresseDireto({ organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id });
+
+    const metricas = await buscarMetricasPipeline(cenario.organization.id, { periodo: "30d" });
+    expect(metricas.ganhos).toBe(0);
+    expect(metricas.perdidos).toBe(0);
+    expect(metricas.taxaGanho).toBeNull();
+  });
+
+  test("AB) busca textual (q) do Kanban não é aceita por buscarMetricasPipeline — resumo é sempre global, sem parâmetro de busca", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa1 = await criarPessoa({ organizationId: cenario.organization.id, name: "Alfa" });
+    const pessoa2 = await criarPessoa({ organizationId: cenario.organization.id, name: "Beta" });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarInteresseDireto({ organizationId: cenario.organization.id, personId: pessoa1.id, propertyId: imovel.id });
+    await criarInteresseDireto({ organizationId: cenario.organization.id, personId: pessoa2.id, propertyId: imovel.id });
+
+    // buscarMetricasPipeline não tem parâmetro de busca — o resumo global
+    // é estruturalmente o mesmo independente de qualquer filtro textual
+    // que a UI aplique só ao Kanban (buscarPipelineAberto).
+    const metricas = await buscarMetricasPipeline(cenario.organization.id);
+    expect(metricas.emAndamento).toBe(2);
+  });
+
+  test("AC) resumo global é idêntico independente da visão do Kanban (aberta/encerrada) — mesma chamada, mesmo resultado, sem parâmetro de visão", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarInteresseDireto({ organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, stage: "PROPOSAL" });
+
+    // A página chama buscarMetricasPipeline exatamente da mesma forma
+    // seja qual for a visão (aberta/encerrada) — simulado aqui chamando
+    // duas vezes seguidas, mesmos argumentos, sem nada relacionado a
+    // "visao" influenciando a chamada.
+    const resumoQuandoAberta = await buscarMetricasPipeline(cenario.organization.id, { periodo: "30d" });
+    const resumoQuandoEncerrada = await buscarMetricasPipeline(cenario.organization.id, { periodo: "30d" });
+    expect(resumoQuandoAberta).toEqual(resumoQuandoEncerrada);
+  });
+
+  test("AD) buscarMetricasPipeline não escreve nada — zero PropertyInterest/ActivityLog criado/alterado", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarInteresseDireto({ organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id });
+
+    const antes = {
+      interesses: await prisma.propertyInterest.count({ where: { organizationId: cenario.organization.id } }),
+      logs: await prisma.activityLog.count({ where: { organizationId: cenario.organization.id } }),
+    };
+
+    await buscarMetricasPipeline(cenario.organization.id, { periodo: "30d" });
+    await buscarMetricasPipeline(cenario.organization.id, { periodo: "TODOS" });
+
+    const depois = {
+      interesses: await prisma.propertyInterest.count({ where: { organizationId: cenario.organization.id } }),
+      logs: await prisma.activityLog.count({ where: { organizationId: cenario.organization.id } }),
+    };
+    expect(depois).toEqual(antes);
+  });
+
+  test("AE) tenant scoping continua obrigatório — groupBy sem organizationId explícito é recusado", async () => {
+    await expect(
+      prisma.propertyInterest.groupBy({ by: ["stage"], _count: { _all: true } })
+    ).rejects.toThrow(/organizationId/);
   });
 });

@@ -4,6 +4,11 @@ import {
   agruparPorColuna,
   ordenarColuna,
   interpretarFiltrosPipeline,
+  calcularTaxaGanho,
+  formatarPercentual,
+  interpretarPeriodoPipeline,
+  resolverIntervaloPeriodo,
+  paraContagemPorStage,
   COLUNAS_ABERTAS,
   type ItemPipeline,
 } from "@/lib/pipeline";
@@ -223,5 +228,142 @@ describe("interpretarFiltrosPipeline", () => {
 
   test("busca é normalizada (trim/espaços colapsados) — mesmo normalizarBusca do resto do projeto", () => {
     expect(interpretarFiltrosPipeline({ q: "  João   Silva  " }).busca).toBe("João Silva");
+  });
+});
+
+// -------------------------------------------------------------------
+// Métricas do Pipeline (Fase P.5) — helpers puros, sem Prisma/banco.
+// -------------------------------------------------------------------
+
+describe("calcularTaxaGanho", () => {
+  test("A) 0/0 -> null (nunca 0%/NaN%/Infinity%)", () => {
+    expect(calcularTaxaGanho(0, 0)).toBeNull();
+  });
+
+  test("B) 1/0 -> 100", () => {
+    expect(calcularTaxaGanho(1, 0)).toBe(100);
+  });
+
+  test("C) 0/1 -> 0", () => {
+    expect(calcularTaxaGanho(0, 1)).toBe(0);
+  });
+
+  test("D) 8/2 -> 80", () => {
+    expect(calcularTaxaGanho(8, 2)).toBe(80);
+  });
+
+  test("valor fracionário preservado (arredondamento é responsabilidade de formatarPercentual, não daqui)", () => {
+    expect(calcularTaxaGanho(2, 1)).toBeCloseTo(66.6666, 3);
+  });
+});
+
+describe("formatarPercentual", () => {
+  test("null -> '—' (nunca texto técnico)", () => {
+    expect(formatarPercentual(null)).toBe("—");
+  });
+
+  test("inteiro não ganha casa decimal artificial", () => {
+    expect(formatarPercentual(80)).toBe("80%");
+  });
+
+  test("fracionário formatado em pt-BR com no máximo 1 casa decimal", () => {
+    expect(formatarPercentual(66.6666)).toBe("66,7%");
+  });
+
+  test("zero", () => {
+    expect(formatarPercentual(0)).toBe("0%");
+  });
+});
+
+describe("interpretarPeriodoPipeline", () => {
+  test("E) 30d", () => {
+    expect(interpretarPeriodoPipeline({ periodo: "30d" })).toBe("30d");
+  });
+
+  test("F) 90d", () => {
+    expect(interpretarPeriodoPipeline({ periodo: "90d" })).toBe("90d");
+  });
+
+  test("G) ano (case-insensitive)", () => {
+    expect(interpretarPeriodoPipeline({ periodo: "ano" })).toBe("ANO");
+    expect(interpretarPeriodoPipeline({ periodo: "ANO" })).toBe("ANO");
+  });
+
+  test("H) todos (case-insensitive)", () => {
+    expect(interpretarPeriodoPipeline({ periodo: "todos" })).toBe("TODOS");
+  });
+
+  test("I) período inválido/ausente cai no default seguro (30d)", () => {
+    expect(interpretarPeriodoPipeline({})).toBe("30d");
+    expect(interpretarPeriodoPipeline({ periodo: "60d" })).toBe("30d");
+    expect(interpretarPeriodoPipeline({ periodo: "" })).toBe("30d");
+  });
+});
+
+describe("resolverIntervaloPeriodo", () => {
+  const agora = new Date("2026-06-15T12:00:00.000Z");
+
+  test("30d: início é exatamente 30 dias antes de agora, fim é agora", () => {
+    const intervalo = resolverIntervaloPeriodo("30d", agora);
+    expect(intervalo).not.toBeNull();
+    expect(intervalo?.fim).toEqual(agora);
+    expect(intervalo?.inicio.getTime()).toBe(agora.getTime() - 30 * 24 * 60 * 60 * 1000);
+  });
+
+  test("90d: início é exatamente 90 dias antes de agora", () => {
+    const intervalo = resolverIntervaloPeriodo("90d", agora);
+    expect(intervalo?.inicio.getTime()).toBe(agora.getTime() - 90 * 24 * 60 * 60 * 1000);
+  });
+
+  test("ANO: início do ano calendário UTC (1º de janeiro 00:00 UTC), não uma janela rolante", () => {
+    const intervalo = resolverIntervaloPeriodo("ANO", agora);
+    expect(intervalo?.inicio.toISOString()).toBe("2026-01-01T00:00:00.000Z");
+    expect(intervalo?.fim).toEqual(agora);
+  });
+
+  test("TODOS: sem intervalo (null) -> caller não filtra por closedAt", () => {
+    expect(resolverIntervaloPeriodo("TODOS", agora)).toBeNull();
+  });
+
+  test("J) boundary: início do intervalo usa o mesmo instante que seria usado como gte (inclusivo por construção do caller)", () => {
+    const intervalo = resolverIntervaloPeriodo("30d", agora);
+    // O próprio valor de `inicio` É o limite que o caller usa como `gte` —
+    // um closedAt exatamente igual a `inicio` deve estar dentro do
+    // intervalo (verificado com Postgres real em DF/DG da integração).
+    expect(intervalo?.inicio.getTime()).toBeLessThanOrEqual(agora.getTime());
+  });
+
+  test("K) fim nunca é depois de agora (limite superior determinístico, nunca um valor futuro implícito)", () => {
+    const intervalo = resolverIntervaloPeriodo("90d", agora);
+    expect(intervalo?.fim.getTime()).toBe(agora.getTime());
+  });
+});
+
+describe("paraContagemPorStage", () => {
+  test("N) lista vazia -> todos os 4 stages abertos presentes com 0", () => {
+    const contagem = paraContagemPorStage([]);
+    for (const coluna of COLUNAS_ABERTAS) {
+      expect(contagem[coluna]).toBe(0);
+    }
+  });
+
+  test("O) groupBy incompleto (só alguns stages retornados) -> stages ausentes viram 0, presentes mantêm o valor real", () => {
+    const contagem = paraContagemPorStage([
+      { stage: "VISIT_SCHEDULED", _count: { _all: 3 } },
+      { stage: "PROPOSAL", _count: { _all: 7 } },
+    ]);
+    expect(contagem).toEqual({
+      INTERESTED: 0,
+      VISIT_SCHEDULED: 3,
+      VISITED: 0,
+      PROPOSAL: 7,
+    });
+  });
+
+  test("stage terminal (WON/REJECTED) no groupBy bruto é ignorado — paraContagemPorStage só conhece as 4 colunas abertas", () => {
+    const contagem = paraContagemPorStage([{ stage: "WON", _count: { _all: 5 } }]);
+    for (const coluna of COLUNAS_ABERTAS) {
+      expect(contagem[coluna]).toBe(0);
+    }
   });
 });

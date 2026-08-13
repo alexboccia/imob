@@ -281,3 +281,161 @@ export async function buscarPipelineEncerrado(
     return { itens: linhas.map((linha) => paraItemPipeline(linha, organizationId)), total };
   });
 }
+
+// -----------------------------------------------------------------------
+// Métricas do Pipeline (Fase P.5) — leitura/analytics pura sobre
+// PropertyInterest, NUNCA uma segunda fonte de verdade: nenhuma tabela
+// nova, nenhum contador persistido, nenhum cron/snapshot. Toda métrica é
+// recalculada a cada request a partir do estado atual do banco.
+//
+// Duas partes deliberadamente independentes (nunca misturadas):
+//   - "estoque atual" (emAndamento/porStage): sempre GLOBAL pra
+//     organização, nunca afetado por período/busca/visão do Kanban — é
+//     "quantas negociações existem AGORA em cada etapa aberta".
+//   - "resultados" (ganhos/perdidos/taxa): sempre filtrado por closedAt
+//     dentro do período escolhido (ou sem filtro nenhum em "todos") —
+//     nunca por createdAt/updatedAt, únicos campos que representariam
+//     corretamente "quando a negociação foi fechada" (mesmo racional já
+//     documentado no comentário de PropertyInterest.closedAt no schema).
+// -----------------------------------------------------------------------
+
+export type PeriodoPipeline = "30d" | "90d" | "ANO" | "TODOS";
+
+const PERIODOS_PIPELINE_VALIDOS: readonly PeriodoPipeline[] = ["30d", "90d", "ANO", "TODOS"];
+
+export const PERIODO_PIPELINE_LABEL: Record<PeriodoPipeline, string> = {
+  "30d": "Últimos 30 dias",
+  "90d": "Últimos 90 dias",
+  ANO: "Este ano",
+  TODOS: "Todo o período",
+};
+
+// URL-driven, mesmo padrão de interpretarFiltrosPipeline — nunca confia em
+// input cru, sempre cai em default seguro (30d).
+export function interpretarPeriodoPipeline(params: { periodo?: string }): PeriodoPipeline {
+  const bruto = (params.periodo ?? "").trim().toUpperCase();
+  const candidato = bruto === "30D" ? "30d" : bruto === "90D" ? "90d" : bruto;
+  return (PERIODOS_PIPELINE_VALIDOS as readonly string[]).includes(candidato)
+    ? (candidato as PeriodoPipeline)
+    : "30d";
+}
+
+// Resolve o intervalo [inicio, fim] em que closedAt precisa cair.
+// null = sem filtro (só "todos", que inclui inclusive terminais com
+// closedAt null — decisão explícita da P.5: "todo o período" responde
+// "quantos no total", não "quantos dentro de uma janela de tempo").
+//
+// 30d/90d: janela rolante em milissegundos reais a partir de `agora`
+// (closedAt é timestamp real de evento, não um datetime-local digitado
+// como scheduledAt — não há "dia calendário" do usuário pra respeitar
+// aqui, então não reaproveita inicioDoDiaUTC/fimDoDiaUTC de
+// scheduled-activity-date.ts, que resolvem um problema diferente).
+// ANO: única variante com semântica de calendário — início do ano UTC,
+// mesma técnica Date.UTC(...) já estabelecida no projeto (H.3/H.4).
+export function resolverIntervaloPeriodo(
+  periodo: PeriodoPipeline,
+  agora: Date = new Date()
+): { inicio: Date; fim: Date } | null {
+  if (periodo === "TODOS") return null;
+  if (periodo === "30d") return { inicio: new Date(agora.getTime() - 30 * 24 * 60 * 60 * 1000), fim: agora };
+  if (periodo === "90d") return { inicio: new Date(agora.getTime() - 90 * 24 * 60 * 60 * 1000), fim: agora };
+  return { inicio: new Date(Date.UTC(agora.getUTCFullYear(), 0, 1, 0, 0, 0, 0)), fim: agora };
+}
+
+// 0/0 -> null (sem base pra calcular nada, nunca 0%/NaN%/Infinity%).
+// Resto é só percentual simples — arredondamento/exibição ficam por conta
+// de formatarPercentual, nunca duplicados aqui.
+export function calcularTaxaGanho(ganhos: number, perdidos: number): number | null {
+  const total = ganhos + perdidos;
+  if (total === 0) return null;
+  return (ganhos / total) * 100;
+}
+
+// pt-BR, no máximo 1 casa decimal (nunca preenchida artificialmente: 80 ->
+// "80%", não "80,0%"). null -> "—" (nunca texto técnico tipo "N/A").
+export function formatarPercentual(valor: number | null): string {
+  if (valor === null) return "—";
+  return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(valor)}%`;
+}
+
+type LinhaGroupByStage = { stage: PropertyInterestStage; _count: { _all: number } };
+
+// Mapeamento puro — Postgres GROUP BY nunca retorna linha pra um stage sem
+// nenhuma ocorrência (0 registros), então qualquer stage ausente do
+// resultado bruto do groupBy precisa ser preenchido com 0 explicitamente
+// aqui, nunca deixado undefined.
+export function paraContagemPorStage(linhas: readonly LinhaGroupByStage[]): Record<ColunaAberta, number> {
+  const contagem = Object.fromEntries(COLUNAS_ABERTAS.map((c) => [c, 0])) as Record<ColunaAberta, number>;
+  for (const linha of linhas) {
+    if ((COLUNAS_ABERTAS as readonly string[]).includes(linha.stage)) {
+      contagem[linha.stage as ColunaAberta] = linha._count._all;
+    }
+  }
+  return contagem;
+}
+
+export type MetricasPipeline = {
+  emAndamento: number;
+  porStage: Record<ColunaAberta, number>;
+  periodo: PeriodoPipeline;
+  ganhos: number;
+  perdidos: number;
+  encerradas: number;
+  taxaGanho: number | null;
+};
+
+// Única função de leitura de métricas — 2 queries `groupBy` estruturais
+// (nunca uma por card, nunca reaproveita os até 300 itens já carregados
+// pelo board de buscarPipelineAberto: aquele tem teto de exibição, este
+// precisa do total real). organizationId sempre explícito no where — a
+// extensão de tenant-scoping (src/lib/prisma.ts) já suporta `groupBy`
+// (está em WHERE_OPERATIONS), então esta chamada é tão tenant-safe quanto
+// qualquer findMany do projeto.
+export async function buscarMetricasPipeline(
+  organizationId: string,
+  opcoes: { periodo?: PeriodoPipeline; agora?: Date } = {}
+): Promise<MetricasPipeline> {
+  const periodo = opcoes.periodo ?? "30d";
+  const agora = opcoes.agora ?? new Date();
+  const intervalo = resolverIntervaloPeriodo(periodo, agora);
+
+  return withOrganization(organizationId, async () => {
+    const [porStageBruto, resultadosBruto] = await Promise.all([
+      prisma.propertyInterest.groupBy({
+        by: ["stage"],
+        where: { organizationId, stage: { in: [...COLUNAS_ABERTAS] } },
+        _count: { _all: true },
+      }),
+      prisma.propertyInterest.groupBy({
+        by: ["stage"],
+        where: {
+          organizationId,
+          stage: { in: ["WON", "REJECTED"] },
+          // closedAt: {gte,lte} exclui closedAt=null automaticamente por
+          // semântica padrão de SQL (NULL nunca satisfaz comparação) —
+          // nenhum código extra necessário pra excluir os legados sem
+          // data. Ausente de propósito quando intervalo é null (período
+          // "todos"): aí sim closedAt null conta, decisão explícita da
+          // seção 33 do pedido.
+          ...(intervalo ? { closedAt: { gte: intervalo.inicio, lte: intervalo.fim } } : {}),
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const porStage = paraContagemPorStage(porStageBruto);
+    const emAndamento = COLUNAS_ABERTAS.reduce((soma, coluna) => soma + porStage[coluna], 0);
+    const ganhos = resultadosBruto.find((linha) => linha.stage === "WON")?._count._all ?? 0;
+    const perdidos = resultadosBruto.find((linha) => linha.stage === "REJECTED")?._count._all ?? 0;
+
+    return {
+      emAndamento,
+      porStage,
+      periodo,
+      ganhos,
+      perdidos,
+      encerradas: ganhos + perdidos,
+      taxaGanho: calcularTaxaGanho(ganhos, perdidos),
+    };
+  });
+}

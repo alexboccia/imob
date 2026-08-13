@@ -5,15 +5,22 @@ import { interpretarPaginacao } from "@/lib/pagination";
 import {
   buscarPipelineAberto,
   buscarPipelineEncerrado,
+  buscarMetricasPipeline,
   interpretarFiltrosPipeline,
+  interpretarPeriodoPipeline,
+  PERIODO_PIPELINE_LABEL,
   COLUNAS_ABERTAS,
   type ColunaAberta,
+  type PeriodoPipeline,
 } from "@/lib/pipeline";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { CardPipeline } from "@/components/admin/CardPipeline";
+import { ResumoPipeline } from "@/components/admin/ResumoPipeline";
 import { Input } from "@/components/ui/input";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+const PERIODOS_PIPELINE_OPCOES: readonly PeriodoPipeline[] = ["30d", "90d", "ANO", "TODOS"];
 
 // Pipeline (Fase P.4) — primeira tela oficial do Kanban, projeção
 // operacional de PropertyInterest (nunca uma segunda fonte de verdade —
@@ -33,11 +40,15 @@ type SearchParams = {
   visao?: string;
   resultado?: string;
   page?: string;
+  periodo?: string;
 };
 
 // Mesmo racional de construirHref em agenda/page.tsx — preserva os
-// filtros ativos em qualquer navegação (troca de visão, paginação),
-// nunca "esquece" um filtro que o corretor já tinha aplicado.
+// filtros ativos em qualquer navegação (troca de visão, paginação, troca
+// de período), nunca "esquece" um filtro que o corretor já tinha
+// aplicado. `periodo` (Fase P.5) é só mais um parâmetro preservado aqui —
+// nunca influencia q/visao/resultado/page, e vice-versa (seção 28/53 do
+// pedido: busca do Kanban e período gerencial são independentes).
 function construirHref(params: SearchParams, overrides: Partial<SearchParams>, resetarPage: boolean): string {
   const efetivos: SearchParams = { ...params, ...overrides };
   if (resetarPage) delete efetivos.page;
@@ -47,6 +58,7 @@ function construirHref(params: SearchParams, overrides: Partial<SearchParams>, r
   if (efetivos.visao && efetivos.visao.toUpperCase() === "ENCERRADA") busca.set("visao", efetivos.visao);
   if (efetivos.resultado && efetivos.resultado.toUpperCase() !== "TODOS") busca.set("resultado", efetivos.resultado);
   if (efetivos.page) busca.set("page", efetivos.page);
+  if (efetivos.periodo && efetivos.periodo.toUpperCase() !== "30D") busca.set("periodo", efetivos.periodo);
 
   const query = busca.toString();
   return query ? `/app/pipeline?${query}` : "/app/pipeline";
@@ -72,6 +84,45 @@ export default async function PipelinePage({
   }
 
   const filtros = interpretarFiltrosPipeline(params);
+  // Período (Fase P.5) é deliberadamente independente de q/visao/resultado
+  // — só afeta o resumo gerencial (ResumoPipeline), nunca o Kanban/lista
+  // abaixo (seção 28/29 do pedido). buscarMetricasPipeline nunca reaproveita
+  // os itens já carregados de buscarPipelineAberto/Encerrado (que têm teto
+  // de exibição) — 2 queries `groupBy` estruturais próprias, sempre
+  // GLOBAIS na parte de estoque atual.
+  const periodo = interpretarPeriodoPipeline(params);
+  const metricas = await buscarMetricasPipeline(organizationId, { periodo });
+
+  const Resumo = <ResumoPipeline metricas={metricas} />;
+
+  const SeletorPeriodo = (
+    <form method="get" className="flex flex-wrap items-end gap-2 mb-4">
+      <input type="hidden" name="q" value={filtros.busca} />
+      <input type="hidden" name="visao" value={filtros.visao === "ENCERRADA" ? "encerrada" : "aberta"} />
+      <input type="hidden" name="resultado" value={filtros.resultado} />
+      {params.page && <input type="hidden" name="page" value={params.page} />}
+      <div className="space-y-1">
+        <label htmlFor="pipeline-periodo" className="text-xs text-muted-foreground">
+          Período dos resultados
+        </label>
+        <select
+          id="pipeline-periodo"
+          name="periodo"
+          defaultValue={periodo}
+          className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          {PERIODOS_PIPELINE_OPCOES.map((opcao) => (
+            <option key={opcao} value={opcao}>
+              {PERIODO_PIPELINE_LABEL[opcao]}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button type="submit" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+        Aplicar
+      </button>
+    </form>
+  );
 
   const CabecalhoFiltros = (
     <>
@@ -96,6 +147,7 @@ export default async function PipelinePage({
 
       <form method="get" className="flex flex-wrap items-end gap-2 mb-4 border rounded-md p-3">
         <input type="hidden" name="visao" value={filtros.visao === "ENCERRADA" ? "encerrada" : "aberta"} />
+        {periodo !== "30d" && <input type="hidden" name="periodo" value={periodo} />}
         <div className="flex-1 min-w-[160px] space-y-1">
           <label htmlFor="pipeline-q" className="text-xs text-muted-foreground">
             Buscar
@@ -129,7 +181,7 @@ export default async function PipelinePage({
         </button>
         {(filtros.busca || filtros.resultado !== "TODOS") && (
           <Link
-            href={construirHref({ visao: params.visao }, {}, true)}
+            href={construirHref({ visao: params.visao, periodo: params.periodo }, {}, true)}
             className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
           >
             Limpar filtros
@@ -150,6 +202,9 @@ export default async function PipelinePage({
         <p className="text-muted-foreground text-sm mb-4">
           Negociações em andamento, agrupadas por etapa.
         </p>
+
+        {Resumo}
+        {SeletorPeriodo}
 
         {CabecalhoFiltros}
 
@@ -205,6 +260,9 @@ export default async function PipelinePage({
     <div>
       <h1 className="text-2xl font-semibold mb-1">Pipeline</h1>
       <p className="text-muted-foreground text-sm mb-4">Negociações encerradas — ganhas ou perdidas.</p>
+
+      {Resumo}
+      {SeletorPeriodo}
 
       {CabecalhoFiltros}
 
