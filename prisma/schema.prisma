@@ -422,6 +422,7 @@ model PropertyInterest {
   updatedAt DateTime @updatedAt
 
   scheduledActivities ScheduledActivity[]
+  stageHistory        PropertyInterestStageHistory[]
 
   // @@unique([organizationId, personId, propertyId]) já serve, por prefixo
   // esquerdo, tanto consultas só por organizationId quanto por
@@ -432,6 +433,41 @@ model PropertyInterest {
   @@unique([organizationId, personId, propertyId])
   @@index([organizationId, propertyId])
   @@map("property_interests")
+}
+
+// Trilha temporal de mudanças de PropertyInterest.stage (Fase P.6) — mesmo
+// papel de PropertyStatusHistory pra Property.status, mesma convenção de
+// nomes (previousX/newX, changedAt @default(now())): fato estruturado e
+// consultável, nunca substitui `stage` (única fonte do estado atual) nem
+// ActivityLog (auditoria/evento de aplicação, payload solto, não indexado
+// pra range de data por stage). Zero PII aqui de propósito — nada de nome,
+// email, telefone, notes ou título de imóvel.
+//
+// previousStage nullable: a primeira transição registrada de um
+// PropertyInterest não tem "de onde" antes dela — nunca inventado/inferido
+// pra registros anteriores a esta fase (migration é só estrutural, sem
+// backfill; ausência de histórico = aging indisponível, nunca uma origem
+// fake). newStage obrigatório: toda linha representa uma transição que de
+// fato aconteceu, gravada na MESMA transação que a mudança de stage.
+model PropertyInterestStageHistory {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  propertyInterestId String
+  propertyInterest   PropertyInterest @relation(fields: [propertyInterestId], references: [id], onDelete: Cascade)
+
+  previousStage PropertyInterestStage?
+  newStage      PropertyInterestStage
+
+  changedAt DateTime @default(now())
+
+  // Serve exatamente a query "última transição por PropertyInterest" (Kanban
+  // aberto, batched via include aninhado — mesmo padrão de
+  // scheduledActivities). Nenhum índice adicional: não há consulta
+  // planejada de "todo histórico da organização por data" nesta fase.
+  @@index([organizationId, propertyInterestId, changedAt])
+  @@map("property_interest_stage_history")
 }
 
 // Agenda de atividades futuras vinculadas a uma Person (Fase H do CRM) —
@@ -635,6 +671,7 @@ model Organization {
   people                Person[]
   personPreferences     PersonPreference[]
   propertyInterests     PropertyInterest[]
+  propertyInterestStageHistory PropertyInterestStageHistory[]
   scheduledActivities   ScheduledActivity[]
   properties            Property[]
   media                 Media[]

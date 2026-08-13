@@ -147,6 +147,20 @@ export async function criarAgendamentoVisita(
           where: { id: interesse.id, organizationId },
           data: { stage: "VISIT_SCHEDULED" },
         });
+
+        // PropertyInterestStageHistory (Fase P.6): mesma transação da
+        // mudança de stage acima — previousStage é o valor literal já
+        // confirmado por stageDeveAvancar (interesse.stage === "INTERESTED"),
+        // nunca um valor relido depois.
+        await tx.propertyInterestStageHistory.create({
+          data: {
+            organizationId,
+            propertyInterestId: interesse.id,
+            previousStage: interesse.stage,
+            newStage: "VISIT_SCHEDULED",
+            changedAt: new Date(),
+          },
+        });
       }
 
       return criado;
@@ -427,6 +441,20 @@ export async function concluirAgendamentoVisita(
             where: { id: atividade.propertyInterestId, organizationId },
             data: { stage: "VISITED" },
           });
+
+          // PropertyInterestStageHistory (Fase P.6): mesma transação, mesmo
+          // valor literal ("VISIT_SCHEDULED") já confirmado pelo if acima —
+          // nunca um valor relido depois.
+          await tx.propertyInterestStageHistory.create({
+            data: {
+              organizationId,
+              propertyInterestId: atividade.propertyInterestId,
+              previousStage: interesse.stage,
+              newStage: "VISITED",
+              changedAt: new Date(),
+            },
+          });
+
           stageSincronizado = true;
         }
       }

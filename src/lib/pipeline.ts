@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { withOrganization } from "@/lib/tenant-context";
 import { normalizarBusca, PAGE_SIZE_PADRAO } from "@/lib/pagination";
-import { ESTAGIOS_INTERESSE } from "@/lib/property-interest-schema";
+import { ESTAGIOS_INTERESSE, estagioInteresseEncerrado } from "@/lib/property-interest-schema";
 import { obterProximaAcaoComercial, type ProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import { acaoOperacionalDaVisita } from "@/lib/scheduled-activity-date";
 import type { Prisma, PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
@@ -38,6 +38,13 @@ export type ItemPipeline = {
   // null quando property foi redigido acima (sem status pra calcular) —
   // nunca inferido/adivinhado.
   proximaAcao: ProximaAcaoComercial | null;
+  // Fase P.6: texto curto de aging (ex: "Na etapa há 3 dias"), derivado de
+  // PropertyInterestStageHistory — NUNCA de updatedAt. null quando não há
+  // histórico (registro anterior à P.6, fundação sem backfill — aging
+  // "indisponível" é semanticamente correto aqui, nunca uma origem
+  // inventada) OU quando o stage atual é encerrado (WON/REJECTED usam
+  // closedAtISO como data de referência, ver FechamentoInteresse).
+  aging: string | null;
 };
 
 function selectItemPipeline(organizationId: string) {
@@ -61,6 +68,17 @@ function selectItemPipeline(organizationId: string) {
       take: 1,
       select: { id: true, scheduledAt: true },
     },
+    // Fase P.6: última transição de stage registrada, batched (mesmo
+    // padrão de scheduledActivities acima — uma única query extra pro
+    // conjunto inteiro de cards, nunca uma por card). organizationId
+    // explícito no where da relação, mesma defesa contra anomalia
+    // cross-tenant.
+    stageHistory: {
+      where: { organizationId },
+      orderBy: { changedAt: "desc" as const },
+      take: 1,
+      select: { newStage: true, changedAt: true },
+    },
   } satisfies Prisma.PropertyInterestSelect;
 }
 
@@ -72,12 +90,62 @@ type LinhaBrutaPipeline = {
   person: { id: string; name: string; organizationId: string };
   property: { id: string; title: string; status: PropertyStatus; organizationId: string };
   scheduledActivities: { id: string; scheduledAt: Date }[];
+  stageHistory: { newStage: PropertyInterestStage; changedAt: Date }[];
 };
+
+// Fase P.6: encontra, dentro do histórico já carregado, a transição mais
+// recente cujo newStage bate com o stage ATUAL informado — nunca assume
+// que "a última linha retornada pela query" já é a certa (defesa em
+// profundidade: mesmo com a escrita atômica garantindo consistência em
+// todo caminho de produto, esta função nunca confia cegamente num dado
+// que não bate). Sem entrada correspondente -> null (sem histórico).
+export function obterInicioStageAtual(
+  stageAtual: PropertyInterestStage,
+  historico: readonly { newStage: PropertyInterestStage; changedAtISO: string }[]
+): string | null {
+  let maisRecente: string | null = null;
+  for (const entrada of historico) {
+    if (entrada.newStage !== stageAtual) continue;
+    if (maisRecente === null || entrada.changedAtISO > maisRecente) {
+      maisRecente = entrada.changedAtISO;
+    }
+  }
+  return maisRecente;
+}
+
+// `agora` sempre explícito (nunca `new Date()` implícito aqui dentro —
+// mesmo racional de ordenarColuna/resolverIntervaloPeriodo, testabilidade
+// determinística). null = sem início conhecido OU changedAt no futuro
+// (nunca aging negativo — anomalia puramente defensiva, changedAt é
+// sempre gravado como new Date() no servidor em todo caminho de escrita).
+export function calcularAgingStageMs(inicioISO: string | null, agora: Date): number | null {
+  if (inicioISO === null) return null;
+  const diffMs = agora.getTime() - new Date(inicioISO).getTime();
+  return diffMs < 0 ? null : diffMs;
+}
+
+const HORA_MS = 60 * 60 * 1000;
+const DIA_MS = 24 * HORA_MS;
+
+// Granularidade grosseira de propósito (não polui o card): minutos nunca
+// aparecem. < 1h -> texto fixo; < 1 dia -> horas inteiras; >= 1 dia ->
+// dias inteiros, singular/plural tratado.
+export function formatarAgingStage(ms: number | null): string | null {
+  if (ms === null) return null;
+  if (ms < HORA_MS) return "Na etapa há menos de 1h";
+  if (ms < DIA_MS) return `Na etapa há ${Math.floor(ms / HORA_MS)}h`;
+  const dias = Math.floor(ms / DIA_MS);
+  return `Na etapa há ${dias} dia${dias === 1 ? "" : "s"}`;
+}
 
 // Mapeamento puro (sem Prisma/I-O) — testável isoladamente, mesmo espírito
 // de paraItemAgenda (src/lib/agenda.ts). Reaproveita obterProximaAcaoComercial
 // direto, nunca reimplementa a lógica de próxima ação.
-export function paraItemPipeline(linha: LinhaBrutaPipeline, organizationId: string): ItemPipeline {
+export function paraItemPipeline(
+  linha: LinhaBrutaPipeline,
+  organizationId: string,
+  agora: Date = new Date()
+): ItemPipeline {
   const person =
     linha.person.organizationId === organizationId
       ? { id: linha.person.id, name: linha.person.name }
@@ -93,6 +161,15 @@ export function paraItemPipeline(linha: LinhaBrutaPipeline, organizationId: stri
       }
     : null;
 
+  // Fase P.6: aging nunca calculado pra estágios encerrados (WON/REJECTED
+  // já têm closedAtISO como data de referência oficial — não substituir).
+  const inicioStageAtual = estagioInteresseEncerrado(linha.stage)
+    ? null
+    : obterInicioStageAtual(
+        linha.stage,
+        linha.stageHistory.map((h) => ({ newStage: h.newStage, changedAtISO: h.changedAt.toISOString() }))
+      );
+
   return {
     id: linha.id,
     stage: linha.stage,
@@ -102,6 +179,7 @@ export function paraItemPipeline(linha: LinhaBrutaPipeline, organizationId: stri
     property,
     proximaVisita,
     proximaAcao: property ? obterProximaAcaoComercial(linha.stage, property.status) : null,
+    aging: formatarAgingStage(calcularAgingStageMs(inicioStageAtual, agora)),
   };
 }
 
@@ -237,7 +315,7 @@ export async function buscarPipelineAberto(
       select: selectItemPipeline(organizationId),
     });
 
-    const itens = linhas.map((linha) => paraItemPipeline(linha, organizationId));
+    const itens = linhas.map((linha) => paraItemPipeline(linha, organizationId, agora));
     const grupos = agruparPorColuna(itens);
     for (const coluna of COLUNAS_ABERTAS) {
       grupos[coluna] = ordenarColuna(grupos[coluna], agora);

@@ -673,4 +673,177 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       prisma.propertyInterest.groupBy({ by: ["stage"], _count: { _all: true } })
     ).rejects.toThrow(/organizationId/);
   });
+
+  // -------------------------------------------------------------------
+  // Aging via PropertyInterestStageHistory no Kanban (Fase P.6) — leitura
+  // real via buscarPipelineAberto, não só o mapper puro (já coberto em
+  // src/lib/pipeline.test.ts). Prefixo P6- pra nunca colidir com as letras
+  // já usadas por P.4/P.5 neste arquivo.
+  // -------------------------------------------------------------------
+
+  async function criarHistoricoDireto(opcoes: {
+    organizationId: string;
+    propertyInterestId: string;
+    previousStage: PropertyInterestStage | null;
+    newStage: PropertyInterestStage;
+    changedAt: Date;
+  }) {
+    return prisma.propertyInterestStageHistory.create({ data: opcoes });
+  }
+
+  test("P6-A) item sem nenhum PropertyInterestStageHistory -> aging null (registro anterior à P.6)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "VISITED",
+    });
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const item = colunas.VISITED.find((i) => i.id === interesse.id);
+    expect(item?.aging).toBeNull();
+  });
+
+  test("P6-B) item com PropertyInterestStageHistory correspondente ao stage atual -> aging calculado corretamente", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "VISITED",
+    });
+    const agora = new Date();
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: "VISIT_SCHEDULED",
+      newStage: "VISITED",
+      changedAt: new Date(agora.getTime() - 5 * 60 * 60 * 1000), // 5h atrás
+    });
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id, { agora });
+    const item = colunas.VISITED.find((i) => i.id === interesse.id);
+    expect(item?.aging).toBe("Na etapa há 5h");
+  });
+
+  test("P6-C) múltiplos itens, cada um com seu próprio último PropertyInterestStageHistory, resolvidos numa única leitura (prova de correção do batching, mesmo espírito de Y)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const agora = new Date();
+    const esperados: { id: string; horas: number }[] = [];
+    for (let i = 1; i <= 4; i++) {
+      const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+      const interesse = await criarInteresseDireto({
+        organizationId: cenario.organization.id,
+        personId: pessoa.id,
+        propertyId: imovel.id,
+        stage: "PROPOSAL",
+      });
+      await criarHistoricoDireto({
+        organizationId: cenario.organization.id,
+        propertyInterestId: interesse.id,
+        previousStage: "VISITED",
+        newStage: "PROPOSAL",
+        changedAt: new Date(agora.getTime() - i * 60 * 60 * 1000),
+      });
+      esperados.push({ id: interesse.id, horas: i });
+    }
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id, { agora });
+    for (const { id, horas } of esperados) {
+      const item = colunas.PROPOSAL.find((i) => i.id === id);
+      expect(item?.aging).toBe(`Na etapa há ${horas}h`);
+    }
+  });
+
+  test("P6-D) reentrada no mesmo stage: aging reflete a transição MAIS RECENTE pro stage atual, nunca a mais antiga", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "VISITED",
+    });
+    const agora = new Date();
+    // Primeira entrada em VISITED, há muito tempo.
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: "VISIT_SCHEDULED",
+      newStage: "VISITED",
+      changedAt: new Date(agora.getTime() - 30 * 24 * 60 * 60 * 1000),
+    });
+    // Saiu pra PROPOSAL e voltou pra VISITED recentemente (reentrada).
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: "PROPOSAL",
+      newStage: "VISITED",
+      changedAt: new Date(agora.getTime() - 2 * 60 * 60 * 1000),
+    });
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id, { agora });
+    const item = colunas.VISITED.find((i) => i.id === interesse.id);
+    expect(item?.aging).toBe("Na etapa há 2h");
+  });
+
+  test("P6-E) PropertyInterestStageHistory de outro tenant (anomalia de dado) não influencia o aging do card", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "VISITED",
+    });
+    // Anomalia deliberada: history de B apontando pro interesse de A —
+    // sem FK composta, o Postgres permite isso.
+    await criarHistoricoDireto({
+      organizationId: cenarioB.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: "VISIT_SCHEDULED",
+      newStage: "VISITED",
+      changedAt: new Date(),
+    });
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const item = colunas.VISITED.find((i) => i.id === interesse.id);
+    expect(item?.aging).toBeNull();
+  });
+
+  test("P6-F) item encerrado (WON) nunca tem aging, mesmo com PropertyInterestStageHistory presente", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const agora = new Date();
+    const interesse = await prisma.propertyInterest.create({
+      data: {
+        organizationId: cenario.organization.id,
+        personId: pessoa.id,
+        propertyId: imovel.id,
+        stage: "WON",
+        closedAt: agora,
+      },
+    });
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: "PROPOSAL",
+      newStage: "WON",
+      changedAt: agora,
+    });
+
+    const { itens } = await buscarPipelineEncerrado(cenario.organization.id);
+    const item = itens.find((i) => i.id === interesse.id);
+    expect(item?.aging).toBeNull();
+  });
 });

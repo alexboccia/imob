@@ -1913,4 +1913,103 @@ describe("Agenda de visitas — Fase H.2 do CRM", () => {
     });
     expect(total).toBe(0);
   });
+
+  // -------------------------------------------------------------------
+  // PropertyInterestStageHistory — exceção pontual e aditiva autorizada
+  // pra este arquivo protegido (Fase P.6): as duas transições automáticas
+  // de stage abaixo (agendar -> VISIT_SCHEDULED, concluir -> VISITED) já
+  // existiam desde a H.2 — aqui só se prova que cada uma agora também
+  // grava exatamente 1 PropertyInterestStageHistory, sem nenhuma mudança
+  // de regra/guard/mensagem.
+  // -------------------------------------------------------------------
+
+  async function historicoDe(organizationId: string, propertyInterestId: string) {
+    return prisma.propertyInterestStageHistory.findMany({
+      where: { organizationId, propertyInterestId },
+      orderBy: { changedAt: "asc" },
+    });
+  }
+
+  test("P6-A) agendar visita a partir de INTERESTED cria exatamente 1 PropertyInterestStageHistory (INTERESTED -> VISIT_SCHEDULED)", async () => {
+    const ctx = await cenarioPadrao("INTERESTED");
+    cenario = ctx.cenario;
+
+    const resultado = await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+
+    expect(resultado.success).toBe(true);
+    const historico = await historicoDe(ctx.cenario.organization.id, ctx.interesse.id);
+    expect(historico).toHaveLength(1);
+    expect(historico[0].previousStage).toBe("INTERESTED");
+    expect(historico[0].newStage).toBe("VISIT_SCHEDULED");
+  });
+
+  test("P6-B) agendar segunda visita quando stage já não é INTERESTED não cria novo PropertyInterestStageHistory (stageDeveAvancar=false)", async () => {
+    const ctx = await cenarioPadrao("VISIT_SCHEDULED");
+    cenario = ctx.cenario;
+
+    const resultado = await agendar(ctx.interesse.id, { scheduledAt: futuro(10) });
+
+    expect(resultado.success).toBe(true);
+    expect(await historicoDe(ctx.cenario.organization.id, ctx.interesse.id)).toHaveLength(0);
+  });
+
+  test("P6-C) concluir visita agendada a partir de VISIT_SCHEDULED cria exatamente 1 PropertyInterestStageHistory (VISIT_SCHEDULED -> VISITED)", async () => {
+    const ctx = await cenarioPadrao("INTERESTED");
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const atividade = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    // O agendamento já gravou 1 entrada (INTERESTED -> VISIT_SCHEDULED,
+    // provado em P6-A) — aqui a asserção é sobre a SEGUNDA entrada, criada
+    // pela conclusão.
+    expect(await historicoDe(ctx.cenario.organization.id, ctx.interesse.id)).toHaveLength(1);
+
+    const resultado = await concluir(atividade.id);
+
+    expect(resultado.success).toBe(true);
+    const historico = await historicoDe(ctx.cenario.organization.id, ctx.interesse.id);
+    expect(historico).toHaveLength(2);
+    expect(historico[1].previousStage).toBe("VISIT_SCHEDULED");
+    expect(historico[1].newStage).toBe("VISITED");
+  });
+
+  test("P6-D) concluir visita quando stage não é mais VISIT_SCHEDULED (ex: já REJECTED) não cria novo PropertyInterestStageHistory", async () => {
+    const ctx = await cenarioPadrao("INTERESTED");
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const atividade = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    await prisma.propertyInterest.update({
+      where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+      data: { stage: "REJECTED" },
+    });
+    expect(await historicoDe(ctx.cenario.organization.id, ctx.interesse.id)).toHaveLength(1); // só a do agendamento
+
+    const resultado = await concluir(atividade.id);
+
+    expect(resultado.success).toBe(true);
+    // Nenhuma entrada nova — o if (stage === "VISIT_SCHEDULED") não bateu.
+    expect(await historicoDe(ctx.cenario.organization.id, ctx.interesse.id)).toHaveLength(1);
+  });
+
+  test("P6-E) duas conclusões concorrentes da mesma visita produzem no máximo 1 PropertyInterestStageHistory novo (nunca duplicado pela corrida)", async () => {
+    const ctx = await cenarioPadrao("INTERESTED");
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const atividade = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+
+    await Promise.all([concluir(atividade.id), concluir(atividade.id)]);
+
+    const historico = await historicoDe(ctx.cenario.organization.id, ctx.interesse.id);
+    // 1 do agendamento + exatamente 1 da conclusão — o guard de
+    // status:"SCHEDULED" do updateMany garante que só uma das duas
+    // chamadas concorrentes realmente conclui (mesmo racional de BD).
+    expect(historico).toHaveLength(2);
+    const transicoesParaVisited = historico.filter((h) => h.newStage === "VISITED");
+    expect(transicoesParaVisited).toHaveLength(1);
+  });
 });

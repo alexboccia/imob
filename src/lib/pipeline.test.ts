@@ -9,6 +9,9 @@ import {
   interpretarPeriodoPipeline,
   resolverIntervaloPeriodo,
   paraContagemPorStage,
+  obterInicioStageAtual,
+  calcularAgingStageMs,
+  formatarAgingStage,
   COLUNAS_ABERTAS,
   type ItemPipeline,
 } from "@/lib/pipeline";
@@ -28,6 +31,7 @@ function linhaFake(overrides: {
   propertyOrganizationId?: string;
   propertyStatus?: PropertyStatus;
   scheduledActivities?: { id: string; scheduledAt: Date }[];
+  stageHistory?: { newStage: PropertyInterestStage; changedAt: Date }[];
 }) {
   return {
     id: overrides.id ?? "interesse-1",
@@ -42,6 +46,7 @@ function linhaFake(overrides: {
       organizationId: overrides.propertyOrganizationId ?? ORG,
     },
     scheduledActivities: overrides.scheduledActivities ?? [],
+    stageHistory: overrides.stageHistory ?? [],
   };
 }
 
@@ -98,6 +103,40 @@ describe("paraItemPipeline", () => {
     expect(item.property).toBeNull();
     expect(item.proximaAcao).toBeNull();
   });
+
+  describe("aging (Fase P.6)", () => {
+    const agora = new Date("2026-06-15T12:00:00.000Z");
+
+    test("stage aberto sem stageHistory -> aging null (registro anterior à P.6, nunca uma origem inventada)", () => {
+      const item = paraItemPipeline(linhaFake({ stage: "VISITED", stageHistory: [] }), ORG, agora);
+      expect(item.aging).toBeNull();
+    });
+
+    test("stage aberto com stageHistory correspondente -> aging calculado a partir de changedAt", () => {
+      const item = paraItemPipeline(
+        linhaFake({
+          stage: "VISITED",
+          stageHistory: [{ newStage: "VISITED", changedAt: new Date("2026-06-12T12:00:00.000Z") }],
+        }),
+        ORG,
+        agora
+      );
+      expect(item.aging).toBe("Na etapa há 3 dias");
+    });
+
+    test("stage encerrado (WON) -> aging sempre null, mesmo com stageHistory presente (closedAtISO é a referência oficial)", () => {
+      const item = paraItemPipeline(
+        linhaFake({
+          stage: "WON",
+          closedAt: new Date("2026-06-14T12:00:00.000Z"),
+          stageHistory: [{ newStage: "WON", changedAt: new Date("2026-06-14T12:00:00.000Z") }],
+        }),
+        ORG,
+        agora
+      );
+      expect(item.aging).toBeNull();
+    });
+  });
 });
 
 function itemFake(overrides: Partial<ItemPipeline> & { stage: PropertyInterestStage }): ItemPipeline {
@@ -110,6 +149,7 @@ function itemFake(overrides: Partial<ItemPipeline> & { stage: PropertyInterestSt
     property: overrides.property ?? { id: "im1", title: "Imóvel", status: "AVAILABLE" },
     proximaVisita: overrides.proximaVisita ?? null,
     proximaAcao: overrides.proximaAcao ?? null,
+    aging: overrides.aging ?? null,
   };
 }
 
@@ -365,5 +405,87 @@ describe("paraContagemPorStage", () => {
     for (const coluna of COLUNAS_ABERTAS) {
       expect(contagem[coluna]).toBe(0);
     }
+  });
+});
+
+// -------------------------------------------------------------------
+// Aging do Pipeline (Fase P.6) — helpers puros, sem Prisma/banco.
+// -------------------------------------------------------------------
+
+describe("obterInicioStageAtual", () => {
+  test("A) transição correspondente ao stage atual encontrada -> retorna seu changedAtISO", () => {
+    const resultado = obterInicioStageAtual("VISITED", [
+      { newStage: "VISITED", changedAtISO: "2026-06-10T00:00:00.000Z" },
+    ]);
+    expect(resultado).toBe("2026-06-10T00:00:00.000Z");
+  });
+
+  test("B) múltiplas entradas pro mesmo stage (reentrada) -> vence a mais recente, nunca a mais antiga", () => {
+    const resultado = obterInicioStageAtual("VISITED", [
+      { newStage: "VISITED", changedAtISO: "2026-01-01T00:00:00.000Z" },
+      { newStage: "VISITED", changedAtISO: "2026-06-10T00:00:00.000Z" },
+    ]);
+    expect(resultado).toBe("2026-06-10T00:00:00.000Z");
+  });
+
+  test("C) entrada com newStage diferente do stage atual é ignorada", () => {
+    const resultado = obterInicioStageAtual("VISITED", [
+      { newStage: "PROPOSAL", changedAtISO: "2026-06-10T00:00:00.000Z" },
+    ]);
+    expect(resultado).toBeNull();
+  });
+
+  test("D) sem histórico -> null", () => {
+    expect(obterInicioStageAtual("VISITED", [])).toBeNull();
+  });
+});
+
+describe("calcularAgingStageMs", () => {
+  test("sem início (null) -> null", () => {
+    expect(calcularAgingStageMs(null, new Date("2026-06-15T12:00:00.000Z"))).toBeNull();
+  });
+
+  test("E) changedAt no futuro -> null (nunca aging negativo)", () => {
+    const agora = new Date("2026-06-15T12:00:00.000Z");
+    const futuro = new Date("2026-06-16T12:00:00.000Z").toISOString();
+    expect(calcularAgingStageMs(futuro, agora)).toBeNull();
+  });
+
+  test("F) changedAt exatamente igual a agora -> 0 (não null — zero é um aging válido)", () => {
+    const agora = new Date("2026-06-15T12:00:00.000Z");
+    expect(calcularAgingStageMs(agora.toISOString(), agora)).toBe(0);
+  });
+
+  test("K) diferença em ms é a mesma independentemente de como o ISO representa o fuso (sempre epoch UTC internamente)", () => {
+    const agora = new Date("2026-06-15T12:00:00.000Z");
+    const semOffset = "2026-06-15T09:00:00.000Z";
+    const comOffset = "2026-06-15T06:00:00.000-03:00"; // mesmo instante que 09:00 UTC
+    expect(calcularAgingStageMs(semOffset, agora)).toBe(calcularAgingStageMs(comOffset, agora));
+  });
+});
+
+describe("formatarAgingStage", () => {
+  test("null -> null", () => {
+    expect(formatarAgingStage(null)).toBeNull();
+  });
+
+  test("G) 30 minutos -> 'menos de 1h'", () => {
+    expect(formatarAgingStage(30 * 60 * 1000)).toBe("Na etapa há menos de 1h");
+  });
+
+  test("H) 5 horas -> 'há 5h'", () => {
+    expect(formatarAgingStage(5 * 60 * 60 * 1000)).toBe("Na etapa há 5h");
+  });
+
+  test("I) 1 dia exato -> 'há 1 dia' (singular)", () => {
+    expect(formatarAgingStage(24 * 60 * 60 * 1000)).toBe("Na etapa há 1 dia");
+  });
+
+  test("J) 3 dias -> 'há 3 dias' (plural)", () => {
+    expect(formatarAgingStage(3 * 24 * 60 * 60 * 1000)).toBe("Na etapa há 3 dias");
+  });
+
+  test("0ms -> 'menos de 1h' (zero é um aging válido, nunca null)", () => {
+    expect(formatarAgingStage(0)).toBe("Na etapa há menos de 1h");
   });
 });

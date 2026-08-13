@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma, type PropertyInterestStage } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
 import { telefoneValido, normalizarTelefone } from "@/lib/telefone";
 import { normalizarEmail } from "@/lib/rate-limit";
@@ -402,8 +402,31 @@ export async function criarInteressePessoa(
     let interesse;
     let foiCriadoAgora = false;
     try {
-      interesse = await prisma.propertyInterest.create({
-        data: { organizationId, personId: pessoaId, propertyId, notes: notes || null },
+      interesse = await prisma.$transaction(async (tx) => {
+        const criado = await tx.propertyInterest.create({
+          data: { organizationId, personId: pessoaId, propertyId, notes: notes || null },
+        });
+
+        // PropertyInterestStageHistory inicial (Fase P.6 — correção
+        // pós-auditoria do achado C): a criação É a entrada real em
+        // INTERESTED, não um "5º caminho sem histórico" — previousStage
+        // null (não existe estado anterior), newStage INTERESTED,
+        // changedAt = criado.createdAt (o instante real que o Postgres já
+        // gravou na própria criação, nunca um new Date() JS separado que
+        // poderia divergir em milissegundos, nunca uma segunda leitura).
+        // Mesma transação do create acima: nunca um PropertyInterest novo
+        // sem history, nunca um history órfão sem PropertyInterest.
+        await tx.propertyInterestStageHistory.create({
+          data: {
+            organizationId,
+            propertyInterestId: criado.id,
+            previousStage: null,
+            newStage: "INTERESTED",
+            changedAt: criado.createdAt,
+          },
+        });
+
+        return criado;
       });
       foiCriadoAgora = true;
     } catch (erro) {
@@ -442,6 +465,19 @@ export async function criarInteressePessoa(
   });
 }
 
+// Limite de tentativas do guard read-then-write abaixo — mesmo racional de
+// MAX_TENTATIVAS_FECHAMENTO (fecharInteresse, mais abaixo neste arquivo):
+// cada tentativa perdida significa que outra transação mudou o stage entre
+// a leitura e o updateMany desta; 3 é generoso pra uma janela de
+// milissegundos dentro de uma única transação.
+const MAX_TENTATIVAS_ATUALIZACAO_ESTAGIO = 3;
+
+type ResultadoAtualizacaoEstagio =
+  | { tipo: "atualizado"; from: PropertyInterestStage }
+  | { tipo: "no_op" }
+  | { tipo: "nao_encontrado" }
+  | { tipo: "corrida_nao_resolvida" };
+
 // Atualiza stage + notes de um relacionamento já existente. Não valida
 // transição (INTERESTED → PROPOSAL é permitido de propósito — decisão da
 // Fase D, MVP sem máquina de estado rígida, mesmo nível de simplicidade
@@ -463,49 +499,117 @@ export async function atualizarEstagioInteresse(
   if (!parsed.success) return erroValidacao(parsed.error);
   const { stage, notes } = parsed.data;
 
+  // notes ausente do FormData chega como undefined do Zod (schema com
+  // .optional()) — nesse caso a chave nem entra no `data`, e o Prisma não
+  // toca a coluna, preservando o valor existente. notes==="" (campo
+  // enviado vazio) grava null de propósito (limpa a observação). Nunca usar
+  // `notes ?? null`/`notes || null` direto no data: isso apagaria notes
+  // existente sempre que o chamador não reenviasse o campo — a UI atual
+  // sempre reenvia (Textarea populada com defaultValue), mas a action não
+  // deve depender disso pra não perder dado silenciosamente.
+  const dadosNotes: { notes?: string | null } = {};
+  if (notes !== undefined) {
+    dadosNotes.notes = notes || null;
+  }
+
   return withOrganization(organizationId, async () => {
     // Confirma que o PropertyInterest pertence a ESTA organização antes de
     // alterar — interesseId é input do navegador como qualquer outro.
-    const atual = await prisma.propertyInterest.findUnique({
+    // personId só serve pra validação de tenant/revalidatePath — NUNCA pro
+    // `stage`, relido dentro da transação abaixo (mesma correção aplicada
+    // em fecharInteresse na P.3: um `stage` capturado aqui fora da
+    // transação podia ficar stale entre esta leitura e o guard atômico).
+    const existente = await prisma.propertyInterest.findUnique({
       where: { id: interesseId, organizationId },
-      select: { stage: true, personId: true },
+      select: { personId: true },
     });
-    if (!atual) return erroAcessoNegado("Relacionamento não encontrado.");
+    if (!existente) return erroAcessoNegado("Relacionamento não encontrado.");
 
-    // notes ausente do FormData chega como undefined do Zod (schema com
-    // .optional()) — nesse caso a chave nem entra no `data`, e o Prisma não
-    // toca a coluna, preservando o valor existente. notes==="" (campo
-    // enviado vazio) grava null de propósito (limpa a observação). Nunca
-    // usar `notes ?? null`/`notes || null` direto no data: isso apagaria
-    // notes existente sempre que o chamador não reenviasse o campo — a UI
-    // atual sempre reenvia (Textarea populada com defaultValue), mas a
-    // action não deve depender disso pra não perder dado silenciosamente.
-    const dadosAtualizacao: { stage: typeof stage; notes?: string | null } = { stage };
-    if (notes !== undefined) {
-      dadosAtualizacao.notes = notes || null;
-    }
+    const resultado = await prisma.$transaction(async (tx): Promise<ResultadoAtualizacaoEstagio> => {
+      for (let tentativa = 0; tentativa < MAX_TENTATIVAS_ATUALIZACAO_ESTAGIO; tentativa++) {
+        const atual = await tx.propertyInterest.findUnique({
+          where: { id: interesseId, organizationId },
+          select: { stage: true },
+        });
+        if (!atual) return { tipo: "nao_encontrado" };
 
-    await prisma.propertyInterest.update({
-      where: { id: interesseId, organizationId },
-      data: dadosAtualizacao,
+        if (atual.stage === stage) {
+          // NO-OP (Fase P.6): stage solicitado == stage atual — nunca cria
+          // PropertyInterestStageHistory (nenhuma transição de fato
+          // ocorreu) nem um ActivityLog redundante de "mudança" que não
+          // mudou nada. notes ainda é atualizado se enviado (cenário comum:
+          // usuário edita só a observação sem tocar no Select).
+          if (Object.keys(dadosNotes).length > 0) {
+            await tx.propertyInterest.update({
+              where: { id: interesseId, organizationId },
+              data: dadosNotes,
+            });
+          }
+          return { tipo: "no_op" };
+        }
+
+        const atualizado = await tx.propertyInterest.updateMany({
+          where: { id: interesseId, organizationId, stage: atual.stage },
+          data: { stage, ...dadosNotes },
+        });
+
+        if (atualizado.count === 0) {
+          // Perdeu a corrida desta tentativa — outra transação mudou o
+          // stage entre a leitura acima e este update. Tenta de novo lendo
+          // o valor mais recente (loop), sem gravar nenhum log/histórico
+          // agora.
+          continue;
+        }
+
+        // PropertyInterestStageHistory (Fase P.6): mesma transação, mesmo
+        // valor literal de `atual.stage` que acabou de casar no updateMany
+        // acima — só a tentativa vencedora da corrida grava histórico.
+        await tx.propertyInterestStageHistory.create({
+          data: {
+            organizationId,
+            propertyInterestId: interesseId,
+            previousStage: atual.stage,
+            newStage: stage,
+            changedAt: new Date(),
+          },
+        });
+
+        await tx.activityLog.create({
+          data: {
+            organizationId,
+            userId: session.user.id,
+            entity: "PropertyInterest",
+            entityId: interesseId,
+            action: "property_interest_stage_changed",
+            payload: { from: atual.stage, to: stage },
+          },
+        });
+
+        return { tipo: "atualizado", from: atual.stage };
+      }
+
+      // Esgotou as tentativas — corrida anormalmente persistente (nunca
+      // observada em teste real, só uma rede de segurança). Zero write,
+      // zero log/histórico.
+      return { tipo: "corrida_nao_resolvida" };
     });
 
-    await logActivity({
-      organizationId,
-      userId: session.user.id,
-      entity: "PropertyInterest",
-      entityId: interesseId,
-      action: "property_interest_stage_changed",
-      payload: { from: atual.stage, to: stage },
-    });
-
-    revalidatePath(`/app/clientes/${atual.personId}`);
+    revalidatePath(`/app/clientes/${existente.personId}`);
     // Fase P.4: esta action é reaproveitada sem alteração de regra pelo
     // controle "Mover" do Kanban (src/app/app/pipeline) — precisa
     // revalidar a própria tela do Pipeline também, senão o card fica
     // preso na coluna antiga até um reload manual.
     revalidatePath("/app/pipeline");
-    return sucesso("Estágio atualizado.");
+
+    switch (resultado.tipo) {
+      case "nao_encontrado":
+        return erroAcessoNegado("Relacionamento não encontrado.");
+      case "corrida_nao_resolvida":
+        return erroGenerico("Não foi possível concluir agora devido a uma alteração concorrente — tente novamente.");
+      case "no_op":
+      case "atualizado":
+        return sucesso("Estágio atualizado.");
+    }
   });
 }
 
@@ -623,9 +727,14 @@ async function fecharInteresse(
           };
         }
 
+        // Uma única instância de Date reutilizada pra closedAt e pra
+        // changedAt do histórico (Fase P.6) — representam o MESMO evento de
+        // fechamento, nunca dois `new Date()` separados que poderiam
+        // divergir em milissegundos.
+        const agora = new Date();
         const atualizado = await tx.propertyInterest.updateMany({
           where: { id: interesse.id, organizationId, stage: atual.stage },
-          data: { stage: destino, closedAt: new Date() },
+          data: { stage: destino, closedAt: agora },
         });
 
         if (atualizado.count === 0) {
@@ -634,6 +743,19 @@ async function fecharInteresse(
           // o valor mais recente (loop), sem gravar nenhum log agora.
           continue;
         }
+
+        // PropertyInterestStageHistory (Fase P.6): mesma transação, mesmo
+        // valor literal de `atual.stage` que acabou de casar no updateMany
+        // acima — só a tentativa vencedora da corrida grava histórico.
+        await tx.propertyInterestStageHistory.create({
+          data: {
+            organizationId,
+            propertyInterestId: interesse.id,
+            previousStage: atual.stage,
+            newStage: destino,
+            changedAt: agora,
+          },
+        });
 
         // ActivityLog DENTRO da transação — mesmo desvio deliberado do
         // padrão best-effort documentado em concluirAgendamentoVisita: o

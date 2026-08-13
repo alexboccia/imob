@@ -21,6 +21,7 @@ import {
   marcarInteresseComoPerdido,
 } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
+import { buscarPipelineAberto } from "@/lib/pipeline";
 import type { PropertyInterestStage } from "@/generated/prisma/client";
 
 function formData(campos: Record<string, string>) {
@@ -1524,5 +1525,356 @@ describe("PropertyInterest — relacionamento Person↔Property (Fase D do CRM)"
       },
     });
     expect(totalStageChanged).toBe(1);
+  });
+
+  // ---------------------------------------------------------------------
+  // PropertyInterestStageHistory — histórico de estágio (Fase P.6).
+  // Continua a mesma sequência de letras do arquivo (DN em diante) — mesmo
+  // describe, mesmos helpers (prepararInteresseNoStage, mudarEstagio,
+  // marcarGanho, marcarPerdido, buscarInteresse).
+  // ---------------------------------------------------------------------
+
+  async function historicoDe(organizationId: string, propertyInterestId: string) {
+    return prisma.propertyInterestStageHistory.findMany({
+      where: { organizationId, propertyInterestId },
+      orderBy: { changedAt: "asc" },
+    });
+  }
+
+  test("DN) atualizarEstagioInteresse: transição real cria exatamente 1 PropertyInterestStageHistory com previousStage/newStage corretos", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { interesse } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    // prepararInteresseNoStage já passa por criarInteressePessoa, que agora
+    // (correção pós-auditoria) grava 1 history inicial (null -> INTERESTED)
+    // na própria criação. A entrada sob teste aqui é a SEGUNDA.
+    expect(await historicoDe(cenario.organization.id, interesse.id)).toHaveLength(1);
+
+    await mudarEstagio(interesse.id, { stage: "PROPOSAL" });
+
+    const historico = await historicoDe(cenario.organization.id, interesse.id);
+    expect(historico).toHaveLength(2);
+    expect(historico[1].previousStage).toBe("INTERESTED");
+    expect(historico[1].newStage).toBe("PROPOSAL");
+    expect(historico[1].organizationId).toBe(cenario.organization.id);
+  });
+
+  test("DO) atualizarEstagioInteresse: no-op (stage solicitado == stage atual) não cria history nem novo ActivityLog de mudança de estágio", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { interesse } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    // 1 entrada já existe (history inicial da criação) — o no-op abaixo não
+    // pode adicionar nenhuma outra.
+    expect(await historicoDe(cenario.organization.id, interesse.id)).toHaveLength(1);
+
+    const resultado = await mudarEstagio(interesse.id, { stage: "INTERESTED", notes: "só editando a nota" });
+
+    expect(resultado.success).toBe(true);
+    const historico = await historicoDe(cenario.organization.id, interesse.id);
+    expect(historico).toHaveLength(1);
+    const totalStageChanged = await prisma.activityLog.count({
+      where: { organizationId: cenario.organization.id, entityId: interesse.id, action: "property_interest_stage_changed" },
+    });
+    expect(totalStageChanged).toBe(0);
+    const atual = await buscarInteresse(cenario.organization.id, interesse.personId, interesse.propertyId);
+    expect(atual?.notes).toBe("só editando a nota");
+  });
+
+  test("DP) marcarInteresseComoGanho: history criado com changedAt EXATAMENTE igual a closedAt (mesmo evento, nunca dois new Date() distintos)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { interesse } = await prepararInteresseNoStage(cenario, "PROPOSAL");
+    // prepararInteresseNoStage já passa por criarInteressePessoa (1 history
+    // inicial, null -> INTERESTED) e por atualizarEstagioInteresse
+    // (INTERESTED -> PROPOSAL, mais 1) pra chegar no stage pedido — 2
+    // entradas de setup. A entrada sob teste aqui é a TERCEIRA, criada por
+    // marcarGanho.
+    expect(await historicoDe(cenario.organization.id, interesse.id)).toHaveLength(2);
+
+    await marcarGanho(interesse.id);
+
+    const historico = await historicoDe(cenario.organization.id, interesse.id);
+    expect(historico).toHaveLength(3);
+    expect(historico[2].previousStage).toBe("PROPOSAL");
+    expect(historico[2].newStage).toBe("WON");
+    const atual = await buscarInteresse(cenario.organization.id, interesse.personId, interesse.propertyId);
+    expect(atual?.closedAt).not.toBeNull();
+    expect(historico[2].changedAt.getTime()).toBe(atual!.closedAt!.getTime());
+  });
+
+  test("DQ) marcarInteresseComoPerdido: history criado com newStage=REJECTED, changedAt == closedAt", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { interesse } = await prepararInteresseNoStage(cenario, "VISITED");
+
+    await marcarPerdido(interesse.id);
+
+    const historico = await historicoDe(cenario.organization.id, interesse.id);
+    // 1 entrada da criação (null -> INTERESTED) + 1 do setup (INTERESTED ->
+    // VISITED, via prepararInteresseNoStage) + 1 da própria action sob teste.
+    expect(historico).toHaveLength(3);
+    expect(historico[2].previousStage).toBe("VISITED");
+    expect(historico[2].newStage).toBe("REJECTED");
+    const atual = await buscarInteresse(cenario.organization.id, interesse.personId, interesse.propertyId);
+    expect(historico[2].changedAt.getTime()).toBe(atual!.closedAt!.getTime());
+  });
+
+  test("DR) idempotência: marcarInteresseComoGanho num interesse já WON não cria novo history (zero write no branch ja_fechado)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { interesse } = await prepararInteresseNoStage(cenario, "PROPOSAL");
+    await marcarGanho(interesse.id);
+    // 1 da criação + 1 do setup (INTERESTED -> PROPOSAL) + 1 do fechamento
+    // (PROPOSAL -> WON).
+    expect(await historicoDe(cenario.organization.id, interesse.id)).toHaveLength(3);
+
+    await marcarGanho(interesse.id);
+
+    expect(await historicoDe(cenario.organization.id, interesse.id)).toHaveLength(3);
+  });
+
+  test("DS) transição inválida (marcarInteresseComoPerdido num WON) não cria history", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { interesse } = await prepararInteresseNoStage(cenario, "PROPOSAL");
+    await marcarGanho(interesse.id);
+    expect(await historicoDe(cenario.organization.id, interesse.id)).toHaveLength(3);
+
+    const resultado = await marcarPerdido(interesse.id);
+
+    expect(resultado.success).toBe(false);
+    expect(await historicoDe(cenario.organization.id, interesse.id)).toHaveLength(3);
+  });
+
+  test("DT) concorrência real: duas chamadas simultâneas de atualizarEstagioInteresse pro MESMO destino resultam em exatamente 1 PropertyInterestStageHistory (a que perde a corrida releva o stage já correto na retentativa e cai no ramo no-op)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { interesse } = await prepararInteresseNoStage(cenario, "INTERESTED");
+    // 1 entrada já existe (history inicial da criação, null -> INTERESTED).
+    expect(await historicoDe(cenario.organization.id, interesse.id)).toHaveLength(1);
+
+    const [r1, r2] = await Promise.all([
+      mudarEstagio(interesse.id, { stage: "PROPOSAL" }),
+      mudarEstagio(interesse.id, { stage: "PROPOSAL" }),
+    ]);
+
+    expect(r1.success).toBe(true);
+    expect(r2.success).toBe(true);
+    const historico = await historicoDe(cenario.organization.id, interesse.id);
+    expect(historico).toHaveLength(2);
+    expect(historico[1].previousStage).toBe("INTERESTED");
+    const atual = await buscarInteresse(cenario.organization.id, interesse.personId, interesse.propertyId);
+    expect(historico[1].newStage).toBe(atual?.stage);
+  });
+
+  test("DU) concorrência real: duas chamadas simultâneas de marcarInteresseComoGanho resultam em exatamente 1 PropertyInterestStageHistory (mesmo racional de DF)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { interesse } = await prepararInteresseNoStage(cenario, "INTERESTED");
+
+    await Promise.all([marcarGanho(interesse.id), marcarGanho(interesse.id)]);
+
+    // 1 da criação + exatamente 1 do fechamento vencedor.
+    expect(await historicoDe(cenario.organization.id, interesse.id)).toHaveLength(2);
+  });
+
+  test("DV) concorrência real: marcarInteresseComoGanho x marcarInteresseComoPerdido simultâneos resultam em exatamente 1 PropertyInterestStageHistory total (mesmo racional de DG)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { interesse } = await prepararInteresseNoStage(cenario, "INTERESTED");
+
+    await Promise.all([marcarGanho(interesse.id), marcarPerdido(interesse.id)]);
+
+    // 1 da criação + exatamente 1 do fechamento vencedor.
+    expect(await historicoDe(cenario.organization.id, interesse.id)).toHaveLength(2);
+  });
+
+  test("DW) tenant scoping obrigatório — leitura de PropertyInterestStageHistory sem organizationId explícito é recusada", async () => {
+    await expect(prisma.propertyInterestStageHistory.findMany({})).rejects.toThrow(/organizationId/);
+  });
+
+  test("DX) PropertyInterestStageHistory nunca contém PII (sem nome/email/telefone/notes/título — só ids e enums)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({
+      organizationId: cenario.organization.id,
+      name: "Cliente Sigiloso Histórico",
+      email: "sigiloso-historico@email.com",
+      phone: "11966665555",
+    });
+    const imovel = await criarImovel({
+      organizationId: cenario.organization.id,
+      status: "AVAILABLE",
+      title: "Cobertura Sigilosa",
+    });
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = (await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id))!;
+
+    await mudarEstagio(interesse.id, { stage: "PROPOSAL" });
+
+    const historico = await historicoDe(cenario.organization.id, interesse.id);
+    const serializado = JSON.stringify(historico);
+    expect(serializado).not.toContain("Cliente Sigiloso Histórico");
+    expect(serializado).not.toContain("sigiloso-historico@email.com");
+    expect(serializado).not.toContain("11966665555");
+    expect(serializado).not.toContain("Cobertura Sigilosa");
+  });
+
+  test("DY) ActivityLog continua sendo gravado normalmente ao lado do novo history — nenhuma regressão do comportamento pré-P.6", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const { interesse } = await prepararInteresseNoStage(cenario, "INTERESTED");
+
+    await mudarEstagio(interesse.id, { stage: "PROPOSAL" });
+
+    const log = await prisma.activityLog.findFirst({
+      where: { organizationId: cenario.organization.id, entityId: interesse.id, action: "property_interest_stage_changed" },
+    });
+    expect(log?.payload).toEqual({ from: "INTERESTED", to: "PROPOSAL" });
+    // 1 da criação (null -> INTERESTED) + 1 da transição sob teste.
+    expect(await historicoDe(cenario.organization.id, interesse.id)).toHaveLength(2);
+  });
+
+  // ---------------------------------------------------------------------
+  // Correção pós-auditoria do achado C (Fase P.6): criarInteressePessoa
+  // agora grava um PropertyInterestStageHistory inicial (previousStage
+  // null -> newStage INTERESTED) na mesma transação da criação. Continua
+  // a mesma sequência de letras do arquivo (DZ em diante).
+  // ---------------------------------------------------------------------
+
+  test("DZ) criarInteressePessoa cria exatamente 1 PropertyInterestStageHistory inicial com previousStage null e newStage INTERESTED", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+
+    const historico = await historicoDe(cenario.organization.id, interesse!.id);
+    expect(historico).toHaveLength(1);
+    expect(historico[0].previousStage).toBeNull();
+    expect(historico[0].newStage).toBe("INTERESTED");
+    expect(historico[0].organizationId).toBe(cenario.organization.id);
+    expect(historico[0].propertyInterestId).toBe(interesse!.id);
+  });
+
+  test("EA) changedAt do history inicial é exatamente o createdAt do PropertyInterest (instante real da criação, nunca um new Date() separado)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+
+    const historico = await historicoDe(cenario.organization.id, interesse!.id);
+    expect(historico[0].changedAt.getTime()).toBe(interesse!.createdAt.getTime());
+  });
+
+  test("EB) novo PropertyInterest criado via criarInteressePessoa possui aging calculável enquanto permanece INTERESTED (contraste com legado, ver EC)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const item = colunas.INTERESTED.find((i) => i.id === interesse!.id);
+    expect(item).toBeDefined();
+    expect(item?.aging).not.toBeNull();
+    expect(item?.aging).toMatch(/^Na etapa há/);
+  });
+
+  test("EC) PropertyInterest legado (criado fora da action, sem history) continua com aging null — distinção intencional preservada", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    // create() direto via Prisma, bypassando criarInteressePessoa —
+    // simula exatamente um registro anterior à P.6 (sem history nenhum).
+    const legado = await prisma.propertyInterest.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id },
+    });
+    expect(await historicoDe(cenario.organization.id, legado.id)).toHaveLength(0);
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const item = colunas.INTERESTED.find((i) => i.id === legado.id);
+    expect(item?.aging).toBeNull();
+  });
+
+  test("ED) tenant isolation: history inicial de A nunca é retornado numa consulta escopada por B", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+
+    const historicoDeB = await prisma.propertyInterestStageHistory.findMany({
+      where: { organizationId: cenarioB.organization.id, propertyInterestId: interesse!.id },
+    });
+    expect(historicoDeB).toHaveLength(0);
+    expect(await historicoDe(cenario.organization.id, interesse!.id)).toHaveLength(1);
+  });
+
+  test("EE) duas criações concorrentes do mesmo relacionamento geram exatamente 1 PropertyInterestStageHistory — nunca duplicado, nunca órfão (mesma corrida de AJ, agora provando também o history)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+
+    await Promise.all([
+      relacionar(pessoa.id, { propertyId: imovel.id }),
+      relacionar(pessoa.id, { propertyId: imovel.id }),
+    ]);
+
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(interesse).not.toBeNull();
+    const historico = await historicoDe(cenario.organization.id, interesse!.id);
+    // Exatamente 1: nunca órfão (o PropertyInterest existe e tem history),
+    // nunca duplicado (a tentativa que perdeu a corrida por P2002 nunca
+    // chama propertyInterestStageHistory.create — cai direto no
+    // findUniqueOrThrow de recuperação).
+    expect(historico).toHaveLength(1);
+    expect(historico[0].previousStage).toBeNull();
+    expect(historico[0].newStage).toBe("INTERESTED");
+  });
+
+  test("EF) reenvio sequencial (idempotente) do mesmo relacionamento não duplica o history inicial", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(await historicoDe(cenario.organization.id, interesse!.id)).toHaveLength(1);
+  });
+
+  test("EG) ActivityLog property_interest_created continua com a mesma semântica pré-correção (entity/action/entityId, sem payload)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+
+    const log = await prisma.activityLog.findFirst({
+      where: { organizationId: cenario.organization.id, entity: "PropertyInterest", action: "property_interest_created" },
+    });
+    expect(log).not.toBeNull();
+    expect(log?.entityId).toBe(interesse!.id);
+    expect(log?.payload).toBeNull();
+
+    const totalLogsCriacao = await prisma.activityLog.count({
+      where: { organizationId: cenario.organization.id, action: "property_interest_created" },
+    });
+    expect(totalLogsCriacao).toBe(1);
   });
 });

@@ -57,6 +57,7 @@ export function CardPipeline({ item }: { item: ItemPipeline }) {
 
         {!encerrado && (
           <>
+            {item.aging && <p className="text-xs text-muted-foreground">{item.aging}</p>}
             {item.proximaAcao && (
               <p className="text-xs text-muted-foreground">
                 <span className={item.proximaAcao.ativa ? "font-medium text-foreground" : ""}>
