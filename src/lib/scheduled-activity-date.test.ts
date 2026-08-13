@@ -7,6 +7,7 @@ import {
   fimDoDiaUTC,
   classificarPeriodoAgenda,
   estaAtrasada,
+  parseDataUTC,
 } from "./scheduled-activity-date";
 
 // Testes unitários puros (sem banco) — mesma pirâmide de testes do
@@ -109,5 +110,40 @@ describe("classificarPeriodoAgenda / estaAtrasada (Fase H.3)", () => {
   test("início e fim do dia UTC cobrem exatamente 00:00:00.000 a 23:59:59.999", () => {
     expect(inicioDoDiaUTC(AGORA).toISOString()).toBe("2026-08-20T00:00:00.000Z");
     expect(fimDoDiaUTC(AGORA).toISOString()).toBe("2026-08-20T23:59:59.999Z");
+  });
+});
+
+describe("parseDataUTC (Fase H.4 — filtro de período)", () => {
+  test("data válida vira meia-noite UTC do dia informado", () => {
+    const data = parseDataUTC("2026-08-20");
+    expect(data?.toISOString()).toBe("2026-08-20T00:00:00.000Z");
+  });
+
+  test("29/02 em ano bissexto é aceito", () => {
+    const data = parseDataUTC("2028-02-29");
+    expect(data?.toISOString()).toBe("2028-02-29T00:00:00.000Z");
+  });
+
+  test("29/02 em ano NÃO bissexto retorna null (nunca rola silenciosamente pra 03-01)", () => {
+    expect(parseDataUTC("2026-02-29")).toBeNull();
+  });
+
+  test("30/02 (dia que não existe em nenhum mês) retorna null", () => {
+    expect(parseDataUTC("2026-02-30")).toBeNull();
+  });
+
+  test("formato fora do padrão YYYY-MM-DD retorna null", () => {
+    expect(parseDataUTC("20/08/2026")).toBeNull();
+    expect(parseDataUTC("2026-8-20")).toBeNull();
+    expect(parseDataUTC("")).toBeNull();
+    expect(parseDataUTC("not-a-date")).toBeNull();
+    expect(parseDataUTC("2026-08-20T00:00:00Z")).toBeNull();
+  });
+
+  test("determinístico independente do timezone do processo", () => {
+    for (const tz of ["UTC", "America/Sao_Paulo", "Asia/Tokyo"]) {
+      const resultado = comTimezoneDoProcesso(tz, () => parseDataUTC("2026-08-20"));
+      expect(resultado?.toISOString()).toBe("2026-08-20T00:00:00.000Z");
+    }
   });
 });

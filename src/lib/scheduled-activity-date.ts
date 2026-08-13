@@ -80,3 +80,28 @@ export function estaAtrasada(
 ): boolean {
   return atividade.status === "SCHEDULED" && classificarPeriodoAgenda(atividade, agora) === "ANTERIORES";
 }
+
+// -----------------------------------------------------------------------
+// Filtro de período da Agenda (Fase H.4) — mesma convenção UTC-literal:
+// "YYYY-MM-DD" (valor cru de <input type="date">) é interpretado como
+// data de calendário UTC, nunca timezone local do navegador/processo.
+// -----------------------------------------------------------------------
+
+// Retorna null pra qualquer valor sintaticamente inválido OU uma data que
+// não existe no calendário (ex: "2026-02-30", que new Date(Date.UTC(...))
+// rolaria silenciosamente pra 2026-03-02) — usar Date.UTC cru sem essa
+// checagem deixaria uma data absurda virar uma query Prisma "válida" mas
+// enganosa. Quem chama trata null como "filtro ausente", nunca como erro
+// que precisa de 500.
+export function parseDataUTC(valor: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor);
+  if (!match) return null;
+  const ano = Number(match[1]);
+  const mes = Number(match[2]);
+  const dia = Number(match[3]);
+  const data = new Date(Date.UTC(ano, mes - 1, dia));
+  if (data.getUTCFullYear() !== ano || data.getUTCMonth() !== mes - 1 || data.getUTCDate() !== dia) {
+    return null;
+  }
+  return data;
+}

@@ -7,18 +7,23 @@ import {
   buscarAgendaProximas,
   buscarAgendaAnteriores,
   contarAgenda,
+  interpretarFiltrosAgenda,
   type ItemAgenda,
+  type FiltroStatusAgenda,
 } from "@/lib/agenda";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { AgendaItemCard } from "@/components/admin/AgendaItemCard";
+import { Input } from "@/components/ui/input";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-// Agenda do corretor (Fase H.3) — projeção operacional de
+// Agenda do corretor (Fase H.3, evoluída na H.4) — projeção operacional de
 // ScheduledActivity(VISIT), nunca uma segunda fonte de verdade. Sem
 // formulário de "nova visita" solta: criação continua exclusivamente a
 // partir de um PropertyInterest existente, nas fichas já implementadas
-// pela H.2.
+// pela H.2. A H.4 adiciona busca, filtro de período e filtro de status
+// operacional — todos aplicados no servidor (Prisma/Postgres), nunca
+// carregando a listagem inteira pra filtrar no client.
 
 const ABAS = ["hoje", "proximas", "anteriores"] as const;
 type Aba = (typeof ABAS)[number];
@@ -33,7 +38,63 @@ const ABA_LABEL: Record<Aba, string> = {
   anteriores: "Anteriores",
 };
 
-type SearchParams = { aba?: string; page?: string; pageSize?: string };
+const STATUS_FILTRO_LABEL: Record<FiltroStatusAgenda, string> = {
+  TODAS: "Todas",
+  AGENDADAS: "Agendadas",
+  CONCLUIDAS: "Concluídas",
+  CANCELADAS: "Canceladas",
+  ATRASADAS: "Atrasadas",
+};
+const STATUS_FILTRO_OPCOES: FiltroStatusAgenda[] = [
+  "TODAS",
+  "AGENDADAS",
+  "CONCLUIDAS",
+  "CANCELADAS",
+  "ATRASADAS",
+];
+
+type SearchParams = {
+  aba?: string;
+  page?: string;
+  pageSize?: string;
+  q?: string;
+  de?: string;
+  ate?: string;
+  status?: string;
+};
+
+// Formata Date -> "YYYY-MM-DD" (valor esperado por <input type="date">) a
+// partir dos componentes UTC — nunca toISOString().slice(0,10) puro seria
+// arriscado aqui porque os valores já vêm de parseDataUTC (sempre meia-
+// noite UTC), mas manter os getters UTC explícitos evita qualquer dúvida
+// futura se essa função for reaproveitada com outro tipo de Date.
+function paraInputDate(data: Date | null): string {
+  if (!data) return "";
+  const ano = data.getUTCFullYear();
+  const mes = String(data.getUTCMonth() + 1).padStart(2, "0");
+  const dia = String(data.getUTCDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+// Monta querystring preservando os filtros atuais, com overrides pontuais
+// (ex: trocar só `aba` ou só `page`) — usado tanto pelos links de aba
+// quanto pelos de paginação, pra nenhuma navegação "esquecer" um filtro
+// ativo do usuário.
+function construirHref(params: SearchParams, overrides: Partial<SearchParams>, resetarPage: boolean): string {
+  const efetivos: SearchParams = { ...params, ...overrides };
+  if (resetarPage) delete efetivos.page;
+
+  const busca = new URLSearchParams();
+  if (efetivos.aba && efetivos.aba !== "hoje") busca.set("aba", efetivos.aba);
+  if (efetivos.q) busca.set("q", efetivos.q);
+  if (efetivos.de) busca.set("de", efetivos.de);
+  if (efetivos.ate) busca.set("ate", efetivos.ate);
+  if (efetivos.status && efetivos.status !== "TODAS") busca.set("status", efetivos.status);
+  if (efetivos.page) busca.set("page", efetivos.page);
+
+  const query = busca.toString();
+  return query ? `/app/agenda?${query}` : "/app/agenda";
+}
 
 export default async function AgendaPage({
   searchParams,
@@ -60,6 +121,9 @@ export default async function AgendaPage({
   // mesma requisição.
   const agora = new Date();
 
+  const filtros = interpretarFiltrosAgenda(params);
+  const temFiltrosAtivos = Boolean(filtros.busca || filtros.de || filtros.ate || filtros.status !== "TODAS");
+
   const contadores = await contarAgenda(organizationId, { agora });
 
   const { page, take } = interpretarPaginacao(params, { pageSizePadrao: 20, pageSizeMaximo: 50 });
@@ -67,11 +131,11 @@ export default async function AgendaPage({
 
   let itens: ItemAgenda[];
   if (aba === "hoje") {
-    itens = await buscarAgendaHoje(organizationId, { agora });
+    itens = await buscarAgendaHoje(organizationId, { agora, filtros });
   } else if (aba === "proximas") {
-    itens = await buscarAgendaProximas(organizationId, { agora });
+    itens = await buscarAgendaProximas(organizationId, { agora, filtros });
   } else {
-    itens = await buscarAgendaAnteriores(organizationId, { agora, skip, take });
+    itens = await buscarAgendaAnteriores(organizationId, { agora, skip, take, filtros });
   }
 
   const mensagemVazia: Record<Aba, string> = {
@@ -79,16 +143,104 @@ export default async function AgendaPage({
     proximas: "Nenhuma próxima visita agendada.",
     anteriores: "Nenhuma visita anterior encontrada.",
   };
+  const mensagemVaziaFinal = temFiltrosAtivos
+    ? "Nenhuma visita encontrada com esses filtros."
+    : mensagemVazia[aba];
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-semibold mb-6">Agenda</h1>
+      <h1 className="text-2xl font-semibold">Agenda</h1>
+      <p className="text-muted-foreground text-sm mb-4">
+        Gerencie suas visitas e compromissos comerciais.
+      </p>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground mb-4">
+        <span>
+          Hoje: <span className="font-medium text-foreground">{contadores.hoje}</span>
+        </span>
+        <span>
+          Próximas: <span className="font-medium text-foreground">{contadores.proximas}</span>
+        </span>
+        <span>
+          Atrasadas: <span className="font-medium text-foreground">{contadores.atrasadas}</span>
+        </span>
+      </div>
+
+      <form method="get" className="flex flex-wrap items-end gap-2 mb-3 border rounded-md p-3">
+        <input type="hidden" name="aba" value={aba} />
+        <div className="flex-1 min-w-[140px] space-y-1">
+          <label htmlFor="agenda-q" className="text-xs text-muted-foreground">
+            Buscar
+          </label>
+          <Input
+            id="agenda-q"
+            name="q"
+            defaultValue={filtros.busca}
+            placeholder="Buscar cliente ou imóvel..."
+          />
+        </div>
+        <div className="space-y-1 w-[132px] max-w-full">
+          <label htmlFor="agenda-de" className="text-xs text-muted-foreground">
+            De
+          </label>
+          <input
+            id="agenda-de"
+            name="de"
+            type="date"
+            defaultValue={paraInputDate(filtros.de)}
+            className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          />
+        </div>
+        <div className="space-y-1 w-[132px] max-w-full">
+          <label htmlFor="agenda-ate" className="text-xs text-muted-foreground">
+            Até
+          </label>
+          <input
+            id="agenda-ate"
+            name="ate"
+            type="date"
+            defaultValue={paraInputDate(filtros.ate)}
+            className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          />
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="agenda-status" className="text-xs text-muted-foreground">
+            Status
+          </label>
+          <select
+            id="agenda-status"
+            name="status"
+            defaultValue={filtros.status}
+            className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            {STATUS_FILTRO_OPCOES.map((opcao) => (
+              <option key={opcao} value={opcao}>
+                {STATUS_FILTRO_LABEL[opcao]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button type="submit" className={cn(buttonVariants({ variant: "default", size: "sm" }))}>
+          Filtrar
+        </button>
+        {temFiltrosAtivos && (
+          <Link href="/app/agenda" className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
+            Limpar filtros
+          </Link>
+        )}
+      </form>
+
+      {filtros.intervaloInvalido && (
+        <p className="text-xs text-destructive mb-3">
+          Data inicial não pode ser depois da data final — mostrando todos os períodos.
+        </p>
+      )}
 
       <nav className="flex flex-wrap gap-2 mb-6" aria-label="Período da agenda">
         {ABAS.map((chave) => (
           <Link
             key={chave}
-            href={`/app/agenda?aba=${chave}`}
+            href={construirHref(params, { aba: chave }, true)}
             aria-current={aba === chave ? "page" : undefined}
             className={cn(buttonVariants({ variant: aba === chave ? "default" : "outline", size: "sm" }))}
           >
@@ -98,7 +250,7 @@ export default async function AgendaPage({
       </nav>
 
       {itens.length === 0 ? (
-        <p className="text-muted-foreground text-sm">{mensagemVazia[aba]}</p>
+        <p className="text-muted-foreground text-sm">{mensagemVaziaFinal}</p>
       ) : (
         <div className="space-y-3">
           {itens.map((item) => (
@@ -111,7 +263,7 @@ export default async function AgendaPage({
         <div className="flex items-center justify-between mt-4 text-sm">
           {page > 1 ? (
             <Link
-              href={`/app/agenda?aba=anteriores&page=${page - 1}`}
+              href={construirHref(params, { page: String(page - 1) }, false)}
               className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             >
               ← Página anterior
@@ -121,7 +273,7 @@ export default async function AgendaPage({
           )}
           {itens.length === take && (
             <Link
-              href={`/app/agenda?aba=anteriores&page=${page + 1}`}
+              href={construirHref(params, { page: String(page + 1) }, false)}
               className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             >
               Próxima página →

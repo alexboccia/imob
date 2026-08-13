@@ -2,7 +2,7 @@ import { describe, test, expect, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { prisma } from "@/lib/prisma";
 import { criarCenario, criarPessoa, criarImovel } from "@/test/fixtures";
-import { buscarAgendaHoje, buscarAgendaProximas, buscarAgendaAnteriores } from "@/lib/agenda";
+import { buscarAgendaHoje, buscarAgendaProximas, buscarAgendaAnteriores, interpretarFiltrosAgenda } from "@/lib/agenda";
 import { inicioDoDiaUTC } from "@/lib/scheduled-activity-date";
 
 // Agenda do corretor (Fase H.3) — testes de integração contra Postgres
@@ -371,11 +371,12 @@ describe("Agenda do corretor — Fase H.3", () => {
     expect(anteriores.map((i) => i.id)).toEqual([maisRecente.id, maisAntiga.id]);
   });
 
-  test("T) as 3 queries da agenda filtram explicitamente type: \"VISIT\" (garantia estrutural pro enum crescer no futuro)", () => {
+  test("T) as queries da agenda filtram explicitamente type: \"VISIT\" (garantia estrutural pro enum crescer no futuro)", () => {
     const codigo = readFileSync(new URL("../../src/lib/agenda.ts", import.meta.url), "utf-8");
     const ocorrencias = codigo.match(/type:\s*"VISIT"/g) ?? [];
-    // 3 queries de listagem (Hoje/Próximas/Anteriores) + 3 de contagem = 6.
-    expect(ocorrencias.length).toBe(6);
+    // 3 queries de listagem (Hoje/Próximas/Anteriores) + 4 de contagem
+    // (hoje/proximas/anteriores/atrasadas, a última adicionada na H.4) = 7.
+    expect(ocorrencias.length).toBe(7);
   });
 
   // -------------------------------------------------------------------
@@ -413,5 +414,369 @@ describe("Agenda do corretor — Fase H.3", () => {
 
     expect(depois).toEqual(antes);
     expect(atividadeDepois).toEqual(atividadeAntes);
+  });
+
+  // -------------------------------------------------------------------
+  // Filtros operacionais (Fase H.4): busca, período, status
+  // -------------------------------------------------------------------
+
+  const SEM_FILTRO = interpretarFiltrosAgenda({});
+
+  test("AA) busca encontra visita pelo nome do cliente", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id, name: "Roberto Alvarenga" });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const atividade = await prisma.scheduledActivity.create({
+      data: {
+        organizationId: cenario.organization.id,
+        personId: pessoa.id,
+        propertyId: imovel.id,
+        status: "SCHEDULED",
+        scheduledAt: hojeAsHoras(2),
+      },
+    });
+
+    const filtros = interpretarFiltrosAgenda({ q: "alvarenga" });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, { filtros });
+
+    expect(hoje.map((i) => i.id)).toEqual([atividade.id]);
+  });
+
+  test("AB) busca encontra visita pelo título do imóvel", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, title: "Cobertura Duplex Panorâmica" });
+    const atividade = await prisma.scheduledActivity.create({
+      data: {
+        organizationId: cenario.organization.id,
+        personId: pessoa.id,
+        propertyId: imovel.id,
+        status: "SCHEDULED",
+        scheduledAt: hojeAsHoras(2),
+      },
+    });
+
+    const filtros = interpretarFiltrosAgenda({ q: "duplex" });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, { filtros });
+
+    expect(hoje.map((i) => i.id)).toEqual([atividade.id]);
+  });
+
+  test("AC) busca sem resultado retorna lista vazia, sem erro", async () => {
+    const ctx = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: hojeAsHoras(2) });
+    cenario = ctx.cenario;
+
+    const filtros = interpretarFiltrosAgenda({ q: "nome-que-nao-existe-em-lugar-nenhum" });
+    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, { filtros });
+
+    expect(hoje).toEqual([]);
+  });
+
+  test("AD) filtro de data inicial (de) exclui visitas anteriores ao período", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const dentro = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(2), completedAt: new Date() },
+    });
+    const foraAntes = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(30), completedAt: new Date() },
+    });
+    void foraAntes;
+
+    const de = new Date(dentro.scheduledAt.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const filtros = interpretarFiltrosAgenda({ de });
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, { filtros });
+
+    expect(anteriores.map((i) => i.id)).toContain(dentro.id);
+    expect(anteriores.map((i) => i.id)).not.toContain(foraAntes.id);
+  });
+
+  test("AE) filtro de data final (ate) exclui visitas posteriores ao período", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const dentro = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: futuro(3) },
+    });
+    const foraDepois = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: futuro(40) },
+    });
+
+    const ate = new Date(dentro.scheduledAt.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const filtros = interpretarFiltrosAgenda({ ate });
+    const proximas = await buscarAgendaProximas(cenario.organization.id, { filtros });
+
+    expect(proximas.map((i) => i.id)).toContain(dentro.id);
+    expect(proximas.map((i) => i.id)).not.toContain(foraDepois.id);
+  });
+
+  test("AF) intervalo completo (de+ate) filtra corretamente em Anteriores", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const dentro = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(5), completedAt: new Date() },
+    });
+    const foraAntes = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(20), completedAt: new Date() },
+    });
+    const foraDepois = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(1), completedAt: new Date() },
+    });
+
+    const de = new Date(dentro.scheduledAt.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const ate = new Date(dentro.scheduledAt.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const filtros = interpretarFiltrosAgenda({ de, ate });
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, { filtros });
+
+    expect(anteriores.map((i) => i.id)).toEqual([dentro.id]);
+    expect(anteriores.map((i) => i.id)).not.toContain(foraAntes.id);
+    expect(anteriores.map((i) => i.id)).not.toContain(foraDepois.id);
+  });
+
+  test("AG) status=CONCLUIDAS em Anteriores retorna só COMPLETED", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const concluida = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(2), completedAt: new Date() },
+    });
+    const cancelada = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "CANCELLED", scheduledAt: passado(2), cancelledAt: new Date() },
+    });
+    const atrasada = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: passado(2) },
+    });
+
+    const filtros = interpretarFiltrosAgenda({ status: "CONCLUIDAS" });
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, { filtros });
+
+    expect(anteriores.map((i) => i.id)).toEqual([concluida.id]);
+    expect(anteriores.map((i) => i.id)).not.toContain(cancelada.id);
+    expect(anteriores.map((i) => i.id)).not.toContain(atrasada.id);
+  });
+
+  test("AH) status=CANCELADAS em Anteriores retorna só CANCELLED", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const concluida = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(2), completedAt: new Date() },
+    });
+    const cancelada = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "CANCELLED", scheduledAt: passado(2), cancelledAt: new Date() },
+    });
+
+    const filtros = interpretarFiltrosAgenda({ status: "CANCELADAS" });
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, { filtros });
+
+    expect(anteriores.map((i) => i.id)).toEqual([cancelada.id]);
+    expect(anteriores.map((i) => i.id)).not.toContain(concluida.id);
+  });
+
+  test("AI) status=ATRASADAS em Anteriores retorna só SCHEDULED atrasada (nunca COMPLETED/CANCELLED)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const atrasada = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: passado(2) },
+    });
+    const concluida = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(2), completedAt: new Date() },
+    });
+
+    const filtros = interpretarFiltrosAgenda({ status: "ATRASADAS" });
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, { filtros });
+
+    expect(anteriores.map((i) => i.id)).toEqual([atrasada.id]);
+    expect(anteriores.map((i) => i.id)).not.toContain(concluida.id);
+    // Confirma no banco: continua SCHEDULED, nunca virou CANCELLED/COMPLETED sozinha.
+    const noBanco = await prisma.scheduledActivity.findUnique({ where: { id: atrasada.id, organizationId: cenario.organization.id } });
+    expect(noBanco?.status).toBe("SCHEDULED");
+  });
+
+  test("AJ) status=CONCLUIDAS na aba Hoje é combinação impossível: retorna vazio, não erro", async () => {
+    const ctx = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: hojeAsHoras(2) });
+    cenario = ctx.cenario;
+
+    const filtros = interpretarFiltrosAgenda({ status: "CONCLUIDAS" });
+    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, { filtros });
+
+    expect(hoje).toEqual([]);
+  });
+
+  test("AK) status=ATRASADAS na aba Próximas é combinação impossível: retorna vazio, não erro", async () => {
+    const ctx = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: futuro(5) });
+    cenario = ctx.cenario;
+
+    const filtros = interpretarFiltrosAgenda({ status: "ATRASADAS" });
+    const proximas = await buscarAgendaProximas(ctx.cenario.organization.id, { filtros });
+
+    expect(proximas).toEqual([]);
+  });
+
+  test("AL) busca + período combinados", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoaAlvo = await criarPessoa({ organizationId: cenario.organization.id, name: "Marina Kowalski" });
+    const pessoaOutra = await criarPessoa({ organizationId: cenario.organization.id, name: "Marina Kowalski" });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const dentroDoPeriodo = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoaAlvo.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: futuro(3) },
+    });
+    const foraDoPeriodo = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoaOutra.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: futuro(40) },
+    });
+
+    const ate = new Date(dentroDoPeriodo.scheduledAt.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const filtros = interpretarFiltrosAgenda({ q: "kowalski", ate });
+    const proximas = await buscarAgendaProximas(cenario.organization.id, { filtros });
+
+    expect(proximas.map((i) => i.id)).toEqual([dentroDoPeriodo.id]);
+    expect(proximas.map((i) => i.id)).not.toContain(foraDoPeriodo.id);
+  });
+
+  test("AM) busca + status combinados", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id, name: "Heitor Nascimento" });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const concluidaAlvo = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(2), completedAt: new Date() },
+    });
+    const canceladaMesmoNome = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "CANCELLED", scheduledAt: passado(2), cancelledAt: new Date() },
+    });
+
+    const filtros = interpretarFiltrosAgenda({ q: "nascimento", status: "CONCLUIDAS" });
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, { filtros });
+
+    expect(anteriores.map((i) => i.id)).toEqual([concluidaAlvo.id]);
+    expect(anteriores.map((i) => i.id)).not.toContain(canceladaMesmoNome.id);
+  });
+
+  test("AN) paginação de Anteriores preserva o filtro de busca entre páginas", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id, name: "Paginação Teste Cliente" });
+    const outraPessoa = await criarPessoa({ organizationId: cenario.organization.id, name: "Alguém Irrelevante" });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const idsAlvo: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const atividade = await prisma.scheduledActivity.create({
+        data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(i + 1), completedAt: new Date() },
+      });
+      idsAlvo.push(atividade.id);
+    }
+    await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: outraPessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(1), completedAt: new Date() },
+    });
+
+    const filtros = interpretarFiltrosAgenda({ q: "paginação teste" });
+    const pagina1 = await buscarAgendaAnteriores(cenario.organization.id, { filtros, skip: 0, take: 2 });
+    const pagina2 = await buscarAgendaAnteriores(cenario.organization.id, { filtros, skip: 2, take: 2 });
+
+    expect(pagina1).toHaveLength(2);
+    expect(pagina2).toHaveLength(1);
+    const idsRetornados = [...pagina1, ...pagina2].map((i) => i.id).sort();
+    expect(idsRetornados).toEqual([...idsAlvo].sort());
+  });
+
+  test("AO) busca não encontra/vaza Person cross-tenant, mesmo quando o nome bate", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoaB = await criarPessoa({ organizationId: cenarioB.organization.id, name: "Nome Sigiloso De Outra Org" });
+    const imovelA = await criarImovel({ organizationId: cenario.organization.id });
+
+    const anomala = await prisma.scheduledActivity.create({
+      data: {
+        organizationId: cenario.organization.id,
+        personId: pessoaB.id,
+        propertyId: imovelA.id,
+        status: "SCHEDULED",
+        scheduledAt: hojeAsHoras(2),
+      },
+    });
+
+    const filtros = interpretarFiltrosAgenda({ q: "sigiloso" });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, { filtros });
+
+    expect(hoje.map((i) => i.id)).not.toContain(anomala.id);
+    expect(hoje).toEqual([]);
+
+    await prisma.scheduledActivity.deleteMany({ where: { id: anomala.id, organizationId: cenario.organization.id } });
+  });
+
+  test("AP) busca não encontra/vaza Property cross-tenant, mesmo quando o título bate", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoaA = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovelB = await criarImovel({ organizationId: cenarioB.organization.id, title: "Imóvel Sigiloso De Outra Org" });
+
+    const anomala = await prisma.scheduledActivity.create({
+      data: {
+        organizationId: cenario.organization.id,
+        personId: pessoaA.id,
+        propertyId: imovelB.id,
+        status: "SCHEDULED",
+        scheduledAt: hojeAsHoras(2),
+      },
+    });
+
+    const filtros = interpretarFiltrosAgenda({ q: "imóvel sigiloso" });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, { filtros });
+
+    expect(hoje.map((i) => i.id)).not.toContain(anomala.id);
+    expect(hoje).toEqual([]);
+  });
+
+  test("AQ) buscar com filtros ativos não cria/altera ScheduledActivity, PropertyInterest, Interaction ou ActivityLog", async () => {
+    const ctx = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: hojeAsHoras(2), notes: "nota" });
+    cenario = ctx.cenario;
+    const where = { organizationId: ctx.cenario.organization.id };
+
+    const antes = {
+      scheduledActivity: await prisma.scheduledActivity.count({ where }),
+      propertyInterest: await prisma.propertyInterest.count({ where }),
+      interaction: await prisma.interaction.count({ where }),
+      activityLog: await prisma.activityLog.count({ where }),
+    };
+
+    const filtros = interpretarFiltrosAgenda({ q: "teste", de: "2020-01-01", ate: "2030-01-01", status: "AGENDADAS" });
+    await buscarAgendaHoje(ctx.cenario.organization.id, { filtros });
+    await buscarAgendaProximas(ctx.cenario.organization.id, { filtros });
+    await buscarAgendaAnteriores(ctx.cenario.organization.id, { filtros });
+
+    const depois = {
+      scheduledActivity: await prisma.scheduledActivity.count({ where }),
+      propertyInterest: await prisma.propertyInterest.count({ where }),
+      interaction: await prisma.interaction.count({ where }),
+      activityLog: await prisma.activityLog.count({ where }),
+    };
+
+    expect(depois).toEqual(antes);
+  });
+
+  test("AR) limite de Próximas continua respeitado com filtro de busca ativo", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id, name: "Cliente Volume Teste" });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    await prisma.scheduledActivity.createMany({
+      data: Array.from({ length: 5 }, (_, i) => ({
+        organizationId: cenario!.organization.id,
+        personId: pessoa.id,
+        propertyId: imovel.id,
+        status: "SCHEDULED" as const,
+        scheduledAt: futuro(i + 1),
+      })),
+    });
+
+    const filtros = interpretarFiltrosAgenda({ q: "volume" });
+    const proximas = await buscarAgendaProximas(cenario.organization.id, { filtros, limite: 3 });
+
+    expect(proximas).toHaveLength(3);
+  });
+
+  test("AS) SEM_FILTRO (objeto default) mantém contrato de interpretarFiltrosAgenda({})", () => {
+    expect(SEM_FILTRO.status).toBe("TODAS");
+    expect(SEM_FILTRO.busca).toBe("");
   });
 });
