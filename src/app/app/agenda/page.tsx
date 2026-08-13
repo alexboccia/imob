@@ -12,9 +12,10 @@ import {
   type ItemAgenda,
   type FiltroStatusAgenda,
 } from "@/lib/agenda";
-import { periodoDaVisita, proximaVisita, type PeriodoDia } from "@/lib/scheduled-activity-date";
+import { periodoDaVisita, proximaVisita, painelAgoraDoDia, type PeriodoDia } from "@/lib/scheduled-activity-date";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { AgendaItemCard } from "@/components/admin/AgendaItemCard";
+import { PainelAgoraAgenda } from "@/components/admin/PainelAgoraAgenda";
 import { Input } from "@/components/ui/input";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -160,6 +161,13 @@ export default async function AgendaPage({
   // nunca via query própria. "Próxima visita" reflete o conjunto VISÍVEL
   // após os filtros, não o conjunto total do dia (decisão H.5 seção 13).
   const proximaVisitaItem = aba === "hoje" ? proximaVisita(itens, agora) : null;
+  // Painel "Agora" (Fase H.7) — calculado sobre `itens`, o mesmo conjunto
+  // VISÍVEL já filtrado pelos parâmetros H.4 usado acima pra
+  // proximaVisitaItem/gruposDoDia (decisão H.7 seção 13: evita mostrar
+  // pendência/próxima que o próprio usuário acabou de esconder com um
+  // filtro). Distinto do resumo diário (resumoDiario, H.5), que continua
+  // GLOBAL e nunca aplica filtro — nenhuma das duas seções mudou.
+  const painelAgora = aba === "hoje" ? painelAgoraDoDia(itens, agora) : null;
   const gruposDoDia =
     aba === "hoje"
       ? PERIODOS_DIA.map((periodo) => ({
@@ -295,6 +303,8 @@ export default async function AgendaPage({
           </Link>
         ))}
       </nav>
+
+      {painelAgora && <PainelAgoraAgenda estado={painelAgora} />}
 
       {itens.length === 0 ? (
         <p className="text-muted-foreground text-sm">{mensagemVaziaFinal}</p>

@@ -2,7 +2,13 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
-import { formatarDataHora, estaAtrasada, horarioJaPassouHoje } from "@/lib/scheduled-activity-date";
+import {
+  formatarDataHora,
+  estaAtrasada,
+  horarioJaPassouHoje,
+  acaoOperacionalDaVisita,
+  type AcaoOperacionalVisita,
+} from "@/lib/scheduled-activity-date";
 import { cn } from "@/lib/utils";
 import type { ItemAgenda } from "@/lib/agenda";
 
@@ -14,6 +20,19 @@ export const STATUS_VISITA_LABEL: Record<string, string> = {
   SCHEDULED: "Agendada",
   COMPLETED: "Concluída",
   CANCELLED: "Cancelada",
+};
+
+// Ação operacional recomendada (Fase H.7) — só apresentação, texto puro
+// (não Badge) de propósito: já existem até 3 badges de estado no mesmo
+// card (Próxima/Atrasada/Horário passou/Status); um 4º badge colorido
+// pesaria visualmente sem agregar clareza. Este é um conceito diferente
+// (orientação do que fazer, não estado), por isso fica destacado como
+// texto próprio, nunca substituindo nenhum badge existente.
+const ACAO_OPERACIONAL_LABEL: Record<Exclude<AcaoOperacionalVisita, null>, string> = {
+  PREPARAR_VISITA: "Preparar visita",
+  VISITA_AGORA: "Visita agora",
+  REGISTRAR_RESULTADO: "Registrar resultado",
+  RESOLVER_PENDENCIA: "Resolver pendência",
 };
 
 // Um único card pra qualquer item da agenda. Itens SCHEDULED (Hoje,
@@ -45,6 +64,12 @@ export function AgendaItemCard({
   // junto com "Atrasada" no mesmo card, já que uma exclui a outra por
   // construção (ver horarioJaPassouHoje).
   const horarioPassou = horarioJaPassouHoje({ status: item.status, scheduledAt: item.scheduledAt }, agora);
+  // Mesmo padrão de atrasada/horarioPassou acima: chamada direta de um
+  // helper puro exportado, com os dados que o card já recebe — nenhuma
+  // lógica temporal nova escrita aqui, nenhuma query disparada.
+  const acaoOperacional = acionavel
+    ? acaoOperacionalDaVisita({ status: item.status, scheduledAt: item.scheduledAt }, agora)
+    : null;
 
   return (
     <Card className={cn(ehProximaVisita && "border-primary ring-1 ring-primary")}>
@@ -81,6 +106,12 @@ export function AgendaItemCard({
             <Badge variant="secondary">{STATUS_VISITA_LABEL[item.status] ?? item.status}</Badge>
           </div>
         </div>
+
+        {acaoOperacional && (
+          <p className="text-xs font-medium text-primary">
+            {ACAO_OPERACIONAL_LABEL[acaoOperacional]}
+          </p>
+        )}
 
         {/* Observação (H.6): só exibida aqui em modo histórico/somente
             leitura (item não-acionável, ou seja, COMPLETED/CANCELLED) —

@@ -9,7 +9,13 @@ import {
   interpretarFiltrosAgenda,
   contarResumoDiario,
 } from "@/lib/agenda";
-import { inicioDoDiaUTC, proximaVisita, periodoDaVisita } from "@/lib/scheduled-activity-date";
+import {
+  inicioDoDiaUTC,
+  proximaVisita,
+  periodoDaVisita,
+  acaoOperacionalDaVisita,
+  painelAgoraDoDia,
+} from "@/lib/scheduled-activity-date";
 
 // Agenda do corretor (Fase H.3) — testes de integração contra Postgres
 // real. Cobre multi-tenancy (G-K), corretude de query (L-T) e read-only
@@ -1057,5 +1063,114 @@ describe("Agenda do corretor — Fase H.3", () => {
     };
 
     expect(depois).toEqual(antes);
+  });
+
+  // -------------------------------------------------------------------
+  // Próxima ação operacional / painel "Agora" (Fase H.7)
+  // -------------------------------------------------------------------
+
+  test("AF) organização A não enxerga ação operacional/painel Agora derivados de dados da organização B", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoaB = await criarPessoa({ organizationId: cenarioB.organization.id });
+    const imovelB = await criarImovel({ organizationId: cenarioB.organization.id });
+    // Visita de B com horário passado hoje — se vazasse pra A, geraria
+    // REGISTRAR_RESULTADO/AGUARDANDO_RESULTADO indevido no painel de A.
+    await prisma.scheduledActivity.create({
+      data: { organizationId: cenarioB.organization.id, personId: pessoaB.id, propertyId: imovelB.id, status: "SCHEDULED", scheduledAt: hojeAsHoras(2) },
+    });
+
+    const hojeDeA = await buscarAgendaHoje(cenario.organization.id);
+    expect(hojeDeA).toEqual([]);
+    expect(painelAgoraDoDia(hojeDeA)).toEqual({ tipo: "VAZIO" });
+  });
+
+  test("AG) painel Agora considera o conjunto VISÍVEL após filtro H.4, enquanto o resumo diário (H.5) permanece global", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoaPendente = await criarPessoa({ organizationId: cenario.organization.id, name: "Cliente Pendencia H7" });
+    const pessoaFutura = await criarPessoa({ organizationId: cenario.organization.id, name: "Cliente Futuro H7" });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    // agora ancorado no meio do dia — a visita "pendente" fica no passado
+    // (horário já passou hoje), a "futura" continua no futuro do mesmo dia.
+    const agoraDoTeste = hojeAsHoras(14);
+    await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoaPendente.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: hojeAsHoras(10) },
+    });
+    await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoaFutura.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: hojeAsHoras(18) },
+    });
+
+    const resumoSemFiltro = await contarResumoDiario(cenario.organization.id, { agora: agoraDoTeste });
+    expect(resumoSemFiltro.agendadas).toBe(2);
+
+    const semFiltro = await buscarAgendaHoje(cenario.organization.id, { agora: agoraDoTeste });
+    expect(painelAgoraDoDia(semFiltro, agoraDoTeste).tipo).toBe("AGUARDANDO_RESULTADO");
+
+    // Filtro H.4 isola só a visita futura — o painel (baseado no conjunto
+    // visível) muda pra "próxima visita"; o resumo diário (sempre global)
+    // continua exatamente igual.
+    const filtros = interpretarFiltrosAgenda({ q: "cliente futuro h7" });
+    const comFiltro = await buscarAgendaHoje(cenario.organization.id, { agora: agoraDoTeste, filtros });
+    expect(comFiltro).toHaveLength(1);
+    const estadoFiltrado = painelAgoraDoDia(comFiltro, agoraDoTeste);
+    expect(estadoFiltrado.tipo).toBe("PROXIMA_VISITA");
+
+    const resumoComFiltro = await contarResumoDiario(cenario.organization.id, { agora: agoraDoTeste });
+    expect(resumoComFiltro).toEqual(resumoSemFiltro);
+  });
+
+  test("AH) filtro H.4 + agrupamento H.5 + ação operacional H.7 continuam coerentes juntos", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoaAlvo = await criarPessoa({ organizationId: cenario.organization.id, name: "Cliente Coerencia H7" });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const agoraDoTeste = hojeAsHoras(14);
+    const visita = await prisma.scheduledActivity.create({
+      data: { organizationId: cenario.organization.id, personId: pessoaAlvo.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: new Date(`${hojeISO()}T09:00:00.000Z`) },
+    });
+
+    const filtros = interpretarFiltrosAgenda({ q: "coerencia h7" });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, { agora: agoraDoTeste, filtros });
+
+    expect(hoje.map((i) => i.id)).toEqual([visita.id]);
+    expect(periodoDaVisita(hoje[0].scheduledAt)).toBe("MANHA");
+    expect(acaoOperacionalDaVisita(hoje[0], agoraDoTeste)).toBe("REGISTRAR_RESULTADO");
+  });
+
+  test("AI) calcular ação operacional/painel Agora sobre a visão de Hoje não escreve nada (zero-write, inclusive zero ActivityLog)", async () => {
+    const ctx = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: hojeAsHoras(2) });
+    cenario = ctx.cenario;
+    const where = { organizationId: ctx.cenario.organization.id };
+
+    const antes = {
+      scheduledActivity: await prisma.scheduledActivity.count({ where }),
+      propertyInterest: await prisma.propertyInterest.count({ where }),
+      interaction: await prisma.interaction.count({ where }),
+      activityLog: await prisma.activityLog.count({ where }),
+    };
+
+    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id);
+    const acoes = hoje.map((item) => acaoOperacionalDaVisita(item));
+    const painel = painelAgoraDoDia(hoje);
+    void acoes;
+    void painel;
+
+    const depois = {
+      scheduledActivity: await prisma.scheduledActivity.count({ where }),
+      propertyInterest: await prisma.propertyInterest.count({ where }),
+      interaction: await prisma.interaction.count({ where }),
+      activityLog: await prisma.activityLog.count({ where }),
+    };
+    expect(depois).toEqual(antes);
+  });
+
+  test("AJ) acaoOperacionalDaVisita e painelAgoraDoDia são funções puras — nenhuma referência a prisma/await no código-fonte (garantia estrutural de zero N+1)", () => {
+    const codigo = readFileSync(new URL("../../src/lib/scheduled-activity-date.ts", import.meta.url), "utf-8");
+    const inicioAcao = codigo.indexOf("export function acaoOperacionalDaVisita");
+    const inicioPainel = codigo.indexOf("export function painelAgoraDoDia");
+    const fimPainel = codigo.indexOf("\n}", inicioPainel) + 2;
+    const trecho = codigo.slice(inicioAcao, fimPainel);
+    expect(trecho).not.toContain("prisma");
+    expect(trecho).not.toContain("await");
+    expect(trecho).not.toContain("async");
   });
 });

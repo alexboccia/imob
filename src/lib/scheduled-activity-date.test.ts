@@ -2,6 +2,7 @@ import { describe, test, expect } from "vitest";
 import { parseScheduledAt, atualizarObservacaoAgendamentoVisitaSchema } from "./scheduled-activity-schema";
 import {
   formatarDataHora,
+  formatarHora,
   paraDatetimeLocal,
   inicioDoDiaUTC,
   fimDoDiaUTC,
@@ -11,6 +12,8 @@ import {
   periodoDaVisita,
   horarioJaPassouHoje,
   proximaVisita,
+  acaoOperacionalDaVisita,
+  painelAgoraDoDia,
 } from "./scheduled-activity-date";
 
 // Testes unitários puros (sem banco) — mesma pirâmide de testes do
@@ -318,5 +321,309 @@ describe("proximaVisita (Fase H.5)", () => {
       { id: "agendada", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T18:00:00.000Z") },
     ];
     expect(proximaVisita(itens, AGORA_PV)?.id).toBe("agendada");
+  });
+});
+
+describe("acaoOperacionalDaVisita (Fase H.7)", () => {
+  const AGORA_H7 = new Date("2026-08-20T14:00:00.000Z");
+
+  test("A) SCHEDULED hoje antes de agora -> REGISTRAR_RESULTADO", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-20T10:00:00.000Z") };
+    expect(acaoOperacionalDaVisita(atividade, AGORA_H7)).toBe("REGISTRAR_RESULTADO");
+  });
+
+  test("B) SCHEDULED hoje exatamente agora -> VISITA_AGORA", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: AGORA_H7 };
+    expect(acaoOperacionalDaVisita(atividade, AGORA_H7)).toBe("VISITA_AGORA");
+  });
+
+  test("C) SCHEDULED hoje depois de agora -> PREPARAR_VISITA", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-20T18:00:00.000Z") };
+    expect(acaoOperacionalDaVisita(atividade, AGORA_H7)).toBe("PREPARAR_VISITA");
+  });
+
+  test("D) SCHEDULED de dia anterior -> RESOLVER_PENDENCIA", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-19T09:00:00.000Z") };
+    expect(acaoOperacionalDaVisita(atividade, AGORA_H7)).toBe("RESOLVER_PENDENCIA");
+  });
+
+  test("E) COMPLETED hoje -> null", () => {
+    const atividade = { status: "COMPLETED" as const, scheduledAt: new Date("2026-08-20T10:00:00.000Z") };
+    expect(acaoOperacionalDaVisita(atividade, AGORA_H7)).toBeNull();
+  });
+
+  test("F) CANCELLED hoje -> null", () => {
+    const atividade = { status: "CANCELLED" as const, scheduledAt: new Date("2026-08-20T10:00:00.000Z") };
+    expect(acaoOperacionalDaVisita(atividade, AGORA_H7)).toBeNull();
+  });
+
+  test("G) COMPLETED de dia anterior -> null (encerrada não tem ação, mesmo no passado)", () => {
+    const atividade = { status: "COMPLETED" as const, scheduledAt: new Date("2026-08-19T09:00:00.000Z") };
+    expect(acaoOperacionalDaVisita(atividade, AGORA_H7)).toBeNull();
+  });
+
+  test("H) CANCELLED de dia anterior -> null", () => {
+    const atividade = { status: "CANCELLED" as const, scheduledAt: new Date("2026-08-19T09:00:00.000Z") };
+    expect(acaoOperacionalDaVisita(atividade, AGORA_H7)).toBeNull();
+  });
+
+  test("I) visita de amanhã (SCHEDULED, período PROXIMAS) -> null (comportamento V1 documentado: ainda não é hora de agir)", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-21T09:00:00.000Z") };
+    expect(acaoOperacionalDaVisita(atividade, AGORA_H7)).toBeNull();
+  });
+
+  test("J) cruzamento com horarioJaPassouHoje/estaAtrasada: horário passado hoje", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-20T10:00:00.000Z") };
+    expect(horarioJaPassouHoje(atividade, AGORA_H7)).toBe(true);
+    expect(estaAtrasada(atividade, AGORA_H7)).toBe(false);
+    expect(acaoOperacionalDaVisita(atividade, AGORA_H7)).toBe("REGISTRAR_RESULTADO");
+  });
+
+  test("K) cruzamento com horarioJaPassouHoje/estaAtrasada: visita atrasada (dia anterior)", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-19T09:00:00.000Z") };
+    expect(horarioJaPassouHoje(atividade, AGORA_H7)).toBe(false);
+    expect(estaAtrasada(atividade, AGORA_H7)).toBe(true);
+    expect(acaoOperacionalDaVisita(atividade, AGORA_H7)).toBe("RESOLVER_PENDENCIA");
+  });
+
+  test("L) cruzamento com horarioJaPassouHoje: exatamente agora", () => {
+    const atividade = { status: "SCHEDULED" as const, scheduledAt: AGORA_H7 };
+    expect(horarioJaPassouHoje(atividade, AGORA_H7)).toBe(false);
+    expect(acaoOperacionalDaVisita(atividade, AGORA_H7)).toBe("VISITA_AGORA");
+  });
+
+  test("M/N/O) determinístico sob TZ=UTC / America/Sao_Paulo / Asia/Tokyo", () => {
+    const casos: Array<{ status: "SCHEDULED" | "COMPLETED" | "CANCELLED"; scheduledAt: Date; esperado: ReturnType<typeof acaoOperacionalDaVisita> }> = [
+      { status: "SCHEDULED", scheduledAt: new Date("2026-08-20T10:00:00.000Z"), esperado: "REGISTRAR_RESULTADO" },
+      { status: "SCHEDULED", scheduledAt: AGORA_H7, esperado: "VISITA_AGORA" },
+      { status: "SCHEDULED", scheduledAt: new Date("2026-08-20T18:00:00.000Z"), esperado: "PREPARAR_VISITA" },
+      { status: "SCHEDULED", scheduledAt: new Date("2026-08-19T09:00:00.000Z"), esperado: "RESOLVER_PENDENCIA" },
+      { status: "COMPLETED", scheduledAt: new Date("2026-08-20T10:00:00.000Z"), esperado: null },
+    ];
+    for (const tz of ["UTC", "America/Sao_Paulo", "Asia/Tokyo"]) {
+      for (const caso of casos) {
+        const resultado = comTimezoneDoProcesso(tz, () => acaoOperacionalDaVisita(caso, AGORA_H7));
+        expect(resultado).toBe(caso.esperado);
+      }
+    }
+  });
+});
+
+describe("formatarHora (Fase H.7)", () => {
+  test("extrai só HH:mm em UTC, independente do timezone do processo", () => {
+    for (const tz of ["UTC", "America/Sao_Paulo", "Asia/Tokyo"]) {
+      const resultado = comTimezoneDoProcesso(tz, () => formatarHora("2026-08-20T14:30:00.000Z"));
+      expect(resultado).toBe("14:30");
+    }
+  });
+});
+
+describe("painelAgoraDoDia (Fase H.7)", () => {
+  const AGORA_PA = new Date("2026-08-20T14:00:00.000Z");
+  type Item = { id: string; status: "SCHEDULED" | "COMPLETED" | "CANCELLED"; scheduledAt: Date };
+
+  test("P) nenhuma visita hoje -> estado vazio", () => {
+    expect(painelAgoraDoDia<Item>([], AGORA_PA)).toEqual({ tipo: "VAZIO" });
+  });
+
+  test("Q) apenas visita futura -> mostra próxima", () => {
+    const itens: Item[] = [{ id: "a", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T16:00:00.000Z") }];
+    const estado = painelAgoraDoDia(itens, AGORA_PA);
+    expect(estado.tipo).toBe("PROXIMA_VISITA");
+    if (estado.tipo === "PROXIMA_VISITA") expect(estado.visita.id).toBe("a");
+  });
+
+  test("R) uma visita com horário passado -> prioridade para 'aguardando resultado'", () => {
+    const itens: Item[] = [{ id: "a", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T10:00:00.000Z") }];
+    const estado = painelAgoraDoDia(itens, AGORA_PA);
+    expect(estado.tipo).toBe("AGUARDANDO_RESULTADO");
+    if (estado.tipo === "AGUARDANDO_RESULTADO") {
+      expect(estado.quantidade).toBe(1);
+      expect(estado.maisAntiga.id).toBe("a");
+    }
+  });
+
+  test("S) duas visitas com horário passado -> quantidade = 2, identifica a mais antiga", () => {
+    const itens: Item[] = [
+      { id: "mais-tarde", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T12:00:00.000Z") },
+      { id: "mais-cedo", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T09:00:00.000Z") },
+    ];
+    const estado = painelAgoraDoDia(itens, AGORA_PA);
+    expect(estado.tipo).toBe("AGUARDANDO_RESULTADO");
+    if (estado.tipo === "AGUARDANDO_RESULTADO") {
+      expect(estado.quantidade).toBe(2);
+      expect(estado.maisAntiga.id).toBe("mais-cedo");
+    }
+  });
+
+  test("T) horário passado + próxima futura -> painel prioriza a pendência passada", () => {
+    const itens: Item[] = [
+      { id: "passada", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T10:00:00.000Z") },
+      { id: "futura", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T18:00:00.000Z") },
+    ];
+    const estado = painelAgoraDoDia(itens, AGORA_PA);
+    expect(estado.tipo).toBe("AGUARDANDO_RESULTADO");
+  });
+
+  test("U) COMPLETED/CANCELLED não entram nas pendências nem na próxima visita", () => {
+    const itens: Item[] = [
+      { id: "completada-passada", status: "COMPLETED", scheduledAt: new Date("2026-08-20T10:00:00.000Z") },
+      { id: "cancelada-futura", status: "CANCELLED", scheduledAt: new Date("2026-08-20T18:00:00.000Z") },
+    ];
+    expect(painelAgoraDoDia(itens, AGORA_PA)).toEqual({ tipo: "VAZIO" });
+  });
+
+  test("V) painel considera apenas o conjunto recebido (simula lista já filtrada pela H.4) — mesmo dado bruto, resultado muda conforme o conjunto visível", () => {
+    const todosOsItens: Item[] = [
+      { id: "pendente", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T10:00:00.000Z") },
+      { id: "futura", status: "SCHEDULED", scheduledAt: new Date("2026-08-20T18:00:00.000Z") },
+    ];
+    const estadoSemFiltro = painelAgoraDoDia(todosOsItens, AGORA_PA);
+    expect(estadoSemFiltro.tipo).toBe("AGUARDANDO_RESULTADO");
+
+    // Conjunto reduzido (equivalente a um filtro H.4 escondendo a
+    // pendência) — o painel nunca consulta nada além do array recebido.
+    const conjuntoFiltrado = todosOsItens.filter((item) => item.id === "futura");
+    const estadoComFiltro = painelAgoraDoDia(conjuntoFiltrado, AGORA_PA);
+    expect(estadoComFiltro.tipo).toBe("PROXIMA_VISITA");
+    if (estadoComFiltro.tipo === "PROXIMA_VISITA") expect(estadoComFiltro.visita.id).toBe("futura");
+  });
+});
+
+describe("janela operacional de VISITA_AGORA (correção pós-auditoria H.7)", () => {
+  // Visita de referência às 14:30 — mesmo exemplo usado na correção
+  // solicitada, pra facilitar conferência cruzada com o pedido.
+  const VISITA_1430 = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-20T14:30:00.000Z") };
+  const CINCO_MIN_MS = 5 * 60 * 1000;
+
+  test("A) exatamente -5min (agora = scheduledAt - 5min) -> VISITA_AGORA (limite inclusivo)", () => {
+    const agora = new Date(VISITA_1430.scheduledAt.getTime() - CINCO_MIN_MS);
+    expect(acaoOperacionalDaVisita(VISITA_1430, agora)).toBe("VISITA_AGORA");
+  });
+
+  test("B) -5min - 1ms -> PREPARAR_VISITA (fora da janela, ainda no futuro)", () => {
+    const agora = new Date(VISITA_1430.scheduledAt.getTime() - CINCO_MIN_MS - 1);
+    expect(acaoOperacionalDaVisita(VISITA_1430, agora)).toBe("PREPARAR_VISITA");
+  });
+
+  test("C) exatamente no horário agendado -> VISITA_AGORA", () => {
+    expect(acaoOperacionalDaVisita(VISITA_1430, VISITA_1430.scheduledAt)).toBe("VISITA_AGORA");
+  });
+
+  test("D) +5min (agora = scheduledAt + 5min) -> VISITA_AGORA (limite inclusivo)", () => {
+    const agora = new Date(VISITA_1430.scheduledAt.getTime() + CINCO_MIN_MS);
+    expect(acaoOperacionalDaVisita(VISITA_1430, agora)).toBe("VISITA_AGORA");
+  });
+
+  test("E) +5min + 1ms -> REGISTRAR_RESULTADO (fora da janela, já passou)", () => {
+    const agora = new Date(VISITA_1430.scheduledAt.getTime() + CINCO_MIN_MS + 1);
+    expect(acaoOperacionalDaVisita(VISITA_1430, agora)).toBe("REGISTRAR_RESULTADO");
+  });
+
+  test("F) +2min (dentro da janela): horarioJaPassouHoje=true (relógio) e ação=VISITA_AGORA (orientação) coexistem de propósito", () => {
+    const agora = new Date(VISITA_1430.scheduledAt.getTime() + 2 * 60 * 1000);
+    expect(horarioJaPassouHoje(VISITA_1430, agora)).toBe(true);
+    expect(acaoOperacionalDaVisita(VISITA_1430, agora)).toBe("VISITA_AGORA");
+  });
+
+  test("G) ontem, mesmo horário nominal -> RESOLVER_PENDENCIA, nunca VISITA_AGORA (período decide antes da janela)", () => {
+    const ontem = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-19T14:30:00.000Z") };
+    const agora = new Date("2026-08-20T14:31:00.000Z");
+    expect(acaoOperacionalDaVisita(ontem, agora)).toBe("RESOLVER_PENDENCIA");
+  });
+
+  test("H) amanhã, mesmo horário nominal -> null, nunca VISITA_AGORA", () => {
+    const amanha = { status: "SCHEDULED" as const, scheduledAt: new Date("2026-08-21T14:30:00.000Z") };
+    const agora = new Date("2026-08-20T14:29:00.000Z");
+    expect(acaoOperacionalDaVisita(amanha, agora)).toBeNull();
+  });
+
+  test("I) COMPLETED dentro da janela -> null", () => {
+    const atividade = { status: "COMPLETED" as const, scheduledAt: VISITA_1430.scheduledAt };
+    const agora = new Date(VISITA_1430.scheduledAt.getTime() + 60 * 1000);
+    expect(acaoOperacionalDaVisita(atividade, agora)).toBeNull();
+  });
+
+  test("J) CANCELLED dentro da janela -> null", () => {
+    const atividade = { status: "CANCELLED" as const, scheduledAt: VISITA_1430.scheduledAt };
+    const agora = new Date(VISITA_1430.scheduledAt.getTime() + 60 * 1000);
+    expect(acaoOperacionalDaVisita(atividade, agora)).toBeNull();
+  });
+
+  test("K/L/M) determinístico sob TZ=UTC / America/Sao_Paulo / Asia/Tokyo", () => {
+    const casos: Array<{ agora: Date; esperado: ReturnType<typeof acaoOperacionalDaVisita> }> = [
+      { agora: new Date(VISITA_1430.scheduledAt.getTime() - CINCO_MIN_MS), esperado: "VISITA_AGORA" },
+      { agora: new Date(VISITA_1430.scheduledAt.getTime() - CINCO_MIN_MS - 1), esperado: "PREPARAR_VISITA" },
+      { agora: new Date(VISITA_1430.scheduledAt.getTime() + CINCO_MIN_MS), esperado: "VISITA_AGORA" },
+      { agora: new Date(VISITA_1430.scheduledAt.getTime() + CINCO_MIN_MS + 1), esperado: "REGISTRAR_RESULTADO" },
+    ];
+    for (const tz of ["UTC", "America/Sao_Paulo", "Asia/Tokyo"]) {
+      for (const caso of casos) {
+        const resultado = comTimezoneDoProcesso(tz, () => acaoOperacionalDaVisita(VISITA_1430, caso.agora));
+        expect(resultado).toBe(caso.esperado);
+      }
+    }
+  });
+});
+
+describe("painelAgoraDoDia × janela operacional (correção pós-auditoria H.7)", () => {
+  const VISITA_1430 = new Date("2026-08-20T14:30:00.000Z");
+  type Item = { id: string; status: "SCHEDULED" | "COMPLETED" | "CANCELLED"; scheduledAt: Date };
+
+  test("N) visita dentro da janela (+2min) -> painel mostra VISITA_AGORA, não AGUARDANDO_RESULTADO", () => {
+    const agora = new Date(VISITA_1430.getTime() + 2 * 60 * 1000);
+    const itens: Item[] = [{ id: "a", status: "SCHEDULED", scheduledAt: VISITA_1430 }];
+    const estado = painelAgoraDoDia(itens, agora);
+    expect(estado.tipo).toBe("VISITA_AGORA");
+    if (estado.tipo === "VISITA_AGORA") expect(estado.visita.id).toBe("a");
+  });
+
+  test("O) visita mais de 5min passada -> AGUARDANDO_RESULTADO", () => {
+    const agora = new Date(VISITA_1430.getTime() + 6 * 60 * 1000);
+    const itens: Item[] = [{ id: "a", status: "SCHEDULED", scheduledAt: VISITA_1430 }];
+    const estado = painelAgoraDoDia(itens, agora);
+    expect(estado.tipo).toBe("AGUARDANDO_RESULTADO");
+  });
+
+  test("P) pendência real (>5min) + visita na janela -> pendência real vence", () => {
+    const agora = new Date(VISITA_1430.getTime() + 2 * 60 * 1000);
+    const itens: Item[] = [
+      { id: "na-janela", status: "SCHEDULED", scheduledAt: VISITA_1430 },
+      { id: "pendencia-real", status: "SCHEDULED", scheduledAt: new Date(VISITA_1430.getTime() - 20 * 60 * 1000) },
+    ];
+    const estado = painelAgoraDoDia(itens, agora);
+    expect(estado.tipo).toBe("AGUARDANDO_RESULTADO");
+    if (estado.tipo === "AGUARDANDO_RESULTADO") expect(estado.maisAntiga.id).toBe("pendencia-real");
+  });
+
+  test("Q) visita na janela + futura -> visita agora vence", () => {
+    const agora = new Date(VISITA_1430.getTime() + 2 * 60 * 1000);
+    const itens: Item[] = [
+      { id: "na-janela", status: "SCHEDULED", scheduledAt: VISITA_1430 },
+      { id: "futura", status: "SCHEDULED", scheduledAt: new Date(VISITA_1430.getTime() + 60 * 60 * 1000) },
+    ];
+    const estado = painelAgoraDoDia(itens, agora);
+    expect(estado.tipo).toBe("VISITA_AGORA");
+    if (estado.tipo === "VISITA_AGORA") expect(estado.visita.id).toBe("na-janela");
+  });
+
+  test("R) somente futura -> próxima visita (H.5 proximaVisita, inalterado)", () => {
+    const agora = new Date(VISITA_1430.getTime() - 60 * 60 * 1000);
+    const itens: Item[] = [{ id: "futura", status: "SCHEDULED", scheduledAt: VISITA_1430 }];
+    const estado = painelAgoraDoDia(itens, agora);
+    expect(estado.tipo).toBe("PROXIMA_VISITA");
+  });
+
+  test("S) nenhuma visita -> vazio", () => {
+    expect(painelAgoraDoDia<Item>([], new Date())).toEqual({ tipo: "VAZIO" });
+  });
+
+  test("COMPLETED/CANCELLED dentro da janela nunca contam como VISITA_AGORA nem AGUARDANDO_RESULTADO", () => {
+    const agora = new Date(VISITA_1430.getTime() + 2 * 60 * 1000);
+    const itens: Item[] = [
+      { id: "completada", status: "COMPLETED", scheduledAt: VISITA_1430 },
+      { id: "cancelada", status: "CANCELLED", scheduledAt: VISITA_1430 },
+    ];
+    expect(painelAgoraDoDia(itens, agora)).toEqual({ tipo: "VAZIO" });
   });
 });
