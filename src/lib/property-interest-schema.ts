@@ -1,9 +1,17 @@
 import { z } from "zod";
 
-// Mesmos 5 valores de PropertyInterestStage (prisma/schema.prisma) — repetido
-// aqui em vez de importado do client gerado porque este arquivo precisa ser
-// importável sem puxar o Prisma Client inteiro (mesmo racional de
-// person-preference-schema.ts, testável isoladamente).
+// Valores de PropertyInterestStage alcançáveis pela action MANUAL e
+// genérica atualizarEstagioInteresse — repetido aqui em vez de importado do
+// client gerado porque este arquivo precisa ser importável sem puxar o
+// Prisma Client inteiro (mesmo racional de person-preference-schema.ts,
+// testável isoladamente).
+//
+// WON (Fase P.2) é DELIBERADAMENTE OMITIDO desta lista — o enum real no
+// banco já tem 6 valores, mas esta action genérica não deve ser capaz de
+// marcar uma negociação como ganha sem passar pela futura action dedicada
+// da P.3 (que precisará preencher closedAt atomicamente junto do stage).
+// Esta omissão é a defesa real (o Zod rejeita "WON" no FormData mesmo que
+// alguém adultere o Select no browser) — não é só a UI escondendo a opção.
 export const ESTAGIOS_INTERESSE = [
   "INTERESTED",
   "VISIT_SCHEDULED",

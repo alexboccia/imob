@@ -28,7 +28,7 @@ export type ProximaAcaoComercial = {
 };
 
 const ACAO_POR_STAGE: Record<
-  Exclude<PropertyInterestStage, "REJECTED">,
+  Exclude<PropertyInterestStage, "REJECTED" | "WON">,
   ProximaAcaoComercial
 > = {
   INTERESTED: { key: "AGENDAR_VISITA", label: "Agendar visita", ativa: true },
@@ -44,19 +44,20 @@ const INDISPONIVEL: ProximaAcaoComercial = {
   ativa: false,
 };
 
-// REJECTED tem precedência sobre Property.status (um relacionamento
-// encerrado continua encerrado, não importa o que aconteça com o
-// imóvel). Pra qualquer outro stage, propertyStatus !== AVAILABLE vira
-// INDISPONIVEL — deliberadamente SEM tentar inferir se um Property
-// RESERVED/SOLD/etc. foi causado por ESTE relacionamento especificamente:
-// o modelo atual (Deal/PropertyStatusHistory) não tem nenhum vínculo com
-// PropertyInterest que permita essa inferência com segurança (decisão
-// registrada na auditoria da Fase G, não decidida silenciosamente aqui).
+// REJECTED e WON (Fase P.2) têm precedência sobre Property.status — um
+// relacionamento encerrado (perdido ou ganho) continua encerrado, não
+// importa o que aconteça com o imóvel. Pra qualquer outro stage,
+// propertyStatus !== AVAILABLE vira INDISPONIVEL — deliberadamente SEM
+// tentar inferir se um Property RESERVED/SOLD/etc. foi causado por ESTE
+// relacionamento especificamente: o modelo atual (Deal/PropertyStatusHistory)
+// não tem nenhum vínculo com PropertyInterest que permita essa inferência
+// com segurança (decisão registrada na auditoria da Fase G, reconfirmada na
+// P.1, não decidida silenciosamente aqui).
 export function obterProximaAcaoComercial(
   stage: PropertyInterestStage,
   propertyStatus: PropertyStatus
 ): ProximaAcaoComercial {
-  if (stage === "REJECTED") return ENCERRADO;
+  if (stage === "REJECTED" || stage === "WON") return ENCERRADO;
   if (propertyStatus !== "AVAILABLE") return INDISPONIVEL;
   return ACAO_POR_STAGE[stage];
 }

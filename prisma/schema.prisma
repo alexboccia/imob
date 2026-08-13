@@ -90,12 +90,21 @@ enum InteractionType {
 // (dimensão independente) e o comentário do model abaixo. Nenhuma transição é
 // validada nesta fase (mesmo nível de simplicidade já usado em
 // Person.pipelineStage — atualizarEstagioFunil também aceita qualquer valor).
+//
+// WON (Fase P.2): a negociação ESPECÍFICA deste PropertyInterest foi ganha —
+// nunca inferido automaticamente a partir de Property.status (SOLD/RENTED),
+// porque um imóvel pode ter múltiplos PropertyInterest concorrentes (ver
+// auditoria P.1, seção 31/34). Nesta fase é só fundação de schema: nenhuma
+// Server Action define WON ainda (isso é P.3), e o Select manual de stage
+// (atualizarEstagioInteresseSchema) deliberadamente NÃO oferece esse valor —
+// ver comentário em src/lib/property-interest-schema.ts.
 enum PropertyInterestStage {
   INTERESTED
   VISIT_SCHEDULED
   VISITED
   PROPOSAL
   REJECTED
+  WON
 }
 
 // Agenda de atividades futuras (Fase H do CRM) — deliberadamente SEPARADA de
@@ -399,6 +408,15 @@ model PropertyInterest {
   favorited Boolean               @default(false)
 
   notes String?
+
+  // Momento real de encerramento como ganho ou perdido (Fase P.2) — nunca
+  // confundir com updatedAt, que muda em QUALQUER escrita (stage, favorited
+  // ou notes) e por isso não serve como "data de fechamento" (auditoria
+  // P.1, seção 27). Nullable, sem default: fundação de schema apenas —
+  // nenhum código desta fase escreve neste campo (permanece null pra todo
+  // registro existente e novo até a P.3 criar a action de fechamento que o
+  // preenche atomicamente junto da mudança de stage).
+  closedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

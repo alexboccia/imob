@@ -11,6 +11,7 @@ import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { formatarPreco } from "@/lib/format";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
+import { ESTAGIOS_INTERESSE } from "@/lib/property-interest-schema";
 import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,12 +26,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+// Label de APRESENTAÇÃO (badges/histórico, sempre somente leitura) — inclui
+// WON de propósito, mesmo esse valor nunca aparecendo como opção no Select
+// abaixo (ver ESTAGIOS_INTERESSE, a lista separada que alimenta as opções
+// editáveis). As duas nunca devem ser fundidas de volta numa só constante.
 export const ESTAGIO_INTERESSE_LABEL: Record<string, string> = {
   INTERESTED: "Interessado",
   VISIT_SCHEDULED: "Visita agendada",
   VISITED: "Visitado",
   PROPOSAL: "Proposta",
   REJECTED: "Descartado",
+  WON: "Ganho",
 };
 
 export function InteresseImovelItem({
@@ -52,10 +58,14 @@ export function InteresseImovelItem({
   // Agendar visita continua permitido pra VISITED/PROPOSAL (múltiplas
   // visitas foram aprovadas estruturalmente na H.1 — ver AGENTS.md da
   // H.2, decisão #8) mesmo que a "próxima ação" da Fase G já tenha
-  // avançado pra outro texto; só REJECTED bloqueia, e só quando não há
-  // visita SCHEDULED em aberto (uma nova só faz sentido depois que a
-  // anterior foi concluída/cancelada).
-  const podeAgendarVisita = interesse.stage !== "REJECTED" && interesse.property.status === "AVAILABLE";
+  // avançado pra outro texto; só relacionamento ENCERRADO (REJECTED ou
+  // WON, Fase P.2) bloqueia — mesma regra do backend em
+  // agendamentos/actions.ts, replicada aqui só pra UX (o botão nem
+  // aparece), nunca como única defesa.
+  const podeAgendarVisita =
+    interesse.stage !== "REJECTED" &&
+    interesse.stage !== "WON" &&
+    interesse.property.status === "AVAILABLE";
   const atualizarAcao = atualizarEstagioInteresse.bind(null, interesse.id);
   const [estadoEstagio, formActionEstagio, pendenteEstagio] = useActionState(
     atualizarAcao,
@@ -128,9 +138,9 @@ export function InteresseImovelItem({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {Object.entries(ESTAGIO_INTERESSE_LABEL).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
+              {ESTAGIOS_INTERESSE.map((valor) => (
+                <SelectItem key={valor} value={valor}>
+                  {ESTAGIO_INTERESSE_LABEL[valor]}
                 </SelectItem>
               ))}
             </SelectContent>

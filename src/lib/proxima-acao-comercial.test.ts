@@ -84,4 +84,39 @@ describe("obterProximaAcaoComercial", () => {
       expect(r.ativa).toBe(false);
     }
   });
+
+  // -------------------------------------------------------------------
+  // WON (Fase P.2) — precedência terminal sobre Property.status, mesmo
+  // padrão já comprovado pra REJECTED (teste K acima).
+  // -------------------------------------------------------------------
+
+  test("L) AVAILABLE + WON -> Encerrado, não ativa", () => {
+    const r = obterProximaAcaoComercial("WON", "AVAILABLE");
+    expect(r).toEqual({ key: "ENCERRADO", label: "Encerrado", ativa: false });
+  });
+
+  test("M) DRAFT + WON -> Encerrado, não ativa", () => {
+    const r = obterProximaAcaoComercial("WON", "DRAFT");
+    expect(r).toEqual({ key: "ENCERRADO", label: "Encerrado", ativa: false });
+  });
+
+  test("N) RESERVED + WON -> Encerrado, não ativa", () => {
+    const r = obterProximaAcaoComercial("WON", "RESERVED");
+    expect(r).toEqual({ key: "ENCERRADO", label: "Encerrado", ativa: false });
+  });
+
+  test("O) SOLD + WON -> Encerrado, não ativa", () => {
+    const r = obterProximaAcaoComercial("WON", "SOLD");
+    expect(r).toEqual({ key: "ENCERRADO", label: "Encerrado", ativa: false });
+  });
+
+  test("P) RENTED + WON -> Encerrado, não ativa", () => {
+    const r = obterProximaAcaoComercial("WON", "RENTED");
+    expect(r).toEqual({ key: "ENCERRADO", label: "Encerrado", ativa: false });
+  });
+
+  test("Q) INACTIVE + WON -> Encerrado, não ativa (precedência terminal confirmada em todos os status)", () => {
+    const r = obterProximaAcaoComercial("WON", "INACTIVE");
+    expect(r).toEqual({ key: "ENCERRADO", label: "Encerrado", ativa: false });
+  });
 });

@@ -154,10 +154,14 @@ export default async function EditarImovelPage({
             <ul className="space-y-2">
               {interesses.map((interesse) => {
                 const proximaAcao = obterProximaAcaoComercial(interesse.stage, imovel.status);
-                // Mesma regra de InteresseImovelItem.tsx (Fase H.2): só
-                // REJECTED bloqueia agendar nova visita, independente da
-                // "próxima ação" textual da Fase G já ter avançado.
-                const podeAgendarVisita = interesse.stage !== "REJECTED" && imovel.status === "AVAILABLE";
+                // Mesma regra de InteresseImovelItem.tsx (Fase H.2/P.2):
+                // relacionamento ENCERRADO (REJECTED ou WON) bloqueia
+                // agendar nova visita, independente da "próxima ação"
+                // textual da Fase G já ter avançado.
+                const podeAgendarVisita =
+                  interesse.stage !== "REJECTED" &&
+                  interesse.stage !== "WON" &&
+                  imovel.status === "AVAILABLE";
                 const proximaVisita = interesse.scheduledActivities[0]
                   ? {
                       id: interesse.scheduledActivities[0].id,

@@ -97,8 +97,10 @@ export async function criarAgendamentoVisita(
       return erroGenerico("Relacionamento não encontrado.");
     }
 
-    // Regra aprovada: relacionamento encerrado não recebe nova visita.
-    if (interesse.stage === "REJECTED") {
+    // Regra aprovada: relacionamento encerrado (perdido OU ganho, Fase
+    // P.2) não recebe nova visita — mesma mensagem genérica pros dois
+    // casos, nunca revela qual dos dois motivos de encerramento é.
+    if (interesse.stage === "REJECTED" || interesse.stage === "WON") {
       return erroGenerico(
         "Este relacionamento foi encerrado — não é possível agendar uma nova visita."
       );

@@ -1706,4 +1706,137 @@ describe("Agenda de visitas — Fase H.2 do CRM", () => {
     });
     expect(atividadeFinal?.notes).toBe("Observação detalhada da visita agendada");
   });
+
+  // -------------------------------------------------------------------
+  // Fundação de fechamento — WON (Fase P.2). WON se comporta como stage
+  // já avançado/terminal pro H.2: mesma regra de REJECTED (teste P acima)
+  // pra criação, e mesmo guard de igualdade estrita (já existente,
+  // inalterado) pra conclusão nunca sobrescrever um stage que não seja
+  // exatamente VISIT_SCHEDULED.
+  // -------------------------------------------------------------------
+
+  test("P2-A) WON bloqueia nova visita (mesma regra de REJECTED)", async () => {
+    const ctx = await cenarioPadrao("WON");
+    cenario = ctx.cenario;
+
+    const resultado = await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+
+    expect(resultado.success).toBe(false);
+  });
+
+  test("P2-B) WON bloqueado: nenhuma ScheduledActivity é criada", async () => {
+    const ctx = await cenarioPadrao("WON");
+    cenario = ctx.cenario;
+
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+
+    const total = await prisma.scheduledActivity.count({
+      where: { organizationId: ctx.cenario.organization.id },
+    });
+    expect(total).toBe(0);
+  });
+
+  test("P2-C) WON bloqueado: nenhum ActivityLog indevido é criado", async () => {
+    const ctx = await cenarioPadrao("WON");
+    cenario = ctx.cenario;
+
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+
+    const total = await prisma.activityLog.count({
+      where: { organizationId: ctx.cenario.organization.id, entity: "ScheduledActivity" },
+    });
+    expect(total).toBe(0);
+    const totalStageChange = await prisma.activityLog.count({
+      where: {
+        organizationId: ctx.cenario.organization.id,
+        entity: "PropertyInterest",
+        action: "property_interest_stage_changed",
+      },
+    });
+    expect(totalStageChange).toBe(0);
+  });
+
+  test("P2-D) visita SCHEDULED previamente criada + PropertyInterest depois virou WON: concluir a visita ainda funciona", async () => {
+    const ctx = await cenarioPadrao("INTERESTED");
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    // Cenário estrutural possível: a negociação foi ganha (ex: proposta em
+    // outro imóvel, ou o corretor já sabe que este vai fechar) antes de a
+    // visita já combinada ter acontecido de fato.
+    await prisma.propertyInterest.update({
+      where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+      data: { stage: "WON" },
+    });
+
+    const resultado = await concluir(original.id);
+
+    expect(resultado.success).toBe(true);
+    const atividadeFinal = await prisma.scheduledActivity.findUnique({
+      where: { id: original.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(atividadeFinal?.status).toBe("COMPLETED");
+  });
+
+  test("P2-E) conclusão com PropertyInterest WON mantém o stage em WON (nunca regride pra VISITED)", async () => {
+    const ctx = await cenarioPadrao("INTERESTED");
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    await prisma.propertyInterest.update({
+      where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+      data: { stage: "WON" },
+    });
+
+    await concluir(original.id);
+
+    const interesseFinal = await prisma.propertyInterest.findUnique({
+      where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(interesseFinal?.stage).toBe("WON");
+  });
+
+  test("P2-F) conclusão da visita cria a Interaction normalmente (regra H.2 inalterada) mesmo com PropertyInterest WON", async () => {
+    const ctx = await cenarioPadrao("INTERESTED");
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    await prisma.propertyInterest.update({
+      where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+      data: { stage: "WON" },
+    });
+
+    await concluir(original.id);
+
+    const totalInteracoes = await prisma.interaction.count({
+      where: { organizationId: ctx.cenario.organization.id, personId: ctx.pessoa.id, type: "VISIT" },
+    });
+    expect(totalInteracoes).toBe(1);
+  });
+
+  test("P2-G) concluir a visita nunca escreve em PropertyInterest.closedAt — isso é responsabilidade da futura action de fechamento (P.3), não da visita", async () => {
+    const ctx = await cenarioPadrao("INTERESTED");
+    cenario = ctx.cenario;
+    await agendar(ctx.interesse.id, { scheduledAt: futuro() });
+    const original = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: ctx.cenario.organization.id, propertyInterestId: ctx.interesse.id },
+    });
+    await prisma.propertyInterest.update({
+      where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+      data: { stage: "WON" },
+    });
+
+    await concluir(original.id);
+
+    const interesseFinal = await prisma.propertyInterest.findUnique({
+      where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+    });
+    expect(interesseFinal?.closedAt).toBeNull();
+  });
 });

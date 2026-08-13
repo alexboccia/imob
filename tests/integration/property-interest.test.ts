@@ -941,4 +941,122 @@ describe("PropertyInterest — relacionamento Person↔Property (Fase D do CRM)"
     });
     expect(total).toBe(1);
   });
+
+  // -------------------------------------------------------------------
+  // Fundação de fechamento — WON / closedAt (Fase P.2)
+  //
+  // Esta fase é só fundação de schema: nenhuma Server Action de
+  // fechamento existe ainda (isso é P.3) — os testes abaixo escrevem
+  // diretamente via prisma.propertyInterest, nunca via
+  // atualizarEstagioInteresse (que deliberadamente rejeita "WON" — ver
+  // teste BS abaixo).
+  // -------------------------------------------------------------------
+
+  test("BN) PropertyInterest aceita stage WON", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const interesse = await prisma.propertyInterest.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, stage: "WON" },
+    });
+    expect(interesse.stage).toBe("WON");
+
+    const relido = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(relido?.stage).toBe("WON");
+  });
+
+  test("BO) closedAt aceita null (não setado na criação)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const interesse = await prisma.propertyInterest.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id },
+    });
+    expect(interesse.closedAt).toBeNull();
+  });
+
+  test("BP) closedAt aceita Date explícita quando escrito diretamente", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const agora = new Date();
+    const interesse = await prisma.propertyInterest.create({
+      data: {
+        organizationId: cenario.organization.id,
+        personId: pessoa.id,
+        propertyId: imovel.id,
+        stage: "WON",
+        closedAt: agora,
+      },
+    });
+    expect(interesse.closedAt?.getTime()).toBe(agora.getTime());
+  });
+
+  test("BQ) relacionamento criado pelo fluxo normal (criarInteressePessoa) continua stage INTERESTED e closedAt null, sem nenhum efeito colateral do campo/enum novos", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const resultado = await relacionar(pessoa.id, { propertyId: imovel.id });
+    expect(resultado.success).toBe(true);
+
+    const linha = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(linha?.stage).toBe("INTERESTED");
+    expect(linha?.closedAt).toBeNull();
+  });
+
+  test("BR) unique organizationId+personId+propertyId permanece intacta mesmo com stage WON", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    await prisma.propertyInterest.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, stage: "WON" },
+    });
+
+    await expect(
+      prisma.propertyInterest.create({
+        data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, stage: "INTERESTED" },
+      })
+    ).rejects.toThrow();
+  });
+
+  test("BS) tenant scoping continua obrigatório — leitura sem organizationId explícito é recusada mesmo com o campo closedAt novo no select", async () => {
+    await expect(
+      prisma.propertyInterest.findMany({ select: { id: true, stage: true, closedAt: true } })
+    ).rejects.toThrow(/organizationId/);
+  });
+
+  test("BT) nenhum backfill automático — registros existentes/novos nunca ganham closedAt sozinhos, migration não alterou nenhuma linha", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa1 = await criarPessoa({ organizationId: cenario.organization.id });
+    const pessoa2 = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    await prisma.propertyInterest.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa1.id, propertyId: imovel.id, stage: "VISITED" },
+    });
+    await prisma.propertyInterest.create({
+      data: { organizationId: cenario.organization.id, personId: pessoa2.id, propertyId: imovel.id, stage: "REJECTED" },
+    });
+
+    const total = await prisma.propertyInterest.count({
+      where: { organizationId: cenario.organization.id, closedAt: { not: null } },
+    });
+    expect(total).toBe(0);
+  });
+
+  test("BU) atualizarEstagioInteresse (action manual/genérica) rejeita 'WON' — só a futura action dedicada da P.3 poderá setá-lo", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+
+    const resultado = await mudarEstagio(interesse!.id, { stage: "WON" });
+
+    expect(resultado.success).toBe(false);
+    const atual = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    expect(atual?.stage).toBe("INTERESTED");
+    expect(atual?.closedAt).toBeNull();
+  });
 });
