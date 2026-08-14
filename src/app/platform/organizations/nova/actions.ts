@@ -66,8 +66,12 @@ export async function criarOrganization(
   });
   if (slugExistente) return erroGenerico("Esse slug já está em uso.");
 
-  const plano = await prisma.plan.findUnique({ where: { id: dados.planId }, select: { id: true } });
+  const plano = await prisma.plan.findUnique({
+    where: { id: dados.planId },
+    select: { id: true, active: true, isTrial: true, trialDays: true },
+  });
   if (!plano) return erroGenerico("Plano inválido.");
+  if (!plano.active) return erroGenerico("Este plano está inativo e não pode ser atribuído a novas organizações.");
 
   // Gerado ANTES da transação (função pura, não bate no banco) — só o
   // hash é persistido; o token bruto só existe em memória até o e-mail
@@ -90,6 +94,25 @@ export async function criarOrganization(
           active: true,
         },
       });
+
+      // Fase P.9: trial é server-side, nunca aceita data do formulário —
+      // início/fim sempre calculados aqui a partir de Plan.trialDays no
+      // exato momento da criação. Só cria Subscription quando o plano
+      // escolhido é de trial (plan.isTrial); planos pagos não geram
+      // nenhuma linha de Subscription nesta fase (zero lógica de
+      // cobrança real ainda, ver comentário do model no schema).
+      if (plano.isTrial && plano.trialDays !== null) {
+        const agora = new Date();
+        await tx.subscription.create({
+          data: {
+            organizationId: organization.id,
+            planId: dados.planId,
+            status: "TRIALING",
+            currentPeriodStart: agora,
+            currentPeriodEnd: new Date(agora.getTime() + plano.trialDays * 24 * 60 * 60 * 1000),
+          },
+        });
+      }
 
       // E-mail já existe como User (ex: mesma pessoa convidada pra outra
       // organização no futuro) -> reusa o User existente. A barreira real

@@ -659,7 +659,14 @@ model Organization {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Fase P.9: preço mensal CONTRATADO desta organização, quando diverge do
+  // padrão do plano (plan.priceMonthlyCents) — null = usa o padrão do
+  // plano. Nunca sobrescreve plan.priceMonthlyCents; resolvido junto com
+  // os limites efetivos em resolverEntitlementsOrganizacao.
+  priceMonthlyCentsOverride Int?
+
   members               OrganizationMember[]
+  limitOverrides        OrganizationLimitOverride[]
   settings              OrganizationSettings?
   branding              OrganizationBranding?
   subscriptions         Subscription[]
@@ -757,12 +764,20 @@ model Module {
   @@map("modules")
 }
 
+// Fase P.9: isTrial/trialDays são metadados do PLANO (duração padrão de
+// trial quando uma Organization é criada neste plano) — NUNCA o período
+// real de trial de uma organização específica, que vive em Subscription
+// (status TRIALING + currentPeriodStart/End, ver resolverEstadoAcessoOrganizacao
+// em src/lib/entitlements.ts). Isso permite extensão individual de trial
+// sem alterar o padrão do plano, e evita uma segunda fonte de verdade.
 model Plan {
   id                String  @id @default(cuid())
-  code              String  @unique // "BASICO" | "PRO" | "PREMIUM"
+  code              String  @unique // "STARTER" | "BASICO" | "PRO" | "PREMIUM"
   name              String
   priceMonthlyCents Int?
   active            Boolean @default(true)
+  isTrial           Boolean @default(false)
+  trialDays         Int?
 
   organizations Organization[]
   planModules   PlanModule[]
@@ -794,6 +809,31 @@ model PlanLimit {
 
   @@unique([planId, feature])
   @@map("plan_limits")
+}
+
+// Fase P.9: exceção comercial POR ORGANIZAÇÃO — mesma forma de PlanLimit
+// de propósito (feature livre, limit nullable), pra cobrir qualquer limite
+// existente ou futuro sem migration nova. Semântica crítica, nunca
+// confundir: AUSÊNCIA de linha (organizationId, feature) = "sem override,
+// herda PlanLimit do plano atual"; PRESENÇA de linha com limit=null =
+// "override explícito para ilimitado". As duas situações são
+// estruturalmente distinguíveis (findUnique retorna null vs retorna uma
+// linha com campo null) — resolverLimiteEfetivo (src/lib/entitlements.ts)
+// nunca usa `??` direto sobre o resultado da consulta, exatamente pra não
+// confundir as duas. Sem planId: independe de qual plano a organização
+// está — sobrevive intacto a qualquer troca de plano (alterarPlano nunca
+// toca aqui).
+model OrganizationLimitOverride {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  feature        String
+  limit          Int?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, feature])
+  @@map("organization_limit_overrides")
 }
 
 // ---------- Billing (modelagem, zero lógica de cobrança) ----------

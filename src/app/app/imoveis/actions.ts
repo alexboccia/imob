@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
-import { verificarLimiteImoveis, LimiteDoPlanoError } from "@/lib/entitlements";
+import { verificarLimiteImoveis, verificarLimiteFotos, LimiteDoPlanoError } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
 import { type ActionState, erroGenerico } from "@/lib/action-result";
 import {
@@ -32,6 +32,10 @@ export async function criarImovel(
   const organizationId = await requireOrganizationId();
   try {
     await verificarLimiteImoveis(organizationId);
+    // Fase P.9: validado ANTES da transação de criação — a lista de
+    // mídias já é a submissão completa (nunca incremental), então checar
+    // o tamanho aqui é suficiente, sem depender de count-then-create.
+    await verificarLimiteFotos(organizationId, midias.length);
   } catch (erro) {
     if (erro instanceof LimiteDoPlanoError) return erroGenerico(erro.message);
     throw erro;
@@ -89,6 +93,12 @@ export async function atualizarImovel(
   const midias = parseMidias(dados.midiasJson);
 
   const organizationId = await requireOrganizationId();
+  try {
+    await verificarLimiteFotos(organizationId, midias.length);
+  } catch (erro) {
+    if (erro instanceof LimiteDoPlanoError) return erroGenerico(erro.message);
+    throw erro;
+  }
 
   await withOrganization(organizationId, async () => {
     const imovelAtual = await prisma.property.findUniqueOrThrow({

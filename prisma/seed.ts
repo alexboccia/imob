@@ -366,18 +366,42 @@ async function seedTenancy() {
   console.log(`Catálogo de módulos pronto: ${modulos.length} módulos.`);
 
   // Preço mensal em centavos — valor de exibição, sem cobrança automática.
+  //
+  // Fase P.9: estes valores só se aplicam à CRIAÇÃO de cada plano — a
+  // partir do momento em que existem no banco, price/módulos/limites viram
+  // configuração comercial editável pelo Platform Admin
+  // (/platform/plans/[id]/editar). Reexecutar este seed NUNCA sobrescreve
+  // um plano já existente (ver loop abaixo: create-if-missing, sem
+  // `update`), justamente pra nunca desfazer silenciosamente uma edição
+  // feita em runtime. A reconciliação one-time dos valores V1 aprovados
+  // pros planos BASICO/PRO/PREMIUM (que já existiam antes da P.9, com
+  // valores antigos) foi feita separadamente, ver scripts/reconciliar-planos-p9.ts
+  // — nunca dentro deste seed idempotente.
   const planos = [
+    {
+      code: "STARTER",
+      name: "Starter",
+      priceMonthlyCents: 0,
+      isTrial: true,
+      trialDays: 14,
+      modulosHabilitados: ["core", "properties", "crm"],
+      limites: { PROPERTIES: 10, USERS: 1, PHOTOS_PER_PROPERTY: 5, CRM_CLIENTS: 100 },
+    },
     {
       code: "BASICO",
       name: "Básico",
       priceMonthlyCents: 9900,
-      modulosHabilitados: ["core", "properties"],
-      limites: { PROPERTIES: 20, USERS: 2, PHOTOS_PER_PROPERTY: 10 },
+      isTrial: false,
+      trialDays: null,
+      modulosHabilitados: ["core", "properties", "crm"],
+      limites: { PROPERTIES: 50, USERS: 1, PHOTOS_PER_PROPERTY: 10, CRM_CLIENTS: 500 },
     },
     {
       code: "PRO",
       name: "Pro",
       priceMonthlyCents: 24900,
+      isTrial: false,
+      trialDays: null,
       modulosHabilitados: [
         "core",
         "properties",
@@ -389,47 +413,60 @@ async function seedTenancy() {
         "email",
         "whatsapp",
       ],
-      limites: { PROPERTIES: 100, USERS: 10, PHOTOS_PER_PROPERTY: 30 },
+      limites: { PROPERTIES: 250, USERS: 5, PHOTOS_PER_PROPERTY: 20, CRM_CLIENTS: 5000 },
     },
     {
       code: "PREMIUM",
       name: "Premium",
       priceMonthlyCents: 49900,
+      isTrial: false,
+      trialDays: null,
       modulosHabilitados: modulos.map((m) => m.code),
-      limites: { PROPERTIES: null, USERS: null, PHOTOS_PER_PROPERTY: null },
+      limites: { PROPERTIES: 1000, USERS: 15, PHOTOS_PER_PROPERTY: 40, CRM_CLIENTS: null },
     },
   ];
 
   for (const planoConfig of planos) {
-    const plano = await prisma.plan.upsert({
-      where: { code: planoConfig.code },
-      update: { name: planoConfig.name, priceMonthlyCents: planoConfig.priceMonthlyCents },
-      create: {
-        code: planoConfig.code,
-        name: planoConfig.name,
-        priceMonthlyCents: planoConfig.priceMonthlyCents,
-      },
-    });
+    const existente = await prisma.plan.findUnique({ where: { code: planoConfig.code } });
+    const plano =
+      existente ??
+      (await prisma.plan.create({
+        data: {
+          code: planoConfig.code,
+          name: planoConfig.name,
+          priceMonthlyCents: planoConfig.priceMonthlyCents,
+          isTrial: planoConfig.isTrial,
+          trialDays: planoConfig.trialDays,
+        },
+      }));
 
+    // Módulos/limites de um plano JÁ EXISTENTE também não são
+    // sobrescritos aqui, pelo mesmo motivo do Plan acima — só populados na
+    // criação do plano (loop abaixo roda create-if-missing por
+    // planId+moduleId / planId+feature, nunca update).
     for (const modulo of modulos) {
       const moduleId = modulosCriados.get(modulo.code)!;
-      await prisma.planModule.upsert({
+      const planModuleExistente = await prisma.planModule.findUnique({
         where: { planId_moduleId: { planId: plano.id, moduleId } },
-        update: { enabled: planoConfig.modulosHabilitados.includes(modulo.code) },
-        create: {
-          planId: plano.id,
-          moduleId,
-          enabled: planoConfig.modulosHabilitados.includes(modulo.code),
-        },
       });
+      if (!planModuleExistente) {
+        await prisma.planModule.create({
+          data: {
+            planId: plano.id,
+            moduleId,
+            enabled: planoConfig.modulosHabilitados.includes(modulo.code),
+          },
+        });
+      }
     }
 
     for (const [feature, limit] of Object.entries(planoConfig.limites)) {
-      await prisma.planLimit.upsert({
+      const planLimitExistente = await prisma.planLimit.findUnique({
         where: { planId_feature: { planId: plano.id, feature } },
-        update: { limit },
-        create: { planId: plano.id, feature, limit },
       });
+      if (!planLimitExistente) {
+        await prisma.planLimit.create({ data: { planId: plano.id, feature, limit } });
+      }
     }
   }
 

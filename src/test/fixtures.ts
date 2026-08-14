@@ -36,9 +36,20 @@ export async function criarPlano(opcoes: {
   modulos?: string[];
   modulosDesabilitados?: string[];
   limites?: Record<string, number | null>;
+  priceMonthlyCents?: number | null;
+  isTrial?: boolean;
+  trialDays?: number | null;
+  active?: boolean;
 } = {}): Promise<{ id: string }> {
   const plano = await prisma.plan.create({
-    data: { code: `PLANO-TESTE-${sufixoUnico()}`, name: "Plano de teste" },
+    data: {
+      code: `PLANO-TESTE-${sufixoUnico()}`,
+      name: "Plano de teste",
+      priceMonthlyCents: opcoes.priceMonthlyCents,
+      isTrial: opcoes.isTrial ?? false,
+      trialDays: opcoes.trialDays,
+      active: opcoes.active ?? true,
+    },
   });
 
   const habilitados = opcoes.modulos ?? ["core", "properties"];
@@ -176,6 +187,68 @@ export async function criarPessoa(opcoes: {
   return { id: pessoa.id };
 }
 
+// Fase P.9 — PlatformOperator direto, pra testar Server Actions de
+// /platform (autenticação mockada via vi.mock("@/lib/platform/auth"),
+// mesmo padrão de auth de /app nos outros testes de integração).
+export async function criarPlatformOperator(opcoes: {
+  email?: string;
+  name?: string;
+  role?: "PLATFORM_ADMIN" | "PLATFORM_SUPPORT" | "SUPER_ADMIN";
+} = {}): Promise<{ id: string; email: string; role: string }> {
+  const email = opcoes.email ?? `platform-operator-teste-${sufixoUnico()}@e2e.test`;
+  const operador = await prisma.platformOperator.create({
+    data: {
+      email,
+      name: opcoes.name ?? "Operador de Teste",
+      passwordHash: await bcrypt.hash("senha-de-teste-123", 10),
+      role: opcoes.role ?? "SUPER_ADMIN",
+    },
+  });
+  return { id: operador.id, email: operador.email, role: operador.role };
+}
+
+// PlatformAuditLog tem FK RESTRICT pra PlatformOperator — precisa sair
+// antes do operador em qualquer limpeza de teste.
+export async function destruirPlatformOperator(operatorId: string): Promise<void> {
+  await prisma.platformAuditLog.deleteMany({ where: { platformOperatorId: operatorId } });
+  await prisma.platformOperator.delete({ where: { id: operatorId } });
+}
+
+// Fase P.9 — override comercial direto (bypassa a action/UI, mesmo
+// espírito de criarImovel/criarPessoa: monta o dado real via Prisma pra
+// testar a leitura/resolução, não o formulário).
+export async function criarOverride(opcoes: {
+  organizationId: string;
+  feature: string;
+  limit: number | null;
+}): Promise<{ id: string }> {
+  const override = await prisma.organizationLimitOverride.create({
+    data: { organizationId: opcoes.organizationId, feature: opcoes.feature, limit: opcoes.limit },
+  });
+  return { id: override.id };
+}
+
+// Fase P.9 — Subscription de trial direta, mesmo formato criado por
+// criarOrganization (platform/organizations/nova/actions.ts) quando o
+// plano escolhido é isTrial.
+export async function criarSubscriptionTrial(opcoes: {
+  organizationId: string;
+  planId: string;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+}): Promise<{ id: string }> {
+  const subscription = await prisma.subscription.create({
+    data: {
+      organizationId: opcoes.organizationId,
+      planId: opcoes.planId,
+      status: "TRIALING",
+      currentPeriodStart: opcoes.currentPeriodStart,
+      currentPeriodEnd: opcoes.currentPeriodEnd,
+    },
+  });
+  return { id: subscription.id };
+}
+
 // Cenário pronto (plano + organização + usuário + membro), o caso comum da
 // maioria dos testes de integração. destruir() apaga tudo que esse cenário
 // criou, na ordem exigida pelas foreign keys do schema.
@@ -184,11 +257,17 @@ export async function criarCenario(opcoes: {
   modulos?: string[];
   modulosDesabilitados?: string[];
   limites?: Record<string, number | null>;
+  priceMonthlyCents?: number | null;
+  isTrial?: boolean;
+  trialDays?: number | null;
 } = {}) {
   const plano = await criarPlano({
     modulos: opcoes.modulos,
     modulosDesabilitados: opcoes.modulosDesabilitados,
     limites: opcoes.limites,
+    priceMonthlyCents: opcoes.priceMonthlyCents,
+    isTrial: opcoes.isTrial,
+    trialDays: opcoes.trialDays,
   });
   const organization = await criarOrganizacao({ planId: plano.id });
   const usuario = await criarUsuario();
@@ -220,6 +299,8 @@ export async function limparOrganizacao(
   await prisma.payment.deleteMany({ where: { invoice: { organizationId } } });
   await prisma.invoice.deleteMany({ where: { organizationId } });
   await prisma.subscription.deleteMany({ where: { organizationId } });
+  // Fase P.9 — FK RESTRICT pra Organization, precisa sair antes do delete.
+  await prisma.organizationLimitOverride.deleteMany({ where: { organizationId } });
   await prisma.billingEvent.deleteMany({ where: { organizationId } });
   await prisma.aiUsage.deleteMany({ where: { organizationId } });
   await prisma.notification.deleteMany({ where: { organizationId } });

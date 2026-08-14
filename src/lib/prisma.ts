@@ -38,6 +38,7 @@ const TENANT_SCOPED_MODELS = new Set([
   "BillingEvent",
   "Subscription",
   "Invoice",
+  "OrganizationLimitOverride",
 ]);
 
 const WHERE_OPERATIONS = new Set([

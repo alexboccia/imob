@@ -10,7 +10,7 @@ import { telefoneValido, normalizarTelefone } from "@/lib/telefone";
 import { normalizarEmail } from "@/lib/rate-limit";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
-import { hasModule } from "@/lib/entitlements";
+import { hasModule, getLimit, limiteExcedido, LimiteDoPlanoError, FEATURE_CRM_CLIENTS } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
 import {
   erroAcessoNegado,
@@ -130,22 +130,50 @@ export async function criarPessoa(
   let pessoa;
   try {
     pessoa = await withOrganization(organizationId, () =>
-      prisma.person.create({
-        data: {
-          organizationId,
-          name: dados.nome,
-          email: dados.email || null,
-          phone: dados.telefone || null,
-          emailNormalized: dados.email ? normalizarEmail(dados.email) : null,
-          phoneNormalized: dados.telefone ? normalizarTelefone(dados.telefone) : null,
-          roles: [dados.papel],
-          source: dados.origem || null,
-          notes: dados.observacoes || null,
-          assignedMemberId: session.user.organizationMemberId ?? null,
-        },
+      // Fase P.9: checagem de limite + create na MESMA transação, atrás de
+      // um advisory lock determinístico por (organizationId, feature) —
+      // serializa concorrência de criação de Person desta organização sem
+      // exigir isolamento SERIALIZABLE na transação inteira (mais barato,
+      // sem retry manual). pg_advisory_xact_lock é liberado
+      // automaticamente no commit/rollback, nunca precisa de unlock
+      // explícito. Diferente de verificarLimiteImoveis/verificarLimiteUsuarios
+      // (count-then-create em duas etapas separadas, fragilidade
+      // pré-existente documentada, não corrigida nesta fase) — aqui o
+      // count e o create nunca podem ser intercalados por outra
+      // transação concorrente da MESMA organização.
+      prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${FEATURE_CRM_CLIENTS}))`;
+
+        const limite = await getLimit(organizationId, FEATURE_CRM_CLIENTS);
+        if (limite !== null) {
+          const total = await tx.person.count({ where: { organizationId } });
+          if (limiteExcedido(total, limite)) {
+            throw new LimiteDoPlanoError(
+              `Seu plano permite até ${limite} clientes CRM. Faça upgrade de plano para cadastrar mais.`
+            );
+          }
+        }
+
+        return tx.person.create({
+          data: {
+            organizationId,
+            name: dados.nome,
+            email: dados.email || null,
+            phone: dados.telefone || null,
+            emailNormalized: dados.email ? normalizarEmail(dados.email) : null,
+            phoneNormalized: dados.telefone ? normalizarTelefone(dados.telefone) : null,
+            roles: [dados.papel],
+            source: dados.origem || null,
+            notes: dados.observacoes || null,
+            assignedMemberId: session.user.organizationMemberId ?? null,
+          },
+        });
       })
     );
   } catch (erro) {
+    if (erro instanceof LimiteDoPlanoError) {
+      return { sucesso: false, erro: erro.message };
+    }
     // Já existe uma Person com esse e-mail ou telefone nesta organização
     // (unique constraint em emailNormalized/phoneNormalized) — erro
     // esperado e tratado, nunca deve virar 500.

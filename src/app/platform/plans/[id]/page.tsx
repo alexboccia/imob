@@ -1,8 +1,11 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePlatformOperator } from "@/lib/platform/auth";
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export default async function PlatformPlanDetailsPage({
   params,
@@ -24,16 +27,23 @@ export default async function PlatformPlanDetailsPage({
 
   return (
     <div className="max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">{plano.name}</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {plano.code} ·{" "}
-          {plano.priceMonthlyCents != null
-            ? `R$ ${(plano.priceMonthlyCents / 100).toLocaleString("pt-BR")}/mês`
-            : "Sem preço definido"}{" "}
-          · {plano._count.organizations} organization
-          {plano._count.organizations === 1 ? "" : "s"}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">{plano.name}</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {plano.code} ·{" "}
+            {plano.priceMonthlyCents != null
+              ? `R$ ${(plano.priceMonthlyCents / 100).toLocaleString("pt-BR")}/mês`
+              : "Sem preço definido"}
+            {plano.isTrial && plano.trialDays != null && ` · trial ${plano.trialDays} dias`} ·{" "}
+            {plano._count.organizations} organization
+            {plano._count.organizations === 1 ? "" : "s"}
+            {!plano.active && " · inativo"}
+          </p>
+        </div>
+        <Link href={`/platform/plans/${plano.id}/editar`} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+          Editar plano
+        </Link>
       </div>
 
       <Card>
