@@ -398,10 +398,12 @@ export function interpretarPeriodoPipeline(params: { periodo?: string }): Period
     : "30d";
 }
 
-// Resolve o intervalo [inicio, fim] em que closedAt precisa cair.
-// null = sem filtro (só "todos", que inclui inclusive terminais com
-// closedAt null — decisão explícita da P.5: "todo o período" responde
-// "quantos no total", não "quantos dentro de uma janela de tempo").
+// Resolve o intervalo [inicio, fim] rolante/calendário do período — a
+// janela em si não depende de qual campo será comparado contra ela
+// (closedAt na P.5; changedAt/exitedAt na P.7, ver buscarAnalyticsHistoricoPipeline
+// mais abaixo). null = sem filtro (só "todos" — decisão explícita da P.5,
+// reaproveitada na P.7: "todo o período" responde "quantos no total", não
+// "quantos dentro de uma janela de tempo").
 //
 // 30d/90d: janela rolante em milissegundos reais a partir de `agora`
 // (closedAt é timestamp real de evento, não um datetime-local digitado
@@ -514,6 +516,377 @@ export async function buscarMetricasPipeline(
       perdidos,
       encerradas: ganhos + perdidos,
       taxaGanho: calcularTaxaGanho(ganhos, perdidos),
+    };
+  });
+}
+
+// -----------------------------------------------------------------------
+// Analytics históricos do Pipeline (Fase P.7) — derivados EXCLUSIVAMENTE
+// de PropertyInterestStageHistory. Três conceitos nunca misturados:
+//   - PropertyInterest.stage: estado ATUAL (P.1, intocado por esta fase);
+//   - PropertyInterestStageHistory: eventos temporais reais (P.6);
+//   - closedAt: data OFICIAL de fechamento (P.2/P.3, nunca substituída
+//     por history — history só serve pra localizar o início da jornada
+//     ao calcular tempo até fechamento, ver calcularTempoMedioAteFechamento).
+// Registro legado sem NENHUM history nunca participa de métrica de
+// jornada (episódio/tempo médio/tempo até fechamento) — continua
+// participando normalmente das métricas atuais da P.5 (stage/closedAt),
+// que este arquivo não altera.
+// -----------------------------------------------------------------------
+
+// Teto de PropertyInterest cuja jornada completa é carregada pra derivar
+// episódios — mesmo racional de LIMITE_PIPELINE_ABERTO: nunca um volume
+// ilimitado. Selecionados por updatedAt desc (proxy de "mais
+// recentemente ativos"; updatedAt muda em qualquer escrita de stage
+// também, não só as consideradas aqui — só como critério de seleção da
+// amostra, nunca como substituto de changedAt nos cálculos). Organizações
+// acima deste teto têm amostra não-exaustiva pras métricas de jornada —
+// decisão V1 explícita, sinalizada na UI (ver amostraLimitada), nunca
+// escondida.
+export const LIMITE_ANALYTICS_HISTORICO = 500;
+
+export type EpisodioEtapa = {
+  propertyInterestId: string;
+  stage: PropertyInterestStage;
+  enteredAtISO: string;
+  // null = episódio ainda aberto (nenhuma transição posterior
+  // registrada — é o stage atual da jornada).
+  exitedAtISO: string | null;
+  // null quando o episódio está aberto OU quando os timestamps
+  // envolvidos produziriam duração negativa (defensivo).
+  duracaoMs: number | null;
+};
+
+export type EventoJornada = { newStage: PropertyInterestStage; changedAtISO: string; id: string };
+
+// Ordena os eventos de UMA jornada por changedAt ASC, com `id` como
+// desempate determinístico — nunca confia em ordem incidental do banco.
+// Colisão de changedAt entre eventos da MESMA jornada é estruturalmente
+// improvável (cada write é serializado pela transação que releu o stage
+// antes de escrever, ver P.6), mas o desempate garante determinismo
+// mesmo assim.
+export function ordenarEventosDaJornada(eventos: readonly EventoJornada[]): EventoJornada[] {
+  return [...eventos].sort((a, b) => {
+    if (a.changedAtISO !== b.changedAtISO) return a.changedAtISO < b.changedAtISO ? -1 : 1;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+}
+
+// Deriva episódios de UMA jornada já ordenada — cada evento fecha o
+// episódio anterior (se houver) e abre um novo cujo `stage` é o
+// `newStage` observado. NUNCA usa `previousStage` pra decidir de que
+// etapa um episódio é (a fonte de verdade é sempre o destino
+// efetivamente escrito) — um `previousStage` inconsistente/anômalo nunca
+// contamina o resultado. Reentrada na mesma etapa gera um episódio NOVO
+// e independente, nunca fundido com uma passagem anterior. Histórico
+// vazio -> [] (nenhum episódio inventado). `agora` sempre parâmetro
+// explícito (mesmo racional de calcularAgingStageMs).
+export function derivarEpisodiosDaJornada(
+  propertyInterestId: string,
+  jornadaOrdenada: readonly EventoJornada[],
+  agora: Date
+): EpisodioEtapa[] {
+  const episodios: EpisodioEtapa[] = [];
+  for (let i = 0; i < jornadaOrdenada.length; i++) {
+    const atual = jornadaOrdenada[i];
+    const proximo = jornadaOrdenada[i + 1];
+    const enteredAtISO = atual.changedAtISO;
+    const exitedAtISO = proximo ? proximo.changedAtISO : null;
+    const fimMs = exitedAtISO !== null ? new Date(exitedAtISO).getTime() : agora.getTime();
+    const diffMs = fimMs - new Date(enteredAtISO).getTime();
+    episodios.push({
+      propertyInterestId,
+      stage: atual.newStage,
+      enteredAtISO,
+      exitedAtISO,
+      duracaoMs: diffMs < 0 ? null : diffMs,
+    });
+  }
+  return episodios;
+}
+
+export type TempoMedioPorEtapa = Record<ColunaAberta, number | null>;
+
+function mediaDeGrupos(grupos: Record<ColunaAberta, { total: number; contagem: number }>): Record<ColunaAberta, number | null> {
+  return Object.fromEntries(
+    COLUNAS_ABERTAS.map((c) => [c, grupos[c].contagem === 0 ? null : grupos[c].total / grupos[c].contagem])
+  ) as Record<ColunaAberta, number | null>;
+}
+
+// Tempo médio histórico por etapa — só episódios CONCLUÍDOS
+// (exitedAtISO !== null), nunca o episódio aberto atual (esse é
+// aging, métrica separada — ver calcularAgingAgregado). Terminal
+// (WON/REJECTED) nunca aparece aqui por construção: um terminal nunca
+// tem transição posterior, logo nunca tem exitedAtISO preenchido.
+// Período filtra por exitedAtISO (fim do episódio) — a duração só é
+// conhecida quando o episódio termina, nunca pelo início.
+export function calcularTempoMedioPorEtapa(
+  episodios: readonly EpisodioEtapa[],
+  intervaloExit: { inicio: Date; fim: Date } | null
+): TempoMedioPorEtapa {
+  const grupos = Object.fromEntries(COLUNAS_ABERTAS.map((c) => [c, { total: 0, contagem: 0 }])) as Record<
+    ColunaAberta,
+    { total: number; contagem: number }
+  >;
+  for (const ep of episodios) {
+    if (ep.exitedAtISO === null || ep.duracaoMs === null) continue;
+    if (!(COLUNAS_ABERTAS as readonly string[]).includes(ep.stage)) continue;
+    if (intervaloExit) {
+      const exitedMs = new Date(ep.exitedAtISO).getTime();
+      if (exitedMs < intervaloExit.inicio.getTime() || exitedMs > intervaloExit.fim.getTime()) continue;
+    }
+    const grupo = grupos[ep.stage as ColunaAberta];
+    grupo.total += ep.duracaoMs;
+    grupo.contagem += 1;
+  }
+  return mediaDeGrupos(grupos);
+}
+
+export type AgingAgregadoPorEtapa = Record<ColunaAberta, number | null>;
+
+// Aging médio ATUAL por etapa — estoque presente, SEMPRE global, nunca
+// filtrado por período (mesmo racional de "Em andamento"/distribuição
+// atual, P.5). Só episódios ainda ABERTOS (exitedAtISO === null) — um
+// registro sem history nenhum não produz episódio algum, logo nunca
+// entra na média (nunca inventa 0). Nunca usa updatedAt/createdAt.
+export function calcularAgingAgregado(episodios: readonly EpisodioEtapa[]): AgingAgregadoPorEtapa {
+  const grupos = Object.fromEntries(COLUNAS_ABERTAS.map((c) => [c, { total: 0, contagem: 0 }])) as Record<
+    ColunaAberta,
+    { total: number; contagem: number }
+  >;
+  for (const ep of episodios) {
+    if (ep.exitedAtISO !== null || ep.duracaoMs === null) continue;
+    if (!(COLUNAS_ABERTAS as readonly string[]).includes(ep.stage)) continue;
+    const grupo = grupos[ep.stage as ColunaAberta];
+    grupo.total += ep.duracaoMs;
+    grupo.contagem += 1;
+  }
+  return mediaDeGrupos(grupos);
+}
+
+export type Gargalo = { stage: ColunaAberta; agingMedioMs: number } | null;
+
+// Gargalo V1 = etapa aberta com maior AGING MÉDIO ATUAL (estoque
+// presente) — nunca o maior tempo médio histórico concluído (as duas
+// noções nunca são misturadas). Operacionalmente é "onde as negociações
+// estão paradas agora", não "onde historicamente demoravam mais".
+// null quando nenhuma etapa tem dado suficiente. Empate: a etapa que
+// aparece primeiro em COLUNAS_ABERTAS vence — determinístico.
+export function calcularGargalo(agingAgregado: AgingAgregadoPorEtapa): Gargalo {
+  let melhor: Gargalo = null;
+  for (const stage of COLUNAS_ABERTAS) {
+    const valor = agingAgregado[stage];
+    if (valor === null) continue;
+    if (melhor === null || valor > melhor.agingMedioMs) {
+      melhor = { stage, agingMedioMs: valor };
+    }
+  }
+  return melhor;
+}
+
+// Formatação genérica de duração (reaproveita a mesma granularidade
+// grosseira de formatarAgingStage, sem o prefixo "Na etapa há" — usada em
+// múltiplos rótulos de analytics, não só o card individual). null ->
+// null, nunca "0" quando na verdade não há dado.
+export function formatarDuracao(ms: number | null): string | null {
+  if (ms === null) return null;
+  if (ms < HORA_MS) return "menos de 1h";
+  if (ms < DIA_MS) return `${Math.floor(ms / HORA_MS)}h`;
+  const dias = Math.floor(ms / DIA_MS);
+  return `${dias} dia${dias === 1 ? "" : "s"}`;
+}
+
+export type EntradasPorEtapa = Record<ColunaAberta, number>;
+
+type LinhaGroupByNewStage = { newStage: PropertyInterestStage; _count: { _all: number } };
+
+// Volume de TRANSIÇÕES pra cada etapa aberta (não é número de negócios
+// únicos) — genesis (null -> INTERESTED) conta como entrada em
+// INTERESTED, reentradas contam de novo. Escopo só às 4 etapas abertas
+// (entrada em WON/REJECTED já é "ganhos"/"perdidos" da P.5 — não
+// duplicado aqui).
+export function paraEntradasPorEtapa(linhas: readonly LinhaGroupByNewStage[]): EntradasPorEtapa {
+  const contagem = Object.fromEntries(COLUNAS_ABERTAS.map((c) => [c, 0])) as EntradasPorEtapa;
+  for (const linha of linhas) {
+    if ((COLUNAS_ABERTAS as readonly string[]).includes(linha.newStage)) {
+      contagem[linha.newStage as ColunaAberta] = linha._count._all;
+    }
+  }
+  return contagem;
+}
+
+export type TransicaoObservada = { de: PropertyInterestStage | null; para: PropertyInterestStage; quantidade: number };
+
+type LinhaGroupByTransicao = {
+  previousStage: PropertyInterestStage | null;
+  newStage: PropertyInterestStage;
+  _count: { _all: number };
+};
+
+// Lista bruta de pares (de,para) observados no período, com contagem —
+// NUNCA convertida em percentual/"taxa de conversão" (decisão P.7: sob
+// reentradas e movimentos não-lineares não existe denominador
+// semanticamente sólido). Ordenado por quantidade desc; desempate
+// determinístico pela chave textual do par.
+export function paraTransicoesObservadas(linhas: readonly LinhaGroupByTransicao[]): TransicaoObservada[] {
+  return linhas
+    .map((linha) => ({ de: linha.previousStage, para: linha.newStage, quantidade: linha._count._all }))
+    .sort((a, b) => {
+      if (b.quantidade !== a.quantidade) return b.quantidade - a.quantidade;
+      const chaveA = `${a.de ?? ""}->${a.para}`;
+      const chaveB = `${b.de ?? ""}->${b.para}`;
+      return chaveA < chaveB ? -1 : chaveA > chaveB ? 1 : 0;
+    });
+}
+
+export type TempoAteFechamento = { ganho: number | null; perdido: number | null; todos: number | null };
+
+type RegistroFechamento = {
+  stage: PropertyInterestStage;
+  closedAtISO: string;
+  // null = sem genesis (histórico incompleto) -> nunca participa.
+  genesisChangedAtISO: string | null;
+};
+
+// Tempo médio até fechamento — só participa quem (a) está encerrado
+// (WON/REJECTED) via closedAt real, (b) tem genesis (histórico completo:
+// sem isso não se sabe quando a jornada realmente começou), (c)
+// closedAt >= genesis (defensivo, nunca duração negativa). Nunca
+// substitui closedAt — history só localiza o início. Período filtra por
+// closedAt (mesma semântica de "resultados" já usada na P.5).
+export function calcularTempoMedioAteFechamento(
+  registros: readonly RegistroFechamento[],
+  intervaloClosedAt: { inicio: Date; fim: Date } | null
+): TempoAteFechamento {
+  const ganho: number[] = [];
+  const perdido: number[] = [];
+  const todos: number[] = [];
+  for (const r of registros) {
+    if (r.genesisChangedAtISO === null) continue;
+    const closedMs = new Date(r.closedAtISO).getTime();
+    if (intervaloClosedAt) {
+      if (closedMs < intervaloClosedAt.inicio.getTime() || closedMs > intervaloClosedAt.fim.getTime()) continue;
+    }
+    const duracao = closedMs - new Date(r.genesisChangedAtISO).getTime();
+    if (duracao < 0) continue;
+    todos.push(duracao);
+    if (r.stage === "WON") ganho.push(duracao);
+    else if (r.stage === "REJECTED") perdido.push(duracao);
+  }
+  const media = (lista: number[]) => (lista.length === 0 ? null : lista.reduce((soma, v) => soma + v, 0) / lista.length);
+  return { ganho: media(ganho), perdido: media(perdido), todos: media(todos) };
+}
+
+export type AnalyticsHistoricoPipeline = {
+  periodo: PeriodoPipeline;
+  // true quando o teto de LIMITE_ANALYTICS_HISTORICO foi atingido — a
+  // amostra pode não ser exaustiva pras métricas de jornada (episódios,
+  // tempo médio, aging agregado, gargalo, tempo até fechamento). Nunca
+  // afeta entradasPorEtapa/transicoesObservadas (agregadas direto no
+  // banco, sem teto).
+  amostraLimitada: boolean;
+  gargalo: Gargalo;
+  agingAgregado: AgingAgregadoPorEtapa;
+  tempoMedioHistorico: TempoMedioPorEtapa;
+  entradasPorEtapa: EntradasPorEtapa;
+  transicoesObservadas: TransicaoObservada[];
+  tempoAteFechamento: TempoAteFechamento;
+};
+
+// Única função de leitura dos analytics históricos (Fase P.7) — 4 queries
+// estruturais (2 groupBy em paralelo + 1 findMany de PropertyInterest com
+// teto + 1 findMany de PropertyInterestStageHistory desses IDs), nunca
+// uma por card/registro. organizationId sempre explícito no where.
+// PropertyInterest.stage nunca é derivado do histórico aqui — os únicos
+// dados de "estado atual" usados (stage/closedAt) vêm direto da tabela
+// PropertyInterest.
+export async function buscarAnalyticsHistoricoPipeline(
+  organizationId: string,
+  opcoes: { periodo?: PeriodoPipeline; agora?: Date } = {}
+): Promise<AnalyticsHistoricoPipeline> {
+  const periodo = opcoes.periodo ?? "30d";
+  const agora = opcoes.agora ?? new Date();
+  const intervalo = resolverIntervaloPeriodo(periodo, agora);
+
+  return withOrganization(organizationId, async () => {
+    const [entradasBruto, transicoesBruto] = await Promise.all([
+      prisma.propertyInterestStageHistory.groupBy({
+        by: ["newStage"],
+        where: {
+          organizationId,
+          newStage: { in: [...COLUNAS_ABERTAS] },
+          ...(intervalo ? { changedAt: { gte: intervalo.inicio, lte: intervalo.fim } } : {}),
+        },
+        _count: { _all: true },
+      }),
+      prisma.propertyInterestStageHistory.groupBy({
+        by: ["previousStage", "newStage"],
+        where: {
+          organizationId,
+          ...(intervalo ? { changedAt: { gte: intervalo.inicio, lte: intervalo.fim } } : {}),
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const registros = await prisma.propertyInterest.findMany({
+      where: { organizationId },
+      orderBy: { updatedAt: "desc" },
+      take: LIMITE_ANALYTICS_HISTORICO,
+      select: { id: true, stage: true, closedAt: true },
+    });
+    const amostraLimitada = registros.length === LIMITE_ANALYTICS_HISTORICO;
+    const idsRegistros = registros.map((r) => r.id);
+
+    const historyBruto =
+      idsRegistros.length === 0
+        ? []
+        : await prisma.propertyInterestStageHistory.findMany({
+            where: { organizationId, propertyInterestId: { in: idsRegistros } },
+            select: { id: true, propertyInterestId: true, previousStage: true, newStage: true, changedAt: true },
+          });
+
+    // Único passo O(N): agrupa por jornada E localiza genesis ao mesmo
+    // tempo — nunca um segundo scan de historyBruto (evitaria O(N²) sob
+    // muitas jornadas).
+    const porJornada = new Map<string, EventoJornada[]>();
+    const genesisPorJornada = new Map<string, string>();
+    for (const h of historyBruto) {
+      const lista = porJornada.get(h.propertyInterestId) ?? [];
+      lista.push({ newStage: h.newStage, changedAtISO: h.changedAt.toISOString(), id: h.id });
+      porJornada.set(h.propertyInterestId, lista);
+      if (h.previousStage === null) {
+        genesisPorJornada.set(h.propertyInterestId, h.changedAt.toISOString());
+      }
+    }
+
+    const todosEpisodios: EpisodioEtapa[] = [];
+    for (const [propertyInterestId, eventos] of porJornada) {
+      const ordenados = ordenarEventosDaJornada(eventos);
+      todosEpisodios.push(...derivarEpisodiosDaJornada(propertyInterestId, ordenados, agora));
+    }
+
+    const registrosFechamento: RegistroFechamento[] = [];
+    for (const r of registros) {
+      if (!estagioInteresseEncerrado(r.stage) || r.closedAt === null) continue;
+      registrosFechamento.push({
+        stage: r.stage,
+        closedAtISO: r.closedAt.toISOString(),
+        genesisChangedAtISO: genesisPorJornada.get(r.id) ?? null,
+      });
+    }
+
+    const agingAgregado = calcularAgingAgregado(todosEpisodios);
+
+    return {
+      periodo,
+      amostraLimitada,
+      gargalo: calcularGargalo(agingAgregado),
+      agingAgregado,
+      tempoMedioHistorico: calcularTempoMedioPorEtapa(todosEpisodios, intervalo),
+      entradasPorEtapa: paraEntradasPorEtapa(entradasBruto),
+      transicoesObservadas: paraTransicoesObservadas(transicoesBruto),
+      tempoAteFechamento: calcularTempoMedioAteFechamento(registrosFechamento, intervalo),
     };
   });
 }

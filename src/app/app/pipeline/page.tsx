@@ -6,6 +6,7 @@ import {
   buscarPipelineAberto,
   buscarPipelineEncerrado,
   buscarMetricasPipeline,
+  buscarAnalyticsHistoricoPipeline,
   interpretarFiltrosPipeline,
   interpretarPeriodoPipeline,
   PERIODO_PIPELINE_LABEL,
@@ -16,6 +17,7 @@ import {
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { CardPipeline } from "@/components/admin/CardPipeline";
 import { ResumoPipeline } from "@/components/admin/ResumoPipeline";
+import { AnalyticsHistoricoPipeline } from "@/components/admin/AnalyticsHistoricoPipeline";
 import { Input } from "@/components/ui/input";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -92,8 +94,13 @@ export default async function PipelinePage({
   // GLOBAIS na parte de estoque atual.
   const periodo = interpretarPeriodoPipeline(params);
   const metricas = await buscarMetricasPipeline(organizationId, { periodo });
+  // Fase P.7: leitura independente, própria (nunca reaproveita os itens
+  // de buscarPipelineAberto/Encerrado, que têm teto de exibição) — mesmo
+  // padrão arquitetural já estabelecido pra buscarMetricasPipeline (P.5).
+  const analyticsHistorico = await buscarAnalyticsHistoricoPipeline(organizationId, { periodo });
 
   const Resumo = <ResumoPipeline metricas={metricas} />;
+  const AnaliseHistorica = <AnalyticsHistoricoPipeline analytics={analyticsHistorico} />;
 
   const SeletorPeriodo = (
     <form method="get" className="flex flex-wrap items-end gap-2 mb-4">
@@ -205,6 +212,7 @@ export default async function PipelinePage({
 
         {Resumo}
         {SeletorPeriodo}
+        {AnaliseHistorica}
 
         {CabecalhoFiltros}
 
@@ -263,6 +271,7 @@ export default async function PipelinePage({
 
       {Resumo}
       {SeletorPeriodo}
+      {AnaliseHistorica}
 
       {CabecalhoFiltros}
 

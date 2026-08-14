@@ -20,6 +20,7 @@ import {
   buscarPipelineAberto,
   buscarPipelineEncerrado,
   buscarMetricasPipeline,
+  buscarAnalyticsHistoricoPipeline,
   COLUNAS_ABERTAS,
 } from "@/lib/pipeline";
 import type { PropertyInterestStage } from "@/generated/prisma/client";
@@ -845,5 +846,308 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     const { itens } = await buscarPipelineEncerrado(cenario.organization.id);
     const item = itens.find((i) => i.id === interesse.id);
     expect(item?.aging).toBeNull();
+  });
+
+  // -------------------------------------------------------------------
+  // Analytics históricos do Pipeline (Fase P.7) — Postgres real. Prefixo
+  // P7- pra nunca colidir com letras já usadas por P.4/P.5/P.6 neste
+  // arquivo.
+  // -------------------------------------------------------------------
+
+  test("P7-AR) tenant A não conta history/registros de B nos analytics históricos", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoaB = await criarPessoa({ organizationId: cenarioB.organization.id });
+    const imovelB = await criarImovel({ organizationId: cenarioB.organization.id, status: "AVAILABLE" });
+    const interesseB = await criarInteresseDireto({
+      organizationId: cenarioB.organization.id,
+      personId: pessoaB.id,
+      propertyId: imovelB.id,
+      stage: "VISITED",
+    });
+    await criarHistoricoDireto({
+      organizationId: cenarioB.organization.id,
+      propertyInterestId: interesseB.id,
+      previousStage: null,
+      newStage: "INTERESTED",
+      changedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+    });
+
+    const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id);
+    expect(analytics.entradasPorEtapa.INTERESTED).toBe(0);
+    for (const coluna of COLUNAS_ABERTAS) {
+      expect(analytics.agingAgregado[coluna]).toBeNull();
+    }
+    expect(analytics.transicoesObservadas).toEqual([]);
+  });
+
+  test("P7-AS) history real criado via atualizarEstagioInteresse aparece nas transições/entradas observadas", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "INTERESTED",
+    });
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: null,
+      newStage: "INTERESTED",
+      changedAt: new Date(),
+    });
+
+    const fd = new FormData();
+    fd.set("stage", "PROPOSAL");
+    await atualizarEstagioInteresse(interesse.id, ESTADO_INICIAL_ACAO, fd);
+
+    const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id, { periodo: "TODOS" });
+    expect(analytics.entradasPorEtapa.PROPOSAL).toBe(1);
+    const transicao = analytics.transicoesObservadas.find((t) => t.de === "INTERESTED" && t.para === "PROPOSAL");
+    expect(transicao?.quantidade).toBe(1);
+  });
+
+  test("P7-AT) genesis + movimentação real gera episódio concluído com duração correta (tempo médio histórico)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "VISIT_SCHEDULED",
+    });
+    const agora = new Date();
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: null,
+      newStage: "INTERESTED",
+      changedAt: new Date(agora.getTime() - 3 * 24 * 60 * 60 * 1000),
+    });
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: "INTERESTED",
+      newStage: "VISIT_SCHEDULED",
+      changedAt: new Date(agora.getTime() - 1 * 24 * 60 * 60 * 1000),
+    });
+
+    const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id, { periodo: "TODOS", agora });
+    // INTERESTED: episódio concluído de exatos 2 dias (3 dias atrás -> 1 dia atrás).
+    expect(analytics.tempoMedioHistorico.INTERESTED).toBe(2 * 24 * 60 * 60 * 1000);
+    // VISIT_SCHEDULED: episódio ainda aberto (aging), não entra no tempo médio histórico.
+    expect(analytics.tempoMedioHistorico.VISIT_SCHEDULED).toBeNull();
+    expect(analytics.agingAgregado.VISIT_SCHEDULED).toBe(1 * 24 * 60 * 60 * 1000);
+  });
+
+  test("P7-AU) fechamento real (marcarInteresseComoGanho) gera tempo até fechamento correto a partir da genesis", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "PROPOSAL",
+    });
+    const genesisEm = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: null,
+      newStage: "INTERESTED",
+      changedAt: genesisEm,
+    });
+
+    await marcarInteresseComoGanho(interesse.id, ESTADO_INICIAL_ACAO, new FormData());
+
+    const atualizado = await prisma.propertyInterest.findUnique({
+      where: { id: interesse.id, organizationId: cenario.organization.id },
+    });
+    const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id, { periodo: "TODOS" });
+    expect(analytics.tempoAteFechamento.ganho).not.toBeNull();
+    const esperadoMs = atualizado!.closedAt!.getTime() - genesisEm.getTime();
+    expect(analytics.tempoAteFechamento.ganho).toBe(esperadoMs);
+  });
+
+  test("P7-AV) registro legado (sem NENHUM history) não contamina tempo médio nem aging agregado", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "PROPOSAL",
+    });
+
+    const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id);
+    for (const coluna of COLUNAS_ABERTAS) {
+      expect(analytics.agingAgregado[coluna]).toBeNull();
+      expect(analytics.tempoMedioHistorico[coluna]).toBeNull();
+    }
+  });
+
+  test("P7-AW) legado com history parcial (primeiro evento não é genesis) contribui com episódios válidos, mas nunca com tempo até fechamento", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "PROPOSAL",
+    });
+    const agora = new Date();
+    // Primeiro history real NÃO é genesis (previousStage != null) —
+    // simula um registro que já existia antes da P.6 e só ganhou history
+    // a partir da primeira transição real pós-P.6.
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: "VISITED",
+      newStage: "PROPOSAL",
+      changedAt: new Date(agora.getTime() - 2 * 24 * 60 * 60 * 1000),
+    });
+
+    const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id, { periodo: "TODOS", agora });
+    // Episódio aberto (aging) ainda é válido mesmo sem genesis.
+    expect(analytics.agingAgregado.PROPOSAL).toBe(2 * 24 * 60 * 60 * 1000);
+  });
+
+  test("P7-AX) período altera entradas/transições/tempo médio histórico/tempo até fechamento, mas NUNCA o aging agregado (sempre global)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "INTERESTED",
+    });
+    const agora = new Date("2026-06-15T12:00:00.000Z");
+    // Genesis MUITO antiga — fora da janela de 30d, mas aging é estoque
+    // presente (sempre global).
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: null,
+      newStage: "INTERESTED",
+      changedAt: new Date(agora.getTime() - 200 * 24 * 60 * 60 * 1000),
+    });
+
+    const em30d = await buscarAnalyticsHistoricoPipeline(cenario.organization.id, { periodo: "30d", agora });
+    const emTodos = await buscarAnalyticsHistoricoPipeline(cenario.organization.id, { periodo: "TODOS", agora });
+
+    expect(em30d.entradasPorEtapa.INTERESTED).toBe(0); // fora da janela de 30d
+    expect(emTodos.entradasPorEtapa.INTERESTED).toBe(1); // sem filtro
+    // Aging agregado é idêntico nos dois períodos — nunca filtrado.
+    expect(em30d.agingAgregado.INTERESTED).toBe(emTodos.agingAgregado.INTERESTED);
+    expect(em30d.agingAgregado.INTERESTED).toBe(200 * 24 * 60 * 60 * 1000);
+  });
+
+  test("P7-AY) buscarAnalyticsHistoricoPipeline não escreve nada — zero PropertyInterest/PropertyInterestStageHistory/ActivityLog criado/alterado", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+    });
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: null,
+      newStage: "INTERESTED",
+      changedAt: new Date(),
+    });
+
+    const antes = {
+      interesses: await prisma.propertyInterest.count({ where: { organizationId: cenario.organization.id } }),
+      history: await prisma.propertyInterestStageHistory.count({ where: { organizationId: cenario.organization.id } }),
+      logs: await prisma.activityLog.count({ where: { organizationId: cenario.organization.id } }),
+    };
+
+    await buscarAnalyticsHistoricoPipeline(cenario.organization.id, { periodo: "30d" });
+    await buscarAnalyticsHistoricoPipeline(cenario.organization.id, { periodo: "TODOS" });
+
+    const depois = {
+      interesses: await prisma.propertyInterest.count({ where: { organizationId: cenario.organization.id } }),
+      history: await prisma.propertyInterestStageHistory.count({ where: { organizationId: cenario.organization.id } }),
+      logs: await prisma.activityLog.count({ where: { organizationId: cenario.organization.id } }),
+    };
+    expect(depois).toEqual(antes);
+  });
+
+  test("P7-AZ) buscarMetricasPipeline (P.5) continua idêntica após a introdução dos analytics históricos", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa1 = await criarPessoa({ organizationId: cenario.organization.id });
+    const pessoa2 = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarInteresseDireto({ organizationId: cenario.organization.id, personId: pessoa1.id, propertyId: imovel.id, stage: "PROPOSAL" });
+    await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: pessoa2.id, propertyId: imovel.id, stage: "WON", closedAt: new Date() });
+
+    const metricas = await buscarMetricasPipeline(cenario.organization.id, { periodo: "TODOS" });
+    expect(metricas.emAndamento).toBe(1);
+    expect(metricas.ganhos).toBe(1);
+    expect(metricas.porStage.PROPOSAL).toBe(1);
+  });
+
+  test("P7-BA) tenant scoping obrigatório — groupBy de PropertyInterestStageHistory sem organizationId explícito é recusado", async () => {
+    await expect(
+      prisma.propertyInterestStageHistory.groupBy({ by: ["newStage"], _count: { _all: true } })
+    ).rejects.toThrow(/organizationId/);
+  });
+
+  test("P7-BB) amostraLimitada é false quando a organização tem menos registros que o teto", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarInteresseDireto({ organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id });
+
+    const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id);
+    expect(analytics.amostraLimitada).toBe(false);
+  });
+
+  test("P7-BC) reentrada real na mesma etapa (via atualizarEstagioInteresse) produz dois episódios distintos, nunca fundidos", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "INTERESTED",
+    });
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: interesse.id,
+      previousStage: null,
+      newStage: "INTERESTED",
+      changedAt: new Date(),
+    });
+
+    const fd1 = new FormData();
+    fd1.set("stage", "VISIT_SCHEDULED");
+    await atualizarEstagioInteresse(interesse.id, ESTADO_INICIAL_ACAO, fd1);
+    const fd2 = new FormData();
+    fd2.set("stage", "PROPOSAL");
+    await atualizarEstagioInteresse(interesse.id, ESTADO_INICIAL_ACAO, fd2);
+    const fd3 = new FormData();
+    fd3.set("stage", "VISIT_SCHEDULED");
+    await atualizarEstagioInteresse(interesse.id, ESTADO_INICIAL_ACAO, fd3);
+
+    const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id, { periodo: "TODOS" });
+    // 2 entradas em VISIT_SCHEDULED: a primeira (concluída) e a segunda (reentrada, aberta/aging).
+    expect(analytics.entradasPorEtapa.VISIT_SCHEDULED).toBe(2);
+    expect(analytics.tempoMedioHistorico.VISIT_SCHEDULED).not.toBeNull();
+    expect(analytics.agingAgregado.VISIT_SCHEDULED).not.toBeNull();
   });
 });

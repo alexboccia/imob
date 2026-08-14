@@ -13,7 +13,18 @@ import {
   calcularAgingStageMs,
   formatarAgingStage,
   COLUNAS_ABERTAS,
+  ordenarEventosDaJornada,
+  derivarEpisodiosDaJornada,
+  calcularTempoMedioPorEtapa,
+  calcularAgingAgregado,
+  calcularGargalo,
+  formatarDuracao,
+  paraEntradasPorEtapa,
+  paraTransicoesObservadas,
+  calcularTempoMedioAteFechamento,
   type ItemPipeline,
+  type EventoJornada,
+  type EpisodioEtapa,
 } from "@/lib/pipeline";
 import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 
@@ -487,5 +498,435 @@ describe("formatarAgingStage", () => {
 
   test("0ms -> 'menos de 1h' (zero é um aging válido, nunca null)", () => {
     expect(formatarAgingStage(0)).toBe("Na etapa há menos de 1h");
+  });
+});
+
+// -------------------------------------------------------------------
+// Analytics históricos do Pipeline (Fase P.7) — helpers puros, sem
+// Prisma/banco.
+// -------------------------------------------------------------------
+
+function evento(overrides: Partial<EventoJornada>): EventoJornada {
+  return {
+    newStage: overrides.newStage ?? "INTERESTED",
+    changedAtISO: overrides.changedAtISO ?? "2026-01-01T00:00:00.000Z",
+    id: overrides.id ?? "h1",
+  };
+}
+
+describe("ordenarEventosDaJornada", () => {
+  test("G) ordem invertida na entrada é corrigida (changedAt ASC)", () => {
+    const eventos = [
+      evento({ id: "b", changedAtISO: "2026-01-03T00:00:00.000Z" }),
+      evento({ id: "a", changedAtISO: "2026-01-01T00:00:00.000Z" }),
+      evento({ id: "c", changedAtISO: "2026-01-02T00:00:00.000Z" }),
+    ];
+    expect(ordenarEventosDaJornada(eventos).map((e) => e.id)).toEqual(["a", "c", "b"]);
+  });
+
+  test("K) timestamps iguais -> desempate determinístico por id", () => {
+    const eventos = [
+      evento({ id: "z", changedAtISO: "2026-01-01T00:00:00.000Z" }),
+      evento({ id: "a", changedAtISO: "2026-01-01T00:00:00.000Z" }),
+    ];
+    expect(ordenarEventosDaJornada(eventos).map((e) => e.id)).toEqual(["a", "z"]);
+  });
+
+  test("não muta o array original", () => {
+    const eventos = [evento({ id: "b" }), evento({ id: "a" })];
+    const copia = [...eventos];
+    ordenarEventosDaJornada(eventos);
+    expect(eventos).toEqual(copia);
+  });
+});
+
+describe("derivarEpisodiosDaJornada", () => {
+  const agora = new Date("2026-01-10T00:00:00.000Z");
+
+  test("A) genesis seguido de uma transição gera exatamente 2 episódios: 1 concluído + 1 aberto", () => {
+    const jornada = [
+      evento({ id: "1", newStage: "INTERESTED", changedAtISO: "2026-01-01T00:00:00.000Z" }),
+      evento({ id: "2", newStage: "VISIT_SCHEDULED", changedAtISO: "2026-01-03T00:00:00.000Z" }),
+    ];
+    const episodios = derivarEpisodiosDaJornada("pi-1", jornada, agora);
+    expect(episodios).toHaveLength(2);
+    expect(episodios[0]).toMatchObject({
+      stage: "INTERESTED",
+      enteredAtISO: "2026-01-01T00:00:00.000Z",
+      exitedAtISO: "2026-01-03T00:00:00.000Z",
+      duracaoMs: 2 * 24 * 60 * 60 * 1000,
+    });
+    expect(episodios[1]).toMatchObject({
+      stage: "VISIT_SCHEDULED",
+      enteredAtISO: "2026-01-03T00:00:00.000Z",
+      exitedAtISO: null,
+      duracaoMs: 7 * 24 * 60 * 60 * 1000,
+    });
+  });
+
+  test("B) múltiplas etapas em sequência gera um episódio por transição", () => {
+    const jornada = [
+      evento({ id: "1", newStage: "INTERESTED", changedAtISO: "2026-01-01T00:00:00.000Z" }),
+      evento({ id: "2", newStage: "VISIT_SCHEDULED", changedAtISO: "2026-01-02T00:00:00.000Z" }),
+      evento({ id: "3", newStage: "VISITED", changedAtISO: "2026-01-03T00:00:00.000Z" }),
+      evento({ id: "4", newStage: "PROPOSAL", changedAtISO: "2026-01-04T00:00:00.000Z" }),
+    ];
+    const episodios = derivarEpisodiosDaJornada("pi-1", jornada, agora);
+    expect(episodios.map((e) => e.stage)).toEqual(["INTERESTED", "VISIT_SCHEDULED", "VISITED", "PROPOSAL"]);
+    expect(episodios.slice(0, 3).every((e) => e.exitedAtISO !== null)).toBe(true);
+    expect(episodios[3].exitedAtISO).toBeNull();
+  });
+
+  test("C) reentrada na mesma etapa gera episódios INDEPENDENTES, nunca fundidos", () => {
+    const jornada = [
+      evento({ id: "1", newStage: "INTERESTED", changedAtISO: "2026-01-01T00:00:00.000Z" }),
+      evento({ id: "2", newStage: "VISIT_SCHEDULED", changedAtISO: "2026-01-02T00:00:00.000Z" }),
+      evento({ id: "3", newStage: "PROPOSAL", changedAtISO: "2026-01-03T00:00:00.000Z" }),
+      evento({ id: "4", newStage: "VISIT_SCHEDULED", changedAtISO: "2026-01-05T00:00:00.000Z" }),
+    ];
+    const episodios = derivarEpisodiosDaJornada("pi-1", jornada, agora);
+    const visitSched = episodios.filter((e) => e.stage === "VISIT_SCHEDULED");
+    expect(visitSched).toHaveLength(2);
+    expect(visitSched[0].duracaoMs).toBe(1 * 24 * 60 * 60 * 1000);
+    expect(visitSched[1].exitedAtISO).toBeNull();
+  });
+
+  test("D) episódio atual (último evento) nunca tem exit — duração calculada até `agora`", () => {
+    const jornada = [evento({ id: "1", newStage: "INTERESTED", changedAtISO: "2026-01-08T00:00:00.000Z" })];
+    const episodios = derivarEpisodiosDaJornada("pi-1", jornada, agora);
+    expect(episodios[0].exitedAtISO).toBeNull();
+    expect(episodios[0].duracaoMs).toBe(2 * 24 * 60 * 60 * 1000);
+  });
+
+  test("E) histórico vazio -> nenhum episódio (nunca inventado)", () => {
+    expect(derivarEpisodiosDaJornada("pi-1", [], agora)).toEqual([]);
+  });
+
+  test("F) histórico parcial (primeiro evento não é genesis) ainda gera episódios válidos a partir dali", () => {
+    const jornada = [
+      evento({ id: "5", newStage: "PROPOSAL", changedAtISO: "2026-01-05T00:00:00.000Z" }),
+      evento({ id: "6", newStage: "WON", changedAtISO: "2026-01-07T00:00:00.000Z" }),
+    ];
+    const episodios = derivarEpisodiosDaJornada("pi-1", jornada, agora);
+    expect(episodios).toHaveLength(2);
+    expect(episodios[0]).toMatchObject({ stage: "PROPOSAL", exitedAtISO: "2026-01-07T00:00:00.000Z" });
+    expect(episodios[1]).toMatchObject({ stage: "WON", exitedAtISO: null });
+  });
+
+  test("H) changedAt no futuro -> duracaoMs null (nunca negativo)", () => {
+    const jornada = [evento({ id: "1", newStage: "INTERESTED", changedAtISO: "2026-01-15T00:00:00.000Z" })];
+    const episodios = derivarEpisodiosDaJornada("pi-1", jornada, agora);
+    expect(episodios[0].duracaoMs).toBeNull();
+  });
+
+  test("I) previousStage nunca é um insumo — EventoJornada estruturalmente não carrega esse campo, garantia por tipo, não por checagem em runtime", () => {
+    const jornada: EventoJornada[] = [{ newStage: "PROPOSAL", changedAtISO: "2026-01-01T00:00:00.000Z", id: "1" }];
+    // Se este objeto compila sem o campo previousStage, a garantia está
+    // provada estruturalmente: a função não tem como ler algo que não existe.
+    expect(derivarEpisodiosDaJornada("pi-1", jornada, agora)[0].stage).toBe("PROPOSAL");
+  });
+
+  test("J) terminal (WON/REJECTED) gera episódio com exitedAtISO null — nunca tem transição posterior", () => {
+    const jornada = [
+      evento({ id: "1", newStage: "PROPOSAL", changedAtISO: "2026-01-01T00:00:00.000Z" }),
+      evento({ id: "2", newStage: "REJECTED", changedAtISO: "2026-01-05T00:00:00.000Z" }),
+    ];
+    const episodios = derivarEpisodiosDaJornada("pi-1", jornada, agora);
+    expect(episodios[1]).toMatchObject({ stage: "REJECTED", exitedAtISO: null });
+  });
+
+  test("L) timezone não altera a duração absoluta calculada", () => {
+    const jornadaSemOffset = [
+      evento({ id: "1", newStage: "INTERESTED", changedAtISO: "2026-01-01T09:00:00.000Z" }),
+      evento({ id: "2", newStage: "VISITED", changedAtISO: "2026-01-01T12:00:00.000Z" }),
+    ];
+    const jornadaComOffset = [
+      evento({ id: "1", newStage: "INTERESTED", changedAtISO: "2026-01-01T06:00:00.000-03:00" }),
+      evento({ id: "2", newStage: "VISITED", changedAtISO: "2026-01-01T09:00:00.000-03:00" }),
+    ];
+    const d1 = derivarEpisodiosDaJornada("pi-1", jornadaSemOffset, agora)[0].duracaoMs;
+    const d2 = derivarEpisodiosDaJornada("pi-1", jornadaComOffset, agora)[0].duracaoMs;
+    expect(d1).toBe(d2);
+  });
+});
+
+function episodioFake(overrides: Partial<EpisodioEtapa>): EpisodioEtapa {
+  return {
+    propertyInterestId: overrides.propertyInterestId ?? "pi-1",
+    stage: overrides.stage ?? "INTERESTED",
+    enteredAtISO: overrides.enteredAtISO ?? "2026-01-01T00:00:00.000Z",
+    exitedAtISO: overrides.exitedAtISO ?? null,
+    duracaoMs: overrides.duracaoMs ?? null,
+  };
+}
+
+describe("calcularTempoMedioPorEtapa", () => {
+  test("M) uma única duração concluída", () => {
+    const episodios = [episodioFake({ stage: "PROPOSAL", exitedAtISO: "2026-01-02T00:00:00.000Z", duracaoMs: 1000 })];
+    expect(calcularTempoMedioPorEtapa(episodios, null).PROPOSAL).toBe(1000);
+  });
+
+  test("N) várias durações concluídas -> média aritmética simples", () => {
+    const episodios = [
+      episodioFake({ stage: "VISITED", exitedAtISO: "x", duracaoMs: 1000 }),
+      episodioFake({ stage: "VISITED", exitedAtISO: "y", duracaoMs: 3000 }),
+    ];
+    expect(calcularTempoMedioPorEtapa(episodios, null).VISITED).toBe(2000);
+  });
+
+  test("O) etapa sem nenhum episódio concluído -> null (nunca 0)", () => {
+    expect(calcularTempoMedioPorEtapa([], null).INTERESTED).toBeNull();
+  });
+
+  test("P) episódio ainda aberto (exitedAtISO null) é excluído da média histórica", () => {
+    const episodios = [
+      episodioFake({ stage: "VISITED", exitedAtISO: "x", duracaoMs: 1000 }),
+      episodioFake({ stage: "VISITED", exitedAtISO: null, duracaoMs: 999999 }),
+    ];
+    expect(calcularTempoMedioPorEtapa(episodios, null).VISITED).toBe(1000);
+  });
+
+  test("Q) outlier não quebra o cálculo (só afeta a média, sem exceção)", () => {
+    const episodios = [
+      episodioFake({ stage: "PROPOSAL", exitedAtISO: "x", duracaoMs: 1000 }),
+      episodioFake({ stage: "PROPOSAL", exitedAtISO: "y", duracaoMs: 100_000_000 }),
+    ];
+    expect(calcularTempoMedioPorEtapa(episodios, null).PROPOSAL).toBe((1000 + 100_000_000) / 2);
+  });
+
+  test("R) lista vazia -> todas as 4 etapas null (nunca divisão por zero/NaN)", () => {
+    const resultado = calcularTempoMedioPorEtapa([], null);
+    for (const coluna of COLUNAS_ABERTAS) {
+      expect(resultado[coluna]).toBeNull();
+    }
+  });
+
+  test("terminal (WON/REJECTED) nunca aparece no resultado, mesmo se presente na lista de episódios", () => {
+    const episodios = [episodioFake({ stage: "WON", exitedAtISO: null, duracaoMs: 1000 })];
+    const resultado = calcularTempoMedioPorEtapa(episodios, null);
+    expect(Object.keys(resultado)).toEqual([...COLUNAS_ABERTAS]);
+  });
+
+  test("período filtra por exitedAtISO (fim do episódio), fora do intervalo é excluído", () => {
+    const intervalo = { inicio: new Date("2026-01-01T00:00:00.000Z"), fim: new Date("2026-01-10T00:00:00.000Z") };
+    const dentro = episodioFake({ stage: "PROPOSAL", exitedAtISO: "2026-01-05T00:00:00.000Z", duracaoMs: 1000 });
+    const fora = episodioFake({ stage: "PROPOSAL", exitedAtISO: "2026-02-01T00:00:00.000Z", duracaoMs: 5000 });
+    expect(calcularTempoMedioPorEtapa([dentro, fora], intervalo).PROPOSAL).toBe(1000);
+  });
+});
+
+describe("calcularAgingAgregado", () => {
+  test("S) média do aging atual de episódios abertos", () => {
+    const episodios = [
+      episodioFake({ stage: "INTERESTED", exitedAtISO: null, duracaoMs: 1000 }),
+      episodioFake({ stage: "INTERESTED", exitedAtISO: null, duracaoMs: 3000 }),
+    ];
+    expect(calcularAgingAgregado(episodios).INTERESTED).toBe(2000);
+  });
+
+  test("T) só episódios ABERTOS entram — concluídos são ignorados aqui", () => {
+    const episodios = [
+      episodioFake({ stage: "VISITED", exitedAtISO: "x", duracaoMs: 1000 }),
+      episodioFake({ stage: "VISITED", exitedAtISO: null, duracaoMs: 5000 }),
+    ];
+    expect(calcularAgingAgregado(episodios).VISITED).toBe(5000);
+  });
+
+  test("U) terminais (WON/REJECTED) nunca aparecem no resultado", () => {
+    const episodios = [episodioFake({ stage: "WON", exitedAtISO: null, duracaoMs: 1000 })];
+    const resultado = calcularAgingAgregado(episodios);
+    expect(Object.keys(resultado)).toEqual([...COLUNAS_ABERTAS]);
+  });
+
+  test("V) registro legado sem history (sem episódio nenhum) não contamina a média", () => {
+    // Nenhum episódio pra esse propertyInterestId — equivalente a jornada
+    // vazia, já provado em derivarEpisodiosDaJornada (E).
+    expect(calcularAgingAgregado([]).INTERESTED).toBeNull();
+  });
+
+  test("W) episódio com changedAt futuro (duracaoMs null) é excluído da média", () => {
+    const episodios = [
+      episodioFake({ stage: "PROPOSAL", exitedAtISO: null, duracaoMs: null }),
+      episodioFake({ stage: "PROPOSAL", exitedAtISO: null, duracaoMs: 2000 }),
+    ];
+    expect(calcularAgingAgregado(episodios).PROPOSAL).toBe(2000);
+  });
+});
+
+describe("calcularGargalo", () => {
+  test("X) etapa com maior aging médio vence", () => {
+    const gargalo = calcularGargalo({ INTERESTED: 1000, VISIT_SCHEDULED: 5000, VISITED: 2000, PROPOSAL: null });
+    expect(gargalo).toEqual({ stage: "VISIT_SCHEDULED", agingMedioMs: 5000 });
+  });
+
+  test("Y) empate -> a etapa que aparece primeiro em COLUNAS_ABERTAS vence, determinístico", () => {
+    const gargalo = calcularGargalo({ INTERESTED: 5000, VISIT_SCHEDULED: 5000, VISITED: null, PROPOSAL: null });
+    expect(gargalo?.stage).toBe("INTERESTED");
+  });
+
+  test("Z) sem nenhum dado -> null", () => {
+    expect(calcularGargalo({ INTERESTED: null, VISIT_SCHEDULED: null, VISITED: null, PROPOSAL: null })).toBeNull();
+  });
+});
+
+describe("formatarDuracao", () => {
+  test("null -> null", () => {
+    expect(formatarDuracao(null)).toBeNull();
+  });
+
+  test("< 1h", () => {
+    expect(formatarDuracao(30 * 60 * 1000)).toBe("menos de 1h");
+  });
+
+  test("horas", () => {
+    expect(formatarDuracao(5 * 60 * 60 * 1000)).toBe("5h");
+  });
+
+  test("dias, plural", () => {
+    expect(formatarDuracao(3 * 24 * 60 * 60 * 1000)).toBe("3 dias");
+  });
+
+  test("1 dia, singular", () => {
+    expect(formatarDuracao(24 * 60 * 60 * 1000)).toBe("1 dia");
+  });
+});
+
+describe("paraEntradasPorEtapa", () => {
+  test("AA) genesis (newStage INTERESTED) conta normalmente", () => {
+    const resultado = paraEntradasPorEtapa([{ newStage: "INTERESTED", _count: { _all: 7 } }]);
+    expect(resultado.INTERESTED).toBe(7);
+  });
+
+  test("AB) contagem alta (reentradas já somadas pelo groupBy do banco) é refletida sem alteração", () => {
+    const resultado = paraEntradasPorEtapa([{ newStage: "VISIT_SCHEDULED", _count: { _all: 42 } }]);
+    expect(resultado.VISIT_SCHEDULED).toBe(42);
+  });
+
+  test("stage ausente no groupBy bruto -> 0, nunca undefined", () => {
+    const resultado = paraEntradasPorEtapa([]);
+    for (const coluna of COLUNAS_ABERTAS) {
+      expect(resultado[coluna]).toBe(0);
+    }
+  });
+
+  test("newStage terminal (WON/REJECTED) no bruto é ignorado — só as 4 etapas abertas", () => {
+    const resultado = paraEntradasPorEtapa([{ newStage: "WON", _count: { _all: 3 } }]);
+    for (const coluna of COLUNAS_ABERTAS) {
+      expect(resultado[coluna]).toBe(0);
+    }
+  });
+});
+
+describe("paraTransicoesObservadas", () => {
+  test("AF) mapeia previousStage/newStage/quantidade, ordenado por quantidade desc", () => {
+    const resultado = paraTransicoesObservadas([
+      { previousStage: "INTERESTED", newStage: "VISIT_SCHEDULED", _count: { _all: 5 } },
+      { previousStage: "VISITED", newStage: "PROPOSAL", _count: { _all: 20 } },
+    ]);
+    expect(resultado[0]).toEqual({ de: "VISITED", para: "PROPOSAL", quantidade: 20 });
+    expect(resultado[1]).toEqual({ de: "INTERESTED", para: "VISIT_SCHEDULED", quantidade: 5 });
+  });
+
+  test("AG) empate de quantidade -> desempate determinístico pela chave textual do par", () => {
+    const linhas = [
+      { previousStage: "VISITED" as const, newStage: "PROPOSAL" as const, _count: { _all: 10 } },
+      { previousStage: "INTERESTED" as const, newStage: "VISIT_SCHEDULED" as const, _count: { _all: 10 } },
+    ];
+    const r1 = paraTransicoesObservadas(linhas);
+    const r2 = paraTransicoesObservadas([...linhas].reverse());
+    expect(r1).toEqual(r2);
+  });
+
+  test("AH) genesis (previousStage null) é representado com `de: null`, nunca uma string mágica", () => {
+    const resultado = paraTransicoesObservadas([{ previousStage: null, newStage: "INTERESTED", _count: { _all: 12 } }]);
+    expect(resultado[0].de).toBeNull();
+  });
+
+  test("AI) transição pra terminal (WON/REJECTED) aparece normalmente — não filtrada aqui", () => {
+    const resultado = paraTransicoesObservadas([{ previousStage: "PROPOSAL", newStage: "WON", _count: { _all: 4 } }]);
+    expect(resultado[0]).toEqual({ de: "PROPOSAL", para: "WON", quantidade: 4 });
+  });
+
+  test("lista vazia -> lista vazia", () => {
+    expect(paraTransicoesObservadas([])).toEqual([]);
+  });
+});
+
+function registroFechamentoFake(overrides: {
+  stage?: "WON" | "REJECTED";
+  closedAtISO?: string;
+  genesisChangedAtISO?: string | null;
+}) {
+  return {
+    stage: overrides.stage ?? "WON",
+    closedAtISO: overrides.closedAtISO ?? "2026-01-10T00:00:00.000Z",
+    // "genesisChangedAtISO" in overrides (não `??`): precisa distinguir
+    // "não fornecido" (usa default) de "explicitamente null" (testa a
+    // exclusão por histórico incompleto) — `??` trataria os dois casos
+    // como iguais.
+    genesisChangedAtISO:
+      "genesisChangedAtISO" in overrides ? (overrides.genesisChangedAtISO ?? null) : "2026-01-01T00:00:00.000Z",
+  };
+}
+
+describe("calcularTempoMedioAteFechamento", () => {
+  test("AL) histórico completo, WON -> duração ganho + todos", () => {
+    const resultado = calcularTempoMedioAteFechamento(
+      [registroFechamentoFake({ stage: "WON", closedAtISO: "2026-01-06T00:00:00.000Z", genesisChangedAtISO: "2026-01-01T00:00:00.000Z" })],
+      null
+    );
+    expect(resultado.ganho).toBe(5 * 24 * 60 * 60 * 1000);
+    expect(resultado.perdido).toBeNull();
+    expect(resultado.todos).toBe(5 * 24 * 60 * 60 * 1000);
+  });
+
+  test("AM) histórico completo, REJECTED -> duração perdido + todos", () => {
+    const resultado = calcularTempoMedioAteFechamento(
+      [registroFechamentoFake({ stage: "REJECTED", closedAtISO: "2026-01-04T00:00:00.000Z", genesisChangedAtISO: "2026-01-01T00:00:00.000Z" })],
+      null
+    );
+    expect(resultado.perdido).toBe(3 * 24 * 60 * 60 * 1000);
+    expect(resultado.ganho).toBeNull();
+  });
+
+  test("AN) sem genesis (histórico parcial) -> excluído, resultado null", () => {
+    const resultado = calcularTempoMedioAteFechamento(
+      [registroFechamentoFake({ genesisChangedAtISO: null })],
+      null
+    );
+    expect(resultado.ganho).toBeNull();
+    expect(resultado.todos).toBeNull();
+  });
+
+  test("AO) lista vazia -> tudo null", () => {
+    const resultado = calcularTempoMedioAteFechamento([], null);
+    expect(resultado).toEqual({ ganho: null, perdido: null, todos: null });
+  });
+
+  test("AP) closedAt antes da genesis -> excluído defensivamente (nunca duração negativa)", () => {
+    const resultado = calcularTempoMedioAteFechamento(
+      [registroFechamentoFake({ closedAtISO: "2025-01-01T00:00:00.000Z", genesisChangedAtISO: "2026-01-01T00:00:00.000Z" })],
+      null
+    );
+    expect(resultado.todos).toBeNull();
+  });
+
+  test("AQ) período filtra por closedAt — fora do intervalo é excluído", () => {
+    const intervalo = { inicio: new Date("2026-01-01T00:00:00.000Z"), fim: new Date("2026-01-10T00:00:00.000Z") };
+    const dentro = registroFechamentoFake({ closedAtISO: "2026-01-05T00:00:00.000Z" });
+    const fora = registroFechamentoFake({ closedAtISO: "2026-06-01T00:00:00.000Z" });
+    const resultado = calcularTempoMedioAteFechamento([dentro, fora], intervalo);
+    expect(resultado.todos).toBe(4 * 24 * 60 * 60 * 1000);
+  });
+
+  test("média de múltiplos registros ganhos", () => {
+    const resultado = calcularTempoMedioAteFechamento(
+      [
+        registroFechamentoFake({ stage: "WON", closedAtISO: "2026-01-02T00:00:00.000Z" }), // 1 dia
+        registroFechamentoFake({ stage: "WON", closedAtISO: "2026-01-04T00:00:00.000Z" }), // 3 dias
+      ],
+      null
+    );
+    expect(resultado.ganho).toBe(2 * 24 * 60 * 60 * 1000);
   });
 });
