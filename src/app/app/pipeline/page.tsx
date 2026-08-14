@@ -9,10 +9,14 @@ import {
   buscarAnalyticsHistoricoPipeline,
   interpretarFiltrosPipeline,
   interpretarPeriodoPipeline,
+  interpretarFiltroPrioridade,
+  classificarPrioridadePipeline,
   PERIODO_PIPELINE_LABEL,
   COLUNAS_ABERTAS,
   type ColunaAberta,
   type PeriodoPipeline,
+  type FiltroPrioridadePipeline,
+  type PrioridadePipeline,
 } from "@/lib/pipeline";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { CardPipeline } from "@/components/admin/CardPipeline";
@@ -43,6 +47,13 @@ type SearchParams = {
   resultado?: string;
   page?: string;
   periodo?: string;
+  prioridade?: string;
+};
+
+const PRIORIDADE_LABEL: Record<Exclude<FiltroPrioridadePipeline, "TODAS">, string> = {
+  ALTA: "Alta",
+  MEDIA: "Média",
+  NORMAL: "Normal",
 };
 
 // Mesmo racional de construirHref em agenda/page.tsx — preserva os
@@ -61,6 +72,7 @@ function construirHref(params: SearchParams, overrides: Partial<SearchParams>, r
   if (efetivos.resultado && efetivos.resultado.toUpperCase() !== "TODOS") busca.set("resultado", efetivos.resultado);
   if (efetivos.page) busca.set("page", efetivos.page);
   if (efetivos.periodo && efetivos.periodo.toUpperCase() !== "30D") busca.set("periodo", efetivos.periodo);
+  if (efetivos.prioridade && efetivos.prioridade.toUpperCase() !== "TODAS") busca.set("prioridade", efetivos.prioridade);
 
   const query = busca.toString();
   return query ? `/app/pipeline?${query}` : "/app/pipeline";
@@ -200,8 +212,68 @@ export default async function PipelinePage({
 
   if (filtros.visao === "ABERTA") {
     const colunas = await buscarPipelineAberto(organizationId, { busca: filtros.busca });
-    const totalAberto = COLUNAS_ABERTAS.reduce((soma, coluna) => soma + colunas[coluna].length, 0);
-    const semResultadoPorFiltro = totalAberto === 0 && filtros.busca !== "";
+
+    // Fase P.8: classificação pura, in-memory, zero I/O adicional — reusa
+    // os itens já carregados por buscarPipelineAberto e a média por etapa
+    // já carregada por buscarAnalyticsHistoricoPipeline (P.7), ambos
+    // buscados acima antes desta ramificação. `agora` compartilhado entre
+    // todos os itens desta mesma requisição (mesmo racional de agora
+    // explícito em calcularAgingStageMs/derivarEpisodiosDaJornada).
+    const agora = new Date();
+    const prioridadesPorItem = new Map<string, PrioridadePipeline>();
+    for (const coluna of COLUNAS_ABERTAS) {
+      for (const item of colunas[coluna]) {
+        prioridadesPorItem.set(
+          item.id,
+          classificarPrioridadePipeline(item, analyticsHistorico.tempoMedioHistorico[coluna], agora)
+        );
+      }
+    }
+    const contagemPrioridade = { ALTA: 0, MEDIA: 0, NORMAL: 0 };
+    for (const prioridade of prioridadesPorItem.values()) {
+      contagemPrioridade[prioridade.nivel] += 1;
+    }
+
+    // Filtro ?prioridade= (opcional) — afeta SÓ quais cards aparecem em
+    // cada coluna, nunca a ordenação (ordenarColuna, dentro de
+    // buscarPipelineAberto, permanece intocada) e nunca ResumoPipeline/
+    // AnalyticsHistoricoPipeline (já resolvidos acima, antes deste filtro).
+    const filtroPrioridade = interpretarFiltroPrioridade(params);
+    const colunasExibidas =
+      filtroPrioridade === "TODAS"
+        ? colunas
+        : (Object.fromEntries(
+            COLUNAS_ABERTAS.map((c) => [
+              c,
+              colunas[c].filter((item) => prioridadesPorItem.get(item.id)?.nivel === filtroPrioridade),
+            ])
+          ) as Record<ColunaAberta, (typeof colunas)[ColunaAberta]>);
+
+    const totalAberto = COLUNAS_ABERTAS.reduce((soma, coluna) => soma + colunasExibidas[coluna].length, 0);
+    const semResultadoPorFiltro =
+      totalAberto === 0 && (filtros.busca !== "" || filtroPrioridade !== "TODAS");
+
+    const ResumoPrioridades = (
+      <div
+        className="flex flex-wrap items-center gap-2 mb-4 text-sm"
+        aria-label="Prioridades das negociações abertas"
+      >
+        <span className="text-muted-foreground">Prioridades:</span>
+        {(["TODAS", "ALTA", "MEDIA", "NORMAL"] as const).map((nivel) => (
+          <Link
+            key={nivel}
+            href={construirHref(params, { prioridade: nivel }, true)}
+            aria-current={filtroPrioridade === nivel ? "page" : undefined}
+            className={cn(
+              buttonVariants({ variant: filtroPrioridade === nivel ? "default" : "outline", size: "sm" })
+            )}
+          >
+            {nivel === "TODAS" ? "Todas" : PRIORIDADE_LABEL[nivel]} (
+            {nivel === "TODAS" ? prioridadesPorItem.size : contagemPrioridade[nivel]})
+          </Link>
+        ))}
+      </div>
+    );
 
     return (
       <div>
@@ -213,6 +285,7 @@ export default async function PipelinePage({
         {Resumo}
         {SeletorPeriodo}
         {AnaliseHistorica}
+        {ResumoPrioridades}
 
         {CabecalhoFiltros}
 
@@ -232,14 +305,14 @@ export default async function PipelinePage({
               <div key={coluna} className="space-y-2 md:w-72 md:shrink-0">
                 <h2 className="text-sm font-medium">
                   {COLUNA_LABEL[coluna]}{" "}
-                  <span className="text-muted-foreground font-normal">({colunas[coluna].length})</span>
+                  <span className="text-muted-foreground font-normal">({colunasExibidas[coluna].length})</span>
                 </h2>
-                {colunas[coluna].length === 0 ? (
+                {colunasExibidas[coluna].length === 0 ? (
                   <p className="text-xs text-muted-foreground">Nenhuma negociação nesta etapa.</p>
                 ) : (
                   <div className="space-y-2">
-                    {colunas[coluna].map((item) => (
-                      <CardPipeline key={item.id} item={item} />
+                    {colunasExibidas[coluna].map((item) => (
+                      <CardPipeline key={item.id} item={item} prioridade={prioridadesPorItem.get(item.id)} />
                     ))}
                   </div>
                 )}

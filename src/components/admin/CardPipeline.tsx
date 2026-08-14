@@ -1,5 +1,6 @@
 import Link from "next/link";
-import type { ItemPipeline } from "@/lib/pipeline";
+import type { ItemPipeline, PrioridadePipeline } from "@/lib/pipeline";
+import { formatarMotivoPrioridade } from "@/lib/pipeline";
 import { estagioInteresseEncerrado, ESTAGIO_INTERESSE_LABEL } from "@/lib/property-interest-schema";
 import { acaoOperacionalDaVisita, formatarDataHora } from "@/lib/scheduled-activity-date";
 import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
@@ -15,7 +16,13 @@ import { Badge } from "@/components/ui/badge";
 // tenant/Prisma aqui — os dados já chegam prontos de buscarPipelineAberto/
 // buscarPipelineEncerrado (src/lib/pipeline.ts), com Person/Property
 // redigidos pra null quando anômalos (nunca vaza dado de outro tenant).
-export function CardPipeline({ item }: { item: ItemPipeline }) {
+// `prioridade` (Fase P.8) é opcional e SEMPRE calculada fora deste
+// componente (page.tsx, combinando ItemPipeline + tempoMedioHistorico da
+// P.7) — nunca aqui, pra manter CardPipeline sem I/O e sem dependência de
+// analytics. Terminal (WON/REJECTED) nunca recebe prop — o caller
+// simplesmente não passa. NORMAL nunca renderiza badge (reduz ruído
+// visual; é o estado esperado, não precisa de destaque).
+export function CardPipeline({ item, prioridade }: { item: ItemPipeline; prioridade?: PrioridadePipeline }) {
   const encerrado = estagioInteresseEncerrado(item.stage);
   const pendente =
     !!item.proximaVisita &&
@@ -54,6 +61,17 @@ export function CardPipeline({ item }: { item: ItemPipeline }) {
             {ESTAGIO_INTERESSE_LABEL[item.stage] ?? item.stage}
           </Badge>
         </div>
+
+        {!encerrado && prioridade && prioridade.nivel !== "NORMAL" && (
+          <p
+            className={`text-xs font-medium ${
+              prioridade.nivel === "ALTA" ? "text-destructive" : "text-foreground"
+            }`}
+          >
+            Prioridade {prioridade.nivel === "ALTA" ? "alta" : "média"}
+            {prioridade.motivos.length > 0 && ` — ${formatarMotivoPrioridade(prioridade.motivos[0])}`}
+          </p>
+        )}
 
         {!encerrado && (
           <>

@@ -22,9 +22,14 @@ import {
   paraEntradasPorEtapa,
   paraTransicoesObservadas,
   calcularTempoMedioAteFechamento,
+  classificarPrioridadePipeline,
+  compararPrioridadePipeline,
+  formatarMotivoPrioridade,
+  interpretarFiltroPrioridade,
   type ItemPipeline,
   type EventoJornada,
   type EpisodioEtapa,
+  type MotivoPrioridadePipeline,
 } from "@/lib/pipeline";
 import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 
@@ -161,6 +166,7 @@ function itemFake(overrides: Partial<ItemPipeline> & { stage: PropertyInterestSt
     proximaVisita: overrides.proximaVisita ?? null,
     proximaAcao: overrides.proximaAcao ?? null,
     aging: overrides.aging ?? null,
+    agingMs: overrides.agingMs ?? null,
   };
 }
 
@@ -928,5 +934,212 @@ describe("calcularTempoMedioAteFechamento", () => {
       null
     );
     expect(resultado.ganho).toBe(2 * 24 * 60 * 60 * 1000);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Priorização comercial (Fase P.8) — helpers puros. `agora` sempre
+// parâmetro explícito, mesmo racional de todo o resto do arquivo.
+// -----------------------------------------------------------------------
+
+const DIA = 24 * 60 * 60 * 1000;
+
+function prioridadeItemFake(overrides: {
+  stage?: ItemPipeline["stage"];
+  proximaVisita?: ItemPipeline["proximaVisita"];
+  agingMs?: number | null;
+}) {
+  return {
+    stage: overrides.stage ?? "INTERESTED",
+    proximaVisita: overrides.proximaVisita ?? null,
+    agingMs: overrides.agingMs ?? null,
+  } satisfies Pick<ItemPipeline, "stage" | "proximaVisita" | "agingMs">;
+}
+
+describe("classificarPrioridadePipeline", () => {
+  const agora = new Date("2026-06-15T12:00:00.000Z");
+
+  test("A) atividade vencida (visita SCHEDULED cujo dia já passou) -> ALTA com motivo ATIVIDADE_VENCIDA", () => {
+    const item = prioridadeItemFake({
+      stage: "VISIT_SCHEDULED",
+      proximaVisita: { id: "v1", scheduledAtISO: "2026-06-10T10:00:00.000Z" },
+    });
+    const resultado = classificarPrioridadePipeline(item, null, agora);
+    expect(resultado.nivel).toBe("ALTA");
+    expect(resultado.motivos).toEqual([{ tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: "2026-06-10T10:00:00.000Z" }]);
+  });
+
+  test("B) próxima ação futura (não vencida) -> NORMAL, sem motivos", () => {
+    const item = prioridadeItemFake({
+      stage: "VISIT_SCHEDULED",
+      proximaVisita: { id: "v1", scheduledAtISO: "2026-06-20T10:00:00.000Z" },
+    });
+    const resultado = classificarPrioridadePipeline(item, null, agora);
+    expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
+  });
+
+  test("C/E) INTERESTED sem próxima ação -> NORMAL (estado esperado nesta etapa, nunca penalizado)", () => {
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ stage: "INTERESTED" }), null, agora);
+    expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
+  });
+
+  test("VISIT_SCHEDULED sem próxima ação -> NORMAL (não é a regra de PROPOSAL/VISITED)", () => {
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ stage: "VISIT_SCHEDULED" }), null, agora);
+    expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
+  });
+
+  test("D) PROPOSAL sem próxima ação -> ALTA com motivo PROPOSTA_SEM_PROXIMA_ACAO (etapa mais avançada do funil aberto)", () => {
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ stage: "PROPOSAL" }), null, agora);
+    expect(resultado.nivel).toBe("ALTA");
+    expect(resultado.motivos).toEqual([{ tipo: "PROPOSTA_SEM_PROXIMA_ACAO" }]);
+  });
+
+  test("VISITED sem próxima ação -> MEDIA com motivo VISITADO_SEM_PROXIMA_ACAO", () => {
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ stage: "VISITED" }), null, agora);
+    expect(resultado.nivel).toBe("MEDIA");
+    expect(resultado.motivos).toEqual([{ tipo: "VISITADO_SEM_PROXIMA_ACAO" }]);
+  });
+
+  test("F) aging acima da média histórica da etapa -> MEDIA com motivo AGING_ACIMA_DA_MEDIA", () => {
+    const item = prioridadeItemFake({ stage: "INTERESTED", agingMs: 10 * DIA });
+    const resultado = classificarPrioridadePipeline(item, 5 * DIA, agora);
+    expect(resultado.nivel).toBe("MEDIA");
+    expect(resultado.motivos).toEqual([{ tipo: "AGING_ACIMA_DA_MEDIA", agingMs: 10 * DIA, mediaMs: 5 * DIA }]);
+  });
+
+  test("aging abaixo ou igual à média -> sem motivo AGING_ACIMA_DA_MEDIA", () => {
+    const abaixo = classificarPrioridadePipeline(prioridadeItemFake({ agingMs: 3 * DIA }), 5 * DIA, agora);
+    const igual = classificarPrioridadePipeline(prioridadeItemFake({ agingMs: 5 * DIA }), 5 * DIA, agora);
+    expect(abaixo).toEqual({ nivel: "NORMAL", motivos: [] });
+    expect(igual).toEqual({ nivel: "NORMAL", motivos: [] });
+  });
+
+  test("G) agingMs null (legado sem history) -> nunca gera AGING_ACIMA_DA_MEDIA, mesmo com média disponível", () => {
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ agingMs: null }), 5 * DIA, agora);
+    expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
+  });
+
+  test("tempoMedioHistoricoMs null (sem base de comparação pra esta etapa) -> nunca gera AGING_ACIMA_DA_MEDIA", () => {
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ agingMs: 100 * DIA }), null, agora);
+    expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
+  });
+
+  test("H) legado sem history (agingMs null) mas com atividade vencida -> ainda ALTA (sinais independentes)", () => {
+    const item = prioridadeItemFake({
+      stage: "VISIT_SCHEDULED",
+      proximaVisita: { id: "v1", scheduledAtISO: "2026-06-10T10:00:00.000Z" },
+      agingMs: null,
+    });
+    const resultado = classificarPrioridadePipeline(item, 5 * DIA, agora);
+    expect(resultado.nivel).toBe("ALTA");
+  });
+
+  test("J/K) WON/REJECTED nunca disparam as regras de PROPOSAL/VISITED (defensivo — caller nunca deve passar terminal)", () => {
+    expect(classificarPrioridadePipeline(prioridadeItemFake({ stage: "WON" }), null, agora)).toEqual({
+      nivel: "NORMAL",
+      motivos: [],
+    });
+    expect(classificarPrioridadePipeline(prioridadeItemFake({ stage: "REJECTED" }), null, agora)).toEqual({
+      nivel: "NORMAL",
+      motivos: [],
+    });
+  });
+
+  test("L/N) múltiplos motivos simultâneos (atividade vencida + aging acima da média) -> ALTA, ordem canônica sempre igual", () => {
+    const item = prioridadeItemFake({
+      stage: "VISIT_SCHEDULED",
+      proximaVisita: { id: "v1", scheduledAtISO: "2026-06-10T10:00:00.000Z" },
+      agingMs: 10 * DIA,
+    });
+    const resultado = classificarPrioridadePipeline(item, 5 * DIA, agora);
+    expect(resultado.nivel).toBe("ALTA");
+    expect(resultado.motivos.map((m) => m.tipo)).toEqual(["ATIVIDADE_VENCIDA", "AGING_ACIMA_DA_MEDIA"]);
+  });
+
+  test("M) determinístico — mesma entrada sempre produz o mesmo resultado", () => {
+    const item = prioridadeItemFake({ stage: "PROPOSAL", agingMs: 10 * DIA });
+    const resultados = new Set(
+      Array.from({ length: 10 }, () => JSON.stringify(classificarPrioridadePipeline(item, 5 * DIA, agora)))
+    );
+    expect(resultados.size).toBe(1);
+  });
+
+  test("O) ausência total de sinais -> NORMAL, motivos vazio", () => {
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({}), null, agora);
+    expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
+  });
+
+  test("S) boundary — visita SCHEDULED ainda hoje (mesmo dia calendário) não é atividade vencida", () => {
+    const item = prioridadeItemFake({
+      stage: "VISIT_SCHEDULED",
+      proximaVisita: { id: "v1", scheduledAtISO: "2026-06-15T23:59:00.000Z" },
+    });
+    const resultado = classificarPrioridadePipeline(item, null, agora);
+    expect(resultado.nivel).toBe("NORMAL");
+  });
+
+  test("boundary — visita SCHEDULED no dia calendário anterior já é atividade vencida", () => {
+    const item = prioridadeItemFake({
+      stage: "VISIT_SCHEDULED",
+      proximaVisita: { id: "v1", scheduledAtISO: "2026-06-14T23:59:00.000Z" },
+    });
+    const resultado = classificarPrioridadePipeline(item, null, agora);
+    expect(resultado.nivel).toBe("ALTA");
+  });
+});
+
+describe("compararPrioridadePipeline", () => {
+  test("T) ALTA < MEDIA < NORMAL — ordem de severidade determinística", () => {
+    const alta: MotivoPrioridadePipeline = { tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: "2026-01-01T00:00:00.000Z" };
+    const media: MotivoPrioridadePipeline = { tipo: "VISITADO_SEM_PROXIMA_ACAO" };
+    expect(compararPrioridadePipeline({ nivel: "ALTA", motivos: [alta] }, { nivel: "MEDIA", motivos: [media] })).toBeLessThan(0);
+    expect(compararPrioridadePipeline({ nivel: "MEDIA", motivos: [media] }, { nivel: "NORMAL", motivos: [] })).toBeLessThan(0);
+    expect(compararPrioridadePipeline({ nivel: "NORMAL", motivos: [] }, { nivel: "NORMAL", motivos: [] })).toBe(0);
+  });
+});
+
+describe("formatarMotivoPrioridade", () => {
+  test("P) texto fixo e semanticamente verdadeiro pra cada motivo", () => {
+    expect(formatarMotivoPrioridade({ tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: "2026-01-01T00:00:00.000Z" })).toBe(
+      "Atividade vencida"
+    );
+    expect(formatarMotivoPrioridade({ tipo: "PROPOSTA_SEM_PROXIMA_ACAO" })).toBe(
+      "Proposta sem próxima ação agendada"
+    );
+    expect(formatarMotivoPrioridade({ tipo: "VISITADO_SEM_PROXIMA_ACAO" })).toBe("Sem próxima ação agendada");
+    expect(formatarMotivoPrioridade({ tipo: "AGING_ACIMA_DA_MEDIA", agingMs: DIA, mediaMs: DIA })).toBe(
+      "Na etapa há mais tempo que a média histórica"
+    );
+  });
+
+  test("Q) nenhum texto usa linguagem probabilística/alarmista proibida", () => {
+    const proibidas = /chance|probabilidade|risco|esfriando|ia recomenda|score/i;
+    const motivos: MotivoPrioridadePipeline[] = [
+      { tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: "2026-01-01T00:00:00.000Z" },
+      { tipo: "PROPOSTA_SEM_PROXIMA_ACAO" },
+      { tipo: "VISITADO_SEM_PROXIMA_ACAO" },
+      { tipo: "AGING_ACIMA_DA_MEDIA", agingMs: DIA, mediaMs: DIA },
+    ];
+    for (const motivo of motivos) {
+      expect(formatarMotivoPrioridade(motivo)).not.toMatch(proibidas);
+      expect(formatarMotivoPrioridade(motivo)).not.toMatch(/atrasad|vencid.*sla|sla/i);
+    }
+    // ATIVIDADE_VENCIDA é a única exceção legítima a "vencid*" (fato real de agenda, não aging/SLA).
+    expect(formatarMotivoPrioridade({ tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: "2026-01-01T00:00:00.000Z" })).toMatch(
+      /vencid/i
+    );
+  });
+});
+
+describe("interpretarFiltroPrioridade", () => {
+  test("defaults seguros sem nenhum param ou valor inválido", () => {
+    expect(interpretarFiltroPrioridade({})).toBe("TODAS");
+    expect(interpretarFiltroPrioridade({ prioridade: "qualquer-coisa" })).toBe("TODAS");
+  });
+
+  test("aceita alta/media/normal (case-insensitive)", () => {
+    expect(interpretarFiltroPrioridade({ prioridade: "Alta" })).toBe("ALTA");
+    expect(interpretarFiltroPrioridade({ prioridade: "media" })).toBe("MEDIA");
+    expect(interpretarFiltroPrioridade({ prioridade: "NORMAL" })).toBe("NORMAL");
   });
 });

@@ -21,6 +21,7 @@ import {
   buscarPipelineEncerrado,
   buscarMetricasPipeline,
   buscarAnalyticsHistoricoPipeline,
+  classificarPrioridadePipeline,
   COLUNAS_ABERTAS,
 } from "@/lib/pipeline";
 import type { PropertyInterestStage } from "@/generated/prisma/client";
@@ -1149,5 +1150,281 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     expect(analytics.entradasPorEtapa.VISIT_SCHEDULED).toBe(2);
     expect(analytics.tempoMedioHistorico.VISIT_SCHEDULED).not.toBeNull();
     expect(analytics.agingAgregado.VISIT_SCHEDULED).not.toBeNull();
+  });
+
+  // -------------------------------------------------------------------
+  // Priorização comercial (Fase P.8) — wiring real: buscarPipelineAberto
+  // (P.4) + buscarAnalyticsHistoricoPipeline (P.7) + classificarPrioridadePipeline,
+  // exatamente como pipeline/page.tsx combina os três. Prefixo P8- pra
+  // nunca colidir com letras já usadas por P.4/P.5/P.6/P.7 neste arquivo.
+  // -------------------------------------------------------------------
+
+  function passado(dias: number): Date {
+    return new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
+  }
+
+  test("P8-U) atividade SCHEDULED vencida (dia calendário já passado) via buscarPipelineAberto real -> ALTA com ATIVIDADE_VENCIDA", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "VISIT_SCHEDULED",
+    });
+    await criarVisitaDireta({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      propertyInterestId: interesse.id,
+      scheduledAt: passado(3),
+    });
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id);
+    const item = colunas.VISIT_SCHEDULED.find((i) => i.id === interesse.id)!;
+    const prioridade = classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.VISIT_SCHEDULED, new Date());
+
+    expect(prioridade.nivel).toBe("ALTA");
+    expect(prioridade.motivos[0]).toEqual({ tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: item.proximaVisita!.scheduledAtISO });
+  });
+
+  test("P8-V) PROPOSAL sem nenhuma ScheduledActivity real -> ALTA com PROPOSTA_SEM_PROXIMA_ACAO", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "PROPOSAL",
+    });
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const item = colunas.PROPOSAL.find((i) => i.id === interesse.id)!;
+    const prioridade = classificarPrioridadePipeline(item, null, new Date());
+
+    expect(prioridade).toEqual({ nivel: "ALTA", motivos: [{ tipo: "PROPOSTA_SEM_PROXIMA_ACAO" }] });
+  });
+
+  test("P8-W) VISITED sem próxima ação real -> MEDIA; INTERESTED sem próxima ação real -> NORMAL (nunca penalizado)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa1 = await criarPessoa({ organizationId: cenario.organization.id });
+    const pessoa2 = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const visitado = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa1.id,
+      propertyId: imovel.id,
+      stage: "VISITED",
+    });
+    const interessado = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa2.id,
+      propertyId: imovel.id,
+      stage: "INTERESTED",
+    });
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const itemVisitado = colunas.VISITED.find((i) => i.id === visitado.id)!;
+    const itemInteressado = colunas.INTERESTED.find((i) => i.id === interessado.id)!;
+
+    expect(classificarPrioridadePipeline(itemVisitado, null, new Date()).nivel).toBe("MEDIA");
+    expect(classificarPrioridadePipeline(itemInteressado, null, new Date())).toEqual({ nivel: "NORMAL", motivos: [] });
+  });
+
+  test("P8-X) aging real (via PropertyInterestStageHistory) acima da média histórica real (via buscarAnalyticsHistoricoPipeline) -> MEDIA com AGING_ACIMA_DA_MEDIA", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+
+    // Um episódio CONCLUÍDO curto em INTERESTED (1 dia) pra estabelecer uma
+    // média histórica baixa e real, via genesis + movimentação.
+    const pessoaConcluida = await criarPessoa({ organizationId: cenario.organization.id });
+    const concluido = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoaConcluida.id,
+      propertyId: imovel.id,
+      stage: "VISIT_SCHEDULED",
+    });
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: concluido.id,
+      previousStage: null,
+      newStage: "INTERESTED",
+      changedAt: passado(10),
+    });
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: concluido.id,
+      previousStage: "INTERESTED",
+      newStage: "VISIT_SCHEDULED",
+      changedAt: passado(9), // episódio INTERESTED durou 1 dia
+    });
+
+    // Item ATUAL, aberto há 8 dias em INTERESTED — bem acima da média de 1 dia.
+    const pessoaAtual = await criarPessoa({ organizationId: cenario.organization.id });
+    const atual = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoaAtual.id,
+      propertyId: imovel.id,
+      stage: "INTERESTED",
+    });
+    await criarHistoricoDireto({
+      organizationId: cenario.organization.id,
+      propertyInterestId: atual.id,
+      previousStage: null,
+      newStage: "INTERESTED",
+      changedAt: passado(8),
+    });
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id, { periodo: "TODOS" });
+    const item = colunas.INTERESTED.find((i) => i.id === atual.id)!;
+    expect(item.agingMs).not.toBeNull();
+    expect(analytics.tempoMedioHistorico.INTERESTED).not.toBeNull();
+
+    const prioridade = classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.INTERESTED, new Date());
+    expect(prioridade.nivel).toBe("MEDIA");
+    expect(prioridade.motivos.map((m) => m.tipo)).toContain("AGING_ACIMA_DA_MEDIA");
+  });
+
+  test("P8-Y) legado sem NENHUM PropertyInterestStageHistory e sem ScheduledActivity -> NORMAL (nunca penalizado pela ausência de dado)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const legado = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "INTERESTED",
+    });
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id);
+    const item = colunas.INTERESTED.find((i) => i.id === legado.id)!;
+    expect(item.agingMs).toBeNull();
+
+    const prioridade = classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.INTERESTED, new Date());
+    expect(prioridade).toEqual({ nivel: "NORMAL", motivos: [] });
+  });
+
+  test("P8-Z) legado sem history mas com atividade vencida real -> ainda ALTA (sinal de agenda é independente de history)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const legado = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      stage: "VISIT_SCHEDULED",
+    });
+    await criarVisitaDireta({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      propertyInterestId: legado.id,
+      scheduledAt: passado(2),
+    });
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const item = colunas.VISIT_SCHEDULED.find((i) => i.id === legado.id)!;
+    expect(item.agingMs).toBeNull();
+
+    const prioridade = classificarPrioridadePipeline(item, null, new Date());
+    expect(prioridade.nivel).toBe("ALTA");
+  });
+
+  test("P8-AA) WON/REJECTED nunca aparecem em buscarPipelineAberto — nunca chegam a ser classificados", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, stage: "WON", closedAt: new Date() });
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const total = COLUNAS_ABERTAS.reduce((soma, c) => soma + colunas[c].length, 0);
+    expect(total).toBe(0);
+  });
+
+  test("P8-AB) tenant A nunca tem prioridade influenciada por atividade vencida de B (isolamento herdado de buscarPipelineAberto/buscarAnalyticsHistoricoPipeline)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    cenarioB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoaA = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovelA = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesseA = await criarInteresseDireto({
+      organizationId: cenario.organization.id,
+      personId: pessoaA.id,
+      propertyId: imovelA.id,
+      stage: "INTERESTED",
+    });
+
+    const pessoaB = await criarPessoa({ organizationId: cenarioB.organization.id });
+    const imovelB = await criarImovel({ organizationId: cenarioB.organization.id, status: "AVAILABLE" });
+    const interesseB = await criarInteresseDireto({
+      organizationId: cenarioB.organization.id,
+      personId: pessoaB.id,
+      propertyId: imovelB.id,
+      stage: "VISIT_SCHEDULED",
+    });
+    await criarVisitaDireta({
+      organizationId: cenarioB.organization.id,
+      personId: pessoaB.id,
+      propertyId: imovelB.id,
+      propertyInterestId: interesseB.id,
+      scheduledAt: passado(5),
+    });
+
+    const colunasA = await buscarPipelineAberto(cenario.organization.id);
+    expect(colunasA.INTERESTED.map((i) => i.id)).toEqual([interesseA.id]);
+    // interesseB nunca aparece em nenhuma coluna de A — sua atividade
+    // vencida jamais pode influenciar a prioridade de A.
+    const idsEmA = COLUNAS_ABERTAS.flatMap((c) => colunasA[c].map((i) => i.id));
+    expect(idsEmA).not.toContain(interesseB.id);
+  });
+
+  test("P8-AC) classificarPrioridadePipeline não escreve nada — zero PropertyInterest/ScheduledActivity/PropertyInterestStageHistory alterado", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await criarInteresseDireto({ organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, stage: "PROPOSAL" });
+
+    const antes = {
+      interesses: await prisma.propertyInterest.count({ where: { organizationId: cenario.organization.id } }),
+      atividades: await prisma.scheduledActivity.count({ where: { organizationId: cenario.organization.id } }),
+      historico: await prisma.propertyInterestStageHistory.count({ where: { organizationId: cenario.organization.id } }),
+    };
+
+    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id);
+    for (const coluna of COLUNAS_ABERTAS) {
+      for (const item of colunas[coluna]) {
+        classificarPrioridadePipeline(item, analytics.tempoMedioHistorico[coluna], new Date());
+      }
+    }
+
+    const depois = {
+      interesses: await prisma.propertyInterest.count({ where: { organizationId: cenario.organization.id } }),
+      atividades: await prisma.scheduledActivity.count({ where: { organizationId: cenario.organization.id } }),
+      historico: await prisma.propertyInterestStageHistory.count({ where: { organizationId: cenario.organization.id } }),
+    };
+    expect(depois).toEqual(antes);
+  });
+
+  test("P8-AD) determinístico entre duas leituras consecutivas — mesmo estado no banco produz a mesma classificação", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    const interesse = await criarInteresseDireto({ organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, stage: "PROPOSAL" });
+
+    async function ler() {
+      const colunas = await buscarPipelineAberto(cenario!.organization.id);
+      const analytics = await buscarAnalyticsHistoricoPipeline(cenario!.organization.id);
+      const item = colunas.PROPOSAL.find((i) => i.id === interesse.id)!;
+      return classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.PROPOSAL, new Date("2026-06-15T12:00:00.000Z"));
+    }
+
+    const primeira = await ler();
+    const segunda = await ler();
+    expect(primeira).toEqual(segunda);
   });
 });

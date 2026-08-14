@@ -45,6 +45,11 @@ export type ItemPipeline = {
   // inventada) OU quando o stage atual é encerrado (WON/REJECTED usam
   // closedAtISO como data de referência, ver FechamentoInteresse).
   aging: string | null;
+  // Fase P.8: mesmo valor bruto (ms) por trás de `aging` acima, exposto pra
+  // permitir comparação com tempoMedioHistorico (P.7) em
+  // classificarPrioridadePipeline — nunca recalculado, nunca uma segunda
+  // fonte. null nas mesmas condições de `aging`.
+  agingMs: number | null;
 };
 
 function selectItemPipeline(organizationId: string) {
@@ -169,6 +174,7 @@ export function paraItemPipeline(
         linha.stage,
         linha.stageHistory.map((h) => ({ newStage: h.newStage, changedAtISO: h.changedAt.toISOString() }))
       );
+  const agingMs = calcularAgingStageMs(inicioStageAtual, agora);
 
   return {
     id: linha.id,
@@ -179,7 +185,8 @@ export function paraItemPipeline(
     property,
     proximaVisita,
     proximaAcao: property ? obterProximaAcaoComercial(linha.stage, property.status) : null,
-    aging: formatarAgingStage(calcularAgingStageMs(inicioStageAtual, agora)),
+    aging: formatarAgingStage(agingMs),
+    agingMs,
   };
 }
 
@@ -889,4 +896,135 @@ export async function buscarAnalyticsHistoricoPipeline(
       tempoAteFechamento: calcularTempoMedioAteFechamento(registrosFechamento, intervalo),
     };
   });
+}
+
+// -----------------------------------------------------------------------
+// Priorização comercial (Fase P.8) — camada de leitura pura, ESTRITAMENTE
+// derivada de fatos já confiáveis (stage atual, próxima
+// ScheduledActivity, aging via PropertyInterestStageHistory da P.6/P.7).
+// NUNCA IA/ML/score/probabilidade/conversão/forecast. NUNCA usa
+// updatedAt/createdAt/ActivityLog/Person.pipelineStage/preço como sinal de
+// prioridade (ver Mapa de Dados Disponíveis, sinais 10-12/15/16). Terminal
+// (WON/REJECTED) nunca é classificado — nem chega a este código, porque só
+// os itens de buscarPipelineAberto (sempre um dos 4 stages abertos) são
+// passados pro caller que chama classificarPrioridadePipeline.
+// -----------------------------------------------------------------------
+
+// Deliberadamente sem "CRITICA"/"URGENTE" e sem score 0-100 — 3 níveis
+// nomeados de forma neutra, nunca alarmista.
+export type NivelPrioridadePipeline = "ALTA" | "MEDIA" | "NORMAL";
+
+// Objetos estruturados, nunca string livre — formatarMotivoPrioridade é o
+// único lugar que produz texto, garantindo que toda frase exibida seja
+// gerada de um conjunto fechado e revisado (nunca "Alta chance de perda"/
+// "Cliente esfriando"/"IA recomenda contato" ou qualquer variante).
+export type MotivoPrioridadePipeline =
+  | { tipo: "ATIVIDADE_VENCIDA"; scheduledAtISO: string }
+  | { tipo: "PROPOSTA_SEM_PROXIMA_ACAO" }
+  | { tipo: "VISITADO_SEM_PROXIMA_ACAO" }
+  | { tipo: "AGING_ACIMA_DA_MEDIA"; agingMs: number; mediaMs: number };
+
+export type PrioridadePipeline = {
+  nivel: NivelPrioridadePipeline;
+  motivos: MotivoPrioridadePipeline[];
+};
+
+// Ordem canônica de exibição — fixa, independente da ordem de avaliação em
+// classificarPrioridadePipeline, garantindo saída determinística mesmo se
+// múltiplos motivos se aplicarem ao mesmo item (nunca depende de ordem de
+// iteração incidental).
+const ORDEM_MOTIVOS: readonly MotivoPrioridadePipeline["tipo"][] = [
+  "ATIVIDADE_VENCIDA",
+  "PROPOSTA_SEM_PROXIMA_ACAO",
+  "VISITADO_SEM_PROXIMA_ACAO",
+  "AGING_ACIMA_DA_MEDIA",
+];
+
+function ordenarMotivos(motivos: readonly MotivoPrioridadePipeline[]): MotivoPrioridadePipeline[] {
+  return [...motivos].sort((a, b) => ORDEM_MOTIVOS.indexOf(a.tipo) - ORDEM_MOTIVOS.indexOf(b.tipo));
+}
+
+// Classifica UM item já aberto (caller nunca passa WON/REJECTED — ver
+// nota de topo da seção). `tempoMedioHistoricoMs` é a média da PRÓPRIA
+// etapa do item (analyticsHistorico.tempoMedioHistorico[item.stage],
+// resolvido pelo caller) — não-circular porque essa média só soma
+// episódios já CONCLUÍDOS (calcularTempoMedioPorEtapa), nunca o episódio
+// aberto atual deste mesmo item. `agora` sempre parâmetro explícito (mesmo
+// racional de calcularAgingStageMs/derivarEpisodiosDaJornada).
+export function classificarPrioridadePipeline(
+  item: Pick<ItemPipeline, "stage" | "proximaVisita" | "agingMs">,
+  tempoMedioHistoricoMs: number | null,
+  agora: Date
+): PrioridadePipeline {
+  const motivos: MotivoPrioridadePipeline[] = [];
+
+  if (item.proximaVisita) {
+    const vencida =
+      acaoOperacionalDaVisita(
+        { status: "SCHEDULED", scheduledAt: new Date(item.proximaVisita.scheduledAtISO) },
+        agora
+      ) === "RESOLVER_PENDENCIA";
+    if (vencida) {
+      motivos.push({ tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: item.proximaVisita.scheduledAtISO });
+    }
+  } else if (item.stage === "PROPOSAL") {
+    motivos.push({ tipo: "PROPOSTA_SEM_PROXIMA_ACAO" });
+  } else if (item.stage === "VISITED") {
+    motivos.push({ tipo: "VISITADO_SEM_PROXIMA_ACAO" });
+  }
+
+  if (item.agingMs !== null && tempoMedioHistoricoMs !== null && item.agingMs > tempoMedioHistoricoMs) {
+    motivos.push({ tipo: "AGING_ACIMA_DA_MEDIA", agingMs: item.agingMs, mediaMs: tempoMedioHistoricoMs });
+  }
+
+  const motivosOrdenados = ordenarMotivos(motivos);
+  const nivel: NivelPrioridadePipeline = motivosOrdenados.some(
+    (m) => m.tipo === "ATIVIDADE_VENCIDA" || m.tipo === "PROPOSTA_SEM_PROXIMA_ACAO"
+  )
+    ? "ALTA"
+    : motivosOrdenados.length > 0
+      ? "MEDIA"
+      : "NORMAL";
+
+  return { nivel, motivos: motivosOrdenados };
+}
+
+// Ordem de severidade pra ordenação/agrupamento externo (ex: contagem do
+// resumo de Prioridades) — NUNCA usado pra reordenar o board em si (P.4
+// permanece intocado, ver ordenarColuna).
+const ORDEM_NIVEL: Record<NivelPrioridadePipeline, number> = { ALTA: 0, MEDIA: 1, NORMAL: 2 };
+
+export function compararPrioridadePipeline(a: PrioridadePipeline, b: PrioridadePipeline): number {
+  return ORDEM_NIVEL[a.nivel] - ORDEM_NIVEL[b.nivel];
+}
+
+// Texto fixo, semanticamente verdadeiro, nunca probabilístico/alarmista —
+// único produtor de string pra MotivoPrioridadePipeline (ver comentário do
+// tipo). "há mais tempo que a média" (nunca "atrasado"/"SLA vencido") pra
+// AGING_ACIMA_DA_MEDIA — distinção deliberada entre atividade vencida
+// (fato operacional real) e aging elevado (comparação informativa).
+// Filtro opcional de exibição (?prioridade=) — mesmo padrão URL-driven de
+// interpretarFiltrosPipeline/interpretarPeriodoPipeline, nunca confia em
+// input cru. Afeta SOMENTE a exibição do board "Em andamento" (nunca
+// ResumoPipeline/AnalyticsHistoricoPipeline, que já são buscados
+// independentemente antes deste filtro ser aplicado) e nunca reordena
+// (ver ordenarColuna, intocado pela P.8).
+export type FiltroPrioridadePipeline = "TODAS" | "ALTA" | "MEDIA" | "NORMAL";
+
+export function interpretarFiltroPrioridade(params: { prioridade?: string }): FiltroPrioridadePipeline {
+  const bruto = (params.prioridade ?? "").trim().toUpperCase();
+  return bruto === "ALTA" || bruto === "MEDIA" || bruto === "NORMAL" ? bruto : "TODAS";
+}
+
+export function formatarMotivoPrioridade(motivo: MotivoPrioridadePipeline): string {
+  switch (motivo.tipo) {
+    case "ATIVIDADE_VENCIDA":
+      return "Atividade vencida";
+    case "PROPOSTA_SEM_PROXIMA_ACAO":
+      return "Proposta sem próxima ação agendada";
+    case "VISITADO_SEM_PROXIMA_ACAO":
+      return "Sem próxima ação agendada";
+    case "AGING_ACIMA_DA_MEDIA":
+      return "Na etapa há mais tempo que a média histórica";
+  }
 }
