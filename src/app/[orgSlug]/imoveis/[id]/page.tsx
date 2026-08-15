@@ -314,13 +314,6 @@ export default async function DetalheImovelPage({
         </div>
       )}
 
-      <div className="mt-6">
-        <EvolucaoObra
-          estagioObra={imovel.constructionStage}
-          previsaoEntrega={imovel.deliveryForecast}
-        />
-      </div>
-
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mt-10">
         <div className="sm:col-span-2 space-y-6">
           <div>
@@ -378,6 +371,11 @@ export default async function DetalheImovelPage({
               </ul>
             </div>
           )}
+
+          <EvolucaoObra
+            estagioObra={imovel.constructionStage}
+            previsaoEntrega={imovel.deliveryForecast}
+          />
 
           {plantas.length > 0 && (
             <div>
