@@ -254,6 +254,52 @@ export default async function DetalheImovelPage({
 
   return (
     <>
+      <div className="mx-auto max-w-6xl px-4 pt-6">
+        <p className="text-sm text-gray-500 mb-2">
+          {imovel.type} ·{" "}
+          {FINALIDADE_LABEL[imovel.purpose] ?? imovel.purpose}
+          {rotulosAtivos({
+            lancamento: imovel.isLaunch,
+            destaque: imovel.isFeatured,
+            oportunidade: imovel.isOpportunity,
+          }).map((rotulo) => (
+            <Badge key={rotulo.chave} className={`ml-2 ${rotulo.className}`}>
+              {rotulo.label}
+            </Badge>
+          ))}
+          <Badge variant="secondary" className="ml-2">
+            # Cód:{" "}
+            {formatarCodigoImovel(imovel.code, configContato.codigoImovelPrefixo)}
+          </Badge>
+        </p>
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+          <h1 className="text-2xl font-semibold">{imovel.title}</h1>
+          {precoPrincipal != null && (
+            <p className="text-2xl font-semibold whitespace-nowrap">
+              {formatarPreco(precoPrincipal)}
+              {imovel.price == null && imovel.rentPrice != null && (
+                <span className="text-sm font-normal text-gray-500">/mês</span>
+              )}
+            </p>
+          )}
+        </div>
+        {imovel.developer && (
+          <p className="text-sm text-gray-600 mt-1">
+            Responsável pela obra: <strong>{imovel.developer}</strong>
+          </p>
+        )}
+        <p className="text-gray-500 mt-1">
+          {enderecoCompleto ? `${enderecoCompleto}, ` : ""}
+          {imovel.city} - {imovel.state}
+        </p>
+        {imovel.publishedAt && (
+          <p className="text-xs text-gray-400 mt-1">
+            Publicado {formatarTempoRelativo(imovel.publishedAt)}, atualizado{" "}
+            {formatarTempoRelativo(imovel.updatedAt)}.
+          </p>
+        )}
+      </div>
+
       <GaleriaFotos
         fotos={fotos}
         titulo={imovel.title}
@@ -266,40 +312,6 @@ export default async function DetalheImovelPage({
       />
 
       <div className="mx-auto max-w-6xl px-4 py-10">
-      <p className="text-sm text-gray-500 mb-2">
-        {imovel.type} ·{" "}
-        {FINALIDADE_LABEL[imovel.purpose] ?? imovel.purpose}
-        {rotulosAtivos({
-          lancamento: imovel.isLaunch,
-          destaque: imovel.isFeatured,
-          oportunidade: imovel.isOpportunity,
-        }).map((rotulo) => (
-          <Badge key={rotulo.chave} className={`ml-2 ${rotulo.className}`}>
-            {rotulo.label}
-          </Badge>
-        ))}
-        <Badge variant="secondary" className="ml-2">
-          # Cód:{" "}
-          {formatarCodigoImovel(imovel.code, configContato.codigoImovelPrefixo)}
-        </Badge>
-      </p>
-      <h1 className="text-2xl font-semibold">{imovel.title}</h1>
-      {imovel.developer && (
-        <p className="text-sm text-gray-600 mt-1">
-          Responsável pela obra: <strong>{imovel.developer}</strong>
-        </p>
-      )}
-      <p className="text-gray-500 mt-1">
-        {enderecoCompleto ? `${enderecoCompleto}, ` : ""}
-        {imovel.city} - {imovel.state}
-      </p>
-      {imovel.publishedAt && (
-        <p className="text-xs text-gray-400 mt-1">
-          Publicado {formatarTempoRelativo(imovel.publishedAt)}, atualizado{" "}
-          {formatarTempoRelativo(imovel.updatedAt)}.
-        </p>
-      )}
-
       {videos.length > 0 && (
         <div id="videos" className="mt-6 space-y-4 scroll-mt-6">
           {videos.map((video) => (
