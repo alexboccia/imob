@@ -134,22 +134,27 @@ export function GaleriaFotos({
     : fotos.map((foto, i) => ({ foto, real: i }));
   const slideInicial = temMultiplas ? 1 : 0;
 
+  // Grade de destaque (desktop/tablet): 1 foto grande + até 4 pequenas.
+  // "Ver todas as N fotos" sempre reflete o total real, mesmo quando há
+  // mais fotos além das 5 exibidas na grade.
+  const restoVisivel = fotos.slice(1, 5);
+  const mostrarOverlayVerTudo = fotos.length >= 5;
+  const gridClasseResto =
+    restoVisivel.length === 1
+      ? "grid-cols-1 grid-rows-1"
+      : restoVisivel.length === 2
+        ? "grid-cols-1 grid-rows-2"
+        : "grid-cols-2 grid-rows-2";
+
   return (
     <>
-      <div className="relative w-full h-[340px] sm:h-[440px] lg:h-[560px] bg-black overflow-hidden">
+      {/* Mobile: carrossel swipável em tela cheia (comportamento original) */}
+      <div className="sm:hidden relative w-full h-[340px] bg-black overflow-hidden">
         <Swiper
           centeredSlides
           initialSlide={slideInicial}
           slidesPerView={1}
           spaceBetween={0}
-          breakpoints={
-            temMultiplas
-              ? {
-                  640: { slidesPerView: 1.2, spaceBetween: 0 },
-                  1024: { slidesPerView: 1.6, spaceBetween: 0 },
-                }
-              : undefined
-          }
           onSwiper={(swiper) => {
             swiperInlineRef.current = swiper;
           }}
@@ -182,9 +187,7 @@ export function GaleriaFotos({
                   src={item.foto.url}
                   alt={titulo}
                   fill
-                  className={`object-cover transition-all duration-300 ${
-                    item.real === indice ? "" : "blur-[3px] brightness-[0.55]"
-                  }`}
+                  className="object-cover"
                   sizes="100vw"
                   priority={posicao === slideInicial}
                 />
@@ -227,7 +230,7 @@ export function GaleriaFotos({
               type="button"
               onClick={anterior}
               aria-label="Foto anterior"
-              className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow"
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow"
             >
               <IconeChevronEsquerdo className="w-5 h-5" />
             </button>
@@ -235,7 +238,7 @@ export function GaleriaFotos({
               type="button"
               onClick={proxima}
               aria-label="Próxima foto"
-              className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow"
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow"
             >
               <IconeChevronDireito className="w-5 h-5" />
             </button>
@@ -247,7 +250,7 @@ export function GaleriaFotos({
       </div>
 
       {(fotos.length > 1 || temVideo) && (
-        <div className="mx-auto max-w-6xl px-4">
+        <div className="sm:hidden mx-auto max-w-6xl px-4">
           <div className="flex gap-2 mt-3 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-1">
             {fotos.map((foto, i) => (
               <button
@@ -293,6 +296,118 @@ export function GaleriaFotos({
           </div>
         </div>
       )}
+
+      {/* Desktop/tablet: 1 foto grande + até 4 pequenas, no padrão de
+          destaque (ex.: Airbnb) — abre o mesmo lightbox de sempre ao
+          clicar em qualquer foto. */}
+      <div className="hidden sm:block mx-auto max-w-6xl px-4 pt-4">
+        <div className="relative">
+          <div className="flex gap-2 h-[420px] lg:h-[520px]">
+            <button
+              type="button"
+              onClick={() => {
+                setIndice(0);
+                setZoom(1);
+                setAberto(true);
+              }}
+              aria-label="Ampliar foto"
+              className={`relative cursor-zoom-in rounded-xl overflow-hidden ${
+                restoVisivel.length > 0 ? "w-1/2" : "w-full"
+              } h-full`}
+            >
+              <Image
+                src={fotos[0].url}
+                alt={titulo}
+                fill
+                className="object-cover"
+                sizes="50vw"
+                priority
+              />
+            </button>
+
+            {restoVisivel.length > 0 && (
+              <div className={`w-1/2 h-full grid gap-2 ${gridClasseResto}`}>
+                {restoVisivel.map((foto, i) => {
+                  const realIndex = i + 1;
+                  const ehTilheDeVerTudo =
+                    mostrarOverlayVerTudo && i === restoVisivel.length - 1;
+                  return (
+                    <button
+                      key={foto.id}
+                      type="button"
+                      onClick={() => {
+                        setIndice(ehTilheDeVerTudo ? 0 : realIndex);
+                        setZoom(1);
+                        setAberto(true);
+                      }}
+                      aria-label={
+                        ehTilheDeVerTudo
+                          ? `Ver todas as ${fotos.length} fotos`
+                          : "Ampliar foto"
+                      }
+                      className="relative cursor-zoom-in rounded-xl overflow-hidden"
+                    >
+                      <Image
+                        src={foto.url}
+                        alt={titulo}
+                        fill
+                        className="object-cover"
+                        sizes="25vw"
+                      />
+                      {ehTilheDeVerTudo && (
+                        <span className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <span className="flex items-center gap-1.5 bg-white text-gray-900 text-xs font-medium rounded-full px-3 py-1.5 shadow">
+                            <IconeGrade className="w-3.5 h-3.5" />
+                            Ver todas as {fotos.length} fotos
+                          </span>
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => router.back()}
+            className="absolute top-4 left-4 z-20 rounded-full bg-white/90 pl-2.5 shadow hover:bg-white"
+          >
+            <IconeChevronEsquerdo className="w-4 h-4" />
+            Voltar
+          </Button>
+
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={compartilhar}
+                aria-label="Compartilhar"
+                className="w-9 h-9 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow"
+              >
+                <IconeCompartilhar className="w-4 h-4" />
+              </button>
+              {linkCopiado && (
+                <span className="absolute top-full right-0 mt-1 whitespace-nowrap text-xs bg-white text-gray-900 px-2 py-1 rounded shadow">
+                  Link copiado!
+                </span>
+              )}
+            </div>
+          </div>
+
+          {temVideo && (
+            <a
+              href="#videos"
+              className="absolute bottom-4 left-4 z-20 rounded-full bg-gray-900/90 hover:bg-gray-900 text-white text-xs font-medium px-3 py-2 shadow flex items-center gap-1.5"
+            >
+              <IconePlay className="w-3.5 h-3.5" />
+              Vídeo
+            </a>
+          )}
+        </div>
+      </div>
 
       <AnimatePresence>
         {aberto && (
