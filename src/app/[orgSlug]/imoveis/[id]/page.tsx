@@ -494,7 +494,7 @@ export default async function DetalheImovelPage({
       </div>
 
       {imoveisProximos.length > 0 && (
-        <section className="mt-16">
+        <section className="mt-16 pt-8 border-t">
           <h2 className="text-xl font-semibold mb-6">
             Imóveis próximos que você pode gostar
           </h2>
