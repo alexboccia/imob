@@ -272,28 +272,7 @@ export default async function DetalheImovelPage({
             {formatarCodigoImovel(imovel.code, configContato.codigoImovelPrefixo)}
           </Badge>
         </p>
-        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
-          <h1 className="text-2xl font-semibold">{imovel.title}</h1>
-          {precoPrincipal != null && (
-            <div className="border rounded-lg p-4 w-full sm:w-auto sm:min-w-[240px] shrink-0">
-              <p className="text-2xl font-semibold whitespace-nowrap">
-                {formatarPreco(precoPrincipal)}
-                {imovel.price == null && imovel.rentPrice != null && (
-                  <span className="text-sm font-normal text-gray-500">/mês</span>
-                )}
-              </p>
-              <Button
-                className="w-full mt-3 bg-whatsapp-brand hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active"
-                nativeButton={false}
-                render={
-                  <a href={whatsappHref} target="_blank" rel="noopener noreferrer" />
-                }
-              >
-                Falar no WhatsApp
-              </Button>
-            </div>
-          )}
-        </div>
+        <h1 className="text-2xl font-semibold">{imovel.title}</h1>
         {imovel.developer && (
           <p className="text-sm text-gray-600 mt-1">
             Responsável pela obra: <strong>{imovel.developer}</strong>
