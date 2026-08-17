@@ -34,7 +34,7 @@ export function ModalContato({
       }}
     >
       <DialogTrigger className={className}>{children}</DialogTrigger>
-      <DialogContent className="max-w-2xl p-0 max-h-[85vh] overflow-y-auto sm:grid sm:grid-cols-[220px_1fr]">
+      <DialogContent className="max-w-2xl p-0 max-h-[85vh] overflow-y-auto sm:max-w-2xl sm:grid sm:grid-cols-[220px_1fr]">
         <DialogTitle className="sr-only">Enviar mensagem</DialogTitle>
         <div className="bg-gray-50 rounded-t-xl p-6 flex flex-col gap-3 border-b sm:rounded-t-none sm:rounded-l-xl sm:border-b-0 sm:border-r">
           <div className="w-14 h-14 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-xl">
@@ -53,7 +53,7 @@ export function ModalContato({
           )}
         </div>
 
-        <div className="p-6">
+        <div className="p-6 min-w-0">
           <h2 className="font-semibold mb-4">Enviar mensagem</h2>
           <FormularioContato
             imovelId={imovelId}
