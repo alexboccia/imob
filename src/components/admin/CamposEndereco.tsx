@@ -119,10 +119,7 @@ export function CamposEndereco({
   }
 
   async function buscarCoordenadas() {
-    const enderecoTexto = [logradouro, numero, bairro, cidade, estado]
-      .filter(Boolean)
-      .join(", ");
-    if (!enderecoTexto) {
+    if (!bairro || !cidade) {
       setErroGeocode("Preencha ao menos o bairro e a cidade primeiro.");
       return;
     }
@@ -130,9 +127,14 @@ export function CamposEndereco({
     setBuscandoCoordenadas(true);
     setErroGeocode(null);
     try {
-      const resposta = await fetch(
-        `/api/admin/geocode?endereco=${encodeURIComponent(enderecoTexto)}`
-      );
+      const params = new URLSearchParams({
+        logradouro,
+        numero,
+        bairro,
+        cidade,
+        estado,
+      });
+      const resposta = await fetch(`/api/admin/geocode?${params.toString()}`);
       const dados = await resposta.json();
       if (!resposta.ok) {
         setErroGeocode(dados.erro ?? "Não foi possível buscar coordenadas.");
