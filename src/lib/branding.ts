@@ -10,6 +10,10 @@ async function buscarBrandingSemCache(organizationId: string) {
   return {
     themeId: branding?.themeId ?? null,
     faviconUrl: branding?.faviconUrl ?? null,
+    // Fase P.10 — nome público, quando diverge do Organization.name
+    // "oficial"/legal. null é um retorno válido: quem consome resolve
+    // pro Organization.name como fallback, nunca aqui.
+    displayName: branding?.displayName ?? null,
   };
 }
 

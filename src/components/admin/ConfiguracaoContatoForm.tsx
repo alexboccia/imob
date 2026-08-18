@@ -27,6 +27,7 @@ type ConfiguracaoInicial = {
   logoAltura: number;
   themeId: string | null;
   favicon: string | null;
+  nomePublico: string | null;
 };
 
 export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicial }) {
@@ -48,6 +49,17 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           <CardTitle className="text-base">Identidade visual</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          <div className="space-y-1.5">
+            <Label htmlFor="nomePublico">Nome público (opcional)</Label>
+            <Input
+              id="nomePublico"
+              name="nomePublico"
+              defaultValue={config.nomePublico ?? ""}
+              placeholder="Deixe em branco para usar o nome cadastrado da organização"
+              maxLength={120}
+            />
+            <ErroCampo erros={estado.fieldErrors?.nomePublico} />
+          </div>
           <LogoUpload logoInicial={config.logo} alturaInicial={config.logoAltura} />
           <FaviconUpload faviconInicial={config.favicon} />
           <SeletorTema themeIdAtual={config.themeId} />

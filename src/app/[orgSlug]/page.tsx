@@ -10,6 +10,7 @@ import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
 import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
+import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 import { Button } from "@/components/ui/button";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -21,18 +22,30 @@ import type { Prisma } from "@/generated/prisma/client";
 // no último build.
 export const revalidate = 60;
 
-// Canonical relativo (resolvido contra metadataBase no root layout): org
-// padrão aponta pra URL sem prefixo, demais orgs pra versão prefixada —
-// evita conteúdo duplicado indexável entre as duas formas de acessar a
-// mesma organização. Ver plano, decisão #4.
+// Canonical: se a Organization tem um domínio customizado ACTIVE, o
+// canonical passa a ser a URL ABSOLUTA sob esse domínio (nunca com o
+// slug — o proxy já esconde isso, ver src/proxy.ts) — um `metadata`
+// field com URL absoluta ignora `metadataBase` (comportamento oficial do
+// Next, ver node_modules/next/dist/docs/.../generate-metadata.md), então
+// isso nunca precisa tocar o metadataBase global do layout raiz.
+// Comportamento ORIGINAL preservado 1:1 quando não há domínio customizado
+// ACTIVE: relativo (resolvido contra metadataBase) — org padrão aponta
+// pra URL sem prefixo, demais orgs pra versão prefixada, evitando
+// conteúdo duplicado indexável entre as duas formas de acessar a mesma
+// organização. Ver plano, decisão #4, e relatório da Fase P.10 (correção
+// AU).
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ orgSlug: string }>;
 }): Promise<Metadata> {
   const { orgSlug } = await params;
-  const basePath = resolverBasePath(orgSlug);
-  return { alternates: { canonical: basePath || "/" } };
+  const organization = await getOrganizationBySlug(orgSlug);
+  if (!organization) return {};
+
+  const hostnameCustom = await buscarHostnameCustomAtivo(organization.id);
+  const canonical = hostnameCustom ? `https://${hostnameCustom}/` : resolverBasePath(orgSlug) || "/";
+  return { alternates: { canonical } };
 }
 
 function buscarImoveis(

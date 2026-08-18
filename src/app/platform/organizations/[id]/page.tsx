@@ -23,7 +23,11 @@ import { EstenderTrialForm } from "./EstenderTrialForm";
 import { OverridesForm } from "./OverridesForm";
 import { DeletarOrganizationForm } from "./DeletarOrganizationForm";
 import { ReenviarConviteForm } from "./ReenviarConviteForm";
+import { AdicionarDominioForm } from "./AdicionarDominioForm";
+import { DominioLinha } from "./DominioLinha";
+import { EmailDomainSection } from "./EmailDomainSection";
 import { suspenderOrganization, ativarOrganization } from "./actions";
+import { resolverOnboarding } from "@/lib/platform/onboarding";
 
 function LinhaUso({
   label,
@@ -85,17 +89,29 @@ export default async function OrganizationDetailsPage({
   // mesmo assim por clareza) — como o `where` já inclui organizationId
   // explícito, a extension de tenant-scoping não interfere, sem precisar
   // de withOrganization() nem bypass.
-  const [propertiesCount, activeMembersCount, personCount, planos, entitlements, estadoAcesso] =
-    await Promise.all([
-      prisma.property.count({
-        where: { organizationId: id, status: { in: ["DRAFT", "AVAILABLE", "RESERVED"] } },
-      }),
-      prisma.organizationMember.count({ where: { organizationId: id, status: "ACTIVE" } }),
-      prisma.person.count({ where: { organizationId: id } }),
-      prisma.plan.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
-      resolverEntitlementsOrganizacao(id),
-      resolverEstadoAcessoOrganizacao(id),
-    ]);
+  const [
+    propertiesCount,
+    activeMembersCount,
+    personCount,
+    planos,
+    entitlements,
+    estadoAcesso,
+    dominios,
+    emailDomain,
+    onboarding,
+  ] = await Promise.all([
+    prisma.property.count({
+      where: { organizationId: id, status: { in: ["DRAFT", "AVAILABLE", "RESERVED"] } },
+    }),
+    prisma.organizationMember.count({ where: { organizationId: id, status: "ACTIVE" } }),
+    prisma.person.count({ where: { organizationId: id } }),
+    prisma.plan.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    resolverEntitlementsOrganizacao(id),
+    resolverEstadoAcessoOrganizacao(id),
+    prisma.organizationDomain.findMany({ where: { organizationId: id }, orderBy: { createdAt: "asc" } }),
+    prisma.organizationEmailDomain.findUnique({ where: { organizationId: id } }),
+    resolverOnboarding(id),
+  ]);
 
   const trial = organization.plan.isTrial
     ? await prisma.subscription.findFirst({
@@ -171,6 +187,41 @@ export default async function OrganizationDetailsPage({
           {organization.createdAt.toLocaleDateString("pt-BR")}
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Onboarding
+            {onboarding.publicationStatus === "PRONTO" ? (
+              <Badge className="ml-2 bg-green-600 text-white">Pronta para publicação</Badge>
+            ) : (
+              <Badge variant="secondary" className="ml-2">
+                {onboarding.publicationStatus.replace("PENDENTE_", "Pendente: ").toLowerCase()}
+              </Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            {onboarding.itens.map((item) => (
+              <li key={item.chave} className="flex items-center gap-2">
+                <span
+                  className={
+                    item.status === "CONCLUIDO"
+                      ? "text-green-600"
+                      : item.status === "EM_ANDAMENTO"
+                        ? "text-amber-600"
+                        : "text-muted-foreground"
+                  }
+                >
+                  {item.status === "CONCLUIDO" ? "✓" : item.status === "EM_ANDAMENTO" ? "…" : "○"}
+                </span>
+                <span className={item.status === "PENDENTE" ? "text-muted-foreground" : ""}>{item.label}</span>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -267,6 +318,65 @@ export default async function OrganizationDetailsPage({
               </Badge>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Domínios</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-2">
+            Nenhum DNS/DigitalOcean/Cloudflare é alterado automaticamente aqui — cadastro é só o registro no
+            easymob. Aponte um CNAME de <span className="font-mono">www</span> para{" "}
+            <span className="font-mono">{process.env.CUSTOM_DOMAIN_CNAME_TARGET ?? "(configurar CUSTOM_DOMAIN_CNAME_TARGET)"}</span>
+            , confirme o DNS, cadastre o domínio manualmente na DigitalOcean, aguarde o certificado, e só então marque
+            o status como VERIFIED/ACTIVE aqui.
+          </p>
+          {dominios.length > 0 ? (
+            <div className="divide-y">
+              {dominios.map((dominio) => (
+                <DominioLinha
+                  key={dominio.id}
+                  id={dominio.id}
+                  hostname={dominio.hostname}
+                  type={dominio.type}
+                  status={dominio.status}
+                  verifiedAt={dominio.verifiedAt?.toISOString() ?? null}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhum domínio cadastrado.</p>
+          )}
+          <AdicionarDominioForm organizationId={organization.id} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">E-mail transacional</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-3">
+            Remetente das notificações automáticas (contato, convites) — nunca uma caixa de e-mail hospedada pelo
+            easymob. Configure SPF/DKIM/DMARC no domínio conforme a configuração real do Resend antes de marcar como
+            verificado.
+          </p>
+          <EmailDomainSection
+            organizationId={organization.id}
+            emailDomain={
+              emailDomain
+                ? {
+                    domain: emailDomain.domain,
+                    fromName: emailDomain.fromName,
+                    fromAddress: emailDomain.fromAddress,
+                    status: emailDomain.status,
+                    verifiedAt: emailDomain.verifiedAt?.toISOString() ?? null,
+                  }
+                : null
+            }
+          />
         </CardContent>
       </Card>
 

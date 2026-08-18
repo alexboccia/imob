@@ -2,6 +2,8 @@ import NextAuth from "next-auth";
 import { NextResponse, type NextRequest } from "next/server";
 import { authConfig } from "@/lib/auth.config";
 import { platformAuthConfig } from "@/lib/platform/auth.config";
+import { normalizarHostname, hostnameReservado } from "@/lib/platform/hostname";
+import { resolverOrgSlugPorHostname } from "@/lib/platform/organization-domain";
 
 // Next.js só permite um arquivo de middleware — as duas áreas (/app,
 // identidade de OrganizationMember; /platform, identidade de
@@ -55,13 +57,74 @@ const platformMiddleware = authPlatform((req) => {
 // normalizada uma vez aqui em vez de um cast poluindo cada chamada.
 type MiddlewareFn = (req: NextRequest) => ReturnType<typeof appMiddleware>;
 
-export default function proxy(req: NextRequest) {
+// Fase P.10 — tenant resolver por host (custom domain / subdomínio
+// easymob). Roda SÓ pra paths fora de /app e /platform (ver dispatch em
+// proxy() abaixo) — /app e /platform continuam 100% host-agnósticos,
+// nenhuma mudança de comportamento ali. Reaproveita 100% do sistema de
+// resolução por slug já existente ([orgSlug]/layout.tsx e cada
+// page.tsx por baixo dele, inalterados) — o único trabalho novo aqui é
+// traduzir Host → slug e reescrever o pathname, nunca resolver tenant
+// por conta própria.
+//
+// Decisão de header confiável (P.10.2.1): só request.headers.get("host")
+// é usado — nunca X-Forwarded-Host (spoofável pelo cliente; mesmo
+// racional já documentado pra IP em src/lib/client-ip.ts, que só confia
+// em do-connecting-ip, nunca no primeiro x-forwarded-for). Isto assume
+// que o Host recebido pelo processo Node já é o hostname original do
+// cliente — comportamento padrão de custom domain na DigitalOcean App
+// Platform, mas ainda NÃO verificado contra infra real (README confirma
+// que nenhum domínio customizado está configurado lá hoje). A primeira
+// ativação de um domínio customizado real em produção deve confirmar
+// isso antes de liberar tráfego de fato (ver relatório da Fase P.10).
+async function resolverTenantPorHost(req: NextRequest): Promise<NextResponse | undefined> {
+  const hostBruto = req.headers.get("host");
+  if (!hostBruto) return undefined;
+
+  const host = normalizarHostname(hostBruto);
+  if (!host) return undefined;
+
+  // Fast path: host conhecido/reservado (domínio canônico da plataforma,
+  // origin da DigitalOcean, localhost) — zero query nova, delega pro
+  // comportamento atual (rewrites de next.config.ts pro PUBLIC_ORG_SLUG,
+  // ou 404 natural). Cobre 100% do tráfego de hoje sem custo adicional —
+  // só requisições pra um host desconhecido chegam a consultar o banco
+  // (ver P.10.15).
+  if (hostnameReservado(host)) return undefined;
+
+  const slug = await resolverOrgSlugPorHostname(host);
+  if (!slug) {
+    // Domínio desconhecido, ou cadastrado mas ainda PENDING/FAILED/
+    // DISABLED — nunca serve o conteúdo de NENHUMA organização (nem a
+    // padrão) sob um host não reconhecido/não confirmado como tenant
+    // ativo (ver P.10.2).
+    return new NextResponse("Not Found", { status: 404 });
+  }
+
+  const url = req.nextUrl.clone();
+  url.pathname = url.pathname === "/" ? `/${slug}` : `/${slug}${url.pathname}`;
+  return NextResponse.rewrite(url);
+}
+
+export default async function proxy(req: NextRequest) {
   if (req.nextUrl.pathname.startsWith("/platform")) {
     return (platformMiddleware as MiddlewareFn)(req);
   }
-  return (appMiddleware as MiddlewareFn)(req);
+  if (req.nextUrl.pathname.startsWith("/app")) {
+    return (appMiddleware as MiddlewareFn)(req);
+  }
+
+  const resposta = await resolverTenantPorHost(req);
+  return resposta ?? NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/platform/:path*"],
+  matcher: [
+    "/app/:path*",
+    "/platform/:path*",
+    // Fase P.10 — todo o resto (site público), exceto /app, /platform,
+    // /api, assets internos do Next e arquivos estáticos (qualquer path
+    // com extensão) — mesmo padrão de negative-matching recomendado pela
+    // doc oficial de Proxy, ver node_modules/next/dist/docs.
+    "/((?!app|platform|api|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\..*).*)",
+  ],
 };

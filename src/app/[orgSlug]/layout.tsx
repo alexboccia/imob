@@ -23,21 +23,27 @@ export async function generateMetadata({
   const organization = await getOrganizationBySlug(orgSlug);
   if (!organization) return {};
 
+  // Fase P.10 — nome público (OrganizationBranding.displayName), com
+  // fallback pro Organization.name atual quando não configurado. Sem
+  // hardcode de nenhuma organização específica.
+  const branding = await buscarBranding(organization.id);
+  const nomePublico = branding.displayName ?? organization.name;
+
   return {
     title: {
-      default: organization.name,
-      template: `%s | ${organization.name}`,
+      default: nomePublico,
+      template: `%s | ${nomePublico}`,
     },
     openGraph: {
       type: "website",
       locale: "pt_BR",
-      siteName: organization.name,
-      title: organization.name,
+      siteName: nomePublico,
+      title: nomePublico,
       description: DESCRICAO_PADRAO_SITE,
     },
     twitter: {
       card: "summary_large_image",
-      title: organization.name,
+      title: nomePublico,
       description: DESCRICAO_PADRAO_SITE,
     },
     // Favicon por organização: NÃO dá pra usar o campo `icons` aqui —
@@ -108,6 +114,10 @@ export default async function PublicLayout({
     ])
   );
   const tema = resolverTema(branding.themeId);
+  // Fase P.10 — mesmo fallback elegante de generateMetadata acima:
+  // Organization.name nunca deixa de existir, então o site público nunca
+  // fica sem nome mesmo sem branding configurado.
+  const nomePublico = branding.displayName ?? organization.name;
 
   return (
     // display:contents — este wrapper só existe pra escopar os CSS vars
@@ -130,7 +140,7 @@ export default async function PublicLayout({
       }
     >
       <SiteHeader
-        nome={organization.name}
+        nome={nomePublico}
         logo={config.logo}
         logoAltura={config.logoAltura}
         navLinks={navLinks(basePath)}
@@ -139,12 +149,12 @@ export default async function PublicLayout({
       <main className="flex-1">{children}</main>
       <footer className="border-t mt-16">
         <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-gray-500">
-          © {new Date().getFullYear()} {organization.name}. Todos os direitos
+          © {new Date().getFullYear()} {nomePublico}. Todos os direitos
           reservados.
         </div>
       </footer>
       <BotaoContatoFlutuante
-        nome={organization.name}
+        nome={nomePublico}
         whatsapp={config.whatsapp}
         telefone={config.telefone || config.whatsapp}
         orgSlug={orgSlug}

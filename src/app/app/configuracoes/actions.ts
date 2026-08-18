@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
+import { logActivity } from "@/lib/activity-log";
 import { LOGO_ALTURA_MIN, LOGO_ALTURA_MAX, LOGO_ALTURA_PADRAO } from "@/lib/logo";
 import { temPapel, PAPEIS_GESTAO_CONFIGURACOES } from "@/lib/authorization";
 import {
@@ -53,6 +54,14 @@ const configuracaoSchema = z.object({
     { message: "Tema inválido." }
   ),
   favicon: z.preprocess(vazioParaNulo, z.string().optional()),
+  // Fase P.10 — nome público exibido no site, quando diverge do nome
+  // "oficial"/legal da organização (Organization.name). Nunca cor/CSS
+  // livre — reaproveita themeId (catálogo fixo) pra isso, ver
+  // OrganizationBranding no schema.
+  nomePublico: z.preprocess(
+    vazioParaNulo,
+    z.string().max(120, "Use no máximo 120 caracteres.").optional()
+  ),
 });
 
 function alturaLogo(valor: number | undefined) {
@@ -114,14 +123,31 @@ export async function salvarConfiguracaoContato(
       }),
       prisma.organizationBranding.upsert({
         where: { organizationId },
-        update: { themeId: campos.themeId, faviconUrl: campos.favicon ?? null },
+        update: {
+          themeId: campos.themeId,
+          faviconUrl: campos.favicon ?? null,
+          displayName: campos.nomePublico ?? null,
+        },
         create: {
           organizationId,
           themeId: campos.themeId,
           faviconUrl: campos.favicon ?? null,
+          displayName: campos.nomePublico ?? null,
         },
       }),
     ]);
+
+    // Fase P.10 — auditoria tenant-scoped (logActivity/ActivityLog), NÃO
+    // PlatformAuditLog: quem faz esta mudança é o próprio admin da
+    // organização (self-service), não um Platform Operator. Ver regra
+    // geral em src/lib/platform/audit.ts vs src/lib/activity-log.ts.
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "OrganizationBranding",
+      action: "branding_updated",
+      payload: { themeId: campos.themeId, nomePublico: campos.nomePublico ?? null },
+    });
 
     revalidatePath("/app/configuracoes");
     revalidatePath("/app/imoveis");

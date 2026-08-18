@@ -351,6 +351,9 @@ async function seedTenancy() {
     { code: "email", name: "Envio de e-mail" },
     { code: "portais", name: "Publicação em portais" },
     { code: "whatsapp", name: "WhatsApp" },
+    // Fase P.10.
+    { code: "custom-domain", name: "Domínio próprio" },
+    { code: "email-domain", name: "E-mail com domínio próprio" },
   ];
 
   const modulosCriados = new Map<string, string>();
@@ -412,6 +415,9 @@ async function seedTenancy() {
         "relatorios",
         "email",
         "whatsapp",
+        // Fase P.10 — domínio próprio a partir do PRO; e-mail com domínio
+        // próprio só no PREMIUM (via modulos.map abaixo).
+        "custom-domain",
       ],
       limites: { PROPERTIES: 250, USERS: 5, PHOTOS_PER_PROPERTY: 20, CRM_CLIENTS: 5000 },
     },

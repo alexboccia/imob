@@ -6,12 +6,14 @@ import { prisma, prismaPlatform } from "@/lib/prisma";
 import { requirePlatformOperator } from "@/lib/platform/auth";
 import { PAPEIS_PLATAFORMA_TUDO, temPapelPlataforma } from "@/lib/platform/authorization";
 import { logPlatformActivity } from "@/lib/platform/audit";
-import { limiteEfetivoDoCatalogo, contarUsoAtual } from "@/lib/entitlements";
+import { limiteEfetivoDoCatalogo, contarUsoAtual, hasModule } from "@/lib/entitlements";
 import { centavosDeReais, parseLimiteForm, FEATURES_EDITAVEIS_PLANO } from "@/lib/plan-schema";
 import { gerarTokenConvite, hashToken, expiracaoConvite } from "@/lib/platform/invite";
 import { enviarEmailConviteOwner } from "@/lib/email";
 import { logger } from "@/lib/logger";
 import { type ActionState, erroAcessoNegado, erroGenerico, erroValidacao, sucesso } from "@/lib/action-result";
+import { normalizarHostname, hostnameReservado } from "@/lib/platform/hostname";
+import { gerarTokenVerificacaoDominio } from "@/lib/platform/organization-domain";
 import { z } from "zod";
 
 // Fase P.9: features agregadas checáveis no guard de downgrade — mesma
@@ -424,6 +426,9 @@ export async function deletarOrganization(
       await tx.featureOption.deleteMany({ where: { organizationId } });
       await tx.propertyTypeOption.deleteMany({ where: { organizationId } });
       await tx.ownerInviteToken.deleteMany({ where: { organizationId } });
+      // Fase P.10 — mesmo motivo (FK restrict pra Organization).
+      await tx.organizationDomain.deleteMany({ where: { organizationId } });
+      await tx.organizationEmailDomain.deleteMany({ where: { organizationId } });
       await tx.organizationMember.deleteMany({ where: { organizationId } });
       await tx.organizationSettings.deleteMany({ where: { organizationId } });
       await tx.organizationBranding.deleteMany({ where: { organizationId } });
@@ -530,6 +535,7 @@ export async function reenviarConvite(
   const linkConvite = `${baseUrl}/app/convite/${token}`;
 
   const { enviado } = await enviarEmailConviteOwner({
+    organizationId,
     para: novoEmail,
     nomeOrganizacao: organizacao.name,
     linkConvite,
@@ -546,4 +552,279 @@ export async function reenviarConvite(
   }
 
   return sucesso(`Convite reenviado para ${novoEmail}.`);
+}
+
+// ============================================================
+// Fase P.10 — Domínios (custom domain / subdomínio easymob)
+// ============================================================
+
+const adicionarDominioSchema = z.object({
+  hostnameBruto: z.string().min(1, "Informe o domínio."),
+  type: z.enum(["EASYMOB_SUBDOMAIN", "CUSTOM"]),
+});
+
+// V1 nunca altera DNS/DigitalOcean/Cloudflare real — só cadastra o
+// domínio como PENDING (ver P.10.3.1/P.10.4). CUSTOM depende do módulo
+// "custom-domain" do plano (ver P.10.8); EASYMOB_SUBDOMAIN é sempre
+// permitido, qualquer plano.
+export async function adicionarDominio(
+  organizationId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const operador = await requirePlatformOperator();
+  if (!temPapelPlataforma(operador.role, PAPEIS_PLATAFORMA_TUDO)) return erroAcessoNegado();
+
+  const parsed = adicionarDominioSchema.safeParse({
+    hostnameBruto: formData.get("hostname"),
+    type: formData.get("type"),
+  });
+  if (!parsed.success) return erroValidacao(parsed.error);
+
+  const host = normalizarHostname(parsed.data.hostnameBruto);
+  if (!host || !host.includes(".")) {
+    return erroGenerico(
+      "Domínio inválido. Use um hostname completo, sem protocolo, path ou porta (ex: www.suaimobiliaria.com.br)."
+    );
+  }
+  if (hostnameReservado(host)) {
+    return erroGenerico("Este domínio é reservado pela plataforma e não pode ser usado por uma organização.");
+  }
+
+  if (parsed.data.type === "CUSTOM" && !(await hasModule(organizationId, "custom-domain"))) {
+    return erroGenerico("O plano desta organização não inclui domínio personalizado.");
+  }
+
+  const existente = await prisma.organizationDomain.findUnique({ where: { hostname: host } });
+  if (existente) {
+    return erroGenerico("Este domínio já está cadastrado (nesta ou em outra organização).");
+  }
+
+  const registro = await prisma.organizationDomain.create({
+    data: {
+      organizationId,
+      hostname: host,
+      type: parsed.data.type,
+      status: "PENDING",
+      verificationToken: gerarTokenVerificacaoDominio(),
+    },
+  });
+
+  await logPlatformActivity({
+    platformOperatorId: operador.id,
+    action: "DOMAIN_ADDED",
+    entity: "OrganizationDomain",
+    entityId: registro.id,
+    organizationId,
+    metadata: { hostname: host, type: parsed.data.type },
+  });
+
+  revalidatePath(`/platform/organizations/${organizationId}`);
+  return sucesso("Domínio cadastrado como PENDING. Configure o DNS e depois marque o status.");
+}
+
+const statusDominioSchema = z.enum(["PENDING", "VERIFIED", "ACTIVE", "FAILED", "DISABLED"]);
+const STATUS_RESOLVAVEIS_DOMINIO = new Set(["VERIFIED", "ACTIVE"]);
+
+// V1: mudança de status é sempre manual (Platform Operator confirmou DNS/
+// certificado fora do easymob, ver P.10.3.3/P.10.4) — nenhuma verificação
+// automática de DNS acontece aqui.
+export async function atualizarStatusDominio(
+  domainId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const operador = await requirePlatformOperator();
+  if (!temPapelPlataforma(operador.role, PAPEIS_PLATAFORMA_TUDO)) return erroAcessoNegado();
+
+  const parsed = statusDominioSchema.safeParse(formData.get("status"));
+  if (!parsed.success) return erroGenerico("Status inválido.");
+  const novoStatus = parsed.data;
+
+  const dominio = await prisma.organizationDomain.findUnique({ where: { id: domainId } });
+  if (!dominio) return erroGenerico("Domínio não encontrado.");
+
+  await prisma.organizationDomain.update({
+    where: { id: domainId },
+    data: {
+      status: novoStatus,
+      verifiedAt: STATUS_RESOLVAVEIS_DOMINIO.has(novoStatus) ? (dominio.verifiedAt ?? new Date()) : dominio.verifiedAt,
+    },
+  });
+
+  await logPlatformActivity({
+    platformOperatorId: operador.id,
+    action: STATUS_RESOLVAVEIS_DOMINIO.has(novoStatus)
+      ? "DOMAIN_VERIFIED"
+      : novoStatus === "DISABLED"
+        ? "DOMAIN_DISABLED"
+        : "DOMAIN_UPDATED",
+    entity: "OrganizationDomain",
+    entityId: domainId,
+    organizationId: dominio.organizationId,
+    metadata: { hostname: dominio.hostname, statusAnterior: dominio.status, statusNovo: novoStatus },
+  });
+
+  revalidatePath(`/platform/organizations/${dominio.organizationId}`);
+  return sucesso("Status do domínio atualizado.");
+}
+
+// Remover NUNCA apaga a organização nem qualquer outro dado — só a linha
+// de OrganizationDomain (ver P.10.16, risco "domínio removido não pode
+// afetar a organização").
+export async function removerDominio(domainId: string): Promise<ActionState> {
+  const operador = await requirePlatformOperator();
+  if (!temPapelPlataforma(operador.role, PAPEIS_PLATAFORMA_TUDO)) return erroAcessoNegado();
+
+  const dominio = await prisma.organizationDomain.findUnique({ where: { id: domainId } });
+  if (!dominio) return erroGenerico("Domínio não encontrado.");
+
+  await prisma.organizationDomain.delete({ where: { id: domainId } });
+
+  await logPlatformActivity({
+    platformOperatorId: operador.id,
+    action: "DOMAIN_REMOVED",
+    entity: "OrganizationDomain",
+    entityId: domainId,
+    organizationId: dominio.organizationId,
+    metadata: { hostname: dominio.hostname },
+  });
+
+  revalidatePath(`/platform/organizations/${dominio.organizationId}`);
+  return sucesso("Domínio removido.");
+}
+
+// ============================================================
+// Fase P.10 — E-mail transacional (domínio/remetente próprio)
+// ============================================================
+
+const salvarEmailDomainSchema = z.object({
+  domainBruto: z.string().min(1, "Informe o domínio de e-mail."),
+  fromName: z.string().min(1, "Informe o nome do remetente."),
+  fromAddress: z.string().email("E-mail do remetente inválido."),
+});
+
+// V1 nunca chama a API de domínio do Resend (chave atual é somente-envio,
+// ver comentário do model OrganizationEmailDomain) — igual a domínio
+// customizado, status é sempre setado manualmente. Depende do módulo
+// "email-domain" do plano (ver P.10.8).
+export async function salvarEmailDomain(
+  organizationId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const operador = await requirePlatformOperator();
+  if (!temPapelPlataforma(operador.role, PAPEIS_PLATAFORMA_TUDO)) return erroAcessoNegado();
+
+  if (!(await hasModule(organizationId, "email-domain"))) {
+    return erroGenerico("O plano desta organização não inclui domínio de e-mail próprio.");
+  }
+
+  const parsed = salvarEmailDomainSchema.safeParse({
+    domainBruto: formData.get("domain"),
+    fromName: formData.get("fromName"),
+    fromAddress: formData.get("fromAddress"),
+  });
+  if (!parsed.success) return erroValidacao(parsed.error);
+
+  const domain = normalizarHostname(parsed.data.domainBruto);
+  if (!domain || !domain.includes(".")) {
+    return erroGenerico("Domínio de e-mail inválido. Use um hostname completo (ex: mail.suaimobiliaria.com.br).");
+  }
+  if (hostnameReservado(domain)) {
+    return erroGenerico("Este domínio é reservado pela plataforma e não pode ser usado por uma organização.");
+  }
+
+  const fromAddress = parsed.data.fromAddress.toLowerCase();
+  if (!fromAddress.endsWith(`@${domain}`)) {
+    return erroGenerico(`O remetente precisa terminar em @${domain}.`);
+  }
+
+  const conflito = await prisma.organizationEmailDomain.findFirst({
+    where: {
+      organizationId: { not: organizationId },
+      OR: [{ domain }, { fromAddress }],
+    },
+  });
+  if (conflito) {
+    return erroGenerico("Este domínio ou remetente já está em uso por outra organização.");
+  }
+
+  await prisma.organizationEmailDomain.upsert({
+    where: { organizationId },
+    update: { domain, fromName: parsed.data.fromName, fromAddress, status: "PENDING", verifiedAt: null },
+    create: { organizationId, domain, fromName: parsed.data.fromName, fromAddress, status: "PENDING" },
+  });
+
+  await logPlatformActivity({
+    platformOperatorId: operador.id,
+    action: "EMAIL_DOMAIN_UPDATED",
+    entity: "OrganizationEmailDomain",
+    entityId: organizationId,
+    organizationId,
+    metadata: { domain, fromAddress },
+  });
+
+  revalidatePath(`/platform/organizations/${organizationId}`);
+  return sucesso("Domínio de e-mail salvo como PENDING. Configure SPF/DKIM/DMARC e depois marque o status.");
+}
+
+const statusEmailDomainSchema = z.enum(["PENDING", "VERIFIED", "ACTIVE", "FAILED"]);
+
+export async function atualizarStatusEmailDomain(
+  organizationId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const operador = await requirePlatformOperator();
+  if (!temPapelPlataforma(operador.role, PAPEIS_PLATAFORMA_TUDO)) return erroAcessoNegado();
+
+  const parsed = statusEmailDomainSchema.safeParse(formData.get("status"));
+  if (!parsed.success) return erroGenerico("Status inválido.");
+  const novoStatus = parsed.data;
+
+  const emailDomain = await prisma.organizationEmailDomain.findUnique({ where: { organizationId } });
+  if (!emailDomain) return erroGenerico("Nenhum domínio de e-mail cadastrado.");
+
+  await prisma.organizationEmailDomain.update({
+    where: { organizationId },
+    data: {
+      status: novoStatus,
+      verifiedAt: novoStatus === "VERIFIED" || novoStatus === "ACTIVE" ? (emailDomain.verifiedAt ?? new Date()) : emailDomain.verifiedAt,
+    },
+  });
+
+  await logPlatformActivity({
+    platformOperatorId: operador.id,
+    action: novoStatus === "VERIFIED" || novoStatus === "ACTIVE" ? "EMAIL_DOMAIN_VERIFIED" : "EMAIL_DOMAIN_UPDATED",
+    entity: "OrganizationEmailDomain",
+    entityId: organizationId,
+    organizationId,
+    metadata: { domain: emailDomain.domain, statusAnterior: emailDomain.status, statusNovo: novoStatus },
+  });
+
+  revalidatePath(`/platform/organizations/${organizationId}`);
+  return sucesso("Status do e-mail atualizado.");
+}
+
+export async function removerEmailDomain(organizationId: string): Promise<ActionState> {
+  const operador = await requirePlatformOperator();
+  if (!temPapelPlataforma(operador.role, PAPEIS_PLATAFORMA_TUDO)) return erroAcessoNegado();
+
+  const emailDomain = await prisma.organizationEmailDomain.findUnique({ where: { organizationId } });
+  if (!emailDomain) return erroGenerico("Nenhum domínio de e-mail cadastrado.");
+
+  await prisma.organizationEmailDomain.delete({ where: { organizationId } });
+
+  await logPlatformActivity({
+    platformOperatorId: operador.id,
+    action: "EMAIL_DOMAIN_REMOVED",
+    entity: "OrganizationEmailDomain",
+    entityId: organizationId,
+    organizationId,
+    metadata: { domain: emailDomain.domain },
+  });
+
+  revalidatePath(`/platform/organizations/${organizationId}`);
+  return sucesso("Domínio de e-mail removido — envios voltam a usar o remetente padrão.");
 }

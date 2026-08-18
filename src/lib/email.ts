@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { logger } from "@/lib/logger";
+import { prisma } from "@/lib/prisma";
 
 let clienteResend: Resend | null = null;
 
@@ -12,7 +13,27 @@ function obterCliente() {
   return clienteResend;
 }
 
+// Fase P.10 — remetente próprio por Organization (OrganizationEmailDomain),
+// só quando status=ACTIVE (V1 nunca chama a API de domínio do Resend, o
+// status é setado manualmente pelo Platform Operator — ver comentário do
+// model no schema). Em QUALQUER outro caso (sem linha, PENDING/VERIFIED/
+// FAILED, ou RESEND_FROM_EMAIL também ausente) cai no remetente global —
+// nunca quebra envio existente (P.10.6.4). OrganizationEmailDomain está
+// fora de TENANT_SCOPED_MODELS, então esta consulta funciona com o
+// `organizationId` explícito abaixo sem nenhum bypass.
+async function resolverRemetente(organizationId: string): Promise<string | null> {
+  const emailDomain = await prisma.organizationEmailDomain.findUnique({
+    where: { organizationId },
+    select: { status: true, fromName: true, fromAddress: true },
+  });
+  if (emailDomain?.status === "ACTIVE") {
+    return `${emailDomain.fromName} <${emailDomain.fromAddress}>`;
+  }
+  return process.env.RESEND_FROM_EMAIL ?? null;
+}
+
 export async function enviarEmailContato({
+  organizationId,
   para,
   nomeLead,
   emailLead,
@@ -21,6 +42,7 @@ export async function enviarEmailContato({
   imovelTitulo,
   avisoConflitoDedup,
 }: {
+  organizationId: string;
   para: string;
   nomeLead: string;
   emailLead: string | null;
@@ -42,7 +64,7 @@ export async function enviarEmailContato({
     return;
   }
 
-  const remetente = process.env.RESEND_FROM_EMAIL;
+  const remetente = await resolverRemetente(organizationId);
   if (!remetente) {
     logger.warn("RESEND_FROM_EMAIL não configurado — e-mail de contato não foi enviado", {
       modulo: "email",
@@ -89,10 +111,12 @@ export async function enviarEmailContato({
 // pra cópia manual, em vez de deixar o convite silenciosamente sem
 // ninguém saber que ele nunca chegou. Ver plano, decisão #6.
 export async function enviarEmailConviteOwner({
+  organizationId,
   para,
   nomeOrganizacao,
   linkConvite,
 }: {
+  organizationId: string;
   para: string;
   nomeOrganizacao: string;
   linkConvite: string;
@@ -105,7 +129,7 @@ export async function enviarEmailConviteOwner({
     return { enviado: false };
   }
 
-  const remetente = process.env.RESEND_FROM_EMAIL;
+  const remetente = await resolverRemetente(organizationId);
   if (!remetente) {
     logger.warn("RESEND_FROM_EMAIL não configurado — e-mail de convite não foi enviado", {
       modulo: "email",

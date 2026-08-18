@@ -1,19 +1,17 @@
 import type { MetadataRoute } from "next";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { withOrganization } from "@/lib/tenant-context";
 import { getSiteUrl, resolverBasePath } from "@/lib/site-url";
+import { resolverOrigemPublicacao } from "@/lib/platform/organization-domain";
 
-// Sem isso, o arquivo é gerado uma vez no build e fica estático — imóvel
-// novo, vendido ou atualizado só apareceria/sumiria no sitemap no próximo
-// deploy. Não precisa ser tempo real (crawler não visita a cada minuto):
-// 1h já evita o sitemap ficar visivelmente desatualizado sem regenerar a
-// cada request.
+// sitemap.js é um "special Route Handler" — cacheado por padrão A MENOS
+// QUE use uma Request-time API (ver doc oficial de sitemap.js,
+// node_modules/next/dist/docs/.../sitemap.md). headers() abaixo é
+// exatamente isso: torna esta rota dinâmica de propósito, pra poder
+// responder hostnames diferentes com sitemaps diferentes (correção AU).
 export const revalidate = 3600;
 
-// Bem abaixo do limite de 50.000 URLs por arquivo do protocolo de sitemap
-// — não é pra evitar estourar esse limite agora (o catálogo atual está
-// longe disso), é o teto que, se ultrapassado, é hora de paginar de
-// verdade (ver comentário abaixo).
 const LIMITE_IMOVEIS_NO_SITEMAP = 5000;
 
 // Só imóveis "disponíveis" entram no sitemap — mesma regra de status já
@@ -28,66 +26,95 @@ const LIMITE_IMOVEIS_NO_SITEMAP = 5000;
 // não aparece em nenhuma navegação normal do site.
 const STATUS_INCLUIDO_NO_SITEMAP = "AVAILABLE" as const;
 
-// Páginas públicas estáticas (não-imóvel) de UMA organização.
-function paginasEstaticas(basePath: string): MetadataRoute.Sitemap {
+// Páginas públicas estáticas (não-imóvel) de UMA organização. `construirUrl`
+// é injetado (não hardcoda getSiteUrl) — correção AU: sob domínio
+// customizado ACTIVE, as URLs são absolutas sob esse domínio, nunca sob
+// o domínio global.
+function paginasEstaticas(basePath: string, construirUrl: (path: string) => string): MetadataRoute.Sitemap {
   const agora = new Date();
   return [
-    { url: getSiteUrl(basePath || "/"), lastModified: agora, changeFrequency: "daily", priority: 1 },
-    { url: getSiteUrl(`${basePath}/imoveis`), lastModified: agora, changeFrequency: "daily", priority: 0.9 },
-    { url: getSiteUrl(`${basePath}/vendidos`), lastModified: agora, changeFrequency: "weekly", priority: 0.3 },
-    { url: getSiteUrl(`${basePath}/anuncie`), lastModified: agora, changeFrequency: "monthly", priority: 0.5 },
-    { url: getSiteUrl(`${basePath}/contato`), lastModified: agora, changeFrequency: "monthly", priority: 0.5 },
+    { url: construirUrl(basePath || "/"), lastModified: agora, changeFrequency: "daily", priority: 1 },
+    { url: construirUrl(`${basePath}/imoveis`), lastModified: agora, changeFrequency: "daily", priority: 0.9 },
+    { url: construirUrl(`${basePath}/vendidos`), lastModified: agora, changeFrequency: "weekly", priority: 0.3 },
+    { url: construirUrl(`${basePath}/anuncie`), lastModified: agora, changeFrequency: "monthly", priority: 0.5 },
+    { url: construirUrl(`${basePath}/contato`), lastModified: agora, changeFrequency: "monthly", priority: 0.5 },
   ];
 }
 
-// Um único sitemap.xml cobrindo todas as Organizations ativas — cada uma
-// com suas URLs prefixadas por slug (org padrão sem prefixo, demais com
-// /{slug}, via resolverBasePath). Organização suspensa fica de fora por
-// completo (não deve continuar anunciando imóveis pra buscadores). Cada
-// query de imóveis é explicitamente filtrada por organizationId — nunca
-// mistura tenants mesmo iterando várias organizations na mesma resposta.
+// Entradas de imóveis de UMA organização — extraído pra ser reaproveitado
+// tanto pelo sitemap global (várias organizations) quanto pelo sitemap de
+// um domínio customizado (uma organization só), sem duplicar a lógica de
+// busca/filtro/formatação.
+async function entradasDaOrganizacao(
+  organization: { id: string; slug: string },
+  basePath: string,
+  construirUrl: (path: string) => string
+): Promise<MetadataRoute.Sitemap> {
+  const imoveis = await withOrganization(organization.id, () =>
+    prisma.property.findMany({
+      where: { organizationId: organization.id, status: STATUS_INCLUIDO_NO_SITEMAP },
+      select: { id: true, updatedAt: true },
+      orderBy: { id: "asc" },
+      take: LIMITE_IMOVEIS_NO_SITEMAP,
+    })
+  );
+
+  const entradasImoveis: MetadataRoute.Sitemap = imoveis.map((imovel) => ({
+    url: construirUrl(`${basePath}/imoveis/${imovel.id}`),
+    lastModified: imovel.updatedAt,
+    changeFrequency: "weekly",
+    priority: 0.7,
+  }));
+
+  return [...paginasEstaticas(basePath, construirUrl), ...entradasImoveis];
+}
+
+// Correção AU (auditoria pré-commit da Fase P.10): o sitemap agora
+// depende do Host da requisição —
 //
-// Paginação: deliberadamente NÃO uso generateSitemaps() aqui ainda — API
-// do Next pra dividir em vários arquivos (app/sitemap.ts vira
-// /sitemap/0.xml, /sitemap/1.xml...), MAS ela muda a URL de
-// `/sitemap.xml` (o que robots.txt aponta, e o que o Google espera por
-// convenção) para `/sitemap/0.xml` mesmo quando só existe uma "página"
-// — confirmado rodando localmente (curl -I http://localhost:3100/sitemap.xml
-// devolvia 404 com generateSitemaps() presente). Ativar isso agora
-// quebraria a URL convencional sem nenhum ganho real, já que o catálogo
-// atual está muito abaixo do limite. Quando o volume justificar: trocar
-// `export default async function sitemap()` abaixo por um par
-// `generateSitemaps()` + `sitemap({ id })` que fatia por organização e por
-// `skip`/`take` de LIMITE_IMOVEIS_NO_SITEMAP.
+// - Host reservado/canônico da plataforma ("global"): comportamento
+//   ORIGINAL preservado — todas as organizations ativas, cada uma sob
+//   getSiteUrl(basePath) — MAS agora excluindo qualquer organização que
+//   já tenha um domínio customizado ACTIVE (ela publica o próprio
+//   sitemap sob o próprio domínio; listá-la aqui também criaria conteúdo
+//   duplicado indexável simultaneamente sob dois hosts, ver P.10.11/AU3).
+// - Host de domínio customizado ACTIVE ("custom"): sitemap de UMA ÚNICA
+//   organização (a dona do domínio), todas as URLs absolutas sob esse
+//   mesmo domínio — nunca inclui nenhuma outra organização.
+// - Host não reconhecido ("desconhecido"): sitemap vazio — nunca expõe
+//   dado de nenhuma organização sob um host não verificado (ver P.10.16
+//   risco AU9/AU8), nem cai silenciosamente no sitemap global.
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const origem = await resolverOrigemPublicacao((await headers()).get("host"));
+
+  if (origem.tipo === "desconhecido") {
+    return [];
+  }
+
+  if (origem.tipo === "custom") {
+    const organization = await prisma.organization.findUnique({
+      where: { id: origem.organizationId, active: true },
+      select: { id: true, slug: true },
+    });
+    if (!organization) return [];
+
+    const construirUrl = (path: string) => `https://${origem.hostname}${path}`;
+    return entradasDaOrganizacao(organization, "", construirUrl);
+  }
+
   const organizacoesAtivas = await prisma.organization.findMany({
-    where: { active: true },
+    where: {
+      active: true,
+      domains: { none: { type: "CUSTOM", status: "ACTIVE" } },
+    },
     select: { id: true, slug: true },
     orderBy: { slug: "asc" },
   });
 
   const entradasPorOrganizacao = await Promise.all(
-    organizacoesAtivas.map(async (organization) => {
-      const basePath = resolverBasePath(organization.slug);
-
-      const imoveis = await withOrganization(organization.id, () =>
-        prisma.property.findMany({
-          where: { organizationId: organization.id, status: STATUS_INCLUIDO_NO_SITEMAP },
-          select: { id: true, updatedAt: true },
-          orderBy: { id: "asc" },
-          take: LIMITE_IMOVEIS_NO_SITEMAP,
-        })
-      );
-
-      const entradasImoveis: MetadataRoute.Sitemap = imoveis.map((imovel) => ({
-        url: getSiteUrl(`${basePath}/imoveis/${imovel.id}`),
-        lastModified: imovel.updatedAt,
-        changeFrequency: "weekly",
-        priority: 0.7,
-      }));
-
-      return [...paginasEstaticas(basePath), ...entradasImoveis];
-    })
+    organizacoesAtivas.map((organization) =>
+      entradasDaOrganizacao(organization, resolverBasePath(organization.slug), getSiteUrl)
+    )
   );
 
   return entradasPorOrganizacao.flat();

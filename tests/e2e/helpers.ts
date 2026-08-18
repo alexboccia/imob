@@ -18,7 +18,15 @@ export const ORG_B = {
 export const IDS_E2E = {
   imovelParaEditarOrgA: "e2e-imovel-editar-a",
   membroOwnerOrgB: "e2e-membro-owner-b",
+  imovelOrgB: "e2e-imovel-org-b",
 };
+
+// Fase P.10 — mesmo valor de prisma/seed-e2e.ts (duplicado de propósito,
+// não importado de lá: importar prisma/seed-e2e.ts puxaria o Prisma
+// Client inteiro pro processo do Playwright, que não roda sob o mesmo
+// runtime ESM do Next — mesmo motivo de IDS_E2E acima já ser duplicado
+// em vez de importado).
+export const HOSTNAME_E2E_ORG_B = "b.e2e-dominio-teste.test";
 
 export async function login(page: Page, credenciais: { email: string; senha: string }) {
   await page.goto("/app/login");

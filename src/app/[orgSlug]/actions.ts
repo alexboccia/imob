@@ -178,6 +178,7 @@ export async function enviarContato(
     // deduplicação — o contato não pode se perder, só não é vinculado
     // automaticamente a nenhum Person/Interaction (ver comentário acima).
     await enviarEmailContato({
+      organizationId,
       para: emailDestino,
       nomeLead: nome,
       emailLead: email || null,

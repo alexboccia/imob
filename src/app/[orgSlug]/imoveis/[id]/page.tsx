@@ -16,6 +16,7 @@ import { paraImovelCard } from "@/lib/imovel-card";
 import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
+import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 import { GaleriaFotos } from "@/components/GaleriaFotos";
 import { FormularioContato } from "@/components/FormularioContato";
 import { EvolucaoObra } from "@/components/EvolucaoObra";
@@ -161,10 +162,18 @@ export async function generateMetadata({
     ? imovel.description.slice(0, 160)
     : `${imovel.type} em ${imovel.neighborhood}, ${imovel.city} - ${imovel.state}.`;
 
+  // Correção AU — mesma decisão de src/app/[orgSlug]/page.tsx: URL
+  // absoluta sob o domínio customizado ACTIVE (ignora metadataBase),
+  // preserva o formato relativo original em qualquer outro caso.
+  const hostnameCustom = await buscarHostnameCustomAtivo(organizationId);
+  const canonical = hostnameCustom
+    ? `https://${hostnameCustom}/imoveis/${id}`
+    : `${basePath}/imoveis/${id}`;
+
   return {
     title: imovel.title,
     description: descricao,
-    alternates: { canonical: `${basePath}/imoveis/${id}` },
+    alternates: { canonical },
     openGraph: {
       title: imovel.title,
       description: descricao,

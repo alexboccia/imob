@@ -327,6 +327,9 @@ export async function limparOrganizacao(
   // FK restrict pra Organization, precisa sair antes do delete (mesmo
   // motivo do organizationLimitOverride acima).
   await prisma.ownerInviteToken.deleteMany({ where: { organizationId } });
+  // Fase P.10 — mesmo motivo.
+  await prisma.organizationDomain.deleteMany({ where: { organizationId } });
+  await prisma.organizationEmailDomain.deleteMany({ where: { organizationId } });
 
   await prisma.organizationMember.deleteMany({ where: { organizationId } });
   await prisma.organizationSettings.deleteMany({ where: { organizationId } });

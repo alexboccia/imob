@@ -29,6 +29,14 @@ export const IDS_E2E = {
   membroOwnerOrgB: "e2e-membro-owner-b",
 };
 
+// Fase P.10 — hostname fixo, custom domain ATIVO da Organização B, usado
+// pelo spec de tenant resolver por host (tests/e2e/custom-domain.spec.ts).
+// Deliberadamente a Organização B (não a A, que já é a "padrão"/canônica
+// via PUBLIC_ORG_SLUG) — provar que o rewrite serve o conteúdo de uma
+// organização DIFERENTE da canônica é o que de fato exercita o mecanismo
+// novo.
+export const HOSTNAME_E2E_ORG_B = "b.e2e-dominio-teste.test";
+
 async function garantirModulo(code: string) {
   return prisma.module.upsert({
     where: { code },
@@ -214,6 +222,20 @@ async function main() {
     id: "e2e-imovel-org-b",
     organizationId: orgB.organization.id,
     title: "Imóvel da Organização B",
+  });
+
+  // Fase P.10 — custom domain fixo e ATIVO da Organização B (ver
+  // HOSTNAME_E2E_ORG_B acima).
+  await prisma.organizationDomain.upsert({
+    where: { hostname: HOSTNAME_E2E_ORG_B },
+    update: { organizationId: orgB.organization.id, status: "ACTIVE" },
+    create: {
+      organizationId: orgB.organization.id,
+      hostname: HOSTNAME_E2E_ORG_B,
+      type: "CUSTOM",
+      status: "ACTIVE",
+      verificationToken: "e2e-token-fixo-org-b",
+    },
   });
 
   console.log("Seed E2E pronto:");

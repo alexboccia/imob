@@ -10,23 +10,7 @@ import { gerarTokenConvite, hashToken, expiracaoConvite } from "@/lib/platform/i
 import { enviarEmailConviteOwner } from "@/lib/email";
 import { logger } from "@/lib/logger";
 import { type ActionState, erroGenerico, erroValidacao } from "@/lib/action-result";
-
-// Nunca podem colidir com um segmento de rota do sistema — mesma reserva
-// já prevista no plano original de multi-tenancy (v2), agora realmente
-// aplicada na única superfície que cria Organization.slug.
-const SLUGS_RESERVADOS = new Set([
-  "app",
-  "api",
-  "platform",
-  "_next",
-  "admin",
-  "convite",
-  "www",
-  "imoveis",
-  "contato",
-  "anuncie",
-  "vendidos",
-]);
+import { SLUGS_RESERVADOS } from "@/lib/platform/reserved-words";
 
 const criarOrganizationSchema = z.object({
   name: z.string().min(2, "Informe o nome da organização."),
@@ -194,6 +178,7 @@ export async function criarOrganization(
   // falhar, devolve o link pra UI mostrar, em vez de deixar o convite no
   // limbo sem ninguém saber que ele nunca chegou.
   const { enviado } = await enviarEmailConviteOwner({
+    organizationId,
     para: dados.responsavelEmail,
     nomeOrganizacao: dados.name,
     linkConvite,

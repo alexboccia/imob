@@ -650,8 +650,14 @@ model OrganizationMember {
 model Organization {
   id           String   @id @default(cuid())
   slug         String   @unique
-  name         String
+  // Vestigial (Fase 2 do multi-tenant original) — nunca lido por nenhum
+  // código de aplicação (confirmado por grep antes da Fase P.10). Fase
+  // P.10 introduz OrganizationDomain (múltiplos domínios, status,
+  // verificação) como o mecanismo real; esta coluna fica intocada
+  // (migration aditiva-only, nunca DROP) até uma fase futura confirmar
+  // que está seguro removê-la.
   customDomain String?  @unique
+  name         String
   cnpj         String?
   planId       String
   plan         Plan     @relation(fields: [planId], references: [id])
@@ -665,30 +671,32 @@ model Organization {
   // os limites efetivos em resolverEntitlementsOrganizacao.
   priceMonthlyCentsOverride Int?
 
-  members               OrganizationMember[]
-  limitOverrides        OrganizationLimitOverride[]
-  settings              OrganizationSettings?
-  branding              OrganizationBranding?
-  subscriptions         Subscription[]
-  invoices              Invoice[]
-  billingEvents         BillingEvent[]
-  activityLogs          ActivityLog[]
-  notifications         Notification[]
-  aiUsages              AiUsage[]
-  people                Person[]
-  personPreferences     PersonPreference[]
-  propertyInterests     PropertyInterest[]
+  members                      OrganizationMember[]
+  limitOverrides               OrganizationLimitOverride[]
+  settings                     OrganizationSettings?
+  branding                     OrganizationBranding?
+  subscriptions                Subscription[]
+  invoices                     Invoice[]
+  billingEvents                BillingEvent[]
+  activityLogs                 ActivityLog[]
+  notifications                Notification[]
+  aiUsages                     AiUsage[]
+  people                       Person[]
+  personPreferences            PersonPreference[]
+  propertyInterests            PropertyInterest[]
   propertyInterestStageHistory PropertyInterestStageHistory[]
-  scheduledActivities   ScheduledActivity[]
-  properties            Property[]
-  media                 Media[]
-  propertyStatusHistory PropertyStatusHistory[]
-  interactions          Interaction[]
-  deals                 Deal[]
-  portalListings        PortalListing[]
-  featureOptions        FeatureOption[]
-  propertyTypeOptions   PropertyTypeOption[]
-  ownerInviteTokens     OwnerInviteToken[]
+  scheduledActivities          ScheduledActivity[]
+  properties                   Property[]
+  media                        Media[]
+  propertyStatusHistory        PropertyStatusHistory[]
+  interactions                 Interaction[]
+  deals                        Deal[]
+  portalListings               PortalListing[]
+  featureOptions               FeatureOption[]
+  propertyTypeOptions          PropertyTypeOption[]
+  ownerInviteTokens            OwnerInviteToken[]
+  domains                      OrganizationDomain[]
+  emailDomain                  OrganizationEmailDomain?
 
   @@map("organizations")
 }
@@ -718,9 +726,19 @@ model OrganizationSettings {
 // ausência desta linha é um estado válido: resolverTema() trata como
 // "classic-blue" — nenhum tenant existente quebra por não ter branding
 // configurado.
+//
+// Fase P.10: displayName é o ÚNICO campo novo aqui. Cores (primary/
+// secondary/accent) foram deliberadamente NÃO adicionadas como hex livre
+// — o catálogo de temas (CATALOGO_TEMAS, src/lib/branding/temas.ts) já
+// resolve exatamente o problema que P.10.5.3 descreve (evitar CSS/cor
+// arbitrária vinda do banco), e é mais seguro: zero superfície de
+// injeção, sem precisar de validação Zod de hex. Duplicar com campos hex
+// soltos reabriria o risco que o catálogo existe pra fechar. Ver
+// relatório da Fase P.10, item "branding" — decisão documentada.
 model OrganizationBranding {
   organizationId String       @id
   organization   Organization @relation(fields: [organizationId], references: [id])
+  displayName    String?
   themeId        String       @default("classic-blue")
   faviconUrl     String?
   updatedAt      DateTime     @updatedAt
@@ -1064,4 +1082,103 @@ model OwnerInviteToken {
 
   @@index([userId])
   @@map("owner_invite_tokens")
+}
+
+// =====================================================================
+// Fase P.10 — Custom Domains & Tenant Branding
+// =====================================================================
+
+enum OrganizationDomainType {
+  EASYMOB_SUBDOMAIN
+  CUSTOM
+}
+
+// PENDING: cadastrado no Platform Admin, DNS ainda não confirmado.
+// VERIFIED: Platform Operator confirmou (manualmente, V1) que o DNS
+// aponta pra plataforma — ainda não necessariamente com o passo manual
+// de custom domain/certificado da DigitalOcean concluído (ver P.10.4).
+// ACTIVE: fluxo completo — é o único status, junto com VERIFIED, que o
+// tenant resolver (src/proxy.ts) aceita como tenant válido (nunca
+// PENDING/FAILED/DISABLED, ver src/lib/platform/hostname.ts).
+// FAILED: verificação tentada e não confirmada — nunca resolve tráfego.
+// DISABLED: desativado manualmente (ex: cliente trocou de domínio) sem
+// apagar o histórico — nunca resolve tráfego, mas preserva o registro.
+enum OrganizationDomainStatus {
+  PENDING
+  VERIFIED
+  ACTIVE
+  FAILED
+  DISABLED
+}
+
+// Domínio(s) associado(s) a uma Organization — mecanismo real da Fase
+// P.10, substitui conceitualmente Organization.customDomain (mantido
+// intacto e não lido, ver comentário no model Organization). hostname é
+// sempre normalizado (src/lib/platform/hostname.ts: normalizarHostname —
+// lowercase, sem protocolo/porta/path/query/trailing dot) antes de
+// gravar aqui, e é ÚNICO GLOBALMENTE: nunca duas organizações reivindicam
+// o mesmo hostname, seja EASYMOB_SUBDOMAIN ou CUSTOM (mesma tabela pros
+// dois tipos — decisão da Fase P.10 — evita duplicar a lógica de
+// resolução/unicidade em dois lugares).
+//
+// Deliberadamente FORA de TENANT_SCOPED_MODELS (src/lib/prisma.ts) — MESMO
+// motivo de OwnerInviteToken: é resolvido pelo proxy (src/proxy.ts) A
+// PARTIR do hostname da requisição, ANTES de qualquer contexto de tenant
+// existir (é o próprio dado que estabelece qual é o tenant).
+model OrganizationDomain {
+  id                String                   @id @default(cuid())
+  organizationId    String
+  organization      Organization             @relation(fields: [organizationId], references: [id])
+  hostname          String                   @unique
+  type              OrganizationDomainType
+  status            OrganizationDomainStatus @default(PENDING)
+  // Não usado por nenhuma verificação automática nesta fase (V1 é manual,
+  // ver P.10.3.3) — gerado e guardado como base pronta pra uma futura
+  // verificação por DNS TXT, sem precisar de migration nova depois.
+  verificationToken String                   @unique
+  verifiedAt        DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@index([organizationId])
+  @@map("organization_domains")
+}
+
+enum OrganizationEmailDomainStatus {
+  PENDING
+  VERIFIED
+  ACTIVE
+  FAILED
+}
+
+// Remetente TRANSACIONAL próprio por Organization (Resend) — nunca uma
+// caixa de e-mail hospedada pelo easymob (ver P.10.6, decisão explícita:
+// sem Gmail/Workspace nesta fase). src/lib/email.ts usa isto como
+// override do remetente quando status=ACTIVE; em qualquer outro status,
+// cai no remetente global (RESEND_FROM_EMAIL) — nunca quebra envio
+// existente (fallback obrigatório, ver P.10.6.4).
+//
+// Um por Organization (organizationId é a própria PK, mesmo padrão de
+// OrganizationSettings/OrganizationBranding). Deliberadamente FORA de
+// TENANT_SCOPED_MODELS pelo mesmo racional de OrganizationDomain: os
+// call sites (enviarEmailContato/enviarEmailConviteOwner) sempre recebem
+// organizationId explícito, então não há necessidade nem garantia de
+// contexto de tenant ambiente no momento do envio.
+//
+// V1: nenhuma chamada real à API de domínio do Resend — a chave atual é
+// escopada "somente envio" (resend.domains.list() retorna 401
+// restricted_api_key, ver src/lib/health.ts) — status é sempre setado
+// manualmente pelo Platform Operator, exatamente como OrganizationDomain.
+model OrganizationEmailDomain {
+  organizationId String                        @id
+  organization   Organization                  @relation(fields: [organizationId], references: [id])
+  domain         String                        @unique
+  fromName       String
+  fromAddress    String                        @unique
+  status         OrganizationEmailDomainStatus @default(PENDING)
+  verifiedAt     DateTime?
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+
+  @@map("organization_email_domains")
 }

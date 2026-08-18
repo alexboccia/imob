@@ -22,7 +22,12 @@ export default async function ConfiguracoesPage() {
       </p>
 
       <ConfiguracaoContatoForm
-        config={{ ...config, themeId: branding.themeId, favicon: branding.faviconUrl }}
+        config={{
+          ...config,
+          themeId: branding.themeId,
+          favicon: branding.faviconUrl,
+          nomePublico: branding.displayName,
+        }}
       />
     </div>
   );
