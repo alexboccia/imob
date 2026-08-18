@@ -58,6 +58,12 @@ export function MapaLocalizacao({
     <MapContainer
       center={posicao}
       zoom={15}
+      // `isolate` contém a pilha de empilhamento do Leaflet (seus controles
+      // e panes internos usam z-index até 1000) dentro do próprio mapa, pra
+      // nunca competir com dropdowns/modais portados pro body (ex.: Select
+      // do formulário, que usa z-50) — mesma técnica já usada no Positioner
+      // do Select (src/components/ui/select.tsx).
+      className="isolate"
       style={{ height: "260px", width: "100%", borderRadius: "0.5rem" }}
     >
       <TileLayer
