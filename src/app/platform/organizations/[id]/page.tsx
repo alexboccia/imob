@@ -21,6 +21,8 @@ import {
 import { AlterarPlanoForm } from "./AlterarPlanoForm";
 import { EstenderTrialForm } from "./EstenderTrialForm";
 import { OverridesForm } from "./OverridesForm";
+import { DeletarOrganizationForm } from "./DeletarOrganizationForm";
+import { ReenviarConviteForm } from "./ReenviarConviteForm";
 import { suspenderOrganization, ativarOrganization } from "./actions";
 
 function LinhaUso({
@@ -54,30 +56,37 @@ export default async function OrganizationDetailsPage({
   await requirePlatformOperator();
   const { id } = await params;
 
+  // Busca a Organization ANTES do resto — resolverEntitlementsOrganizacao/
+  // resolverEstadoAcessoOrganizacao usam findUniqueOrThrow internamente
+  // (src/lib/entitlements.ts), então rodar tudo num único Promise.all faria
+  // uma organização já apagada (ex: logo após excluí-la, ver
+  // deletarOrganization) estourar 500 em vez do 404 esperado abaixo.
+  const organization = await prisma.organization.findUnique({
+    where: { id },
+    include: {
+      plan: {
+        include: {
+          planModules: { include: { module: true } },
+          planLimits: true,
+        },
+      },
+      limitOverrides: true,
+      members: {
+        include: { user: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+  if (!organization) notFound();
+
   // Organization não é tenant-scoped (consulta direto via `prisma`). As
   // contagens abaixo são em models tenant-scoped (Property/Person;
   // OrganizationMember não é tenant-scoped mas filtra por organizationId
   // mesmo assim por clareza) — como o `where` já inclui organizationId
   // explícito, a extension de tenant-scoping não interfere, sem precisar
   // de withOrganization() nem bypass.
-  const [organization, propertiesCount, activeMembersCount, personCount, planos, entitlements, estadoAcesso] =
+  const [propertiesCount, activeMembersCount, personCount, planos, entitlements, estadoAcesso] =
     await Promise.all([
-      prisma.organization.findUnique({
-        where: { id },
-        include: {
-          plan: {
-            include: {
-              planModules: { include: { module: true } },
-              planLimits: true,
-            },
-          },
-          limitOverrides: true,
-          members: {
-            include: { user: true },
-            orderBy: { createdAt: "asc" },
-          },
-        },
-      }),
       prisma.property.count({
         where: { organizationId: id, status: { in: ["DRAFT", "AVAILABLE", "RESERVED"] } },
       }),
@@ -87,8 +96,6 @@ export default async function OrganizationDetailsPage({
       resolverEntitlementsOrganizacao(id),
       resolverEstadoAcessoOrganizacao(id),
     ]);
-
-  if (!organization) notFound();
 
   const trial = organization.plan.isTrial
     ? await prisma.subscription.findFirst({
@@ -114,6 +121,10 @@ export default async function OrganizationDetailsPage({
       return [feature, { modo: "PERSONALIZADO" as const, valor: linha.limit }];
     })
   ) as Record<Feature, { modo: "PADRAO" | "ILIMITADO" | "PERSONALIZADO"; valor: number | null }>;
+
+  const convitePendente = organization.members.find(
+    (membro) => membro.role === "OWNER" && membro.status === "INVITED"
+  );
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -259,6 +270,24 @@ export default async function OrganizationDetailsPage({
         </CardContent>
       </Card>
 
+      {convitePendente && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Convite pendente</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-2">
+              {convitePendente.user.name} ainda não ativou a conta. Reenvie o
+              convite para o e-mail atual ou corrija o endereço abaixo.
+            </p>
+            <ReenviarConviteForm
+              organizationId={organization.id}
+              emailAtual={convitePendente.user.email}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Membros ({organization.members.length})</CardTitle>
@@ -290,6 +319,15 @@ export default async function OrganizationDetailsPage({
               </p>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-destructive">
+        <CardHeader>
+          <CardTitle className="text-base text-destructive">Zona de risco</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DeletarOrganizationForm organizationId={organization.id} slug={organization.slug} />
         </CardContent>
       </Card>
     </div>

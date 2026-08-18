@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma, prismaPlatform } from "@/lib/prisma";
 import { requirePlatformOperator } from "@/lib/platform/auth";
@@ -7,6 +8,9 @@ import { PAPEIS_PLATAFORMA_TUDO, temPapelPlataforma } from "@/lib/platform/autho
 import { logPlatformActivity } from "@/lib/platform/audit";
 import { limiteEfetivoDoCatalogo, contarUsoAtual } from "@/lib/entitlements";
 import { centavosDeReais, parseLimiteForm, FEATURES_EDITAVEIS_PLANO } from "@/lib/plan-schema";
+import { gerarTokenConvite, hashToken, expiracaoConvite } from "@/lib/platform/invite";
+import { enviarEmailConviteOwner } from "@/lib/email";
+import { logger } from "@/lib/logger";
 import { type ActionState, erroAcessoNegado, erroGenerico, erroValidacao, sucesso } from "@/lib/action-result";
 import { z } from "zod";
 
@@ -367,4 +371,179 @@ export async function atualizarOverrides(
 
   revalidatePath(`/platform/organizations/${organizationId}`);
   return sucesso("Overrides atualizados.");
+}
+
+// Exclusão DEFINITIVA — diferente de suspenderOrganization, aqui os dados
+// realmente somem. Protegida por confirmação (digitar o slug exato) na
+// própria action, nunca só no client (o client component só desabilita o
+// botão por UX). Ordem dos deleteMany replica limparOrganizacao
+// (src/test/fixtures.ts) — filhos antes de pais, respeitando as FKs
+// RESTRICT de Organization. Cascatas automáticas do Prisma cobrem o resto
+// (Property→Media/PropertyStatusHistory/PortalListing,
+// Person→PersonPreference/ScheduledActivity,
+// PropertyInterest→PropertyInterestStageHistory). User NUNCA é apagado
+// aqui — só o vínculo OrganizationMember some; a conta de login do
+// responsável sobrevive (pode ser membro de outra organização).
+export async function deletarOrganization(
+  organizationId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const operador = await requirePlatformOperator();
+  if (!temPapelPlataforma(operador.role, PAPEIS_PLATAFORMA_TUDO)) return erroAcessoNegado();
+
+  const organizacao = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { name: true, slug: true },
+  });
+  if (!organizacao) return erroGenerico("Organization não encontrada.");
+
+  const confirmacao = String(formData.get("confirmacao") ?? "").trim();
+  if (confirmacao !== organizacao.slug) {
+    return erroGenerico(`Digite exatamente "${organizacao.slug}" para confirmar a exclusão.`);
+  }
+
+  try {
+    await prismaPlatform.$transaction(async (tx) => {
+      await tx.payment.deleteMany({ where: { invoice: { organizationId } } });
+      await tx.invoice.deleteMany({ where: { organizationId } });
+      await tx.subscription.deleteMany({ where: { organizationId } });
+      await tx.organizationLimitOverride.deleteMany({ where: { organizationId } });
+      await tx.billingEvent.deleteMany({ where: { organizationId } });
+      await tx.aiUsage.deleteMany({ where: { organizationId } });
+      await tx.notification.deleteMany({ where: { organizationId } });
+      await tx.activityLog.deleteMany({ where: { organizationId } });
+      await tx.notificationPreference.deleteMany({ where: { organizationMember: { organizationId } } });
+      // Deal e Interaction têm FK restrict pra Property — saem antes.
+      // PropertyInterest também (FK restrict pra Property).
+      await tx.deal.deleteMany({ where: { organizationId } });
+      await tx.interaction.deleteMany({ where: { organizationId } });
+      await tx.propertyInterest.deleteMany({ where: { organizationId } });
+      await tx.property.deleteMany({ where: { organizationId } });
+      await tx.person.deleteMany({ where: { organizationId } });
+      await tx.featureOption.deleteMany({ where: { organizationId } });
+      await tx.propertyTypeOption.deleteMany({ where: { organizationId } });
+      await tx.ownerInviteToken.deleteMany({ where: { organizationId } });
+      await tx.organizationMember.deleteMany({ where: { organizationId } });
+      await tx.organizationSettings.deleteMany({ where: { organizationId } });
+      await tx.organizationBranding.deleteMany({ where: { organizationId } });
+      await tx.organization.delete({ where: { id: organizationId } });
+    });
+  } catch (erro) {
+    logger.error("Falha ao deletar Organization — transação revertida, nada foi apagado", erro, {
+      platformOperatorId: operador.id,
+      organizationId,
+      modulo: "platform",
+    });
+    return erroGenerico("Não foi possível excluir a organização. Nenhum dado foi apagado — tente novamente.");
+  }
+
+  // PlatformAuditLog.organizationId é solto, sem FK real pra Organization
+  // (só pra filtro) — logar depois do delete é seguro, o registro
+  // continua consultável mesmo com a Organization já apagada.
+  await logPlatformActivity({
+    platformOperatorId: operador.id,
+    action: "ORGANIZATION_DELETED",
+    entity: "Organization",
+    entityId: organizationId,
+    organizationId,
+    metadata: { name: organizacao.name, slug: organizacao.slug },
+  });
+
+  revalidatePath("/platform/organizations");
+  redirect("/platform/organizations");
+}
+
+export type EstadoReenviarConvite = ActionState & { linkConvite?: string };
+
+const reenviarConviteSchema = z.object({
+  novoEmail: z.string().email("E-mail inválido."),
+});
+
+// Reenvia (ou muda o e-mail e reenvia) o convite de primeiro acesso do
+// OWNER — só faz sentido enquanto o vínculo ainda está INVITED (nunca
+// depois de ativado, ali quem manda é a troca de senha normal do
+// usuário). Sempre invalida convites antigos não usados antes de criar um
+// novo, pra nunca deixar dois links válidos ao mesmo tempo.
+export async function reenviarConvite(
+  organizationId: string,
+  _prevState: EstadoReenviarConvite,
+  formData: FormData
+): Promise<EstadoReenviarConvite> {
+  const operador = await requirePlatformOperator();
+  if (!temPapelPlataforma(operador.role, PAPEIS_PLATAFORMA_TUDO)) return erroAcessoNegado();
+
+  const organizacao = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { name: true },
+  });
+  if (!organizacao) return erroGenerico("Organization não encontrada.");
+
+  const membroOwner = await prisma.organizationMember.findFirst({
+    where: { organizationId, role: "OWNER", status: "INVITED" },
+    include: { user: true },
+  });
+  if (!membroOwner) {
+    return erroGenerico("Não há convite pendente para esta organização.");
+  }
+
+  const parsed = reenviarConviteSchema.safeParse({
+    novoEmail: formData.get("novoEmail"),
+  });
+  if (!parsed.success) return erroValidacao(parsed.error);
+  const novoEmail = parsed.data.novoEmail;
+
+  const emailAnterior = membroOwner.user.email;
+  const emailAlterado = novoEmail !== emailAnterior;
+
+  if (emailAlterado) {
+    const emailEmUso = await prisma.user.findUnique({ where: { email: novoEmail }, select: { id: true } });
+    if (emailEmUso && emailEmUso.id !== membroOwner.userId) {
+      return erroGenerico("Já existe uma conta com este e-mail.");
+    }
+    await prisma.user.update({ where: { id: membroOwner.userId }, data: { email: novoEmail } });
+  }
+
+  // Sai antes de criar o novo — nunca dois links válidos ao mesmo tempo
+  // pro mesmo convite.
+  await prisma.ownerInviteToken.deleteMany({
+    where: { userId: membroOwner.userId, organizationId, usedAt: null },
+  });
+
+  const token = gerarTokenConvite();
+  const tokenHash = hashToken(token);
+  const expiresAt = expiracaoConvite();
+  await prisma.ownerInviteToken.create({
+    data: { userId: membroOwner.userId, organizationId, tokenHash, expiresAt },
+  });
+
+  await logPlatformActivity({
+    platformOperatorId: operador.id,
+    action: "OWNER_INVITE_RESENT",
+    entity: "User",
+    entityId: membroOwner.userId,
+    organizationId,
+    metadata: emailAlterado ? { emailAnterior, emailNovo: novoEmail } : { email: novoEmail },
+  });
+
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const linkConvite = `${baseUrl}/app/convite/${token}`;
+
+  const { enviado } = await enviarEmailConviteOwner({
+    para: novoEmail,
+    nomeOrganizacao: organizacao.name,
+    linkConvite,
+  });
+
+  revalidatePath(`/platform/organizations/${organizationId}`);
+
+  if (!enviado) {
+    return {
+      success: true,
+      message: "Convite atualizado, mas o e-mail não pôde ser enviado. Copie o link abaixo e envie manualmente.",
+      linkConvite,
+    };
+  }
+
+  return sucesso(`Convite reenviado para ${novoEmail}.`);
 }
