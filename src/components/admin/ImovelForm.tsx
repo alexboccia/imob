@@ -167,7 +167,9 @@ export function ImovelForm({
           <Label htmlFor="finalidade">Finalidade</Label>
           <Select name="finalidade" defaultValue={v.finalidade ?? "SALE"}>
             <SelectTrigger id="finalidade" className="w-full">
-              <SelectValue />
+              <SelectValue>
+                {(valor: string) => FINALIDADE_LABEL[valor] ?? valor}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {Object.entries(FINALIDADE_LABEL).map(([value, label]) => (
@@ -182,7 +184,9 @@ export function ImovelForm({
           <Label htmlFor="status">Status</Label>
           <Select name="status" defaultValue={v.status ?? "DRAFT"}>
             <SelectTrigger id="status" className="w-full">
-              <SelectValue />
+              <SelectValue>
+                {(valor: string) => STATUS_IMOVEL_LABEL[valor] ?? valor}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {Object.entries(STATUS_IMOVEL_LABEL).map(([value, label]) => (
@@ -236,7 +240,11 @@ export function ImovelForm({
           <Label htmlFor="estagioObra">Evolução da obra</Label>
           <Select name="estagioObra" defaultValue={v.estagioObra ?? ""}>
             <SelectTrigger id="estagioObra" className="w-full">
-              <SelectValue />
+              <SelectValue>
+                {(valor: string) =>
+                  valor ? (ESTAGIO_OBRA_LABEL[valor] ?? valor) : "Não se aplica"
+                }
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="">Não se aplica</SelectItem>
