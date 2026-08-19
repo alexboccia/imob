@@ -29,7 +29,7 @@ import {
   estagioInteresseEncerrado,
 } from "@/lib/property-interest-schema";
 
-type EstadoFormulario = { sucesso: boolean; erro?: string };
+type EstadoFormulario = { sucesso: boolean; erro?: string; clienteId?: string };
 
 // Confirma que todo item de propertyTypes/desiredPropertyFeatures/
 // desiredCondoFeatures pertence a um catálogo (PropertyTypeOption/
@@ -96,9 +96,14 @@ const pessoaSchema = z.object({
     .optional()
     .or(z.literal("")),
   papel: z.enum(["LEAD", "CLIENT", "OWNER"]),
+  // .optional() sozinho só aceita `undefined` — o <Select> de origem não
+  // tem defaultValue (placeholder "Origem"), então o hidden input do Base
+  // UI sempre existe no FormData com value="" quando nada é escolhido,
+  // nunca omitido. Mesmo padrão de email/telefone acima pra aceitar "".
   origem: z
     .enum(["WEBSITE", "REFERRAL", "PORTAL", "INSTAGRAM", "WHATSAPP", "OTHER"])
-    .optional(),
+    .optional()
+    .or(z.literal("")),
   observacoes: z.string().optional(),
 });
 
@@ -196,7 +201,13 @@ export async function criarPessoa(
   });
 
   revalidatePath("/app/clientes");
-  redirect("/app/clientes");
+  // Redesenho da tela de Clientes: antes disparava redirect("/app/clientes")
+  // incondicional — como o formulário agora abre dentro de um Sheet SOBRE
+  // a própria página de Clientes, um redirect pra ela mesma não fecharia o
+  // Sheet (Next não remonta o componente cliente numa navegação pro mesmo
+  // segmento). Devolve sucesso pro chamador decidir (NovoClienteSheet fecha
+  // o Sheet e conta com o revalidatePath acima pra atualizar a listagem).
+  return { sucesso: true, clienteId: pessoa.id };
 }
 
 const estagioSchema = z.object({
@@ -972,5 +983,87 @@ export async function removerInteresse(
 
     revalidatePath(`/app/clientes/${atual.personId}`);
     return sucesso("Relacionamento removido.");
+  });
+}
+
+export type ResumoClienteDrawer = {
+  id: string;
+  name: string;
+  roles: string[];
+  source: string | null;
+  pipelineStage: string;
+  interacoes: {
+    id: string;
+    type: string;
+    notes: string | null;
+    occurredAt: Date;
+    propertyTitulo: string | null;
+  }[];
+  contagens: {
+    favoritos: number;
+    visitados: number;
+    propostas: number;
+    atividades: number;
+  };
+};
+
+// Redesenho da tela de Clientes — dado sob demanda do drawer lateral,
+// buscado só quando um cliente é aberto (nunca por linha da listagem, ver
+// comentário do SELECT batched em page.tsx). As 4 contagens usam
+// prisma.propertyInterest.count/scheduledActivity.count — nenhuma delas
+// tenta estimar; "atividades" conta TODA ScheduledActivity da pessoa
+// (agendada, concluída ou cancelada), distinto do histórico de Interaction
+// mostrado logo abaixo no drawer.
+export async function buscarResumoClienteCrm(pessoaId: string): Promise<ResumoClienteDrawer | null> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  const organizationId = await requireOrganizationId();
+
+  return withOrganization(organizationId, async () => {
+    const [pessoa, favoritos, visitados, propostas, atividades] = await Promise.all([
+      prisma.person.findUnique({
+        where: { id: pessoaId, organizationId },
+        select: {
+          id: true,
+          name: true,
+          roles: true,
+          source: true,
+          pipelineStage: true,
+          interactions: {
+            orderBy: { occurredAt: "desc" },
+            take: 5,
+            select: {
+              id: true,
+              type: true,
+              notes: true,
+              occurredAt: true,
+              property: { select: { title: true } },
+            },
+          },
+        },
+      }),
+      prisma.propertyInterest.count({ where: { organizationId, personId: pessoaId, favorited: true } }),
+      prisma.propertyInterest.count({ where: { organizationId, personId: pessoaId, stage: "VISITED" } }),
+      prisma.propertyInterest.count({ where: { organizationId, personId: pessoaId, stage: "PROPOSAL" } }),
+      prisma.scheduledActivity.count({ where: { organizationId, personId: pessoaId } }),
+    ]);
+
+    if (!pessoa) return null;
+
+    return {
+      id: pessoa.id,
+      name: pessoa.name,
+      roles: pessoa.roles,
+      source: pessoa.source,
+      pipelineStage: pessoa.pipelineStage,
+      interacoes: pessoa.interactions.map((i) => ({
+        id: i.id,
+        type: i.type,
+        notes: i.notes,
+        occurredAt: i.occurredAt,
+        propertyTitulo: i.property?.title ?? null,
+      })),
+      contagens: { favoritos, visitados, propostas, atividades },
+    };
   });
 }

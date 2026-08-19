@@ -4,6 +4,7 @@ import {
   construirWhereClientes,
   construirWhereUsuarios,
 } from "@/lib/listagens-admin-query";
+import { sanitizarFiltro, ORIGEM_LABEL, PAPEL_LABEL } from "@/lib/crm-labels";
 
 describe("construirWhereImoveis — isolamento de tenant", () => {
   test("organizationId está sempre presente no where", () => {
@@ -71,6 +72,95 @@ describe("construirWhereClientes — isolamento e filtros", () => {
     const where = construirWhereClientes({ organizationId: "org-a", busca: "joão" });
     const campos = where.OR!.map((c) => Object.keys(c)[0]);
     expect(new Set(campos)).toEqual(new Set(["name", "email", "phone"]));
+    expect(where.organizationId).toBe("org-a");
+  });
+
+  // Redesenho da tela de Clientes — filtros por origem (Person.source) e
+  // papel (Person.roles), expostos como filtro de URL pela primeira vez.
+  test("filtro de origem aplicado só quando informado", () => {
+    const comFiltro = construirWhereClientes({ organizationId: "org-a", busca: "", origemFiltro: "WEBSITE" });
+    const semFiltro = construirWhereClientes({ organizationId: "org-a", busca: "" });
+    expect(comFiltro.source).toBe("WEBSITE");
+    expect("source" in semFiltro).toBe(false);
+  });
+
+  test("filtro de papel usa `has` (roles é array — Person pode ter mais de um papel)", () => {
+    const comFiltro = construirWhereClientes({ organizationId: "org-a", busca: "", papelFiltro: "CLIENT" });
+    const semFiltro = construirWhereClientes({ organizationId: "org-a", busca: "" });
+    expect(comFiltro.roles).toEqual({ has: "CLIENT" });
+    expect("roles" in semFiltro).toBe(false);
+  });
+
+  test("estágio, origem e papel combinam sem se sobrescrever", () => {
+    const where = construirWhereClientes({
+      organizationId: "org-a",
+      busca: "",
+      estagioFiltro: "CONTACTED",
+      origemFiltro: "REFERRAL",
+      papelFiltro: "LEAD",
+    });
+    expect(where.pipelineStage).toBe("CONTACTED");
+    expect(where.source).toBe("REFERRAL");
+    expect(where.roles).toEqual({ has: "LEAD" });
+    expect(where.organizationId).toBe("org-a");
+  });
+});
+
+// Correção cirúrgica pós-auditoria — reproduz exatamente o que page.tsx faz
+// (sanitizarFiltro ANTES de construirWhereClientes) pros 7 cenários que
+// causavam PrismaClientValidationError (HTTP 500) antes da correção.
+// "nenhum where Prisma inválido é produzido" = nunca um valor fora da
+// allowlist sobrevive até aqui.
+describe("construirWhereClientes — filtro inválido nunca chega ao where (pipeline sanitizarFiltro + construirWhereClientes)", () => {
+  const ORIGENS_VALIDAS = new Set<string>(Object.keys(ORIGEM_LABEL));
+  const PAPEIS_VALIDOS = new Set<string>(Object.keys(PAPEL_LABEL));
+
+  function construirComoAPagina(params: { origem?: string; papel?: string }) {
+    return construirWhereClientes({
+      organizationId: "org-a",
+      busca: "",
+      origemFiltro: sanitizarFiltro(params.origem, ORIGENS_VALIDAS),
+      papelFiltro: sanitizarFiltro(params.papel, PAPEIS_VALIDOS),
+    });
+  }
+
+  test("A) origem válida sozinha -> aplicada", () => {
+    const where = construirComoAPagina({ origem: "WEBSITE" });
+    expect(where.source).toBe("WEBSITE");
+    expect("roles" in where).toBe(false);
+  });
+
+  test("B) origem inválida sozinha -> ignorada, where sem `source`", () => {
+    const where = construirComoAPagina({ origem: "GARBAGE" });
+    expect("source" in where).toBe(false);
+  });
+
+  test("C) papel válido sozinho -> aplicado", () => {
+    const where = construirComoAPagina({ papel: "CLIENT" });
+    expect(where.roles).toEqual({ has: "CLIENT" });
+  });
+
+  test("D) papel inválido sozinho -> ignorado, where sem `roles`", () => {
+    const where = construirComoAPagina({ papel: "GARBAGE" });
+    expect("roles" in where).toBe(false);
+  });
+
+  test("E) origem válida + papel inválido -> só origem aplicada, papel ignorado", () => {
+    const where = construirComoAPagina({ origem: "REFERRAL", papel: "GARBAGE" });
+    expect(where.source).toBe("REFERRAL");
+    expect("roles" in where).toBe(false);
+  });
+
+  test("F) origem inválida + papel válido -> só papel aplicado, origem ignorada", () => {
+    const where = construirComoAPagina({ origem: "GARBAGE", papel: "LEAD" });
+    expect("source" in where).toBe(false);
+    expect(where.roles).toEqual({ has: "LEAD" });
+  });
+
+  test("G) ambos inválidos -> where só com organizationId, nenhum dos dois aplicado", () => {
+    const where = construirComoAPagina({ origem: "GARBAGE", papel: "GARBAGE" });
+    expect("source" in where).toBe(false);
+    expect("roles" in where).toBe(false);
     expect(where.organizationId).toBe("org-a");
   });
 });

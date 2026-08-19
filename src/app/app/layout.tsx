@@ -128,7 +128,12 @@ export default async function AdminLayout({
           </form>
         </div>
       </aside>
-      <div className="flex-1">
+      {/* min-w-0: sem isso, um flex item nunca encolhe abaixo da largura
+          intrínseca do conteúdo — uma tabela larga "empurra" a página
+          inteira em vez de rolar dentro do próprio overflow-x-auto (bug
+          pré-existente, reproduzido em /app/imoveis e /app/usuarios antes
+          desta correção, não só em /app/clientes). */}
+      <div className="min-w-0 flex-1">
         <main className="p-6">{children}</main>
       </div>
       <Toaster />

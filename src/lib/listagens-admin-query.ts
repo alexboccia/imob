@@ -2,7 +2,7 @@
 // page.tsx pra ser testável sem precisar de um banco real — o ponto
 // central de verificação é que `organizationId` está sempre presente e
 // nunca é sobrescrito por filtro/busca do usuário (isolamento de tenant).
-import type { Prisma } from "@/generated/prisma/client";
+import type { Prisma, PersonRole } from "@/generated/prisma/client";
 
 export function construirWhereImoveis(params: {
   organizationId: string;
@@ -37,14 +37,21 @@ export function construirWhereClientes(params: {
   organizationId: string;
   busca: string;
   estagioFiltro?: string;
+  origemFiltro?: string;
+  papelFiltro?: string;
 }): Prisma.PersonWhereInput {
-  const { organizationId, busca, estagioFiltro } = params;
+  const { organizationId, busca, estagioFiltro, origemFiltro, papelFiltro } = params;
 
   return {
     organizationId,
     ...(estagioFiltro
       ? { pipelineStage: estagioFiltro as Prisma.PersonWhereInput["pipelineStage"] }
       : {}),
+    ...(origemFiltro ? { source: origemFiltro as Prisma.PersonWhereInput["source"] } : {}),
+    // roles é String[]/PersonRole[] — `has` (não `equals`) porque uma
+    // Person pode acumular mais de um papel (ex: LEAD que virou CLIENT
+    // sem perder o histórico do primeiro).
+    ...(papelFiltro ? { roles: { has: papelFiltro as PersonRole } } : {}),
     ...(busca
       ? {
           OR: [

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { criarPessoa } from "@/app/app/clientes/actions";
 import { FormDisclosure } from "@/components/admin/FormDisclosure";
 import { Input } from "@/components/ui/input";
@@ -14,14 +14,35 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const estadoInicial = { sucesso: false, erro: undefined as string | undefined };
+const estadoInicial = { sucesso: false, erro: undefined as string | undefined, clienteId: undefined as string | undefined };
 
-export function CriarClienteForm() {
+// `envolverEmDisclosure`: uso original desta tela (inline, sempre montado
+// na página) usava <FormDisclosure> como moldura. O redesenho da tela de
+// Clientes passou a abrir este mesmo formulário dentro de um Sheet
+// (NovoClienteSheet) — moldura diferente, mesmos campos/validação/action.
+// `onSuccess`: chamado depois que criarPessoa devolve sucesso (a action
+// não redireciona mais, ver comentário nela) — usado pelo Sheet pra se
+// fechar; sem consumidor (uso original), simplesmente não faz nada.
+export function CriarClienteForm({
+  envolverEmDisclosure = true,
+  onSuccess,
+}: {
+  envolverEmDisclosure?: boolean;
+  onSuccess?: () => void;
+} = {}) {
   const [estado, formAction, pendente] = useActionState(criarPessoa, estadoInicial);
+  const formRef = useRef<HTMLFormElement>(null);
 
-  return (
-    <FormDisclosure titulo="+ Cadastrar novo cliente/lead">
-      <form action={formAction} className="grid grid-cols-2 gap-3 text-sm">
+  useEffect(() => {
+    if (estado.sucesso) {
+      formRef.current?.reset();
+      onSuccess?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estado.sucesso, estado.clienteId]);
+
+  const formulario = (
+      <form ref={formRef} action={formAction} className="grid grid-cols-2 gap-3 text-sm">
         <Input name="nome" placeholder="Nome" required />
         <CampoTelefone name="telefone" placeholder="Telefone/WhatsApp" />
         <Input name="email" type="email" placeholder="E-mail" />
@@ -60,6 +81,9 @@ export function CriarClienteForm() {
           {pendente ? "Cadastrando..." : "Cadastrar"}
         </Button>
       </form>
-    </FormDisclosure>
   );
+
+  if (!envolverEmDisclosure) return formulario;
+
+  return <FormDisclosure titulo="+ Cadastrar novo cliente/lead">{formulario}</FormDisclosure>;
 }

@@ -27,32 +27,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ESTAGIO_LABEL, ESTAGIOS_PIPELINE, TIPO_INTERACAO_LABEL } from "@/lib/crm-labels";
 
-const ESTAGIOS = [
-  "NEW_LEAD",
-  "CONTACTED",
-  "VISIT_SCHEDULED",
-  "PROPOSAL",
-  "CLOSED",
-  "LOST",
-];
-
-const ESTAGIO_LABEL: Record<string, string> = {
-  NEW_LEAD: "Novo lead",
-  CONTACTED: "Contato feito",
-  VISIT_SCHEDULED: "Visita agendada",
-  PROPOSAL: "Proposta",
-  CLOSED: "Fechado",
-  LOST: "Perdido",
-};
-
-const TIPO_INTERACAO_LABEL: Record<string, string> = {
-  VISIT: "Visita",
-  CALL: "Ligação",
-  MESSAGE: "Mensagem",
-  EMAIL: "E-mail",
-  OTHER: "Outro",
-};
+// Redesenho da tela de Clientes — ESTAGIO_LABEL/TIPO_INTERACAO_LABEL
+// consolidados em src/lib/crm-labels.ts (antes duplicados aqui e em
+// columns.tsx).
+const ESTAGIOS = ESTAGIOS_PIPELINE;
 
 export default async function DetalheClientePage({
   params,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useTable, flexRender, type ColumnDef } from "@tanstack/react-table";
 import { tableFeaturesUsadas, type TableFeaturesUsadas } from "./table-features";
@@ -46,6 +46,7 @@ export function DataTable<TData extends Record<string, unknown>>({
   sortableColumns = {},
   searchPlaceholder = "Buscar...",
   emptyMessage = "Nenhum registro encontrado.",
+  onRowClick,
 }: {
   columns: DataTableColumn<TData>[];
   data: TData[];
@@ -55,7 +56,18 @@ export function DataTable<TData extends Record<string, unknown>>({
   /** Mapa "id da coluna" -> "campo aceito pelo servidor no parâmetro sort". */
   sortableColumns?: Record<string, string>;
   searchPlaceholder?: string;
-  emptyMessage?: string;
+  /** Aceita ReactNode (não só texto) desde o redesenho de Clientes — a
+   * tela de Clientes usa isso pra incluir um botão "Adicionar primeiro
+   * cliente" no estado vazio, mas continua funcionando com string simples
+   * nas outras 4 telas que já usam DataTable (nenhuma delas muda). */
+  emptyMessage?: ReactNode;
+  /** Opcional — quando presente, a linha vira clicável (cursor-pointer +
+   * onClick). Nenhuma das 5 telas que já usam DataTable passa isso hoje,
+   * então o comportamento delas não muda (aditivo, ver Fase de redesenho
+   * de Clientes). Cliques em elementos interativos dentro da linha (link,
+   * botão) continuam funcionando normalmente — o clique só propagaria até
+   * aqui se não for capturado antes por eles. */
+  onRowClick?: (row: TData) => void;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -155,7 +167,52 @@ export function DataTable<TData extends Record<string, unknown>>({
           <TableBody>
             {linhas.length > 0 ? (
               linhas.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow
+                  key={row.id}
+                  onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                  // tabIndex/onKeyDown só quando a linha é interativa
+                  // (onRowClick presente) — nas outras 4 telas que usam
+                  // DataTable sem essa prop, a linha continua um <tr>
+                  // comum, sem foco/handler novo algum.
+                  //
+                  // Sem role="button": a linha já contém elementos
+                  // interativos aninhados (Link do nome, menu de ações) —
+                  // sobrescrever pra role="button" criaria um antipadrão
+                  // ARIA (interativo dentro de interativo) e destruiria a
+                  // semântica nativa de linha de tabela pra leitores de
+                  // tela. Em vez disso, a PRÓPRIA linha vira um parada de
+                  // Tab (tabIndex=0) com Enter/Espaço ativando o mesmo
+                  // comportamento do clique, preservando role="row" nativo.
+                  //
+                  // `event.target === event.currentTarget`: só ativa quando
+                  // o evento de teclado se origina na própria <tr> (linha
+                  // com foco direto), nunca quando ele borbulha de um
+                  // descendente focável (Link do nome, botão do menu) —
+                  // mesmo racional do stopPropagation já usado no clique
+                  // desses elementos, aplicado ao teclado.
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onKeyDown={
+                    onRowClick
+                      ? (e) => {
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === "Enter") {
+                            onRowClick(row.original);
+                          } else if (e.key === " ") {
+                            // Previne rolagem da página (comportamento
+                            // padrão do navegador pra Espaço) antes de
+                            // ativar a linha.
+                            e.preventDefault();
+                            onRowClick(row.original);
+                          }
+                        }
+                      : undefined
+                  }
+                  className={
+                    onRowClick
+                      ? "cursor-pointer focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                      : undefined
+                  }
+                >
                   {row.getAllCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(
