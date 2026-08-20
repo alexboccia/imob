@@ -58,7 +58,7 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen flex">
-      <aside className="w-56 border-r bg-gray-50 flex flex-col">
+      <aside className="min-w-0 w-56 border-r bg-gray-50 flex flex-col">
         <div className="px-4 py-4 font-semibold border-b">Painel</div>
         {siteUrl && (
           <a
