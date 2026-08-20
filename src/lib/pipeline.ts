@@ -33,7 +33,7 @@ export type ItemPipeline = {
   // aparecendo (é legitimamente desta organização), só a relação anômala
   // é redigida, nunca vaza nome/título de outro tenant.
   person: { id: string; name: string } | null;
-  property: { id: string; title: string; status: PropertyStatus } | null;
+  property: { id: string; title: string; status: PropertyStatus; neighborhood: string } | null;
   proximaVisita: { id: string; scheduledAtISO: string } | null;
   // null quando property foi redigido acima (sem status pra calcular) —
   // nunca inferido/adivinhado.
@@ -59,7 +59,7 @@ function selectItemPipeline(organizationId: string) {
     closedAt: true,
     updatedAt: true,
     person: { select: { id: true, name: true, organizationId: true } },
-    property: { select: { id: true, title: true, status: true, organizationId: true } },
+    property: { select: { id: true, title: true, status: true, neighborhood: true, organizationId: true } },
     // organizationId explícito no where da relação — mesma defesa de
     // clientes/[id]/page.tsx e imoveis/[id]/page.tsx (H.2/P.2): mesmo sob
     // uma ScheduledActivity anômala (organizationId de outro tenant
@@ -93,7 +93,7 @@ type LinhaBrutaPipeline = {
   closedAt: Date | null;
   updatedAt: Date;
   person: { id: string; name: string; organizationId: string };
-  property: { id: string; title: string; status: PropertyStatus; organizationId: string };
+  property: { id: string; title: string; status: PropertyStatus; neighborhood: string; organizationId: string };
   scheduledActivities: { id: string; scheduledAt: Date }[];
   stageHistory: { newStage: PropertyInterestStage; changedAt: Date }[];
 };
@@ -157,7 +157,12 @@ export function paraItemPipeline(
       : null;
   const property =
     linha.property.organizationId === organizationId
-      ? { id: linha.property.id, title: linha.property.title, status: linha.property.status }
+      ? {
+          id: linha.property.id,
+          title: linha.property.title,
+          status: linha.property.status,
+          neighborhood: linha.property.neighborhood,
+        }
       : null;
   const proximaVisita = linha.scheduledActivities[0]
     ? {

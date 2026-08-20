@@ -187,7 +187,12 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     const colunas = await buscarPipelineAberto(cenario.organization.id);
     const item = colunas.INTERESTED.find((i) => i.id === interesse.id);
     expect(item?.person).toEqual({ id: pessoa.id, name: "Cliente Nominal" });
-    expect(item?.property).toEqual({ id: imovel.id, title: "Cobertura Duplex", status: "AVAILABLE" });
+    expect(item?.property).toEqual({
+      id: imovel.id,
+      title: "Cobertura Duplex",
+      status: "AVAILABLE",
+      neighborhood: "Bairro de teste",
+    });
   });
 
   test("O) os 4 stages abertos aparecem cada um na sua coluna correta", async () => {

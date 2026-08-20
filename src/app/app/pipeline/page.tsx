@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireOrganizationId } from "@/lib/tenant";
 import { hasModule } from "@/lib/entitlements";
 import { interpretarPaginacao } from "@/lib/pagination";
@@ -14,25 +13,25 @@ import {
   PERIODO_PIPELINE_LABEL,
   COLUNAS_ABERTAS,
   type ColunaAberta,
-  type PeriodoPipeline,
-  type FiltroPrioridadePipeline,
   type PrioridadePipeline,
 } from "@/lib/pipeline";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { CardPipeline } from "@/components/admin/CardPipeline";
-import { ResumoPipeline } from "@/components/admin/ResumoPipeline";
-import { AnalyticsHistoricoPipeline } from "@/components/admin/AnalyticsHistoricoPipeline";
-import { Input } from "@/components/ui/input";
+import { PipelineKpiCards } from "@/components/admin/pipeline/PipelineKpiCards";
+import { PipelineTabs } from "@/components/admin/pipeline/PipelineTabs";
+import { PipelineFiltrosBar } from "@/components/admin/pipeline/PipelineFiltrosBar";
+import { PipelinePrioridadeChips } from "@/components/admin/pipeline/PipelinePrioridadeChips";
+import { PipelineInsights } from "@/components/admin/pipeline/PipelineInsights";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
-const PERIODOS_PIPELINE_OPCOES: readonly PeriodoPipeline[] = ["30d", "90d", "ANO", "TODOS"];
-
-// Pipeline (Fase P.4) — primeira tela oficial do Kanban, projeção
-// operacional de PropertyInterest (nunca uma segunda fonte de verdade —
-// ver src/lib/pipeline.ts). Mesmo padrão estrutural de src/app/app/agenda
-// (Fase H.3/H.4): filtros URL-driven, refresh preserva estado, sem estado
-// client-side escondido.
+// Pipeline (Fase P.4, redesenhado pra seguir o mesmo padrão visual/UX do
+// CRM de Clientes) — projeção operacional de PropertyInterest (nunca uma
+// segunda fonte de verdade — ver src/lib/pipeline.ts). Mesmo padrão
+// estrutural de src/app/app/agenda: filtros URL-driven, refresh preserva
+// estado, sem estado client-side escondido na página em si (só os cards
+// individuais guardam o estado local do próprio drawer).
 
 const COLUNA_LABEL: Record<ColunaAberta, string> = {
   INTERESTED: "Interessado",
@@ -50,18 +49,11 @@ type SearchParams = {
   prioridade?: string;
 };
 
-const PRIORIDADE_LABEL: Record<Exclude<FiltroPrioridadePipeline, "TODAS">, string> = {
-  ALTA: "Alta",
-  MEDIA: "Média",
-  NORMAL: "Normal",
-};
-
 // Mesmo racional de construirHref em agenda/page.tsx — preserva os
 // filtros ativos em qualquer navegação (troca de visão, paginação, troca
 // de período), nunca "esquece" um filtro que o corretor já tinha
-// aplicado. `periodo` (Fase P.5) é só mais um parâmetro preservado aqui —
-// nunca influencia q/visao/resultado/page, e vice-versa (seção 28/53 do
-// pedido: busca do Kanban e período gerencial são independentes).
+// aplicado. `periodo` é só mais um parâmetro preservado aqui — nunca
+// influencia q/visao/resultado/page, e vice-versa.
 function construirHref(params: SearchParams, overrides: Partial<SearchParams>, resetarPage: boolean): string {
   const efetivos: SearchParams = { ...params, ...overrides };
   if (resetarPage) delete efetivos.page;
@@ -98,127 +90,58 @@ export default async function PipelinePage({
   }
 
   const filtros = interpretarFiltrosPipeline(params);
-  // Período (Fase P.5) é deliberadamente independente de q/visao/resultado
-  // — só afeta o resumo gerencial (ResumoPipeline), nunca o Kanban/lista
-  // abaixo (seção 28/29 do pedido). buscarMetricasPipeline nunca reaproveita
-  // os itens já carregados de buscarPipelineAberto/Encerrado (que têm teto
-  // de exibição) — 2 queries `groupBy` estruturais próprias, sempre
-  // GLOBAIS na parte de estoque atual.
+  // Período é deliberadamente independente de q/visao/resultado — só
+  // afeta o resumo gerencial (KPIs/Insights), nunca o Kanban/lista abaixo.
+  // buscarMetricasPipeline nunca reaproveita os itens já carregados de
+  // buscarPipelineAberto/Encerrado (que têm teto de exibição) — 2 queries
+  // `groupBy` estruturais próprias, sempre GLOBAIS na parte de estoque atual.
   const periodo = interpretarPeriodoPipeline(params);
   const metricas = await buscarMetricasPipeline(organizationId, { periodo });
-  // Fase P.7: leitura independente, própria (nunca reaproveita os itens
-  // de buscarPipelineAberto/Encerrado, que têm teto de exibição) — mesmo
-  // padrão arquitetural já estabelecido pra buscarMetricasPipeline (P.5).
+  // Leitura independente, própria (nunca reaproveita os itens de
+  // buscarPipelineAberto/Encerrado, que têm teto de exibição).
   const analyticsHistorico = await buscarAnalyticsHistoricoPipeline(organizationId, { periodo });
 
-  const Resumo = <ResumoPipeline metricas={metricas} />;
-  const AnaliseHistorica = <AnalyticsHistoricoPipeline analytics={analyticsHistorico} />;
-
-  const SeletorPeriodo = (
-    <form method="get" className="flex flex-wrap items-end gap-2 mb-4">
-      <input type="hidden" name="q" value={filtros.busca} />
-      <input type="hidden" name="visao" value={filtros.visao === "ENCERRADA" ? "encerrada" : "aberta"} />
-      <input type="hidden" name="resultado" value={filtros.resultado} />
-      {params.page && <input type="hidden" name="page" value={params.page} />}
-      <div className="space-y-1">
-        <label htmlFor="pipeline-periodo" className="text-xs text-muted-foreground">
-          Período dos resultados
-        </label>
-        <select
-          id="pipeline-periodo"
-          name="periodo"
-          defaultValue={periodo}
-          className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          {PERIODOS_PIPELINE_OPCOES.map((opcao) => (
-            <option key={opcao} value={opcao}>
-              {PERIODO_PIPELINE_LABEL[opcao]}
-            </option>
-          ))}
-        </select>
-      </div>
-      <button type="submit" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-        Aplicar
-      </button>
-    </form>
+  const Cabecalho = (
+    <div>
+      <h1 className="text-2xl font-semibold">Pipeline</h1>
+      <p className="text-sm text-muted-foreground">
+        {filtros.visao === "ABERTA"
+          ? "Negociações em andamento, agrupadas por etapa."
+          : "Negociações encerradas — ganhas ou perdidas."}
+      </p>
+    </div>
   );
 
-  const CabecalhoFiltros = (
-    <>
-      <nav className="flex flex-wrap gap-2 mb-3" aria-label="Situação da negociação">
-        <Link
-          href={construirHref(params, { visao: "aberta" }, true)}
-          aria-current={filtros.visao === "ABERTA" ? "page" : undefined}
-          className={cn(buttonVariants({ variant: filtros.visao === "ABERTA" ? "default" : "outline", size: "sm" }))}
-        >
-          Em andamento
-        </Link>
-        <Link
-          href={construirHref(params, { visao: "encerrada" }, true)}
-          aria-current={filtros.visao === "ENCERRADA" ? "page" : undefined}
-          className={cn(
-            buttonVariants({ variant: filtros.visao === "ENCERRADA" ? "default" : "outline", size: "sm" })
-          )}
-        >
-          Encerradas
-        </Link>
-      </nav>
+  const Kpis = <PipelineKpiCards metricas={metricas} periodoLabel={PERIODO_PIPELINE_LABEL[periodo]} />;
 
-      <form method="get" className="flex flex-wrap items-end gap-2 mb-4 border rounded-md p-3">
-        <input type="hidden" name="visao" value={filtros.visao === "ENCERRADA" ? "encerrada" : "aberta"} />
-        {periodo !== "30d" && <input type="hidden" name="periodo" value={periodo} />}
-        <div className="flex-1 min-w-[160px] space-y-1">
-          <label htmlFor="pipeline-q" className="text-xs text-muted-foreground">
-            Buscar
-          </label>
-          <Input
-            id="pipeline-q"
-            name="q"
-            defaultValue={filtros.busca}
-            placeholder="Buscar cliente ou imóvel..."
-          />
-        </div>
-        {filtros.visao === "ENCERRADA" && (
-          <div className="space-y-1">
-            <label htmlFor="pipeline-resultado" className="text-xs text-muted-foreground">
-              Resultado
-            </label>
-            <select
-              id="pipeline-resultado"
-              name="resultado"
-              defaultValue={filtros.resultado}
-              className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              <option value="TODOS">Todos</option>
-              <option value="GANHO">Ganho</option>
-              <option value="PERDIDO">Perdido</option>
-            </select>
-          </div>
-        )}
-        <button type="submit" className={cn(buttonVariants({ variant: "default", size: "sm" }))}>
-          Filtrar
-        </button>
-        {(filtros.busca || filtros.resultado !== "TODOS") && (
-          <Link
-            href={construirHref({ visao: params.visao, periodo: params.periodo }, {}, true)}
-            className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-          >
-            Limpar filtros
-          </Link>
-        )}
-      </form>
-    </>
+  const Tabs = (
+    <PipelineTabs
+      visao={filtros.visao}
+      emAndamento={metricas.emAndamento}
+      hrefAberta={construirHref(params, { visao: "aberta" }, true)}
+      hrefEncerrada={construirHref(params, { visao: "encerrada" }, true)}
+    />
   );
+
+  const FiltrosBar = (
+    <PipelineFiltrosBar
+      params={params}
+      filtros={filtros}
+      periodo={periodo}
+      visao={filtros.visao}
+      construirHref={construirHref}
+    />
+  );
+
+  const Insights = <PipelineInsights analytics={analyticsHistorico} />;
 
   if (filtros.visao === "ABERTA") {
     const colunas = await buscarPipelineAberto(organizationId, { busca: filtros.busca });
 
-    // Fase P.8: classificação pura, in-memory, zero I/O adicional — reusa
-    // os itens já carregados por buscarPipelineAberto e a média por etapa
-    // já carregada por buscarAnalyticsHistoricoPipeline (P.7), ambos
-    // buscados acima antes desta ramificação. `agora` compartilhado entre
-    // todos os itens desta mesma requisição (mesmo racional de agora
-    // explícito em calcularAgingStageMs/derivarEpisodiosDaJornada).
+    // Classificação pura, in-memory, zero I/O adicional — reusa os itens
+    // já carregados por buscarPipelineAberto e a média por etapa já
+    // carregada por buscarAnalyticsHistoricoPipeline, ambos buscados
+    // acima antes desta ramificação.
     const agora = new Date();
     const prioridadesPorItem = new Map<string, PrioridadePipeline>();
     for (const coluna of COLUNAS_ABERTAS) {
@@ -235,9 +158,8 @@ export default async function PipelinePage({
     }
 
     // Filtro ?prioridade= (opcional) — afeta SÓ quais cards aparecem em
-    // cada coluna, nunca a ordenação (ordenarColuna, dentro de
-    // buscarPipelineAberto, permanece intocada) e nunca ResumoPipeline/
-    // AnalyticsHistoricoPipeline (já resolvidos acima, antes deste filtro).
+    // cada coluna, nunca a ordenação e nunca KPIs/Insights (já resolvidos
+    // acima, antes deste filtro).
     const filtroPrioridade = interpretarFiltroPrioridade(params);
     const colunasExibidas =
       filtroPrioridade === "TODAS"
@@ -250,65 +172,52 @@ export default async function PipelinePage({
           ) as Record<ColunaAberta, (typeof colunas)[ColunaAberta]>);
 
     const totalAberto = COLUNAS_ABERTAS.reduce((soma, coluna) => soma + colunasExibidas[coluna].length, 0);
-    const semResultadoPorFiltro =
-      totalAberto === 0 && (filtros.busca !== "" || filtroPrioridade !== "TODAS");
-
-    const ResumoPrioridades = (
-      <div
-        className="flex flex-wrap items-center gap-2 mb-4 text-sm"
-        aria-label="Prioridades das negociações abertas"
-      >
-        <span className="text-muted-foreground">Prioridades:</span>
-        {(["TODAS", "ALTA", "MEDIA", "NORMAL"] as const).map((nivel) => (
-          <Link
-            key={nivel}
-            href={construirHref(params, { prioridade: nivel }, true)}
-            aria-current={filtroPrioridade === nivel ? "page" : undefined}
-            className={cn(
-              buttonVariants({ variant: filtroPrioridade === nivel ? "default" : "outline", size: "sm" })
-            )}
-          >
-            {nivel === "TODAS" ? "Todas" : PRIORIDADE_LABEL[nivel]} (
-            {nivel === "TODAS" ? prioridadesPorItem.size : contagemPrioridade[nivel]})
-          </Link>
-        ))}
-      </div>
-    );
+    const semResultadoPorFiltro = totalAberto === 0 && (filtros.busca !== "" || filtroPrioridade !== "TODAS");
 
     return (
-      <div>
-        <h1 className="text-2xl font-semibold mb-1">Pipeline</h1>
-        <p className="text-muted-foreground text-sm mb-4">
-          Negociações em andamento, agrupadas por etapa.
-        </p>
+      <div className="space-y-5">
+        {Cabecalho}
+        {Kpis}
 
-        {Resumo}
-        {SeletorPeriodo}
-        {AnaliseHistorica}
-        {ResumoPrioridades}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {Tabs}
+          <PipelinePrioridadeChips
+            filtroAtual={filtroPrioridade}
+            total={prioridadesPorItem.size}
+            contagem={contagemPrioridade}
+            href={(nivel) => construirHref(params, { prioridade: nivel }, true)}
+          />
+        </div>
 
-        {CabecalhoFiltros}
+        {FiltrosBar}
 
         {totalAberto === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            {semResultadoPorFiltro
-              ? "Nenhuma negociação encontrada com estes filtros."
-              : "Nenhuma negociação em andamento."}
-          </p>
+          <div className="rounded-xl border bg-card p-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              {semResultadoPorFiltro
+                ? "Nenhuma negociação encontrada com estes filtros."
+                : "Nenhuma negociação em andamento."}
+            </p>
+          </div>
         ) : (
           // Desktop: colunas lado a lado, scroll horizontal CONTIDO neste
-          // container (nunca no documento inteiro — critério de 360px da
-          // P.4). Mobile: empilhadas (flex-col), scroll só vertical, sem
-          // nenhum overflow horizontal novo.
+          // container (nunca no documento inteiro). Mobile: empilhadas
+          // (flex-col), scroll só vertical, sem nenhum overflow horizontal
+          // novo — mesmo mecanismo já validado antes do redesenho, só
+          // restilizado.
           <div className="flex flex-col gap-4 md:flex-row md:overflow-x-auto md:pb-2">
             {COLUNAS_ABERTAS.map((coluna) => (
               <div key={coluna} className="space-y-2 md:w-72 md:shrink-0">
-                <h2 className="text-sm font-medium">
-                  {COLUNA_LABEL[coluna]}{" "}
-                  <span className="text-muted-foreground font-normal">({colunasExibidas[coluna].length})</span>
+                <h2 className="flex items-center justify-between text-sm font-medium">
+                  {COLUNA_LABEL[coluna]}
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
+                    {colunasExibidas[coluna].length}
+                  </span>
                 </h2>
                 {colunasExibidas[coluna].length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhuma negociação nesta etapa.</p>
+                  <div className="rounded-lg border border-dashed p-4 text-center">
+                    <p className="text-xs text-muted-foreground">Nenhuma negociação nesta etapa.</p>
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     {colunasExibidas[coluna].map((item) => (
@@ -320,6 +229,8 @@ export default async function PipelinePage({
             ))}
           </div>
         )}
+
+        {Insights}
       </div>
     );
   }
@@ -338,24 +249,20 @@ export default async function PipelinePage({
   const temProximaPagina = skip + itens.length < total;
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-1">Pipeline</h1>
-      <p className="text-muted-foreground text-sm mb-4">Negociações encerradas — ganhas ou perdidas.</p>
-
-      {Resumo}
-      {SeletorPeriodo}
-      {AnaliseHistorica}
-
-      {CabecalhoFiltros}
+    <div className="space-y-5">
+      {Cabecalho}
+      {Kpis}
+      {Tabs}
+      {FiltrosBar}
 
       {itens.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          {temFiltroAtivo
-            ? "Nenhuma negociação encontrada com estes filtros."
-            : "Nenhuma negociação encerrada."}
-        </p>
+        <div className="rounded-xl border bg-card p-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            {temFiltroAtivo ? "Nenhuma negociação encontrada com estes filtros." : "Nenhuma negociação encerrada."}
+          </p>
+        </div>
       ) : (
-        <div className="max-w-2xl space-y-2">
+        <div className="grid max-w-2xl grid-cols-1 gap-2">
           {itens.map((item) => (
             <CardPipeline key={item.id} item={item} />
           ))}
@@ -363,7 +270,7 @@ export default async function PipelinePage({
       )}
 
       {(page > 1 || temProximaPagina) && (
-        <div className="flex items-center gap-2 mt-4">
+        <div className="flex items-center gap-2">
           {page > 1 ? (
             <Link
               href={construirHref(params, { page: String(page - 1) }, false)}
@@ -390,6 +297,8 @@ export default async function PipelinePage({
           )}
         </div>
       )}
+
+      {Insights}
     </div>
   );
 }
