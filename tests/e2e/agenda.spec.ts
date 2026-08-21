@@ -22,13 +22,17 @@ const TITULO_IMOVEL_AGENDA = "Apartamento E2E Agenda";
 // nenhum atalho de banco, mesmo fluxo real do produto). Agenda pra mais
 // tarde HOJE (não amanhã) de propósito: exercita a aba "Hoje", o KPI
 // "Hoje" e — crucialmente — mantém o card/drawer MONTADO depois de
-// remarcar (ver horarioFuturoHojeDiferenteDe abaixo): revalidatePath
-// re-renderiza page.tsx a cada Server Action, e a busca (`q=nomeUnico`)
-// continua ativa na URL durante a etapa de remarcar/concluir — se o novo
-// scheduledAt caísse fora da janela da aba atual (Hoje) o item sumiria da
-// lista filtrada e o <AgendaItemCard>/<AgendaDetalhesDrawer> desmontariam
-// no meio do fluxo (bug real encontrado e corrigido nesta rodada, ao
-// tentar uma primeira versão do fix que remarcava pra "amanhã").
+// remarcar (ver horarioLogoDepoisDe abaixo): revalidatePath re-renderiza
+// page.tsx a cada Server Action, e a busca (`q=nomeUnico`) continua ativa
+// na URL durante a etapa de remarcar/concluir — se o novo scheduledAt
+// caísse fora da janela da aba atual (Hoje) OU mudasse de grupo
+// Manhã/Tarde/Noite (gruposDoDia, page.tsx — cada grupo é uma subtree
+// DOM própria), o item sumiria/mudaria de subtree e o
+// <AgendaItemCard>/<AgendaDetalhesDrawer> desmontariam no meio do fluxo
+// (as duas variantes desse bug foram reproduzidas e corrigidas nesta
+// rodada: primeiro tentando remarcar pra "amanhã", depois recalculando
+// "agora" independentemente perto da virada de período Manhã/Tarde
+// 12:00 UTC).
 // "Daqui a `minutos`", mas nunca cruzando a virada do dia UTC (a
 // classificação Hoje/Próximas de src/lib/scheduled-activity-date.ts é
 // por dia calendário UTC-literal, não por deslocamento de horário) —
@@ -54,31 +58,29 @@ function horarioMaisTardeHoje(minutos: number): string {
   return formatarISOMinuto(alvo);
 }
 
-// Horário de remarcação — SEMPRE avaliado no momento em que é chamado
-// (nunca derivado de um valor calculado cedo no teste): entre criar a
-// visita e remarcá-la, o teste passa por vários passos reais de UI
-// (checar KPIs, buscar, abrir o drawer), consumindo segundos reais de
-// relógio — perto da virada do dia UTC, um valor "1 minuto antes da
-// criação" calculado no início do teste podia já estar no PASSADO por
-// quando a remarcação era de fato submetida (bug real encontrado:
-// "A nova data deve ser no futuro."). Mesmo clamp de horarioMaisTardeHoje
-// (nunca cruza a virada do dia), mas nunca igual a `evitar`: se a
-// primeira tentativa colidir (ambos os valores caindo no mesmo teto de
-// 23:59), tenta 1 minuto antes do teto — e só aceita a colisão como
-// último recurso se isso já não for mais estritamente futuro (janela
-// residual de bem menos de 1 minuto antes da meia-noite UTC,
-// extremamente rara).
-function horarioFuturoHojeDiferenteDe(minutos: number, evitar: string): string {
-  const agora = new Date();
+// Horário de remarcação — derivado do valor de CRIAÇÃO (nunca de uma
+// nova amostra de "agora"). horarioCriacao já nasceu com folga
+// confortável (minutosFolga) sobre o "agora" de quando foi calculado, e
+// entre criar e remarcar só passam poucos segundos reais de UI — somar 1
+// minuto A PARTIR DELE (em vez de reamostrar "agora" de novo, como numa
+// versão anterior deste helper) garante um valor sempre estritamente
+// depois do valor de criação, então sempre válido (futuro) e — crucial
+// pro bug descrito acima — sempre dentro do MESMO grupo Manhã/Tarde/
+// Noite na esmagadora maioria dos casos, já que só avança 1 minuto.
+// Reamostrar "agora" independentemente é o que causava o bug: o "agora"
+// no momento de remarcar podia já ter cruzado 12:00/18:00 UTC (mudando
+// de grupo) mesmo que a criação não tivesse. Clampado no mesmo dia
+// (nunca cruza a virada UTC). Resíduo aceito, extremamente raro: se
+// horarioCriacao cair no último minuto de um período (ex: 11:59, 17:59,
+// 23:59), o +1 ainda cruzaria o período/dia — mesma classe de janela
+// sub-minuto já documentada e aceita pra horarioMaisTardeHoje.
+function horarioLogoDepoisDe(horarioISO: string): string {
+  const alvo = new Date(`${horarioISO}:00.000Z`);
+  alvo.setUTCMinutes(alvo.getUTCMinutes() + 1);
   const fimDeHojeUTC = new Date(
-    Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate(), 23, 59, 0, 0)
+    Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth(), alvo.getUTCDate(), 23, 59, 0, 0)
   );
-  const daquiXmin = new Date(agora.getTime() + minutos * 60 * 1000);
-  let alvo = daquiXmin.getTime() < fimDeHojeUTC.getTime() ? daquiXmin : fimDeHojeUTC;
-  if (formatarISOMinuto(alvo) === evitar) {
-    const candidato = new Date(alvo.getTime() - 60_000);
-    if (candidato.getTime() > agora.getTime()) alvo = candidato;
-  }
+  if (alvo.getTime() > fimDeHojeUTC.getTime()) alvo.setTime(fimDeHojeUTC.getTime());
   return formatarISOMinuto(alvo);
 }
 
@@ -162,7 +164,7 @@ test.describe("Agenda", () => {
     // Remarca (ainda hoje ou não, tanto faz — só confirma que a Server
     // Action real de remarcar funciona a partir do drawer).
     await drawer.getByRole("button", { name: "Remarcar" }).click();
-    await drawer.locator('input[name="scheduledAt"]').fill(horarioFuturoHojeDiferenteDe(2, horarioCriacao));
+    await drawer.locator('input[name="scheduledAt"]').fill(horarioLogoDepoisDe(horarioCriacao));
     await drawer.getByRole("button", { name: "Salvar nova data" }).click();
     await expect(drawer.getByText("Salvando...")).not.toBeVisible({ timeout: 10000 });
 

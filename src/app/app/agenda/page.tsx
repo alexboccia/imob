@@ -163,7 +163,7 @@ export default async function AgendaPage({
   const mostrarLinkProximas = aba === "hoje" && !temFiltrosAtivos && itens.length === 0;
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Agenda</h1>
         <p className="text-sm text-muted-foreground">Gerencie suas visitas e compromissos comerciais.</p>
