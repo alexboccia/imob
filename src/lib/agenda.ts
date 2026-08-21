@@ -24,8 +24,8 @@ export type ItemAgenda = {
   // null tanto no caso normal de ausência (propertyId nulo na linha) quanto
   // na anomalia defensiva abaixo — a UI trata os dois casos da mesma forma
   // (fallback discreto), nunca falha.
-  person: { id: string; name: string } | null;
-  property: { id: string; title: string } | null;
+  person: { id: string; name: string; phone: string | null } | null;
+  property: { id: string; title: string; neighborhood: string } | null;
 };
 
 export type ContadoresAgenda = { hoje: number; proximas: number; anteriores: number; atrasadas: number };
@@ -47,8 +47,8 @@ const SELECT_ITEM_AGENDA = {
   propertyInterestId: true,
   // organizationId de Person/Property selecionado só pra reconferência
   // abaixo — nunca exposto no tipo de retorno ItemAgenda.
-  person: { select: { id: true, name: true, organizationId: true } },
-  property: { select: { id: true, title: true, organizationId: true } },
+  person: { select: { id: true, name: true, phone: true, organizationId: true } },
+  property: { select: { id: true, title: true, neighborhood: true, organizationId: true } },
 } as const;
 
 type LinhaBruta = {
@@ -57,8 +57,8 @@ type LinhaBruta = {
   scheduledAt: Date;
   notes: string | null;
   propertyInterestId: string | null;
-  person: { id: string; name: string; organizationId: string };
-  property: { id: string; title: string; organizationId: string } | null;
+  person: { id: string; name: string; phone: string | null; organizationId: string };
+  property: { id: string; title: string; neighborhood: string; organizationId: string } | null;
 };
 
 // Estratégia pra relação cross-tenant anômala (seção 9 da H.3): a FK simples
@@ -81,11 +81,11 @@ function paraItemAgenda(linha: LinhaBruta, organizationId: string): ItemAgenda {
     propertyInterestId: linha.propertyInterestId,
     person:
       linha.person.organizationId === organizationId
-        ? { id: linha.person.id, name: linha.person.name }
+        ? { id: linha.person.id, name: linha.person.name, phone: linha.person.phone }
         : null,
     property:
       linha.property && linha.property.organizationId === organizationId
-        ? { id: linha.property.id, title: linha.property.title }
+        ? { id: linha.property.id, title: linha.property.title, neighborhood: linha.property.neighborhood }
         : null,
   };
 }

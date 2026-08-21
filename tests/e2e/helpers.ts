@@ -15,10 +15,22 @@ export const ORG_B = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Organização dedicada a agenda.spec.ts — nunca compartilhada com nenhum
+// outro spec, especificamente pra isolar estruturalmente a métrica
+// agregada que src/lib/pipeline.ts calcula sobre TODO o
+// PropertyInterestStageHistory de uma organização (ver comentário em
+// prisma/seed-e2e.ts, seção "Organização C").
+export const ORG_AGENDA = {
+  slug: "e2e-org-agenda",
+  email: "owner-agenda@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const IDS_E2E = {
   imovelParaEditarOrgA: "e2e-imovel-editar-a",
   membroOwnerOrgB: "e2e-membro-owner-b",
   imovelOrgB: "e2e-imovel-org-b",
+  imovelOrgAgenda: "e2e-imovel-org-agenda",
 };
 
 // Fase P.10 — mesmo valor de prisma/seed-e2e.ts (duplicado de propósito,

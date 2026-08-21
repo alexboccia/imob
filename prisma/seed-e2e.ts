@@ -27,6 +27,11 @@ const prisma = new PrismaClient({ adapter });
 export const IDS_E2E = {
   imovelParaEditarOrgA: "e2e-imovel-editar-a",
   membroOwnerOrgB: "e2e-membro-owner-b",
+  // Organização dedicada da Agenda (ver comentário na seção "Organização
+  // C" abaixo) — property fixa própria, nunca tocada por nenhum outro
+  // spec, então (diferente de imovelParaEditarOrgA) seu título nunca é
+  // renomeado por imoveis.spec.ts e pode ser referenciado como constante.
+  imovelOrgAgenda: "e2e-imovel-org-agenda",
 };
 
 // Fase P.10 — hostname fixo, custom domain ATIVO da Organização B, usado
@@ -199,16 +204,40 @@ async function main() {
     membroId: IDS_E2E.membroOwnerOrgB,
   });
 
+  // Organização C: dedicada exclusivamente a agenda.spec.ts. Mesmo plano
+  // completo de A (CRM habilitado), mas tenant à parte — nenhum outro spec
+  // faz login nela. Existe pra ISOLAR ESTRUTURALMENTE a métrica agregada
+  // que src/lib/pipeline.ts (buscarAnalyticsHistoricoPipeline) calcula
+  // sobre TODO o PropertyInterestStageHistory de uma organização, sem
+  // nenhum filtro de tempo/execução: como criarAgendamentoVisita avança
+  // PropertyInterest de INTERESTED -> VISIT_SCHEDULED na primeira visita
+  // (agendamentos/actions.ts), rodar agenda.spec.ts na MESMA organização
+  // de pipeline.spec.ts (Org A) grava um episódio de stage ali, mudando
+  // tempoMedioHistorico["INTERESTED"] e podendo reclassificar a
+  // prioridade de uma negociação criada por outro spec (achado real da
+  // auditoria pré-commit, reproduzido em worktree descartável). Como
+  // buscarAnalyticsHistoricoPipeline sempre filtra por
+  // `where: { organizationId }`, uma Organization própria pra Agenda
+  // elimina o vetor de contaminação por construção — nunca por timing.
+  const orgAgenda = await garantirOrganizacaoComDono({
+    slug: "e2e-org-agenda",
+    name: "Organização E2E Agenda",
+    planId: planoCompleto.id,
+    email: "owner-agenda@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+
   // Specs como "criar imóvel" e "formulário público cria lead" criam dados
   // novos a cada rodada — sem isso o banco de teste acumularia lixo entre
   // execuções do Playwright. Person cascateia Interaction ao ser apagada;
   // Property (fora dos ids fixos) cascateia Media/PropertyStatusHistory.
-  const idsOrgs = [orgA.organization.id, orgB.organization.id];
+  const idsOrgs = [orgA.organization.id, orgB.organization.id, orgAgenda.organization.id];
   await prisma.person.deleteMany({ where: { organizationId: { in: idsOrgs } } });
   await prisma.property.deleteMany({
     where: {
       organizationId: { in: idsOrgs },
-      id: { notIn: [IDS_E2E.imovelParaEditarOrgA, "e2e-imovel-org-b"] },
+      id: { notIn: [IDS_E2E.imovelParaEditarOrgA, "e2e-imovel-org-b", IDS_E2E.imovelOrgAgenda] },
     },
   });
 
@@ -222,6 +251,13 @@ async function main() {
     id: "e2e-imovel-org-b",
     organizationId: orgB.organization.id,
     title: "Imóvel da Organização B",
+  });
+
+  await garantirTipoImovel({ organizationId: orgAgenda.organization.id, name: "Apartamento" });
+  await garantirImovel({
+    id: IDS_E2E.imovelOrgAgenda,
+    organizationId: orgAgenda.organization.id,
+    title: "Apartamento E2E Agenda",
   });
 
   // Fase P.10 — custom domain fixo e ATIVO da Organização B (ver
@@ -241,6 +277,9 @@ async function main() {
   console.log("Seed E2E pronto:");
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);
+  console.log(
+    `  Org C (dedicada à Agenda, CRM habilitado): slug=${orgAgenda.organization.slug} login=owner-agenda@e2e.test`
+  );
 }
 
 main()

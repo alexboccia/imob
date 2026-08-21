@@ -10,23 +10,34 @@ import {
   contarResumoDiario,
   interpretarFiltrosAgenda,
   type ItemAgenda,
-  type FiltroStatusAgenda,
 } from "@/lib/agenda";
 import { periodoDaVisita, proximaVisita, painelAgoraDoDia, type PeriodoDia } from "@/lib/scheduled-activity-date";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { AgendaItemCard } from "@/components/admin/AgendaItemCard";
 import { PainelAgoraAgenda } from "@/components/admin/PainelAgoraAgenda";
-import { Input } from "@/components/ui/input";
+import { AgendaKpiCards } from "@/components/admin/agenda/AgendaKpiCards";
+import { AgendaTabs } from "@/components/admin/agenda/AgendaTabs";
+import { AgendaFiltrosBar } from "@/components/admin/agenda/AgendaFiltrosBar";
+import type { ItemAgendaClient } from "@/components/admin/agenda/agenda-visual";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-// Agenda do corretor (Fase H.3, evoluída na H.4) — projeção operacional de
+// Converte pra forma client-safe (scheduledAt -> scheduledAtISO) antes de
+// entregar a AgendaItemCard/AgendaDetalhesDrawer — nenhum objeto Date
+// bruto cruza a fronteira Server -> Client (ver ItemAgendaClient em
+// agenda-visual.ts).
+function paraItemCliente(item: ItemAgenda): ItemAgendaClient {
+  const { scheduledAt, ...resto } = item;
+  return { ...resto, scheduledAtISO: scheduledAt.toISOString() };
+}
+
+// Agenda do corretor (Fase H.3-H.7, redesenhada pra seguir o mesmo padrão
+// visual/UX do CRM de Clientes/Pipeline) — projeção operacional de
 // ScheduledActivity(VISIT), nunca uma segunda fonte de verdade. Sem
 // formulário de "nova visita" solta: criação continua exclusivamente a
-// partir de um PropertyInterest existente, nas fichas já implementadas
-// pela H.2. A H.4 adiciona busca, filtro de período e filtro de status
-// operacional — todos aplicados no servidor (Prisma/Postgres), nunca
-// carregando a listagem inteira pra filtrar no client.
+// partir de um PropertyInterest existente, nas fichas do cliente/imóvel —
+// por isso este redesenho NÃO adiciona nenhum botão "+ Novo compromisso"
+// (capacidade que nunca existiu, não deve ser fabricada só pro visual).
 
 const ABAS = ["hoje", "proximas", "anteriores"] as const;
 type Aba = (typeof ABAS)[number];
@@ -34,27 +45,6 @@ type Aba = (typeof ABAS)[number];
 function ehAba(valor: string | undefined): valor is Aba {
   return ABAS.includes(valor as Aba);
 }
-
-const ABA_LABEL: Record<Aba, string> = {
-  hoje: "Hoje",
-  proximas: "Próximas",
-  anteriores: "Anteriores",
-};
-
-const STATUS_FILTRO_LABEL: Record<FiltroStatusAgenda, string> = {
-  TODAS: "Todas",
-  AGENDADAS: "Agendadas",
-  CONCLUIDAS: "Concluídas",
-  CANCELADAS: "Canceladas",
-  ATRASADAS: "Atrasadas",
-};
-const STATUS_FILTRO_OPCOES: FiltroStatusAgenda[] = [
-  "TODAS",
-  "AGENDADAS",
-  "CONCLUIDAS",
-  "CANCELADAS",
-  "ATRASADAS",
-];
 
 // Agrupamento da aba Hoje (Fase H.5) — ordem de exibição fixa
 // Manhã/Tarde/Noite, nunca reordenada por status/cliente/imóvel.
@@ -74,19 +64,6 @@ type SearchParams = {
   ate?: string;
   status?: string;
 };
-
-// Formata Date -> "YYYY-MM-DD" (valor esperado por <input type="date">) a
-// partir dos componentes UTC — nunca toISOString().slice(0,10) puro seria
-// arriscado aqui porque os valores já vêm de parseDataUTC (sempre meia-
-// noite UTC), mas manter os getters UTC explícitos evita qualquer dúvida
-// futura se essa função for reaproveitada com outro tipo de Date.
-function paraInputDate(data: Date | null): string {
-  if (!data) return "";
-  const ano = data.getUTCFullYear();
-  const mes = String(data.getUTCMonth() + 1).padStart(2, "0");
-  const dia = String(data.getUTCDate()).padStart(2, "0");
-  return `${ano}-${mes}-${dia}`;
-}
 
 // Monta querystring preservando os filtros atuais, com overrides pontuais
 // (ex: trocar só `aba` ou só `page`) — usado tanto pelos links de aba
@@ -137,6 +114,12 @@ export default async function AgendaPage({
   const temFiltrosAtivos = Boolean(filtros.busca || filtros.de || filtros.ate || filtros.status !== "TODAS");
 
   const contadores = await contarAgenda(organizationId, { agora });
+  // Resumo diário (H.5) — antes do redesenho, só era calculado na aba
+  // "hoje" (o único lugar que o exibia). Agora os KPIs ficam visíveis em
+  // qualquer aba (mesmo padrão de Clientes/Pipeline), então esta mesma
+  // query barata (3 counts pelo índice já existente) passa a rodar
+  // sempre — nenhuma query nova, só deixou de ser condicional.
+  const resumoDiario = await contarResumoDiario(organizationId, { agora });
 
   const { page, take } = interpretarPaginacao(params, { pageSizePadrao: 20, pageSizeMaximo: 50 });
   const skip = (page - 1) * take;
@@ -150,23 +133,12 @@ export default async function AgendaPage({
     itens = await buscarAgendaAnteriores(organizationId, { agora, skip, take, filtros });
   }
 
-  // Resumo diário (H.5) — só calculado/exibido na aba Hoje, sempre
-  // GLOBAL (não aplica filtros H.4, decisão explícita da H.5 seção 12):
-  // uma busca por "João" não pode fazer "Agendadas hoje" parecer 1
-  // quando na verdade são 5.
-  const resumoDiario = aba === "hoje" ? await contarResumoDiario(organizationId, { agora }) : null;
-
   // Próxima visita e agrupamento por período (H.5) — calculados em
   // memória sobre `itens` (já filtrado pelos parâmetros H.4 ativos),
-  // nunca via query própria. "Próxima visita" reflete o conjunto VISÍVEL
-  // após os filtros, não o conjunto total do dia (decisão H.5 seção 13).
+  // nunca via query própria.
   const proximaVisitaItem = aba === "hoje" ? proximaVisita(itens, agora) : null;
   // Painel "Agora" (Fase H.7) — calculado sobre `itens`, o mesmo conjunto
-  // VISÍVEL já filtrado pelos parâmetros H.4 usado acima pra
-  // proximaVisitaItem/gruposDoDia (decisão H.7 seção 13: evita mostrar
-  // pendência/próxima que o próprio usuário acabou de esconder com um
-  // filtro). Distinto do resumo diário (resumoDiario, H.5), que continua
-  // GLOBAL e nunca aplica filtro — nenhuma das duas seções mudou.
+  // VISÍVEL já filtrado.
   const painelAgora = aba === "hoje" ? painelAgoraDoDia(itens, agora) : null;
   const gruposDoDia =
     aba === "hoje"
@@ -184,130 +156,43 @@ export default async function AgendaPage({
   const mensagemVaziaFinal = temFiltrosAtivos
     ? "Nenhuma visita encontrada com esses filtros."
     : mensagemVazia[aba];
+  // "Ver próximas" só na aba Hoje realmente vazia (sem filtro ativo) —
+  // navegação real pra uma aba que já existe, nunca um botão de criação
+  // fabricado (capacidade que não existe nesta tela — ver comentário do
+  // topo do arquivo).
+  const mostrarLinkProximas = aba === "hoje" && !temFiltrosAtivos && itens.length === 0;
 
   return (
-    <div className="max-w-3xl">
-      <h1 className="text-2xl font-semibold">Agenda</h1>
-      <p className="text-muted-foreground text-sm mb-4">
-        Gerencie suas visitas e compromissos comerciais.
-      </p>
-
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground mb-4">
-        <span>
-          Hoje: <span className="font-medium text-foreground">{contadores.hoje}</span>
-        </span>
-        <span>
-          Próximas: <span className="font-medium text-foreground">{contadores.proximas}</span>
-        </span>
-        <span>
-          Atrasadas: <span className="font-medium text-foreground">{contadores.atrasadas}</span>
-        </span>
+    <div className="max-w-3xl space-y-5">
+      <div>
+        <h1 className="text-2xl font-semibold">Agenda</h1>
+        <p className="text-sm text-muted-foreground">Gerencie suas visitas e compromissos comerciais.</p>
       </div>
 
-      {/* Resumo diário (H.5) — distinto do resumo global acima: só na
-          aba Hoje, sempre baseado em scheduledAt (data da visita), nunca
-          filtrado pelos parâmetros de busca/período/status. */}
-      {resumoDiario && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mb-4 border-t pt-3">
-          <span>
-            Agendadas hoje: <span className="font-medium text-foreground">{resumoDiario.agendadas}</span>
-          </span>
-          <span>
-            Concluídas hoje: <span className="font-medium text-foreground">{resumoDiario.concluidas}</span>
-          </span>
-          <span>
-            Canceladas hoje: <span className="font-medium text-foreground">{resumoDiario.canceladas}</span>
-          </span>
-        </div>
-      )}
+      <AgendaKpiCards contadores={contadores} concluidasHoje={resumoDiario.concluidas} />
 
-      <form method="get" className="flex flex-wrap items-end gap-2 mb-3 border rounded-md p-3">
-        <input type="hidden" name="aba" value={aba} />
-        <div className="flex-1 min-w-[140px] space-y-1">
-          <label htmlFor="agenda-q" className="text-xs text-muted-foreground">
-            Buscar
-          </label>
-          <Input
-            id="agenda-q"
-            name="q"
-            defaultValue={filtros.busca}
-            placeholder="Buscar cliente ou imóvel..."
-          />
-        </div>
-        <div className="space-y-1 w-[132px] max-w-full">
-          <label htmlFor="agenda-de" className="text-xs text-muted-foreground">
-            De
-          </label>
-          <input
-            id="agenda-de"
-            name="de"
-            type="date"
-            defaultValue={paraInputDate(filtros.de)}
-            className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          />
-        </div>
-        <div className="space-y-1 w-[132px] max-w-full">
-          <label htmlFor="agenda-ate" className="text-xs text-muted-foreground">
-            Até
-          </label>
-          <input
-            id="agenda-ate"
-            name="ate"
-            type="date"
-            defaultValue={paraInputDate(filtros.ate)}
-            className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="agenda-status" className="text-xs text-muted-foreground">
-            Status
-          </label>
-          <select
-            id="agenda-status"
-            name="status"
-            defaultValue={filtros.status}
-            className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            {STATUS_FILTRO_OPCOES.map((opcao) => (
-              <option key={opcao} value={opcao}>
-                {STATUS_FILTRO_LABEL[opcao]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button type="submit" className={cn(buttonVariants({ variant: "default", size: "sm" }))}>
-          Filtrar
-        </button>
-        {temFiltrosAtivos && (
-          <Link href="/app/agenda" className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
-            Limpar filtros
-          </Link>
-        )}
-      </form>
+      <AgendaTabs
+        abaAtual={aba}
+        contadores={contadores}
+        href={(a) => construirHref(params, { aba: a }, true)}
+      />
 
-      {filtros.intervaloInvalido && (
-        <p className="text-xs text-destructive mb-3">
-          Data inicial não pode ser depois da data final — mostrando todos os períodos.
-        </p>
-      )}
-
-      <nav className="flex flex-wrap gap-2 mb-6" aria-label="Período da agenda">
-        {ABAS.map((chave) => (
-          <Link
-            key={chave}
-            href={construirHref(params, { aba: chave }, true)}
-            aria-current={aba === chave ? "page" : undefined}
-            className={cn(buttonVariants({ variant: aba === chave ? "default" : "outline", size: "sm" }))}
-          >
-            {ABA_LABEL[chave]} ({contadores[chave]})
-          </Link>
-        ))}
-      </nav>
+      <AgendaFiltrosBar aba={aba} filtros={filtros} temFiltrosAtivos={temFiltrosAtivos} />
 
       {painelAgora && <PainelAgoraAgenda estado={painelAgora} />}
 
       {itens.length === 0 ? (
-        <p className="text-muted-foreground text-sm">{mensagemVaziaFinal}</p>
+        <div className="rounded-xl border bg-card p-2 text-center sm:p-8">
+          <p className="text-sm text-muted-foreground">{mensagemVaziaFinal}</p>
+          {mostrarLinkProximas && (
+            <Link
+              href={construirHref(params, { aba: "proximas" }, true)}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-3")}
+            >
+              Ver próximas
+            </Link>
+          )}
+        </div>
       ) : gruposDoDia ? (
         <div className="space-y-6">
           {gruposDoDia.map((grupo) => (
@@ -315,27 +200,29 @@ export default async function AgendaPage({
               <h2 className="text-sm font-semibold text-muted-foreground">
                 {PERIODO_DIA_LABEL[grupo.periodo]}
               </h2>
-              {grupo.itens.map((item) => (
-                <AgendaItemCard
-                  key={item.id}
-                  item={item}
-                  agora={agora}
-                  ehProximaVisita={proximaVisitaItem?.id === item.id}
-                />
-              ))}
+              <div className="space-y-2">
+                {grupo.itens.map((item) => (
+                  <AgendaItemCard
+                    key={item.id}
+                    item={paraItemCliente(item)}
+                    agoraISO={agora.toISOString()}
+                    ehProximaVisita={proximaVisitaItem?.id === item.id}
+                  />
+                ))}
+              </div>
             </div>
           ))}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {itens.map((item) => (
-            <AgendaItemCard key={item.id} item={item} agora={agora} />
+            <AgendaItemCard key={item.id} item={paraItemCliente(item)} agoraISO={agora.toISOString()} />
           ))}
         </div>
       )}
 
       {aba === "anteriores" && (page > 1 || itens.length === take) && (
-        <div className="flex items-center justify-between mt-4 text-sm">
+        <div className="flex items-center justify-between text-sm">
           {page > 1 ? (
             <Link
               href={construirHref(params, { page: String(page - 1) }, false)}
