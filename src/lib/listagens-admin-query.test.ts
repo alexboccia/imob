@@ -182,4 +182,27 @@ describe("construirWhereUsuarios — isolamento e filtros", () => {
     const userWhere = where.user as { OR?: unknown[] };
     expect(userWhere.OR?.length).toBe(2);
   });
+
+  // Redesenho de Usuários — filtro de status (Ativo/Suspenso) adicionado à
+  // barra unificada.
+  test("filtro de status aplicado só quando informado", () => {
+    const comFiltro = construirWhereUsuarios({ organizationId: "org-a", busca: "", statusFiltro: "SUSPENDED" });
+    expect(comFiltro.status).toBe("SUSPENDED");
+  });
+
+  test("sem filtro de status, a cláusula status não aparece no where", () => {
+    const where = construirWhereUsuarios({ organizationId: "org-a", busca: "" });
+    expect("status" in where).toBe(false);
+  });
+
+  test("papel e status combinados aplicam os dois filtros ao mesmo tempo", () => {
+    const where = construirWhereUsuarios({
+      organizationId: "org-a",
+      busca: "",
+      papelFiltro: "ADMIN",
+      statusFiltro: "ACTIVE",
+    });
+    expect(where.role).toBe("ADMIN");
+    expect(where.status).toBe("ACTIVE");
+  });
 });

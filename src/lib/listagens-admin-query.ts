@@ -68,12 +68,19 @@ export function construirWhereUsuarios(params: {
   organizationId: string;
   busca: string;
   papelFiltro?: string;
+  // Redesenho de Usuários — filtro de status (Ativo/Suspenso) adicionado à
+  // barra unificada. O campo já existia e já era exibido (coluna "Status"),
+  // só não era filtrável antes. Allowlist validada no caller (page.tsx),
+  // mesmo padrão defensivo de papelFiltro — nunca repassa string crua ao
+  // Prisma.
+  statusFiltro?: string;
 }): Prisma.OrganizationMemberWhereInput {
-  const { organizationId, busca, papelFiltro } = params;
+  const { organizationId, busca, papelFiltro, statusFiltro } = params;
 
   return {
     organizationId,
     ...(papelFiltro ? { role: papelFiltro as Prisma.OrganizationMemberWhereInput["role"] } : {}),
+    ...(statusFiltro ? { status: statusFiltro as Prisma.OrganizationMemberWhereInput["status"] } : {}),
     ...(busca
       ? {
           user: {

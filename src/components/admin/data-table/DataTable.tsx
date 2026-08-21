@@ -241,7 +241,11 @@ export function DataTable<TData extends Record<string, unknown>>({
           <p>
             Página {page} de {paginas} · {totalCount} registro(s)
           </p>
-          <div className="flex items-center gap-1.5">
+          {/* flex-wrap: mesmo achado/correção do grupo Anterior/Próxima
+              logo abaixo — "Itens por página" + o Select de tamanho é um
+              único item do flex-wrap pai, então só quebra linha por
+              dentro se ele MESMO também puder quebrar. */}
+          <div className="flex flex-wrap items-center gap-1.5">
             <span>Itens por página</span>
             <Select
               value={String(pageSize)}
@@ -260,7 +264,17 @@ export function DataTable<TData extends Record<string, unknown>>({
             </Select>
           </div>
         </div>
-        <div className="flex gap-2">
+        {/* flex-wrap (achado direto durante o redesenho de Usuários,
+            reproduzido também em /app/imoveis — pré-existente, não
+            introduzido por esta tarefa): sem isso, "Anterior"/"Próxima"
+            nunca quebravam linha entre si, e num container com pouco
+            espaço real (ex: coluna estreita atrás da sidebar em 375px)
+            isso empurrava scrollWidth do DOCUMENTO inteiro, não só deste
+            rodapé — mesmo mecanismo de min-w-0/flex-wrap já corrigido
+            várias vezes nas telas de Agenda/Pipeline. Correção mínima e
+            só aditiva: nunca reduz o espaço disponível em telas largas,
+            onde os dois botões continuam lado a lado normalmente. */}
+        <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             variant="outline"

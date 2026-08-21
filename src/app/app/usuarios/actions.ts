@@ -15,6 +15,7 @@ import {
   erroAcessoNegado,
   erroGenerico,
   erroValidacao,
+  sucesso,
 } from "@/lib/action-result";
 
 const ROLES = ["OWNER", "ADMIN", "MANAGER", "BROKER", "ASSISTANT"] as const;
@@ -90,8 +91,37 @@ export async function criarUsuario(
     payload: { email: user.email, role: dados.papel },
   });
 
+  // Redesenho de Usuários — não redireciona mais (era redirect("/app/usuarios"),
+  // que forçava uma navegação de página inteira mesmo quando o formulário
+  // agora abre dentro de um Sheet lateral, NovoUsuarioSheet). Mesmo padrão já
+  // adotado em criarPessoa (Fase de redesenho de Clientes): devolve sucesso
+  // e deixa o componente cliente decidir o que fazer (fechar o Sheet), a
+  // revalidação de path continua garantindo que a listagem reflita o novo
+  // usuário assim que a página for revisitada/revalidada.
   revalidatePath("/app/usuarios");
-  redirect("/app/usuarios");
+  return sucesso("Usuário cadastrado.");
+}
+
+// Compartilhado entre atualizarUsuario e alternarStatusUsuario — nunca
+// deixa a organização sem nenhum OWNER/ADMIN ativo. `membershipId` é
+// sempre excluído da contagem porque a checagem só roda quando ELE é quem
+// está perdendo a condição de admin ativo (rebaixado e/ou desativado).
+async function garantirNaoUltimoAdminAtivo(
+  organizationId: string,
+  membershipId: string
+): Promise<ActionState | null> {
+  const outrosAdmins = await prisma.organizationMember.count({
+    where: {
+      organizationId,
+      role: { in: ["OWNER", "ADMIN"] },
+      status: "ACTIVE",
+      id: { not: membershipId },
+    },
+  });
+  if (outrosAdmins === 0) {
+    return erroGenerico("Precisa haver ao menos um administrador ativo.");
+  }
+  return null;
 }
 
 const atualizarUsuarioSchema = z.object({
@@ -162,17 +192,8 @@ export async function atualizarUsuario(
       return erroGenerico("Você não pode desativar sua própria conta.");
     }
   } else if (eraAdmin && (!continuaAdmin || !dados.ativo)) {
-    const outrosAdmins = await prisma.organizationMember.count({
-      where: {
-        organizationId,
-        role: { in: ["OWNER", "ADMIN"] },
-        status: "ACTIVE",
-        id: { not: membershipId },
-      },
-    });
-    if (outrosAdmins === 0) {
-      return erroGenerico("Precisa haver ao menos um administrador ativo.");
-    }
+    const erro = await garantirNaoUltimoAdminAtivo(organizationId, membershipId);
+    if (erro) return erro;
   }
 
   await prisma.user.update({
@@ -207,4 +228,71 @@ export async function atualizarUsuario(
   revalidatePath("/app/usuarios");
   revalidatePath(`/app/usuarios/${membershipId}`);
   redirect("/app/usuarios");
+}
+
+// Redesenho de Usuários — ação rápida da coluna "Ações" da listagem:
+// alterna só OrganizationMember.status, sem passar pelo formulário
+// completo de edição. Reaproveita EXATAMENTE as mesmas proteções de
+// atualizarUsuario acima (auto-proteção, guard de OWNER, guard do último
+// admin ativo, via garantirNaoUltimoAdminAtivo compartilhado) — nenhuma
+// regra nova, só uma superfície de UI mais rápida pra uma capacidade que
+// já existia (o checkbox "Usuário ativo" do formulário completo). Nunca
+// toca em papel/nome/foto/senha — só o status.
+export async function alternarStatusUsuario(
+  membershipId: string,
+  novoAtivo: boolean,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  if (!temPapel(session.user.role, PAPEIS_GESTAO_USUARIOS)) {
+    return erroAcessoNegado();
+  }
+
+  const organizationId = await requireOrganizationId();
+  const membershipAlvo = await prisma.organizationMember.findFirst({
+    where: { id: membershipId, organizationId },
+  });
+  if (!membershipAlvo) {
+    return erroGenerico("Usuário não encontrado.");
+  }
+
+  const ehVoceMesmo = membershipId === session.user.organizationMemberId;
+  if (ehVoceMesmo && !novoAtivo) {
+    return erroGenerico("Você não pode desativar sua própria conta.");
+  }
+
+  // Mesma regra de atualizarUsuario: só quem já é OWNER pode ativar ou
+  // desativar outro OWNER, independente da direção da mudança.
+  if (membershipAlvo.role === "OWNER" && session.user.role !== "OWNER") {
+    return erroAcessoNegado(
+      "Apenas o proprietário pode ativar ou desativar outro proprietário."
+    );
+  }
+
+  const eraAdmin = membershipAlvo.role === "OWNER" || membershipAlvo.role === "ADMIN";
+  if (eraAdmin && !novoAtivo) {
+    const erro = await garantirNaoUltimoAdminAtivo(organizationId, membershipId);
+    if (erro) return erro;
+  }
+
+  await prisma.organizationMember.update({
+    where: { id: membershipId, organizationId },
+    data: { status: novoAtivo ? "ACTIVE" : "SUSPENDED" },
+  });
+
+  await logActivity({
+    organizationId,
+    userId: session.user.id,
+    entity: "User",
+    entityId: membershipAlvo.userId,
+    action: "updated",
+    payload: { status: novoAtivo ? "ACTIVE" : "SUSPENDED" },
+  });
+
+  revalidatePath("/app/usuarios");
+  return sucesso(novoAtivo ? "Usuário ativado." : "Usuário desativado.");
 }
