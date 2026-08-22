@@ -1,155 +1,74 @@
-import { prisma } from "@/lib/prisma";
-import { Card, CardContent } from "@/components/ui/card";
-import { STATUS_IMOVEL_LABEL } from "@/lib/format";
+import Link from "next/link";
 import { requireOrganizationId } from "@/lib/tenant";
-import { withOrganization } from "@/lib/tenant-context";
-import {
-  DashboardCharts,
-  type PontoTendencia,
-  type ItemComposicao,
-} from "@/components/admin/DashboardCharts";
+import { buscarMetricasDashboard } from "@/lib/dashboard";
+import { contarAgenda } from "@/lib/agenda";
+import { DashboardKpiCards } from "@/components/admin/DashboardKpiCards";
+import { DashboardCharts } from "@/components/admin/DashboardCharts";
+import { Clock } from "lucide-react";
 
-function chaveMes(data: Date) {
-  return `${data.getUTCFullYear()}-${String(data.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-function rotuloMes(data: Date) {
-  const mes = data.toLocaleString("pt-BR", { month: "short" }).replace(".", "");
-  const ano = String(data.getFullYear()).slice(-2);
-  return `${mes.charAt(0).toUpperCase()}${mes.slice(1)}/${ano}`;
-}
-
+// Redesenho do Dashboard — mesmo padrão estrutural de Pipeline/Agenda/
+// Usuários/Clientes: `<div className="space-y-5">` sem max-w (o <main>
+// do layout já não tem largura máxima, ver src/app/app/layout.tsx),
+// cabeçalho h1+subtítulo, KPIs, e o restante do conteúdo. Toda a lógica
+// de cálculo (queries, janela de 6 meses, bucketização, composição) foi
+// extraída pra src/lib/dashboard.ts — mesmo padrão já usado por
+// src/lib/pipeline.ts/src/lib/agenda.ts, permitindo testar as funções
+// puras isoladamente (dashboard.test.ts) sem precisar de banco.
 export default async function DashboardPage() {
   const organizationId = await requireOrganizationId();
 
-  const inicioDoMes = new Date();
-  inicioDoMes.setDate(1);
-  inicioDoMes.setHours(0, 0, 0, 0);
-
-  const noventaDiasAtras = new Date();
-  noventaDiasAtras.setDate(noventaDiasAtras.getDate() - 90);
-
-  const seisMesesAtras = new Date();
-  seisMesesAtras.setMonth(seisMesesAtras.getMonth() - 5);
-  seisMesesAtras.setDate(1);
-  seisMesesAtras.setHours(0, 0, 0, 0);
-
-  const [
-    imoveisAtivos,
-    leadsNoMes,
-    negociosNoMes,
-    imoveisParados,
-    leadsRecentes,
-    negociosRecentes,
-    porTipo,
-    porBairro,
-    porStatus,
-  ] = await withOrganization(organizationId, () =>
-    Promise.all([
-      prisma.property.count({ where: { organizationId, status: "AVAILABLE" } }),
-      prisma.person.count({
-        where: { organizationId, roles: { has: "LEAD" }, createdAt: { gte: inicioDoMes } },
-      }),
-      prisma.deal.count({ where: { organizationId, closedAt: { gte: inicioDoMes } } }),
-      prisma.property.count({
-        where: {
-          organizationId,
-          status: "AVAILABLE",
-          publishedAt: {
-            lt: noventaDiasAtras,
-          },
-        },
-      }),
-      prisma.person.findMany({
-        where: { organizationId, roles: { has: "LEAD" }, createdAt: { gte: seisMesesAtras } },
-        select: { createdAt: true },
-      }),
-      prisma.deal.findMany({
-        where: { organizationId, closedAt: { gte: seisMesesAtras } },
-        select: { closedAt: true },
-      }),
-      prisma.property.groupBy({ where: { organizationId }, by: ["type"], _count: true }),
-      prisma.property.groupBy({ where: { organizationId }, by: ["neighborhood"], _count: true }),
-      prisma.property.groupBy({ where: { organizationId }, by: ["status"], _count: true }),
-    ])
-  );
-
-  const cards = [
-    { label: "Imóveis disponíveis", valor: imoveisAtivos },
-    { label: "Novos leads no mês", valor: leadsNoMes },
-    { label: "Negócios fechados no mês", valor: negociosNoMes },
-    { label: "Imóveis parados há +90 dias", valor: imoveisParados },
-  ];
-
-  const meses: { chave: string; rotulo: string }[] = [];
-  for (let i = 5; i >= 0; i--) {
-    const data = new Date();
-    data.setDate(1);
-    data.setMonth(data.getMonth() - i);
-    meses.push({ chave: chaveMes(data), rotulo: rotuloMes(data) });
-  }
-
-  const contagemLeads = new Map(meses.map((m) => [m.chave, 0]));
-  for (const lead of leadsRecentes) {
-    const chave = chaveMes(lead.createdAt);
-    if (contagemLeads.has(chave)) {
-      contagemLeads.set(chave, (contagemLeads.get(chave) ?? 0) + 1);
-    }
-  }
-
-  const contagemNegocios = new Map(meses.map((m) => [m.chave, 0]));
-  for (const negocio of negociosRecentes) {
-    if (!negocio.closedAt) continue;
-    const chave = chaveMes(negocio.closedAt);
-    if (contagemNegocios.has(chave)) {
-      contagemNegocios.set(chave, (contagemNegocios.get(chave) ?? 0) + 1);
-    }
-  }
-
-  const tendencia: PontoTendencia[] = meses.map((m) => ({
-    mes: m.rotulo,
-    leads: contagemLeads.get(m.chave) ?? 0,
-    negocios: contagemNegocios.get(m.chave) ?? 0,
-  }));
-
-  const porTotal = (a: ItemComposicao, b: ItemComposicao) => b.total - a.total;
-
-  const composicaoTipo: ItemComposicao[] = porTipo
-    .map((g) => ({ nome: g.type, total: g._count }))
-    .sort(porTotal)
-    .slice(0, 8);
-
-  const composicaoBairro: ItemComposicao[] = porBairro
-    .map((g) => ({ nome: g.neighborhood, total: g._count }))
-    .sort(porTotal)
-    .slice(0, 8);
-
-  const composicaoStatus: ItemComposicao[] = porStatus
-    .map((g) => ({
-      nome: STATUS_IMOVEL_LABEL[g.status] ?? g.status,
-      total: g._count,
-    }))
-    .sort(porTotal);
+  const [metricas, agenda] = await Promise.all([
+    buscarMetricasDashboard(organizationId),
+    // Reaproveita contarAgenda (já existente, já testado via H.4/H.5) só
+    // pra ler `.atrasadas` — nenhuma query nova, nenhuma lógica de
+    // "atraso" duplicada aqui. Ver relatório final, seção "Atenção
+    // necessária", sobre por que só este item (visitas atrasadas) entrou
+    // nesta versão: é o único, dos exemplos conceituais do pedido, que
+    // tem uma contagem já pronta e barata — "negociações que precisam de
+    // atenção" (Pipeline) exigiria carregar o board aberto inteiro só
+    // pra extrair um número, e "imóveis parados" já é um KPI acima.
+    contarAgenda(organizationId),
+  ]);
 
   return (
-    <div>
-      <h1 className="min-w-0 break-words text-2xl font-semibold mb-6">Dashboard</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {cards.map((card) => (
-          <Card key={card.label}>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{card.label}</p>
-              <p className="text-3xl font-semibold mt-1">{card.valor}</p>
-            </CardContent>
-          </Card>
-        ))}
+    <div className="space-y-5">
+      <div className="min-w-0">
+        {/* break-words: a coluna real de conteúdo em 360px (atrás da
+            sidebar fixa) tem só ~88px — menos que a largura natural da
+            palavra "Dashboard" sozinha em text-2xl (~125px). Sem
+            break-words a palavra (sem espaço pra quebrar) vaza da própria
+            caixa em vez de quebrar — mesma proteção que já existia no
+            h1 do Dashboard antes deste redesenho, mantida aqui. */}
+        <h1 className="min-w-0 break-words text-2xl font-semibold">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">Visão geral da sua operação imobiliária.</p>
       </div>
 
+      <DashboardKpiCards metricas={metricas} />
+
+      {agenda.atrasadas > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+              <Clock className="size-4.5" />
+            </div>
+            <p className="text-sm">
+              <span className="font-medium">
+                {agenda.atrasadas === 1 ? "1 visita atrasada" : `${agenda.atrasadas} visitas atrasadas`}
+              </span>{" "}
+              <span className="text-muted-foreground">precisam de atenção.</span>
+            </p>
+          </div>
+          <Link href="/app/agenda?aba=anteriores&status=ATRASADAS" className="text-sm font-medium text-primary hover:underline">
+            Ver agenda →
+          </Link>
+        </div>
+      )}
+
       <DashboardCharts
-        tendencia={tendencia}
-        composicaoTipo={composicaoTipo}
-        composicaoBairro={composicaoBairro}
-        composicaoStatus={composicaoStatus}
+        tendencia={metricas.tendencia}
+        composicaoTipo={metricas.composicaoTipo}
+        composicaoBairro={metricas.composicaoBairro}
+        composicaoStatus={metricas.composicaoStatus}
       />
     </div>
   );
