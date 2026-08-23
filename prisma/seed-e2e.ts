@@ -32,6 +32,8 @@ export const IDS_E2E = {
   // spec, então (diferente de imovelParaEditarOrgA) seu título nunca é
   // renomeado por imoveis.spec.ts e pode ser referenciado como constante.
   imovelOrgAgenda: "e2e-imovel-org-agenda",
+  // Redesenho de Imóveis — ver duplicata em tests/e2e/helpers.ts.
+  imovelComBadgesOrgA: "e2e-imovel-badges-a",
 };
 
 // Fase P.10 — hostname fixo, custom domain ATIVO da Organização B, usado
@@ -120,7 +122,18 @@ async function garantirOrganizacaoComDono(opcoes: {
   return { organization, usuario, membro };
 }
 
-async function garantirImovel(opcoes: { id: string; organizationId: string; title: string }) {
+async function garantirImovel(opcoes: {
+  id: string;
+  organizationId: string;
+  title: string;
+  // Redesenho de Imóveis — badges opcionais, default false (nenhuma
+  // chamada existente muda de comportamento). Usado só pelo fixture
+  // dedicado de badges/KPIs abaixo.
+  isOpportunity?: boolean;
+  isFeatured?: boolean;
+  isLaunch?: boolean;
+  hasSlideshow?: boolean;
+}) {
   // update reseta os mesmos campos do create — specs de edição (ex: "editar
   // imóvel") mudam o título do imóvel seedado, então sem isso o seed
   // deixaria de ser determinístico depois da primeira rodada de E2E.
@@ -134,6 +147,10 @@ async function garantirImovel(opcoes: { id: string; organizationId: string; titl
     city: "São Paulo",
     state: "SP",
     price: 500000,
+    isOpportunity: opcoes.isOpportunity ?? false,
+    isFeatured: opcoes.isFeatured ?? false,
+    isLaunch: opcoes.isLaunch ?? false,
+    hasSlideshow: opcoes.hasSlideshow ?? false,
   } as const;
 
   return prisma.property.upsert({
@@ -237,7 +254,14 @@ async function main() {
   await prisma.property.deleteMany({
     where: {
       organizationId: { in: idsOrgs },
-      id: { notIn: [IDS_E2E.imovelParaEditarOrgA, "e2e-imovel-org-b", IDS_E2E.imovelOrgAgenda] },
+      id: {
+        notIn: [
+          IDS_E2E.imovelParaEditarOrgA,
+          "e2e-imovel-org-b",
+          IDS_E2E.imovelOrgAgenda,
+          IDS_E2E.imovelComBadgesOrgA,
+        ],
+      },
     },
   });
 
@@ -246,6 +270,19 @@ async function main() {
     id: IDS_E2E.imovelParaEditarOrgA,
     organizationId: orgA.organization.id,
     title: "Apartamento E2E para edição",
+  });
+  // Redesenho de Imóveis — fixture dedicada, nunca tocada por "editar
+  // imóvel" (que reescreve imovelParaEditarOrgA e resetaria os badges a
+  // cada rodada se fosse o mesmo registro). Garante 1 imóvel real com
+  // todos os 4 badges + Oportunidade/Destaque > 0 nos KPIs.
+  await garantirImovel({
+    id: IDS_E2E.imovelComBadgesOrgA,
+    organizationId: orgA.organization.id,
+    title: "Apartamento com 2 quartos à venda, 58m² – Santo Amaro",
+    isOpportunity: true,
+    isFeatured: true,
+    isLaunch: true,
+    hasSlideshow: true,
   });
   await garantirImovel({
     id: "e2e-imovel-org-b",

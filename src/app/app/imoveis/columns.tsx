@@ -4,10 +4,12 @@ import Link from "next/link";
 import {
   FINALIDADE_LABEL,
   STATUS_IMOVEL_LABEL,
+  formatarLocalizacaoImovel,
   formatarPreco,
   rotulosAtivos,
 } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
+import { ImovelColunaOrdenacao } from "@/components/admin/imoveis/ImovelColunaOrdenacao";
 import type { DataTableColumn } from "@/components/admin/data-table/DataTable";
 
 export type ImovelRow = {
@@ -21,44 +23,55 @@ export type ImovelRow = {
   slideshow: boolean;
   tipo: string;
   finalidade: string;
+  bairro: string | null;
   cidade: string;
   estado: string;
   preco: number | null;
   precoAluguel: number | null;
   status: string;
-  corretor: string;
 };
+
+// Badges (Lançamento/Destaque/Oportunidade/Slideshow) — mesma fonte
+// (rotulosAtivos + slideshow avulso) e mesmas cores já usadas antes do
+// redesenho, só reorganizadas visualmente. `flex-wrap` aqui é o que
+// permite os badges quebrarem linha sob o título em vez de forçar a
+// célula/tabela a crescer horizontalmente — parte da correção estrutural
+// do overflow em mobile (ver ImovelCardMobile.tsx e relatório final para
+// a causa raiz completa, que é mais sobre nº de colunas em 375px do que
+// sobre este wrap isoladamente).
+export function BadgesImovel({ imovel }: { imovel: { lancamento: boolean; destaque: boolean; oportunidade: boolean; slideshow: boolean } }) {
+  const rotulos = rotulosAtivos(imovel);
+  if (rotulos.length === 0 && !imovel.slideshow) return null;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {rotulos.map((rotulo) => (
+        <Badge key={rotulo.chave} className={rotulo.className}>
+          {rotulo.label}
+        </Badge>
+      ))}
+      {imovel.slideshow && <Badge className="bg-purple-600 text-white">Slideshow</Badge>}
+    </div>
+  );
+}
 
 export const imovelColumns: DataTableColumn<ImovelRow>[] = [
   {
-    id: "codigo",
-    accessorFn: (row) => row.codigoFormatado,
-    header: "Código",
+    id: "imovel",
+    header: () => <ImovelColunaOrdenacao />,
     cell: ({ row }) => (
-      <span className="text-muted-foreground">
-        {row.original.codigoFormatado}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "titulo",
-    header: "Título",
-    cell: ({ row }) => (
-      <div>
+      <div className="min-w-0 space-y-1">
+        {/* break-words: mesma correção de ImovelCardMobile.tsx — ver
+            relatório final. Aqui a tabela também tem overflow-x-auto como
+            rede de segurança, mas o título nunca precisa forçar a coluna
+            inteira a crescer só por causa de um token sem espaços. */}
         <Link
           href={`/app/imoveis/${row.original.id}`}
-          className="font-medium hover:underline"
+          className="break-words font-medium hover:underline"
         >
           {row.original.titulo}
         </Link>
-        {rotulosAtivos(row.original).map((rotulo) => (
-          <Badge key={rotulo.chave} className={`ml-2 ${rotulo.className}`}>
-            {rotulo.label}
-          </Badge>
-        ))}
-        {row.original.slideshow && (
-          <Badge className="ml-2 bg-purple-600 text-white">Slideshow</Badge>
-        )}
+        <p className="text-xs text-muted-foreground">{row.original.codigoFormatado}</p>
+        <BadgesImovel imovel={row.original} />
       </div>
     ),
   },
@@ -75,9 +88,9 @@ export const imovelColumns: DataTableColumn<ImovelRow>[] = [
       ] ?? row.original.finalidade,
   },
   {
-    accessorKey: "cidade",
-    header: "Cidade",
-    cell: ({ row }) => `${row.original.cidade} - ${row.original.estado}`,
+    id: "localizacao",
+    accessorFn: (row) => formatarLocalizacaoImovel(row.bairro, row.cidade, row.estado),
+    header: "Localização",
   },
   {
     id: "preco",
@@ -105,9 +118,5 @@ export const imovelColumns: DataTableColumn<ImovelRow>[] = [
         ] ?? row.original.status}
       </Badge>
     ),
-  },
-  {
-    accessorKey: "corretor",
-    header: "Corretor",
   },
 ];

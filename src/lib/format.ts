@@ -5,6 +5,20 @@ export function formatarCodigoImovel(
   return prefixo ? `${prefixo}-${codigo}` : `${codigo}`;
 }
 
+// Redesenho de Imóveis — bairro já vem no mesmo select de listagem (coluna
+// escalar da própria Property, sem join/query adicional), então a coluna
+// "Localização" pode mostrar bairro + cidade/UF sem custo extra (ver
+// prompt do redesenho, seção 21). Bairro é opcional na prática (nem toda
+// linha antiga tem um preenchido) — omitido silenciosamente quando vazio,
+// nunca uma vírgula solta.
+export function formatarLocalizacaoImovel(
+  neighborhood: string | null | undefined,
+  city: string,
+  state: string
+): string {
+  return neighborhood ? `${neighborhood}, ${city} - ${state}` : `${city} - ${state}`;
+}
+
 export function formatarPreco(valor: unknown) {
   if (valor === null || valor === undefined) return "Consulte-nos";
   const numero = Number(valor.toString());

@@ -31,6 +31,12 @@ export const IDS_E2E = {
   membroOwnerOrgB: "e2e-membro-owner-b",
   imovelOrgB: "e2e-imovel-org-b",
   imovelOrgAgenda: "e2e-imovel-org-agenda",
+  // Redesenho de Imóveis — fixo e nunca mutado por outro spec (diferente
+  // de imovelParaEditarOrgA, que "editar imóvel" reescreve): garante
+  // badges (Lançamento/Destaque/Oportunidade/Slideshow) e os KPIs
+  // Oportunidades/Destaques sempre com pelo menos 1 registro real,
+  // deterministicamente, em qualquer ordem de execução dos specs.
+  imovelComBadgesOrgA: "e2e-imovel-badges-a",
 };
 
 // Fase P.10 — mesmo valor de prisma/seed-e2e.ts (duplicado de propósito,

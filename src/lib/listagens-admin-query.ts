@@ -8,17 +8,34 @@ export function construirWhereImoveis(params: {
   organizationId: string;
   busca: string;
   statusFiltro?: string;
+  tipoFiltro?: string;
+  finalidadeFiltro?: string;
 }): Prisma.PropertyWhereInput {
-  const { organizationId, busca, statusFiltro } = params;
+  const { organizationId, busca, statusFiltro, tipoFiltro, finalidadeFiltro } = params;
   // "".replace(/\D/g,"") -> "" -> Number("") é 0, não NaN — sem o dígitos
   // ? ... : NaN, uma busca só de texto (sem nenhum número) incluiria por
   // engano a cláusula { code: 0 } no OR.
+  //
+  // Redesenho de Imóveis — achado real ao escrever o teste E2E de
+  // ordenação (marcador com Date.now(), 13 dígitos): `code` é Prisma `Int`
+  // (Postgres `integer`, máx. 2147483647); uma busca com uma sequência de
+  // ~10+ dígitos (CEP colado sem máscara, telefone, o marcador de teste)
+  // gerava um `codigoBusca` fora desse range e o Prisma lançava
+  // PrismaClientKnownRequestError ("Value out of range for the type") —
+  // um HTTP 500 real em /app/imoveis pra uma busca de texto legítima, não
+  // hipotética. Corrigido aqui (mesmo arquivo já tocado nesta tarefa) por
+  // ser diretamente parte de "busca preservada" (seção 10 do redesenho);
+  // fora do escopo do bug ficaria uma regressão funcional não documentada.
+  const LIMITE_INT32 = 2147483647;
   const digitosBusca = busca.replace(/\D/g, "");
   const codigoBusca = digitosBusca ? Number(digitosBusca) : NaN;
+  const codigoBuscaValido = Number.isInteger(codigoBusca) && codigoBusca >= 0 && codigoBusca <= LIMITE_INT32;
 
   return {
     organizationId,
     ...(statusFiltro ? { status: statusFiltro as Prisma.PropertyWhereInput["status"] } : {}),
+    ...(tipoFiltro ? { type: tipoFiltro } : {}),
+    ...(finalidadeFiltro ? { purpose: finalidadeFiltro as Prisma.PropertyWhereInput["purpose"] } : {}),
     ...(busca
       ? {
           OR: [
@@ -26,7 +43,7 @@ export function construirWhereImoveis(params: {
             { city: { contains: busca, mode: "insensitive" } },
             { neighborhood: { contains: busca, mode: "insensitive" } },
             { type: { contains: busca, mode: "insensitive" } },
-            ...(Number.isInteger(codigoBusca) ? [{ code: codigoBusca }] : []),
+            ...(codigoBuscaValido ? [{ code: codigoBusca }] : []),
           ],
         }
       : {}),

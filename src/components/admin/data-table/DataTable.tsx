@@ -47,6 +47,7 @@ export function DataTable<TData extends Record<string, unknown>>({
   searchPlaceholder = "Buscar...",
   emptyMessage = "Nenhum registro encontrado.",
   onRowClick,
+  cards,
 }: {
   columns: DataTableColumn<TData>[];
   data: TData[];
@@ -68,6 +69,23 @@ export function DataTable<TData extends Record<string, unknown>>({
    * botão) continuam funcionando normalmente — o clique só propagaria até
    * aqui se não for capturado antes por eles. */
   onRowClick?: (row: TData) => void;
+  /** Opcional — quando presente, `<table>` fica restrita a `md:` e acima
+   * (`hidden md:block` no wrapper) e esta lista (um card JÁ RENDERIZADO
+   * por linha de `data`, na mesma ordem) aparece abaixo de `md`
+   * (redesenho de Imóveis, primeira tela a precisar de layout mobile !=
+   * tabela espremida). ReactNode pré-renderizado, não uma função — este
+   * componente é "use client" e page.tsx (Server Component) não pode
+   * passar uma função como prop através da fronteira Server->Client (RSC
+   * serialization error, achado real ao implementar isto: "Functions
+   * cannot be passed directly to Client Components"); um array de
+   * elementos já renderizados no servidor cruza essa fronteira
+   * normalmente, mesma categoria de `emptyMessage`/`children`. Nenhuma
+   * das outras 4 telas que usam DataTable passa isso hoje — sem a prop, o
+   * wrapper da tabela mantém exatamente a mesma className de sempre, em
+   * todos os breakpoints, então o comportamento delas não muda em nada
+   * (aditivo, mesmo racional de onRowClick acima). Busca e paginação
+   * continuam únicas e compartilhadas entre os dois layouts. */
+  cards?: ReactNode[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -131,7 +149,7 @@ export function DataTable<TData extends Record<string, unknown>>({
         onChange={(e) => setBuscaLocal(e.target.value)}
         className="max-w-xs"
       />
-      <div className="border rounded-lg overflow-x-auto">
+      <div className={cards ? "hidden rounded-lg border md:block md:overflow-x-auto" : "border rounded-lg overflow-x-auto"}>
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -236,6 +254,17 @@ export function DataTable<TData extends Record<string, unknown>>({
           </TableBody>
         </Table>
       </div>
+      {cards && (
+        <div className="space-y-3 md:hidden">
+          {linhas.length > 0 ? (
+            linhas.map((row, index) => <div key={row.id}>{cards[index]}</div>)
+          ) : (
+            <div className="rounded-lg border p-6 text-center text-sm text-muted-foreground">
+              {emptyMessage}
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
         <div className="flex flex-wrap items-center gap-3">
           <p>

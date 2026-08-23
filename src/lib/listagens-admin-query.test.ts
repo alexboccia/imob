@@ -44,6 +44,27 @@ describe("construirWhereImoveis — filtros funcionam", () => {
     expect(temCodigo).toBe(true);
   });
 
+  // Redesenho de Imóveis — achado real (ver comentário em
+  // listagens-admin-query.ts): `code` é Postgres `integer` (máx.
+  // 2147483647). Uma busca com uma sequência longa de dígitos (CEP colado,
+  // telefone, timestamp) não pode mais gerar um `{code: N}` fora desse
+  // range — isso lançava PrismaClientKnownRequestError (HTTP 500) antes
+  // desta correção.
+  test("busca com dígitos fora do range de Int32 não inclui cláusula de código (evita 500 no Prisma)", () => {
+    const where = construirWhereImoveis({ organizationId: "org-a", busca: "Ordenacao1787391239982" });
+    const temCodigo = where.OR!.some((c) => "code" in c);
+    expect(temCodigo).toBe(false);
+    // Continua buscando por título/cidade/bairro/tipo normalmente.
+    const campos = where.OR!.map((c) => Object.keys(c)[0]);
+    expect(new Set(campos)).toEqual(new Set(["title", "city", "neighborhood", "type"]));
+  });
+
+  test("busca com código exatamente no limite de Int32 ainda inclui a cláusula de código", () => {
+    const where = construirWhereImoveis({ organizationId: "org-a", busca: "2147483647" });
+    const clausulaCodigo = where.OR!.find((c) => "code" in c) as { code: number } | undefined;
+    expect(clausulaCodigo?.code).toBe(2147483647);
+  });
+
   test("filtro de status é aplicado quando informado", () => {
     const where = construirWhereImoveis({ organizationId: "org-a", busca: "", statusFiltro: "SOLD" });
     expect(where.status).toBe("SOLD");
@@ -52,6 +73,42 @@ describe("construirWhereImoveis — filtros funcionam", () => {
   test("sem filtro de status, a cláusula não é incluída (não filtra por engano)", () => {
     const where = construirWhereImoveis({ organizationId: "org-a", busca: "" });
     expect("status" in where).toBe(false);
+  });
+
+  // Redesenho de Imóveis — filtros de tipo/finalidade, expostos como
+  // filtro de URL pela primeira vez (mesmo racional de status acima).
+  test("filtro de tipo é aplicado quando informado", () => {
+    const where = construirWhereImoveis({ organizationId: "org-a", busca: "", tipoFiltro: "Cobertura duplex" });
+    expect(where.type).toBe("Cobertura duplex");
+  });
+
+  test("sem filtro de tipo, a cláusula não é incluída", () => {
+    const where = construirWhereImoveis({ organizationId: "org-a", busca: "" });
+    expect("type" in where).toBe(false);
+  });
+
+  test("filtro de finalidade é aplicado quando informado", () => {
+    const where = construirWhereImoveis({ organizationId: "org-a", busca: "", finalidadeFiltro: "RENT" });
+    expect(where.purpose).toBe("RENT");
+  });
+
+  test("sem filtro de finalidade, a cláusula não é incluída", () => {
+    const where = construirWhereImoveis({ organizationId: "org-a", busca: "" });
+    expect("purpose" in where).toBe(false);
+  });
+
+  test("status, tipo e finalidade combinam sem se sobrescreverem", () => {
+    const where = construirWhereImoveis({
+      organizationId: "org-a",
+      busca: "",
+      statusFiltro: "AVAILABLE",
+      tipoFiltro: "Studio",
+      finalidadeFiltro: "SALE",
+    });
+    expect(where.status).toBe("AVAILABLE");
+    expect(where.type).toBe("Studio");
+    expect(where.purpose).toBe("SALE");
+    expect(where.organizationId).toBe("org-a");
   });
 });
 
