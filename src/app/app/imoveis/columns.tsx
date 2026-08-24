@@ -33,23 +33,62 @@ export type ImovelRow = {
 
 // Badges (Lançamento/Destaque/Oportunidade/Slideshow) — mesma fonte
 // (rotulosAtivos + slideshow avulso) e mesmas cores já usadas antes do
-// redesenho, só reorganizadas visualmente. `flex-wrap` aqui é o que
-// permite os badges quebrarem linha sob o título em vez de forçar a
-// célula/tabela a crescer horizontalmente — parte da correção estrutural
-// do overflow em mobile (ver ImovelCardMobile.tsx e relatório final para
-// a causa raiz completa, que é mais sobre nº de colunas em 375px do que
-// sobre este wrap isoladamente).
+// redesenho, só reorganizadas visualmente. `flex-wrap` no container
+// permite os badges quebrarem linha entre si sob o título, em vez de
+// forçar a célula/tabela a crescer horizontalmente.
+//
+// min-w-0 whitespace-normal [overflow-wrap:anywhere] h-auto min-h-5 em
+// CADA badge — achado real da investigação do overflow de 360px no
+// runner Linux da CI.
+//
+// Causa raiz real (confirmada por medição de container, não só por
+// screenshot): a sidebar fixa (`w-56` = 224px, layout.tsx, pré-existente
+// e fora do escopo deste redesign) nunca colapsa em mobile — em 360px de
+// viewport, a área de conteúdo real (`main`) fica com só ~136px, e o
+// card (`p-3`) com ~88px úteis. O badge "Oportunidade" (rótulo mais
+// longo, ~95px numa linha só) genuinamente NÃO cabe nessa largura real —
+// não é uma diferença de fonte entre macOS/Linux, é geometria: o card
+// inteiro já é estreito o bastante pra que o PRÓPRIO TÍTULO do imóvel
+// quebre em várias linhas (visível em qualquer screenshot desta tela em
+// 360px). O bug real do badge nunca foi "é um pouco estreito demais" —
+// foi que ele não tinha NENHUM mecanismo de quebra (`shrink-0` +
+// `whitespace-nowrap` + `overflow-hidden`, todos herdados da base de
+// Badge), então em vez de quebrar como o título já faz, ele vazava por
+// cima do limite do card e ia parar perto da borda do documento.
+//
+// Duas iterações de auto-revisão antes de finalizar, ambas só percebidas
+// com screenshot real (geometria sozinha mascarou os dois problemas):
+// 1) só `[overflow-wrap:anywhere]` não bastava: `white-space: nowrap`
+//    suprime todo ponto de quebra, então o texto não tinha como quebrar —
+//    só estourava a caixa e era CORTADO pelo `overflow-hidden` da base
+//    (confirmado visualmente: "Lançamento"/"Oportunidade" apareciam sem a
+//    primeira letra). Corrigido com `whitespace-normal` + `h-auto min-h-5`
+//    (permite altura crescer pra 2 linhas em vez de cortar verticalmente
+//    a altura fixa de 1 linha).
+// 2) `max-w-full` funcionava, mas `min-w-0` é o mecanismo mais robusto e
+//    já usado no resto do projeto (mesmo padrão do `break-words` no
+//    título logo abaixo) — trocado por consistência, comportamento final
+//    idêntico.
+//
+// Resultado real: os 4 badges quebram em 2 linhas em 360px quando o
+// rótulo é mais longo (mesmo comportamento que o título do imóvel já
+// tinha) — legível, sem corte, documento nunca estoura. Em 375/768/1440
+// (card com mais espaço) continuam numa linha só, sem nenhuma mudança
+// visual.
 export function BadgesImovel({ imovel }: { imovel: { lancamento: boolean; destaque: boolean; oportunidade: boolean; slideshow: boolean } }) {
   const rotulos = rotulosAtivos(imovel);
   if (rotulos.length === 0 && !imovel.slideshow) return null;
+  const classeProtecaoLargura = "h-auto min-h-5 min-w-0 whitespace-normal [overflow-wrap:anywhere]";
   return (
     <div className="flex flex-wrap gap-1">
       {rotulos.map((rotulo) => (
-        <Badge key={rotulo.chave} className={rotulo.className}>
+        <Badge key={rotulo.chave} className={`${classeProtecaoLargura} ${rotulo.className}`}>
           {rotulo.label}
         </Badge>
       ))}
-      {imovel.slideshow && <Badge className="bg-purple-600 text-white">Slideshow</Badge>}
+      {imovel.slideshow && (
+        <Badge className={`${classeProtecaoLargura} bg-purple-600 text-white`}>Slideshow</Badge>
+      )}
     </div>
   );
 }

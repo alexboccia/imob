@@ -217,10 +217,15 @@ test.describe("Imóveis", () => {
     await page.setViewportSize({ width: 375, height: 800 });
     await page.goto("/app/imoveis");
 
-    const semOverflowHorizontal = await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth + 1
-    );
-    expect(semOverflowHorizontal).toBe(true);
+    const medida375 = await page.evaluate(() => ({
+      innerWidth: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      bodyScrollWidth: document.body.scrollWidth,
+    }));
+    expect(
+      medida375.scrollWidth <= medida375.innerWidth + 1,
+      `innerWidth=${medida375.innerWidth} scrollWidth=${medida375.scrollWidth} bodyScrollWidth=${medida375.bodyScrollWidth}`
+    ).toBe(true);
     await expect(page.locator("table")).toBeHidden();
     // .last(): a tabela desktop (oculta via `hidden md:block`, mas ainda
     // presente no DOM) e o card mobile renderizam o MESMO título — o card
@@ -233,20 +238,51 @@ test.describe("Imóveis", () => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto("/app/imoveis");
 
-    async function semOverflow() {
-      return page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+    // Achado da investigação do overflow real no runner Linux da CI: o
+    // helper anterior só devolvia um boolean — uma falha real no CI não
+    // deixava nenhum número pra diagnosticar. Agora cada assertion carrega
+    // innerWidth/scrollWidth/bodyScrollWidth na própria mensagem de falha,
+    // sem alterar a tolerância (`<= innerWidth + 1`, idêntica à anterior).
+    async function medirOverflow() {
+      const m = await page.evaluate(() => ({
+        innerWidth: window.innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        bodyScrollWidth: document.body.scrollWidth,
+      }));
+      return { semOverflow: m.scrollWidth <= m.innerWidth + 1, ...m };
     }
 
-    expect(await semOverflow(), "overflow sem filtro ativo").toBe(true);
+    async function esperarSemOverflow(rotulo: string) {
+      const m = await medirOverflow();
+      expect(
+        m.semOverflow,
+        `${rotulo}: innerWidth=${m.innerWidth} scrollWidth=${m.scrollWidth} bodyScrollWidth=${m.bodyScrollWidth}`
+      ).toBe(true);
+    }
+
+    await esperarSemOverflow("overflow sem filtro ativo");
+
+    // Assertion estrutural complementar (não substitui a medição acima) —
+    // prova que a proteção de largura dos badges (min-w-0 + whitespace-
+    // normal + overflow-wrap:anywhere, ver BadgesImovel em columns.tsx)
+    // está realmente aplicada no DOM renderizado, sem depender de nenhum
+    // pixel mágico dependente de fonte. e2e-imovel-badges-a garante pelo
+    // menos um badge real sempre presente. O texto continua íntegro
+    // (sem corte) mesmo quebrando em 2 linhas nesta largura.
+    const primeiroBadge = page.locator(".md\\:hidden span", { hasText: "Oportunidade" }).first();
+    await expect(primeiroBadge).toBeVisible();
+    await expect(primeiroBadge).toHaveCSS("overflow-wrap", "anywhere");
+    await expect(primeiroBadge).toHaveCSS("white-space", "normal");
+    await expect(primeiroBadge).toHaveText("Oportunidade");
 
     await page.getByLabel("Status").selectOption("AVAILABLE");
     await page.waitForTimeout(200);
     await expect(page.getByRole("button", { name: "Limpar filtros" })).toBeVisible();
-    expect(await semOverflow(), "overflow com filtro de status ativo").toBe(true);
+    await esperarSemOverflow("overflow com filtro de status ativo");
 
     await page.getByLabel("Tipo").selectOption("Apartamento");
     await page.waitForTimeout(200);
-    expect(await semOverflow(), "overflow com status + tipo ativos").toBe(true);
+    await esperarSemOverflow("overflow com status + tipo ativos");
   });
 
   // Adversarial: parsing defensivo de `filters` no client — mesmo
