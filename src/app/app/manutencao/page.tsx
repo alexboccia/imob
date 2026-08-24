@@ -14,7 +14,7 @@ export default async function ManutencaoPage() {
     session?.user.role === "MANAGER";
 
   return (
-    <div className="max-w-2xl space-y-5">
+    <div className="space-y-5">
       <div className="min-w-0">
         <h1 className="min-w-0 break-words text-2xl font-semibold">Manutenção</h1>
         <p className="text-sm text-muted-foreground">
