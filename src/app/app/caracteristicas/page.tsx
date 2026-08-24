@@ -1,65 +1,27 @@
 import { prisma } from "@/lib/prisma";
-import {
-  criarCaracteristica,
-  removerCaracteristica,
-} from "@/app/app/caracteristicas/actions";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
-import { NovoItemCatalogoForm } from "@/components/admin/NovoItemCatalogoForm";
+import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
-
-function ColunaCaracteristicas({
-  titulo,
-  categoria,
-  opcoes,
-}: {
-  titulo: string;
-  categoria: "PROPERTY" | "CONDO";
-  opcoes: { id: string; nome: string }[];
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{titulo}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <NovoItemCatalogoForm
-          action={criarCaracteristica}
-          categoria={categoria}
-          placeholder="Nova característica"
-        />
-
-        {opcoes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhuma característica cadastrada.
-          </p>
-        ) : (
-          <ul className="space-y-1">
-            {opcoes.map((opcao) => {
-              const removerComId = removerCaracteristica.bind(null, opcao.id);
-              return (
-                <li
-                  key={opcao.id}
-                  className="flex items-center justify-between text-sm py-1 border-b last:border-b-0"
-                >
-                  <span>{opcao.nome}</span>
-                  <ConfirmDeleteButton
-                    action={removerComId}
-                    itemLabel={opcao.nome}
-                  />
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+import { temPapel, PAPEIS_GESTAO_CATALOGOS } from "@/lib/authorization";
+import { CaracteristicasKpiCards } from "@/components/admin/caracteristicas/CaracteristicasKpiCards";
+import { CaracteristicasGrupoCard } from "@/components/admin/caracteristicas/CaracteristicasGrupoCard";
 
 export default async function CaracteristicasPage() {
+  const session = await auth();
   const organizationId = await requireOrganizationId();
+  // AUTHORIZATION UNCHANGED — a leitura da página continua acessível a
+  // qualquer membro autenticado da organização (nenhum guard novo aqui,
+  // igual ao comportamento anterior); só a UI de criar/remover passa a
+  // ficar condicionada ao mesmo papel que as Server Actions já exigem
+  // (PAPEIS_GESTAO_CATALOGOS), pra não oferecer uma ação que o servidor
+  // recusaria de qualquer forma — mesmo padrão já usado em Usuários. A
+  // garantia real continua inteiramente no servidor (actions.ts,
+  // inalterado nesta tarefa).
+  const podeGerenciar = temPapel(session?.user.role, PAPEIS_GESTAO_CATALOGOS);
+
+  // Mesma query única de antes (findMany sem filtro de categoria) — os 3
+  // KPIs são derivados EM MEMÓRIA a partir deste mesmo resultado, zero
+  // query adicional.
   const opcoes = await withOrganization(organizationId, () =>
     prisma.featureOption.findMany({ where: { organizationId } })
   );
@@ -76,24 +38,39 @@ export default async function CaracteristicasPage() {
     .sort(porNome);
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-2">Características</h1>
-      <p className="text-muted-foreground mb-6">
-        Gerencie as opções que aparecem para seleção no cadastro de imóveis.
-        Remover uma característica daqui não afeta imóveis que já a
-        possuem — só deixa de aparecer como opção para novos cadastros.
-      </p>
+    <div className="space-y-5">
+      <div className="min-w-0">
+        {/* break-words: achado real em 375/360px — "Características"
+            (16 caracteres, uma palavra só, sem espaço pra quebrar no ponto
+            normal) não cabe nos ~103px de coluna real disponível atrás da
+            sidebar fixa (scrollWidth do próprio h1 media 176px sem esta
+            classe) e empurrava o documento inteiro pra fora do viewport
+            (scrollWidth 424 vs innerWidth 375). Mesma correção já aplicada
+            no <h1>Dashboard</h1> por achado equivalente. */}
+        <h1 className="min-w-0 break-words text-2xl font-semibold">Características</h1>
+        <p className="text-sm text-muted-foreground">
+          Gerencie as opções disponíveis para classificação dos imóveis e condomínios.
+        </p>
+      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <ColunaCaracteristicas
+      <CaracteristicasKpiCards
+        total={opcoes.length}
+        doImovel={opcoesImovel.length}
+        doCondominio={opcoesCondominio.length}
+      />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <CaracteristicasGrupoCard
           titulo="Características do imóvel"
           categoria="PROPERTY"
           opcoes={opcoesImovel}
+          podeGerenciar={podeGerenciar}
         />
-        <ColunaCaracteristicas
+        <CaracteristicasGrupoCard
           titulo="Características do condomínio"
           categoria="CONDO"
           opcoes={opcoesCondominio}
+          podeGerenciar={podeGerenciar}
         />
       </div>
     </div>

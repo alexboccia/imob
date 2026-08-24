@@ -178,6 +178,31 @@ async function garantirTipoImovel(opcoes: { organizationId: string; name: string
   });
 }
 
+// Redesenho de Características — mesmo padrão upsert de garantirTipoImovel
+// acima (chave única real do model, idempotente entre execuções do
+// Playwright, nunca acumula).
+async function garantirCaracteristica(opcoes: {
+  organizationId: string;
+  category: "PROPERTY" | "CONDO";
+  name: string;
+}) {
+  await prisma.featureOption.upsert({
+    where: {
+      organizationId_category_name: {
+        organizationId: opcoes.organizationId,
+        category: opcoes.category,
+        name: opcoes.name,
+      },
+    },
+    update: {},
+    create: {
+      organizationId: opcoes.organizationId,
+      category: opcoes.category,
+      name: opcoes.name,
+    },
+  });
+}
+
 async function main() {
   const orgSlugA = process.env.ORG_SLUG ?? "e2e-org-a";
   const orgNameA = process.env.ORG_NAME ?? "Organização E2E A";
@@ -266,6 +291,18 @@ async function main() {
   });
 
   await garantirTipoImovel({ organizationId: orgA.organization.id, name: "Apartamento" });
+  // Redesenho de Características — fixtures determinísticas mínimas pra
+  // exercitar KPIs (>0 nas duas categorias), busca (nome conhecido) e
+  // texto longo sem overflow (nome propositalmente extenso).
+  await garantirCaracteristica({ organizationId: orgA.organization.id, category: "PROPERTY", name: "Aceita pet" });
+  await garantirCaracteristica({ organizationId: orgA.organization.id, category: "PROPERTY", name: "Piscina" });
+  await garantirCaracteristica({
+    organizationId: orgA.organization.id,
+    category: "PROPERTY",
+    name: "Vista panorâmica para o mar com terraço gourmet completo e churrasqueira integrada",
+  });
+  await garantirCaracteristica({ organizationId: orgA.organization.id, category: "CONDO", name: "Portaria 24 horas" });
+  await garantirCaracteristica({ organizationId: orgA.organization.id, category: "CONDO", name: "Salão de festas" });
   await garantirImovel({
     id: IDS_E2E.imovelParaEditarOrgA,
     organizationId: orgA.organization.id,

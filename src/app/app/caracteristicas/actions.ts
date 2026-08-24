@@ -36,8 +36,26 @@ export async function criarCaracteristica(
 
   const organizationId = await requireOrganizationId();
   await withOrganization(organizationId, async () => {
+    // organizationId repetido no nível raiz do `where` (redundante com o
+    // já presente dentro de `organizationId_category_name`) — achado real
+    // ao escrever o teste E2E desta feature: o middleware de tenant-scoping
+    // (src/lib/prisma.ts) só reconhece "tem organizationId" olhando as
+    // chaves de PRIMEIRO NÍVEL do objeto; como aqui ele só existia
+    // aninhado dentro da chave composta, a extensão caía no fallback via
+    // AsyncLocalStorage (withOrganization/getCurrentOrganizationId) — que
+    // o próprio prisma.ts já documenta como "NÃO confiável... testado e
+    // confirmado que o contexto se perde mesmo em creates simples de uma
+    // única operação" — e lançava exatamente esse erro (nunca coberto por
+    // teste antes desta tarefa). Corrigido aqui por ser impossível
+    // entregar o redesign com "Adicionar" funcionando sem isso — mesma
+    // regra de negócio (upsert idempotente por org+categoria+nome),
+    // nenhuma mudança de domínio. FeatureOptionWhereUniqueInput aceita
+    // `organizationId` como filtro adicional ao lado da chave composta
+    // (confirmado no client gerado). tipos-imovel/actions.ts tem o mesmo
+    // padrão frágil — fora de escopo desta tarefa, registrado como
+    // finding, não corrigido.
     await prisma.featureOption.upsert({
-      where: { organizationId_category_name: { organizationId, category: categoria, name: nome } },
+      where: { organizationId_category_name: { organizationId, category: categoria, name: nome }, organizationId },
       update: {},
       create: { organizationId, category: categoria, name: nome },
     });
