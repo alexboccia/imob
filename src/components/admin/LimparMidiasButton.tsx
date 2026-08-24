@@ -1,43 +1,83 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { limparMidiasOrfas } from "@/app/app/manutencao/actions";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 export function LimparMidiasButton() {
+  const [open, setOpen] = useState(false);
   const [resultado, setResultado] = useState<{
     totalObjetos: number;
     totalRemovidas: number;
   } | null>(null);
-  const [erro, setErro] = useState<string | null>(null);
   const [pendente, startTransition] = useTransition();
 
   function executar() {
-    setErro(null);
-    setResultado(null);
     startTransition(async () => {
       try {
         const res = await limparMidiasOrfas();
         setResultado(res);
-      } catch (e) {
-        setErro(e instanceof Error ? e.message : "Erro ao limpar mídias.");
+        setOpen(false);
+        toast.success(
+          res.totalRemovidas > 0
+            ? `${res.totalRemovidas} foto${res.totalRemovidas === 1 ? "" : "s"} não utilizada${res.totalRemovidas === 1 ? "" : "s"} foi(ram) removida(s).`
+            : "Limpeza concluída com sucesso. Nenhuma foto não utilizada encontrada."
+        );
+      } catch {
+        toast.error("A limpeza não pôde ser concluída.");
       }
     });
   }
 
   return (
-    <div>
-      <Button type="button" onClick={executar} disabled={pendente}>
-        {pendente ? "Limpando..." : "Limpar fotos não utilizadas"}
-      </Button>
+    <div className="min-w-0 space-y-3">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger render={<Button type="button" />}>
+          Limpar fotos não utilizadas
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Limpar fotos não utilizadas?</DialogTitle>
+            <DialogDescription>
+              Serão removidas apenas fotos sem vínculo com imóveis e enviadas
+              há mais de 24 horas. Arquivos utilizados por imóveis não serão
+              afetados.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              Cancelar
+            </DialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={executar}
+              disabled={pendente}
+            >
+              {pendente ? "Limpando..." : "Confirmar limpeza"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {resultado && (
-        <p className="text-sm text-gray-600 mt-3">
-          {resultado.totalObjetos} arquivo(s) verificado(s) no storage,{" "}
-          {resultado.totalRemovidas} removido(s) por não estarem vinculados a
-          nenhum imóvel.
+        <p className="min-w-0 break-words text-sm text-muted-foreground">
+          {resultado.totalRemovidas} de {resultado.totalObjetos} arquivo(s)
+          verificado(s) no storage foram removidos por não estarem
+          vinculados a nenhum imóvel.
         </p>
       )}
-      {erro && <p className="text-sm text-red-600 mt-3">{erro}</p>}
     </div>
   );
 }
