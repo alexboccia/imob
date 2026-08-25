@@ -7,17 +7,17 @@ export function SeletorTema({ themeIdAtual }: { themeIdAtual: string | null }) {
   const selecionado = themeIdAtual ?? TEMA_PADRAO_ID;
 
   return (
-    <div className="space-y-1.5">
-      <p className="text-sm font-medium">Tema do site público</p>
-      <p className="text-sm text-muted-foreground mb-2">
+    <div className="min-w-0 space-y-1.5">
+      <p className="min-w-0 break-words text-sm font-medium">Tema do site público</p>
+      <p className="min-w-0 break-words text-sm text-muted-foreground mb-2">
         Define as cores de destaque (botões, links, bordas) das páginas
         públicas do seu site.
       </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {Object.values(CATALOGO_TEMAS).map((tema) => (
           <label
             key={tema.id}
-            className="relative flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary"
+            className="relative flex min-w-0 flex-col items-start gap-2 rounded-lg border p-3 cursor-pointer sm:flex-row sm:items-center has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary"
           >
             <input
               type="radio"
@@ -40,7 +40,7 @@ export function SeletorTema({ themeIdAtual }: { themeIdAtual: string | null }) {
                 style={{ backgroundColor: tema.border }}
               />
             </span>
-            <span className="text-sm">{tema.label}</span>
+            <span className="min-w-0 break-words text-sm">{tema.label}</span>
           </label>
         ))}
       </div>

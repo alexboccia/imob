@@ -34,11 +34,11 @@ export function FaviconUpload({ faviconInicial }: { faviconInicial: string | nul
   }
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       <Label>Favicon</Label>
       <input type="hidden" name="favicon" value={favicon ?? ""} />
-      <div className="flex items-center gap-4">
-        <div className="relative w-8 h-8 rounded overflow-hidden border bg-gray-50 shrink-0">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <div className="relative w-8 h-8 shrink-0 rounded overflow-hidden border bg-gray-50">
           {favicon ? (
             <Image src={favicon} alt="Favicon" fill className="object-contain" />
           ) : (
@@ -47,13 +47,13 @@ export function FaviconUpload({ faviconInicial }: { faviconInicial: string | nul
             </div>
           )}
         </div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <input
             type="file"
             accept="image/png,image/jpeg,image/webp"
             onChange={handleArquivo}
             disabled={enviando}
-            className="block text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
+            className="block w-full min-w-0 max-w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
           />
           {favicon && (
             <Button
@@ -66,10 +66,10 @@ export function FaviconUpload({ faviconInicial }: { faviconInicial: string | nul
               Remover favicon
             </Button>
           )}
-          {erro && <p className="text-xs text-destructive">{erro}</p>}
+          {erro && <p className="min-w-0 break-words text-xs text-destructive">{erro}</p>}
         </div>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="min-w-0 break-words text-xs text-muted-foreground">
         PNG, JPEG ou WEBP, de preferência quadrado (ex: 32x32 ou 64x64). Se
         nenhum favicon for enviado, o site público usa o ícone padrão.
       </p>

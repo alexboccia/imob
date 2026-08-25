@@ -14,12 +14,13 @@ export default async function ConfiguracoesPage() {
   );
 
   return (
-    <div className="max-w-2xl">
-      <h1 className="text-2xl font-semibold mb-2">Contato e redes sociais</h1>
-      <p className="text-muted-foreground mb-6">
-        Esses dados alimentam o botão de contato flutuante, o WhatsApp dos
-        imóveis e outros pontos de contato do site público.
-      </p>
+    <div className="space-y-5">
+      <div className="min-w-0">
+        <h1 className="min-w-0 break-words text-2xl font-semibold">Configurações</h1>
+        <p className="text-sm text-muted-foreground">
+          Personalize a identidade, os contatos e as informações públicas da imobiliária.
+        </p>
+      </div>
 
       <ConfiguracaoContatoForm
         config={{

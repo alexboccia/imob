@@ -43,13 +43,13 @@ export function LogoUpload({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       <Label>Logotipo</Label>
       <input type="hidden" name="logo" value={logo ?? ""} />
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <div
-          className="relative rounded-md overflow-hidden border bg-gray-50 shrink-0"
-          style={{ height: altura, width: Math.min(altura * 4, 220) }}
+          className="relative shrink-0 overflow-hidden rounded-md border bg-gray-50 max-w-full"
+          style={{ height: altura, width: Math.min(altura * 4, 220), maxWidth: "100%" }}
         >
           {logo ? (
             <Image
@@ -64,13 +64,13 @@ export function LogoUpload({
             </div>
           )}
         </div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <input
             type="file"
             accept="image/*"
             onChange={handleArquivo}
             disabled={enviando}
-            className="block text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
+            className="block w-full min-w-0 max-w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
           />
           {logo && (
             <Button
@@ -83,11 +83,11 @@ export function LogoUpload({
               Remover logotipo
             </Button>
           )}
-          {erro && <p className="text-xs text-destructive">{erro}</p>}
+          {erro && <p className="min-w-0 break-words text-xs text-destructive">{erro}</p>}
         </div>
       </div>
 
-      <div className="space-y-1.5 pt-1">
+      <div className="min-w-0 space-y-1.5 pt-1">
         <Label htmlFor="logoAltura">Altura do logotipo no cabeçalho (px)</Label>
         <Input
           id="logoAltura"
@@ -104,7 +104,7 @@ export function LogoUpload({
         />
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="min-w-0 break-words text-xs text-muted-foreground">
         Recomendado: PNG ou WEBP com fundo transparente e formato retangular
         (proporção até 3:1), até 10MB. A imagem é redimensionada
         automaticamente para caber na altura escolhida (entre{" "}
