@@ -190,7 +190,7 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
         type="submit"
         size="lg"
         disabled={pendente}
-        className="h-auto w-full min-w-0 shrink whitespace-normal sm:w-auto"
+        className="h-auto min-w-0 shrink whitespace-normal"
       >
         {pendente ? "Salvando..." : "Salvar alterações"}
       </Button>
