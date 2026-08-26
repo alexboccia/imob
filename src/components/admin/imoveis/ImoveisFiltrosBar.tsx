@@ -96,16 +96,17 @@ export function ImoveisFiltrosBar({
 
   return (
     <div className="flex flex-wrap items-end gap-2 rounded-xl border bg-card p-3 shadow-sm">
-      <div className="min-w-0 max-w-full space-y-1">
-        {/* block: <label> nativo é inline por padrão — sem isso, ele não
-            força quebra de linha antes do <select> (também inline-block),
-            e como este div não tem largura fixa (auto/shrink-to-fit), o
-            navegador simplesmente encolhe o box pra caber rótulo+campo
-            lado a lado numa linha só, colados (achado real reportado
-            nesta tela). Outras telas que usam o componente <Label>
-            compartilhado (flex, portanto block-level) não sofrem disso;
-            aqui é <label> nativo, corrigido só neste arquivo. */}
-        <label htmlFor="imoveis-status" className="block text-xs text-muted-foreground">
+      {/* flex-col gap-1 no mobile (rótulo empilhado, mesmo espaçamento de
+          antes) e sm:flex-row sm:items-center sm:gap-2 no desktop —
+          achado real reportado: rótulo e campo devem ficar na MESMA linha
+          em telas largas, só com um espaço visível entre o texto e o
+          campo (gap-2), não empilhados. shrink-0 whitespace-nowrap no
+          rótulo evita que ele quebre linha/encolha quando comprimido. */}
+      <div className="flex min-w-0 max-w-full flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+        <label
+          htmlFor="imoveis-status"
+          className="shrink-0 whitespace-nowrap text-xs text-muted-foreground"
+        >
           Status
         </label>
         <select
@@ -122,8 +123,11 @@ export function ImoveisFiltrosBar({
           ))}
         </select>
       </div>
-      <div className="min-w-0 max-w-full space-y-1">
-        <label htmlFor="imoveis-tipo" className="block text-xs text-muted-foreground">
+      <div className="flex min-w-0 max-w-full flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+        <label
+          htmlFor="imoveis-tipo"
+          className="shrink-0 whitespace-nowrap text-xs text-muted-foreground"
+        >
           Tipo
         </label>
         <select
@@ -140,8 +144,11 @@ export function ImoveisFiltrosBar({
           ))}
         </select>
       </div>
-      <div className="min-w-0 max-w-full space-y-1">
-        <label htmlFor="imoveis-finalidade" className="block text-xs text-muted-foreground">
+      <div className="flex min-w-0 max-w-full flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+        <label
+          htmlFor="imoveis-finalidade"
+          className="shrink-0 whitespace-nowrap text-xs text-muted-foreground"
+        >
           Finalidade
         </label>
         <select
