@@ -97,7 +97,15 @@ export function ImoveisFiltrosBar({
   return (
     <div className="flex flex-wrap items-end gap-2 rounded-xl border bg-card p-3 shadow-sm">
       <div className="min-w-0 max-w-full space-y-1">
-        <label htmlFor="imoveis-status" className="text-xs text-muted-foreground">
+        {/* block: <label> nativo é inline por padrão — sem isso, ele não
+            força quebra de linha antes do <select> (também inline-block),
+            e como este div não tem largura fixa (auto/shrink-to-fit), o
+            navegador simplesmente encolhe o box pra caber rótulo+campo
+            lado a lado numa linha só, colados (achado real reportado
+            nesta tela). Outras telas que usam o componente <Label>
+            compartilhado (flex, portanto block-level) não sofrem disso;
+            aqui é <label> nativo, corrigido só neste arquivo. */}
+        <label htmlFor="imoveis-status" className="block text-xs text-muted-foreground">
           Status
         </label>
         <select
@@ -115,7 +123,7 @@ export function ImoveisFiltrosBar({
         </select>
       </div>
       <div className="min-w-0 max-w-full space-y-1">
-        <label htmlFor="imoveis-tipo" className="text-xs text-muted-foreground">
+        <label htmlFor="imoveis-tipo" className="block text-xs text-muted-foreground">
           Tipo
         </label>
         <select
@@ -133,7 +141,7 @@ export function ImoveisFiltrosBar({
         </select>
       </div>
       <div className="min-w-0 max-w-full space-y-1">
-        <label htmlFor="imoveis-finalidade" className="text-xs text-muted-foreground">
+        <label htmlFor="imoveis-finalidade" className="block text-xs text-muted-foreground">
           Finalidade
         </label>
         <select
