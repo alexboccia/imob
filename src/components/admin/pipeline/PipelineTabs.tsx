@@ -30,7 +30,13 @@ export function PipelineTabs({
           href={tab.href}
           aria-current={visao === tab.valor ? "page" : undefined}
           className={cn(
-            "h-8 rounded-lg px-3 text-sm font-medium transition-colors",
+            // inline-flex items-center justify-center: <a> é inline por
+            // padrão — height sozinho não centraliza o texto
+            // verticalmente na ausência de display flex (achado real: o
+            // texto ficava colado no topo da pill, com toda a folga
+            // sobrando embaixo). Mesmo padrão de centralização já usado
+            // no Button (buttonVariants).
+            "inline-flex h-8 items-center justify-center rounded-lg px-3 text-sm font-medium transition-colors",
             visao === tab.valor
               ? "bg-primary text-primary-foreground"
               : "bg-secondary text-secondary-foreground hover:bg-muted"

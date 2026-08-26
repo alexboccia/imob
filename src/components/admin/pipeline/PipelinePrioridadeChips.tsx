@@ -35,7 +35,10 @@ export function PipelinePrioridadeChips({
           href={href(nivel)}
           aria-current={filtroAtual === nivel ? "page" : undefined}
           className={cn(
-            "h-8 rounded-lg px-3 text-sm font-medium transition-colors",
+            // inline-flex items-center justify-center: mesmo achado de
+            // PipelineTabs.tsx — <a> é inline por padrão, height sozinho
+            // não centraliza o texto sem display flex.
+            "inline-flex h-8 items-center justify-center rounded-lg px-3 text-sm font-medium transition-colors",
             filtroAtual === nivel
               ? "bg-primary text-primary-foreground"
               : "bg-secondary text-secondary-foreground hover:bg-muted"
