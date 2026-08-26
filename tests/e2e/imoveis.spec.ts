@@ -285,6 +285,47 @@ test.describe("Imóveis", () => {
     await esperarSemOverflow("overflow com status + tipo ativos");
   });
 
+  // Redesenho visual dos filtros — Status/Tipo/Finalidade e a busca
+  // ("Buscar imóveis", extraída de DataTable pra este card via
+  // TableSearchInput/hideSearchBar) agora vivem dentro do MESMO card,
+  // provado aqui via ancestor comum `[data-slot="card"]` — antes eram
+  // dois blocos visuais separados (ImoveisFiltrosBar + o campo que
+  // DataTable renderizava sozinho acima da tabela).
+  test("Status, Tipo, Finalidade e busca ficam no mesmo card visual", async ({ page }) => {
+    await page.goto("/app/imoveis");
+
+    const card = page.locator('[data-slot="card"]').filter({ has: page.getByLabel("Status") });
+    await expect(card.getByLabel("Status")).toBeVisible();
+    await expect(card.getByLabel("Tipo")).toBeVisible();
+    await expect(card.getByLabel("Finalidade")).toBeVisible();
+    await expect(card.getByLabel("Buscar imóveis")).toBeVisible();
+    await expect(
+      card.getByPlaceholder("Buscar por código, título, tipo, cidade ou bairro...")
+    ).toBeVisible();
+  });
+
+  for (const width of [768, 1440]) {
+    test(`${width}px: sem overflow horizontal`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/app/imoveis");
+
+      const m = await page.evaluate(() => ({
+        innerWidth: window.innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      }));
+      expect(
+        m.scrollWidth <= m.innerWidth + 1,
+        `innerWidth=${m.innerWidth} scrollWidth=${m.scrollWidth}`
+      ).toBe(true);
+
+      // Inspeção visual real (não só scrollWidth): rótulos legíveis,
+      // select/input não espremidos, busca ocupando a maior parte da
+      // largura ao lado do rótulo "Buscar imóveis".
+      const buscaBox = await page.getByLabel("Buscar imóveis").boundingBox();
+      expect(buscaBox && buscaBox.width, `largura da busca: ${buscaBox?.width}`).toBeGreaterThan(150);
+    });
+  }
+
   // Adversarial: parsing defensivo de `filters` no client — mesmo
   // mecanismo/correção já usado em Usuários (Finding #3 daquela
   // auditoria), reproduzido aqui desde o início pros 3 filtros novos.

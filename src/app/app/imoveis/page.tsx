@@ -188,7 +188,7 @@ export default async function AdminImoveisPage({
         page={page}
         pageSize={pageSize}
         sortableColumns={SORT_MAP}
-        searchPlaceholder="Buscar por código, título, tipo, cidade ou bairro..."
+        hideSearchBar
         emptyMessage={
           temFiltroOuBuscaAtivo
             ? "Nenhum imóvel encontrado com esses filtros."

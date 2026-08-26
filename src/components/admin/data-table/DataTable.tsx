@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useTable, flexRender, type ColumnDef } from "@tanstack/react-table";
 import { tableFeaturesUsadas, type TableFeaturesUsadas } from "./table-features";
 import { PAGE_SIZE_MAXIMO, totalDePaginas } from "@/lib/pagination";
-import { Input } from "@/components/ui/input";
+import { TableSearchInput } from "./TableSearchInput";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -45,6 +45,7 @@ export function DataTable<TData extends Record<string, unknown>>({
   pageSize,
   sortableColumns = {},
   searchPlaceholder = "Buscar...",
+  hideSearchBar = false,
   emptyMessage = "Nenhum registro encontrado.",
   onRowClick,
   cards,
@@ -57,6 +58,15 @@ export function DataTable<TData extends Record<string, unknown>>({
   /** Mapa "id da coluna" -> "campo aceito pelo servidor no parâmetro sort". */
   sortableColumns?: Record<string, string>;
   searchPlaceholder?: string;
+  /** Opcional — quando true, suprime a busca própria deste componente
+   * (mesma lógica, agora em TableSearchInput.tsx, continua sendo a
+   * padrão aqui embaixo). Usado só por Imóveis (redesenho dos filtros),
+   * que renderiza seu próprio <TableSearchInput> dentro do card de
+   * Status/Tipo/Finalidade em vez de deixá-lo aqui. Default `false`
+   * preserva exatamente o comportamento/posição atuais nas outras 4
+   * telas que usam DataTable (Usuários, Clientes, Organizations, Audit) —
+   * nenhuma delas passa esta prop, então nada muda para elas. */
+  hideSearchBar?: boolean;
   /** Aceita ReactNode (não só texto) desde o redesenho de Clientes — a
    * tela de Clientes usa isso pra incluir um botão "Adicionar primeiro
    * cliente" no estado vazio, mas continua funcionando com string simples
@@ -102,19 +112,6 @@ export function DataTable<TData extends Record<string, unknown>>({
   const sortAtual = searchParams.get("sort") ?? "";
   const [sortCampoAtual, sortDirecaoAtual] = sortAtual.split(":");
 
-  // Reseta buscaLocal quando o `search` da URL muda por fora deste
-  // componente (voltar no navegador, clicar num link que limpa filtros).
-  // Ajustado durante o render (padrão recomendado pelo React pra "resetar
-  // estado quando uma prop muda"), não num useEffect — evita o
-  // cascading-render de um setState síncrono dentro de efeito.
-  const searchNaUrl = searchParams.get("search") ?? "";
-  const [buscaLocal, setBuscaLocal] = useState(searchNaUrl);
-  const [ultimoSearchNaUrl, setUltimoSearchNaUrl] = useState(searchNaUrl);
-  if (searchNaUrl !== ultimoSearchNaUrl) {
-    setUltimoSearchNaUrl(searchNaUrl);
-    setBuscaLocal(searchNaUrl);
-  }
-
   function navegarCom(alteracoes: Record<string, string | null>) {
     const novo = new URLSearchParams(searchParams.toString());
     for (const [chave, valor] of Object.entries(alteracoes)) {
@@ -124,18 +121,6 @@ export function DataTable<TData extends Record<string, unknown>>({
     router.push(`${pathname}?${novo.toString()}`);
   }
 
-  // Debounce simples: só atualiza a URL (e refaz a consulta no servidor)
-  // 400ms depois da última tecla, pra não disparar uma query por caractere.
-  useEffect(() => {
-    const atual = searchParams.get("search") ?? "";
-    if (buscaLocal === atual) return;
-    const id = setTimeout(() => {
-      navegarCom({ search: buscaLocal || null, page: null });
-    }, 400);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buscaLocal]);
-
   function alternarOrdenacao(campo: string) {
     const proximaDirecao = sortCampoAtual === campo && sortDirecaoAtual === "asc" ? "desc" : "asc";
     navegarCom({ sort: `${campo}:${proximaDirecao}`, page: null });
@@ -143,12 +128,9 @@ export function DataTable<TData extends Record<string, unknown>>({
 
   return (
     <div className="space-y-3">
-      <Input
-        placeholder={searchPlaceholder}
-        value={buscaLocal}
-        onChange={(e) => setBuscaLocal(e.target.value)}
-        className="max-w-xs"
-      />
+      {!hideSearchBar && (
+        <TableSearchInput placeholder={searchPlaceholder} className="max-w-xs" />
+      )}
       <div className={cards ? "hidden rounded-lg border md:block md:overflow-x-auto" : "border rounded-lg overflow-x-auto"}>
         <Table>
           <TableHeader>
