@@ -92,13 +92,22 @@ export function PipelineFiltrosBar({
           </select>
         </div>
       )}
-      <button type="submit" className={cn(buttonVariants({ variant: "default", size: "sm" }))}>
+      {/* size="default" (não "sm"): Input/<select> desta barra são h-8;
+          buttonVariants({size:"sm"}) é h-7, 4px mais baixo — com
+          items-end no container, isso alinhava só a base, deixando o
+          topo do botão visivelmente mais baixo que os campos ao lado
+          (achado real reportado nesta tela). size="default" é h-8,
+          mesma altura dos campos — corrige sem tocar Button/
+          buttonVariants nem outras telas que usam o mesmo padrão
+          size="sm" ao lado de <select> h-8 (ex: Agenda), que ficam fora
+          de escopo desta correção pontual do Pipeline. */}
+      <button type="submit" className={cn(buttonVariants({ variant: "default" }))}>
         Filtrar
       </button>
       {temFiltroAtivo && (
         <Link
           href={construirHref({ visao: params.visao, periodo: params.periodo }, {}, true)}
-          className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+          className={cn(buttonVariants({ variant: "ghost" }))}
         >
           Limpar filtros
         </Link>
