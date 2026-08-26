@@ -1,63 +1,22 @@
 import { prisma } from "@/lib/prisma";
-import {
-  criarTipoImovel,
-  removerTipoImovel,
-} from "@/app/app/tipos-imovel/actions";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { ConfirmDeleteButton } from "@/components/admin/ConfirmDeleteButton";
-import { NovoItemCatalogoForm } from "@/components/admin/NovoItemCatalogoForm";
+import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
-
-function ColunaTipos({
-  titulo,
-  categoria,
-  opcoes,
-}: {
-  titulo: string;
-  categoria: "RESIDENTIAL" | "COMMERCIAL";
-  opcoes: { id: string; nome: string }[];
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{titulo}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <NovoItemCatalogoForm
-          action={criarTipoImovel}
-          categoria={categoria}
-          placeholder="Novo tipo de imóvel"
-        />
-
-        {opcoes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum tipo cadastrado.</p>
-        ) : (
-          <ul className="space-y-1">
-            {opcoes.map((opcao) => {
-              const removerComId = removerTipoImovel.bind(null, opcao.id);
-              return (
-                <li
-                  key={opcao.id}
-                  className="flex items-center justify-between text-sm py-1 border-b last:border-b-0"
-                >
-                  <span>{opcao.nome}</span>
-                  <ConfirmDeleteButton
-                    action={removerComId}
-                    itemLabel={opcao.nome}
-                  />
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+import { temPapel, PAPEIS_GESTAO_CATALOGOS } from "@/lib/authorization";
+import { TiposImovelGrupoCard } from "@/components/admin/tipos-imovel/TiposImovelGrupoCard";
 
 export default async function TiposImovelPage() {
+  const session = await auth();
   const organizationId = await requireOrganizationId();
+  // AUTHORIZATION UNCHANGED — a leitura da página continua acessível a
+  // qualquer membro autenticado da organização (nenhum guard novo aqui);
+  // só a UI de criar/remover passa a ficar condicionada ao mesmo papel
+  // que as Server Actions já exigem (PAPEIS_GESTAO_CATALOGOS), pra não
+  // oferecer uma ação que o servidor recusaria de qualquer forma — mesmo
+  // padrão já usado em Características/Usuários. A garantia real continua
+  // inteiramente no servidor (actions.ts).
+  const podeGerenciar = temPapel(session?.user.role, PAPEIS_GESTAO_CATALOGOS);
+
   const opcoes = await withOrganization(organizationId, () =>
     prisma.propertyTypeOption.findMany({ where: { organizationId } })
   );
@@ -74,24 +33,34 @@ export default async function TiposImovelPage() {
     .sort(porNome);
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-2">Tipos de imóvel</h1>
-      <p className="text-muted-foreground mb-6">
-        Gerencie as opções de tipo (residencial/comercial) que aparecem no
-        cadastro de imóveis. Remover um tipo daqui não afeta imóveis que já
-        o possuem — só deixa de aparecer como opção para novos cadastros.
-      </p>
+    <div className="space-y-5">
+      <div className="min-w-0">
+        <h1 className="min-w-0 break-words text-2xl font-semibold">Tipos de imóvel</h1>
+        {/* min-w-0 break-words: achado real em 375/360px — "(residencial/comercial)"
+            é um único token sem espaço (o "/" não é ponto de quebra
+            garantido) e não cabia na coluna estreita disponível atrás da
+            sidebar fixa (scrollWidth 393 vs innerWidth 375 antes desta
+            correção), mesma classe de bug já corrigida em outros títulos/
+            textos do projeto. */}
+        <p className="min-w-0 break-words text-sm text-muted-foreground">
+          Gerencie as opções de tipo (residencial/comercial) que aparecem no
+          cadastro de imóveis. Remover um tipo daqui não afeta imóveis que já
+          o possuem — só deixa de aparecer como opção para novos cadastros.
+        </p>
+      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <ColunaTipos
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <TiposImovelGrupoCard
           titulo="Imóveis residenciais"
           categoria="RESIDENTIAL"
           opcoes={opcoesResidencial}
+          podeGerenciar={podeGerenciar}
         />
-        <ColunaTipos
+        <TiposImovelGrupoCard
           titulo="Imóveis comerciais"
           categoria="COMMERCIAL"
           opcoes={opcoesComercial}
+          podeGerenciar={podeGerenciar}
         />
       </div>
     </div>

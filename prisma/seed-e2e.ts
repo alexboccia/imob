@@ -160,19 +160,24 @@ async function garantirImovel(opcoes: {
   });
 }
 
-async function garantirTipoImovel(opcoes: { organizationId: string; name: string }) {
+async function garantirTipoImovel(opcoes: {
+  organizationId: string;
+  name: string;
+  category?: "RESIDENTIAL" | "COMMERCIAL";
+}) {
+  const category = opcoes.category ?? "RESIDENTIAL";
   await prisma.propertyTypeOption.upsert({
     where: {
       organizationId_category_name: {
         organizationId: opcoes.organizationId,
-        category: "RESIDENTIAL",
+        category,
         name: opcoes.name,
       },
     },
     update: {},
     create: {
       organizationId: opcoes.organizationId,
-      category: "RESIDENTIAL",
+      category,
       name: opcoes.name,
     },
   });
@@ -291,6 +296,18 @@ async function main() {
   });
 
   await garantirTipoImovel({ organizationId: orgA.organization.id, name: "Apartamento" });
+  // Redesenho de Tipos de Imóvel — fixtures determinísticas mínimas pra
+  // exercitar os dois grupos (residencial já tinha "Apartamento" acima) e
+  // a busca por nome longo sem overflow em viewports estreitos.
+  await garantirTipoImovel({
+    organizationId: orgA.organization.id,
+    name: "Casa em condomínio fechado com área de lazer completa",
+  });
+  await garantirTipoImovel({
+    organizationId: orgA.organization.id,
+    name: "Sala Comercial",
+    category: "COMMERCIAL",
+  });
   // Redesenho de Características — fixtures determinísticas mínimas pra
   // exercitar KPIs (>0 nas duas categorias), busca (nome conhecido) e
   // texto longo sem overflow (nome propositalmente extenso).

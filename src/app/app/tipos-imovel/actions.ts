@@ -37,8 +37,19 @@ export async function criarTipoImovel(
 
   const organizationId = await requireOrganizationId();
   await withOrganization(organizationId, async () => {
+    // organizationId repetido no nível raiz do `where` (redundante com o
+    // já presente dentro de `organizationId_category_name`) — mesmo bug e
+    // mesma correção já aplicados em criarCaracteristica
+    // (src/app/app/caracteristicas/actions.ts): o middleware de
+    // tenant-scoping (src/lib/prisma.ts) só reconhece "tem organizationId"
+    // olhando as chaves de PRIMEIRO NÍVEL do objeto; aninhado só dentro da
+    // chave composta, caía no fallback via AsyncLocalStorage — documentado
+    // como não confiável — e lançava erro em toda criação real (HTTP 500,
+    // reproduzido via UI real antes desta correção). Mesma regra de
+    // negócio (upsert idempotente por org+categoria+nome), nenhuma
+    // mudança de domínio.
     await prisma.propertyTypeOption.upsert({
-      where: { organizationId_category_name: { organizationId, category: categoria, name: nome } },
+      where: { organizationId_category_name: { organizationId, category: categoria, name: nome }, organizationId },
       update: {},
       create: { organizationId, category: categoria, name: nome },
     });

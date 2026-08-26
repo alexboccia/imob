@@ -14,22 +14,16 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { removerCaracteristica } from "@/app/app/caracteristicas/actions";
+import { removerTipoImovel } from "@/app/app/tipos-imovel/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 
-// Redesenho de Características — componente NOVO e específico da feature
-// (o antigo ConfirmDeleteButton compartilhado foi removido no redesenho
-// de Tipos de Imóvel, seu último consumidor real). Duplica a lógica
-// pequena do dialog de confirmação de propósito, pra manter zero blast
-// radius entre os dois catálogos.
-//
-// Botão-ícone discreto em vez do menu "⋯": única ação real por item é
-// remover — um menu de 1 item só adicionaria indireção sem ganho (a
-// própria tarefa sanciona essa alternativa explicitamente quando o menu
-// não agrega). `text-muted-foreground` em repouso, só fica vermelho no
-// hover/focus — resolve o "vermelho dominando a lista inteira" do design
-// anterior sem esconder a ação.
-export function CaracteristicaLinha({
+// Redesenho de Tipos de Imóvel — componente NOVO e específico da feature.
+// O antigo ConfirmDeleteButton compartilhado tinha esta tela como único
+// consumidor real (grep confirmado) e foi removido nesta tarefa. Mesmo
+// padrão de botão-ícone + Dialog de confirmação já usado em
+// CaracteristicaLinha.tsx, pra manter consistência visual entre os dois
+// catálogos administrativos.
+export function TipoImovelLinha({
   id,
   nome,
   podeGerenciar,
@@ -39,12 +33,13 @@ export function CaracteristicaLinha({
   podeGerenciar: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const removerComId = removerCaracteristica.bind(null, id);
+  const removerComId = removerTipoImovel.bind(null, id);
   const [estado, formAction, pendente] = useActionState(removerComId, ESTADO_INICIAL_ACAO);
 
   // Sucesso não fecha o dialog explicitamente por setState — a Server
-  // Action já chama revalidatePath, então o item some da lista do
-  // Server Component pai e esta linha (com o dialog) desmonta sozinha.
+  // Action já chama revalidatePath, então o item some da lista do Server
+  // Component pai e esta linha (com o dialog) desmonta sozinha, mesmo
+  // comportamento do ConfirmDeleteButton pré-existente.
   useEffect(() => {
     if (!estado.success && estado.message) {
       toast.error(estado.message);
@@ -63,7 +58,7 @@ export function CaracteristicaLinha({
                 variant="ghost"
                 size="icon-sm"
                 className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 focus-visible:text-destructive"
-                aria-label={`Remover característica "${nome}"`}
+                aria-label={`Remover tipo de imóvel "${nome}"`}
               />
             }
           >
@@ -71,11 +66,10 @@ export function CaracteristicaLinha({
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Remover característica?</DialogTitle>
+              <DialogTitle>Remover tipo de imóvel?</DialogTitle>
               <DialogDescription>
                 &quot;{nome}&quot; deixará de aparecer como opção para novos
-                cadastros. Imóveis que já possuem essa característica não
-                serão alterados.
+                cadastros. Imóveis que já usam esse tipo não são alterados.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
