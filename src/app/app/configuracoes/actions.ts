@@ -19,6 +19,7 @@ import {
 } from "@/lib/action-result";
 import { tagConfiguracao, tagBranding } from "@/lib/cache-tags";
 import { CATALOGO_TEMAS } from "@/lib/branding/temas";
+import { CATALOGO_APARENCIA_RODAPE } from "@/lib/branding/aparencia-rodape";
 import { validarFaviconUrl } from "@/lib/branding/favicon-url";
 
 const vazioParaNulo = (v: unknown) =>
@@ -43,6 +44,15 @@ const configuracaoSchema = z.object({
   logoAltura: z.preprocess(
     (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
     z.number().optional()
+  ),
+  // Logotipo dedicado ao rodapé (OrganizationSettings.footerLogoUrl) —
+  // mesmo tratamento de `logo` acima, campo opcional e independente.
+  logoRodape: z.preprocess(vazioParaNulo, z.string().optional()),
+  // Aparência do rodapé: só um dos valores do catálogo fixo (mesmo
+  // racional de themeId acima) — nunca cor/CSS livre.
+  footerAparencia: z.enum(
+    CATALOGO_APARENCIA_RODAPE.map((opcao) => opcao.id) as [string, ...string[]],
+    { message: "Aparência de rodapé inválida." }
   ),
   // Só um dos 6 temas pré-definidos do catálogo — nunca cor livre. Um
   // valor fora do catálogo (ex: manipulação do formulário) falha a
@@ -112,6 +122,7 @@ export async function salvarConfiguracaoContato(
     propertyCodePrefix: campos.codigoImovelPrefixo?.toUpperCase() ?? null,
     logoUrl: campos.logo ?? null,
     logoHeight: alturaLogo(campos.logoAltura),
+    footerLogoUrl: campos.logoRodape ?? null,
   };
 
   await withOrganization(organizationId, async () => {
@@ -127,12 +138,14 @@ export async function salvarConfiguracaoContato(
           themeId: campos.themeId,
           faviconUrl: campos.favicon ?? null,
           displayName: campos.nomePublico ?? null,
+          footerAppearance: campos.footerAparencia,
         },
         create: {
           organizationId,
           themeId: campos.themeId,
           faviconUrl: campos.favicon ?? null,
           displayName: campos.nomePublico ?? null,
+          footerAppearance: campos.footerAparencia,
         },
       }),
     ]);

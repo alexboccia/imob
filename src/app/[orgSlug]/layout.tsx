@@ -151,6 +151,8 @@ export default async function PublicLayout({
       <SiteFooter
         nome={nomePublico}
         logo={config.logo}
+        logoRodape={config.logoRodape}
+        aparencia={branding.footerAppearance}
         basePath={basePath}
         // Contato acrescentado só no footer (rota pública real,
         // /[orgSlug]/contato) — o menu principal continua com os mesmos

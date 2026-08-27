@@ -26,8 +26,39 @@ test.describe("Configurações", () => {
   test("controles de upload de logo e favicon permanecem presentes", async ({ page }) => {
     await expect(page.getByText("Logotipo", { exact: true })).toBeVisible();
     await expect(page.getByText("Favicon", { exact: true })).toBeVisible();
-    // Dois inputs de arquivo reais (logo + favicon), sem alterar a lógica.
-    await expect(page.locator('input[type="file"]')).toHaveCount(2);
+    // Três inputs de arquivo reais (logo cabeçalho + favicon + logo
+    // rodapé), sem alterar a lógica dos dois já existentes.
+    await expect(page.locator('input[type="file"]')).toHaveCount(3);
+  });
+
+  test("rodapé do site: upload dedicado e as 3 opções de aparência aparecem, AUTO é o padrão", async ({ page }) => {
+    await expect(page.getByText("Rodapé do site", { exact: true })).toBeVisible();
+    await expect(page.getByText("Logotipo do rodapé", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Use uma versão do logotipo adequada ao fundo do rodapé.")
+    ).toBeVisible();
+
+    await expect(page.getByRole("radio", { name: /Automático pelo tema/i })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Cor principal do tema/i })).not.toBeChecked();
+    await expect(page.getByRole("radio", { name: /Fundo claro/i })).not.toBeChecked();
+    await expect(page.getByText("Usa a cor principal do tema como fundo.")).toBeVisible();
+    await expect(page.getByText("Usa uma superfície clara e texto escuro.")).toBeVisible();
+  });
+
+  test("aparência do rodapé persiste após salvar e recarregar", async ({ page }) => {
+    await page.getByRole("radio", { name: /Fundo claro/i }).check({ force: true });
+    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
+
+    await page.reload();
+    await expect(page.getByRole("radio", { name: /Fundo claro/i })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Automático pelo tema/i })).not.toBeChecked();
+
+    // Devolve ao padrão pra não vazar estado pros outros testes deste
+    // describe (mesma organização/sessão reaproveitada entre testes).
+    await page.getByRole("radio", { name: /Automático pelo tema/i }).check({ force: true });
+    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
   });
 
   test("salvar persiste os campos preenchidos, tema selecionável, e reaparece após reload", async ({ page }) => {

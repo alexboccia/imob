@@ -17,6 +17,7 @@ async function buscarConfiguracaoContatoSemCache(organizationId: string) {
     codigoImovelPrefixo: settings?.propertyCodePrefix ?? "",
     logo: settings?.logoUrl ?? null,
     logoAltura: settings?.logoHeight ?? LOGO_ALTURA_PADRAO,
+    logoRodape: settings?.footerLogoUrl ?? null,
   };
 }
 

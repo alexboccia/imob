@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { ORG_A, login } from "./helpers";
 
 // Redesign do site público (Proposta 2) — roda no host padrão (sem
 // prefixo de slug: PUBLIC_ORG_SLUG=e2e-org-a em .env.test), já seedado
@@ -274,4 +275,49 @@ test.describe("Site público — Footer (Proposta 2, correção)", () => {
       await expect(page.locator("footer")).toBeVisible();
     });
   }
+});
+
+// Configurações → Rodapé do site (aparência): a escolha em
+// /app/configuracoes precisa realmente refletir no fundo do footer do
+// site público, não só persistir no formulário (isso já é coberto em
+// configuracoes.spec.ts). Verifica o valor ESPECIFICADO de
+// backgroundColor (el.style, não getComputedStyle) — AUTO/PRIMARY usam
+// color-mix()/var(--primary) inline (ver SiteFooter.tsx), então o valor
+// bruto identifica o modo sem depender de resolver cor calculada,
+// evitando o mesmo tipo de fragilidade de parse já visto no teste de
+// luminosidade acima.
+test.describe("Site público — Footer aparência (rodapé)", () => {
+  test("PRIMARY e LIGHT mudam o fundo do footer público; AUTO (padrão) volta a color-mix", async ({ page }) => {
+    async function estiloFundoFooter() {
+      await page.goto("/");
+      return page.locator("footer").evaluate((el) => (el as HTMLElement).style.backgroundColor);
+    }
+
+    // Padrão (AUTO) antes de qualquer alteração.
+    expect(await estiloFundoFooter()).toContain("color-mix");
+
+    await login(page, ORG_A);
+
+    await page.goto("/app/configuracoes");
+    await page.getByRole("radio", { name: /Cor principal do tema/i }).check({ force: true });
+    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
+    expect(await estiloFundoFooter()).toBe("var(--primary)");
+
+    await page.goto("/app/configuracoes");
+    await page.getByRole("radio", { name: /Fundo claro/i }).check({ force: true });
+    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
+    await page.goto("/");
+    // LIGHT não usa cor inline — fundo vem de uma classe Tailwind estática.
+    expect(await estiloFundoFooter()).toBe("");
+    await expect(page.locator("footer")).toHaveClass(/bg-slate-50/);
+
+    // Devolve ao padrão (AUTO): outros testes deste arquivo (luminosidade
+    // do footer, acima) dependem do fundo escuro padrão da organização.
+    await page.goto("/app/configuracoes");
+    await page.getByRole("radio", { name: /Automático pelo tema/i }).check({ force: true });
+    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
+  });
 });

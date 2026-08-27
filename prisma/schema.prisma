@@ -715,6 +715,11 @@ model OrganizationSettings {
   propertyCodePrefix String?
   logoUrl            String?
   logoHeight         Int?
+  // Logotipo dedicado ao rodapé do site público (fundo pode ser escuro —
+  // ver OrganizationBranding.footerAppearance) — mesmo asset de sempre
+  // (R2, upload por /api/admin/upload), só um segundo slot, opcional. Sem
+  // isto, o rodapé cai no MESMO logoUrl do cabeçalho (ver SiteFooter.tsx).
+  footerLogoUrl      String?
   updatedAt          DateTime     @updatedAt
 
   @@map("organization_settings")
@@ -736,12 +741,20 @@ model OrganizationSettings {
 // soltos reabriria o risco que o catálogo existe pra fechar. Ver
 // relatório da Fase P.10, item "branding" — decisão documentada.
 model OrganizationBranding {
-  organizationId String       @id
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  displayName    String?
-  themeId        String       @default("classic-blue")
-  faviconUrl     String?
-  updatedAt      DateTime     @updatedAt
+  organizationId   String       @id
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  displayName      String?
+  themeId          String       @default("classic-blue")
+  faviconUrl       String?
+  // Aparência do rodapé público — mesmo racional de themeId acima:
+  // catálogo FIXO em código ("AUTO" | "PRIMARY" | "LIGHT", ver
+  // src/lib/branding/aparencia-rodape.ts), nunca cor/CSS livre vinda do
+  // banco. "AUTO" (variação escura derivada do tema via color-mix, sem
+  // precisar de um token novo por tema) é o padrão — mesmo visual que o
+  // rodapé já tinha antes deste campo existir, nenhum tenant existente
+  // muda de aparência só por essa migration.
+  footerAppearance String       @default("AUTO")
+  updatedAt        DateTime     @updatedAt
 
   @@map("organization_branding")
 }

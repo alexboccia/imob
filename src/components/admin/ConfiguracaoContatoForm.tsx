@@ -11,8 +11,10 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ErroCampo } from "@/components/admin/ErroCampo";
 import { LogoUpload } from "@/components/admin/LogoUpload";
+import { LogoRodapeUpload } from "@/components/admin/LogoRodapeUpload";
 import { FaviconUpload } from "@/components/admin/FaviconUpload";
 import { SeletorTema } from "@/components/admin/SeletorTema";
+import { SeletorAparenciaRodape } from "@/components/admin/SeletorAparenciaRodape";
 
 type ConfiguracaoInicial = {
   telefone: string;
@@ -25,9 +27,11 @@ type ConfiguracaoInicial = {
   codigoImovelPrefixo: string;
   logo: string | null;
   logoAltura: number;
+  logoRodape: string | null;
   themeId: string | null;
   favicon: string | null;
   nomePublico: string | null;
+  footerAppearance: string | null;
 };
 
 export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicial }) {
@@ -66,6 +70,17 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           <LogoUpload logoInicial={config.logo} alturaInicial={config.logoAltura} />
           <FaviconUpload faviconInicial={config.favicon} />
           <SeletorTema themeIdAtual={config.themeId} />
+
+          <div className="min-w-0 space-y-6 border-t pt-6">
+            <div className="min-w-0 space-y-1.5">
+              <p className="min-w-0 break-words text-sm font-medium">Rodapé do site</p>
+              <p className="min-w-0 break-words text-sm text-muted-foreground">
+                Use uma versão do logotipo adequada ao fundo do rodapé.
+              </p>
+            </div>
+            <LogoRodapeUpload logoInicial={config.logoRodape} />
+            <SeletorAparenciaRodape aparenciaAtual={config.footerAppearance} />
+          </div>
         </CardContent>
       </Card>
 

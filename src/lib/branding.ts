@@ -14,6 +14,7 @@ async function buscarBrandingSemCache(organizationId: string) {
     // "oficial"/legal. null é um retorno válido: quem consome resolve
     // pro Organization.name como fallback, nunca aqui.
     displayName: branding?.displayName ?? null,
+    footerAppearance: branding?.footerAppearance ?? null,
   };
 }
 
