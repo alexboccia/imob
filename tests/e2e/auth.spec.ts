@@ -5,7 +5,11 @@ import { ORG_A, login } from "./helpers";
 test("login válido leva pro painel autenticado", async ({ page }) => {
   await login(page, ORG_A);
   await expect(page).toHaveURL("/app");
-  await expect(page.getByText("Painel")).toBeVisible();
+  // Nav responsiva: "Painel" aparece tanto na sidebar desktop quanto no
+  // header mobile (ambos no DOM, só um visível por vez via CSS) — escopo
+  // explícito na sidebar, que é a visível no viewport padrão (desktop) em
+  // que este teste roda.
+  await expect(page.locator("aside").getByText("Painel")).toBeVisible();
 });
 
 // 2. login inválido

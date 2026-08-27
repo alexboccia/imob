@@ -6,6 +6,7 @@ import { getSiteUrl, resolverBasePath } from "@/lib/site-url";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
+import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
 import { hasModule } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
@@ -56,9 +57,35 @@ export default async function AdminLayout({
     ? getSiteUrl(resolverBasePath(organization.slug) || "/")
     : null;
 
+  async function logoutAction() {
+    "use server";
+    if (session!.user.organizationId) {
+      await logActivity({
+        organizationId: session!.user.organizationId,
+        userId: session!.user.id,
+        entity: "Session",
+        action: "logout",
+      });
+    }
+    await signOut({ redirectTo: "/app/login" });
+  }
+
+  const navLinksParaMobile = NAV_LINKS.map((link) => ({
+    href: link.href,
+    label: link.label,
+    liberado: !link.modulo || Boolean(modulosHabilitados.get(link.modulo)),
+  }));
+
   return (
     <div className="min-h-screen flex">
-      <aside className="min-w-0 w-56 border-r bg-gray-50 flex flex-col">
+      {/* hidden md:flex — abaixo de md (768px) a sidebar fixa (224px) não
+          cabe mais numa viewport mobile sem espremer o conteúdo principal
+          a quase nada (achado histórico, documentado em várias telas desta
+          mesma pasta: ~136-151px de coluna real útil em 360-375px). Nesse
+          intervalo, AdminMobileNav assume a navegação via header
+          compacto + Sheet — desktop/tablet largo (>=768px) continua
+          exatamente como antes, sem nenhuma mudança visual. */}
+      <aside className="hidden md:flex min-w-0 w-56 border-r bg-gray-50 flex-col">
         <div className="px-4 py-4 font-semibold border-b">Painel</div>
         {siteUrl && (
           <a
@@ -104,20 +131,7 @@ export default async function AdminLayout({
           <p className="text-gray-500 truncate">
             {PAPEL_USUARIO_LABEL[session.user?.role ?? ""] ?? session.user?.role}
           </p>
-          <form
-            action={async () => {
-              "use server";
-              if (session.user.organizationId) {
-                await logActivity({
-                  organizationId: session.user.organizationId,
-                  userId: session.user.id,
-                  entity: "Session",
-                  action: "logout",
-                });
-              }
-              await signOut({ redirectTo: "/app/login" });
-            }}
-          >
+          <form action={logoutAction}>
             <Button
               type="submit"
               variant="link"
@@ -133,8 +147,18 @@ export default async function AdminLayout({
           inteira em vez de rolar dentro do próprio overflow-x-auto (bug
           pré-existente, reproduzido em /app/imoveis e /app/usuarios antes
           desta correção, não só em /app/clientes). */}
-      <div className="min-w-0 flex-1">
-        <main className="p-6">{children}</main>
+      <div className="min-w-0 flex-1 flex flex-col">
+        <AdminMobileNav
+          navLinks={navLinksParaMobile}
+          siteUrl={siteUrl}
+          userName={session.user?.name}
+          userRoleLabel={PAPEL_USUARIO_LABEL[session.user?.role ?? ""] ?? session.user?.role ?? ""}
+          logoutAction={logoutAction}
+        />
+        {/* p-4 md:p-6: mobile ganha um pouco mais de largura útil de volta
+            (16px vs 24px de cada lado) — modesto, mas soma com a sidebar
+            oculta pra devolver a maior parte da viewport ao conteúdo. */}
+        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
       <Toaster />
     </div>
