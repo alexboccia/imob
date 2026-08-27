@@ -15,6 +15,7 @@ import { DataTable } from "@/components/admin/data-table/DataTable";
 import { NovoUsuarioSheet } from "@/components/admin/usuarios/NovoUsuarioSheet";
 import { UsuariosKpiCards } from "@/components/admin/usuarios/UsuariosKpiCards";
 import { UsuariosFiltrosBar } from "@/components/admin/usuarios/UsuariosFiltrosBar";
+import { UsuarioCardMobile } from "@/components/admin/usuarios/UsuarioCardMobile";
 import { usuarioColumns, type UsuarioRow } from "./columns";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -171,6 +172,9 @@ export default async function UsuariosPage({
         pageSize={pageSize}
         sortableColumns={SORT_MAP}
         searchPlaceholder="Buscar por nome ou e-mail..."
+        cards={linhas.map((usuario) => (
+          <UsuarioCardMobile key={usuario.id} usuario={usuario} />
+        ))}
         emptyMessage={
           temFiltroOuBuscaAtivo ? (
             "Nenhum usuário encontrado com esses filtros."

@@ -45,10 +45,14 @@ export function AgendaFiltrosBar({
   return (
     <form
       method="get"
-      className="flex flex-wrap items-end gap-2 rounded-xl border bg-card p-3 shadow-sm"
+      className="flex flex-col gap-2 rounded-xl border bg-card p-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-end"
     >
       <input type="hidden" name="aba" value={aba} />
-      <div className="min-w-0 flex-1 space-y-1">
+      {/* w-full sm:min-w-0 sm:flex-1: mesma correção do Pipeline — sem
+          isso, flex-1+min-w-0 num container flex-wrap nunca quebra linha
+          (encolhe o campo até quase 0 em vez de mover pra próxima linha),
+          espremendo o campo de busca a poucos pixels em vez de empilhar. */}
+      <div className="w-full space-y-1 sm:min-w-0 sm:flex-1">
         <label htmlFor="agenda-q" className="text-xs text-muted-foreground">
           Buscar
         </label>

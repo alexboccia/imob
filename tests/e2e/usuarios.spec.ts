@@ -44,7 +44,9 @@ test.describe("Usuários", () => {
     // nome real.
     await page.getByPlaceholder("Buscar por nome ou e-mail...").fill("Nome Que Nunca Existe Zzz");
     await page.waitForTimeout(500); // debounce de 400ms do próprio DataTable, não um sleep de isolamento.
-    await expect(page.getByText("Nenhum usuário encontrado com esses filtros.")).toBeVisible();
+    // .first(): mesma dualidade tabela/cards mobile do teste de estado
+    // vazio abaixo — ver comentário lá.
+    await expect(page.getByText("Nenhum usuário encontrado com esses filtros.").first()).toBeVisible();
     await page.getByPlaceholder("Buscar por nome ou e-mail...").fill(nomeUnico);
     await page.waitForTimeout(500);
     await expect(page.getByText(nomeUnico).first()).toBeVisible();
@@ -91,7 +93,13 @@ test.describe("Usuários", () => {
     await page.goto("/app/usuarios");
     await page.getByPlaceholder("Buscar por nome ou e-mail...").fill("Nome Que Nunca Existe Zzz Vazio");
     await page.waitForTimeout(500);
-    await expect(page.getByText("Nenhum usuário encontrado com esses filtros.")).toBeVisible();
+    // .first(): responsividade do painel administrativo — DataTable agora
+    // recebe `cards` pra este listing (mesma correção de Imóveis), então a
+    // mensagem vazia renderiza tanto na tabela desktop (visível, oculta só
+    // por CSS em viewport padrão) quanto no bloco de cards mobile (oculto
+    // via `md:hidden`, mas presente no DOM) — mesmo racional já usado no
+    // teste equivalente de imoveis.spec.ts.
+    await expect(page.getByText("Nenhum usuário encontrado com esses filtros.").first()).toBeVisible();
   });
 
   // Mobile 375px — sem overflow horizontal do documento.

@@ -42,11 +42,20 @@ export function PipelineFiltrosBar({
   return (
     <form
       method="get"
-      className="flex flex-wrap items-end gap-2 rounded-xl border bg-card p-3 shadow-sm"
+      className="flex flex-col gap-2 rounded-xl border bg-card p-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-end"
     >
       <input type="hidden" name="visao" value={visao === "ENCERRADA" ? "encerrada" : "aberta"} />
       {params.prioridade && <input type="hidden" name="prioridade" value={params.prioridade} />}
-      <div className="min-w-0 flex-1 space-y-1">
+      {/* w-full sm:min-w-0 sm:flex-1: achado real da auditoria de
+          responsividade — com flex-1+min-w-0 dentro de um flex-wrap de
+          largura livre, o navegador sempre consegue encaixar tudo numa
+          linha só encolhendo este campo até quase 0 (min-w-0 remove o piso
+          que faria o flex-wrap disparar), em vez de quebrar linha —
+          resultado visual: campo de busca reduzido a ~40px, mostrando só
+          "Bu" do placeholder. Abaixo de `sm`, este campo ocupa sua própria
+          linha inteira (w-full); a partir de `sm`, volta a dividir espaço
+          com os demais campos (sm:flex-1). */}
+      <div className="w-full space-y-1 sm:min-w-0 sm:flex-1">
         <label htmlFor="pipeline-q" className="text-xs text-muted-foreground">
           Buscar
         </label>
