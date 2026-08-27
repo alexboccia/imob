@@ -52,8 +52,12 @@ test.describe("Usuários", () => {
     await expect(page.getByText(nomeUnico).first()).toBeVisible();
 
     // Filtro de papel — o usuário recém-criado é BROKER (Corretor).
+    // .first(): mesma dualidade tabela/cards mobile (ver comentário no
+    // teste de estado vazio) — sem isso, o locator ambíguo (2 elementos,
+    // um em cada layout) faz .not.toBeVisible() falhar por strict mode
+    // violation, não porque a linha continua visível.
     await page.getByLabel("Papel").selectOption("ADMIN");
-    await expect(page.getByText(nomeUnico)).not.toBeVisible();
+    await expect(page.getByText(nomeUnico).first()).not.toBeVisible();
     await page.getByLabel("Papel").selectOption("__todos__");
     await page.getByPlaceholder("Buscar por nome ou e-mail...").fill(nomeUnico);
     await page.waitForTimeout(500);
@@ -71,7 +75,7 @@ test.describe("Usuários", () => {
     await page.getByLabel("Status").selectOption("SUSPENDED");
     await expect(page.getByText(nomeUnico).first()).toBeVisible();
     await page.getByLabel("Status").selectOption("ACTIVE");
-    await expect(page.getByText(nomeUnico)).not.toBeVisible();
+    await expect(page.getByText(nomeUnico).first()).not.toBeVisible();
   });
 
   // Auto-proteção (actions.ts): o próprio usuário logado nunca vê um
