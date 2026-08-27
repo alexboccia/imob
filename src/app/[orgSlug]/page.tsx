@@ -161,13 +161,13 @@ export default async function HomePage({
 
   return (
     <div>
-      <HeroHome imagemUrl={imagemHero} />
-
-      <PainelBuscaHome
-        tipos={dadosFiltros.tipos}
-        bairros={dadosFiltros.bairros}
-        basePath={basePath}
-      />
+      <HeroHome imagemUrl={imagemHero}>
+        <PainelBuscaHome
+          tipos={dadosFiltros.tipos}
+          bairros={dadosFiltros.bairros}
+          basePath={basePath}
+        />
+      </HeroHome>
 
       <SecaoImoveis
         titulo="Lançamentos"

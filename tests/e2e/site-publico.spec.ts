@@ -171,3 +171,107 @@ test.describe("Site público — responsividade (360/375/768/1024/1440)", () => 
     });
   }
 });
+
+// Correção — painel de busca vertical DENTRO do hero (texto à esquerda,
+// card à direita em desktop), não mais uma barra horizontal abaixo dele.
+// Estrutural (bounding boxes), não pixel-exato: só prova que headline e
+// painel coexistem lado a lado a partir do breakpoint lg (1024px) e
+// empilham abaixo dele — mesma lógica geométrica usada pelo restante da
+// suíte de responsividade neste projeto.
+test.describe("Site público — Hero + painel de busca (Proposta 2, correção)", () => {
+  test("desktop (1440px): headline e painel de busca coexistem lado a lado, painel dentro do hero", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+
+    const headline = page.getByRole("heading", { level: 1, name: "Encontre o imóvel ideal para você" });
+    // Topo do card (não o botão "Buscar imóveis", que fica no rodapé de
+    // um card alto — comparar sua posição Y com a da headline não prova
+    // nada sobre "lado a lado", já que um card vertical alto naturalmente
+    // termina bem mais abaixo).
+    const painelTopo = page.getByLabel("Bairro");
+    const [boxHeadline, boxPainelTopo] = await Promise.all([headline.boundingBox(), painelTopo.boundingBox()]);
+
+    expect(boxHeadline).not.toBeNull();
+    expect(boxPainelTopo).not.toBeNull();
+    // Lado a lado: o topo do painel fica à direita de onde a headline
+    // termina, e sua linha de base está dentro da faixa vertical da
+    // headline (mesma composição horizontal, não empilhado abaixo dela).
+    expect(boxPainelTopo!.x).toBeGreaterThan(boxHeadline!.x + boxHeadline!.width);
+    expect(boxPainelTopo!.y).toBeLessThan(boxHeadline!.y + boxHeadline!.height);
+  });
+
+  test("mobile (375px): painel empilha abaixo da headline, full-width", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 900 });
+    await page.goto("/");
+
+    const headline = page.getByRole("heading", { level: 1, name: "Encontre o imóvel ideal para você" });
+    const painel = page.getByRole("button", { name: "Buscar imóveis" });
+    const [boxHeadline, boxPainel] = await Promise.all([headline.boundingBox(), painel.boundingBox()]);
+
+    expect(boxHeadline).not.toBeNull();
+    expect(boxPainel).not.toBeNull();
+    // Empilhado: painel começa abaixo de onde a headline termina, nunca
+    // ao lado.
+    expect(boxPainel!.y).toBeGreaterThan(boxHeadline!.y + boxHeadline!.height);
+    // Praticamente full-width (mesma largura ~ viewport menos padding),
+    // não uma coluna estreita espremida ao lado de outra coisa.
+    expect(boxPainel!.width).toBeGreaterThan(300);
+  });
+});
+
+// Correção — footer escuro com logo/nome, links reais e redes sociais
+// (quando configuradas), em vez do footer branco simples anterior.
+test.describe("Site público — Footer (Proposta 2, correção)", () => {
+  test("mostra nome/logo, links reais (incluindo Contato) e copyright", async ({ page }) => {
+    await page.goto("/");
+    const footer = page.locator("footer");
+    await expect(footer).toBeVisible();
+
+    await expect(footer.getByText("Organização E2E A", { exact: true })).toBeVisible();
+    for (const label of ["Comprar", "Alugar", "Lançamentos", "Contato"]) {
+      await expect(footer.getByRole("link", { name: label })).toBeVisible();
+    }
+    await expect(footer.getByText(/Todos os direitos reservados/)).toBeVisible();
+
+    // Fundo escuro (não branco) — checagem estrutural via computed style,
+    // não um valor de cor exato (o objetivo é "escuro", não uma hex
+    // específica). getComputedStyle pode devolver oklch/lab() dependendo
+    // do browser — normaliza via canvas 2D (fillStyle sempre volta como
+    // #rrggbb/rgba, independente da notação de origem) antes de medir
+    // luminosidade.
+    const luminosidade = await footer.evaluate((el) => {
+      const corFundo = getComputedStyle(el).backgroundColor;
+      // 1x1 canvas real: pinta com a cor computada (qualquer notação —
+      // rgb/oklch/lab) e lê o pixel já rasterizado de volta em sRGB
+      // 0-255 — normalização robusta, não depende de fillStyle
+      // simplificar pra uma string hex específica.
+      const canvas = document.createElement("canvas");
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = corFundo;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      return (r + g + b) / 3;
+    });
+    expect(luminosidade, `luminosidade média do fundo do footer: ${luminosidade}`).toBeLessThan(80);
+  });
+
+  test("link Contato do footer navega pra rota real", async ({ page }) => {
+    await page.goto("/");
+    await page.locator("footer").getByRole("link", { name: "Contato" }).click();
+    await page.waitForURL(/\/contato$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Contato" })).toBeVisible();
+  });
+
+  for (const width of [360, 1440]) {
+    test(`footer ${width}px: sem overflow horizontal`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      expect(await semOverflow(page), `Footer @ ${width}px`).toBe(true);
+      await expect(page.locator("footer")).toBeVisible();
+    });
+  }
+});
