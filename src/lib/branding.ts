@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { tagBranding } from "@/lib/cache-tags";
+import { parseTokensTemaSeguro } from "@/lib/branding/tokens-tema-schema";
 
 async function buscarBrandingSemCache(organizationId: string) {
   const branding = await prisma.organizationBranding.findUnique({
@@ -15,6 +16,10 @@ async function buscarBrandingSemCache(organizationId: string) {
     // pro Organization.name como fallback, nunca aqui.
     displayName: branding?.displayName ?? null,
     footerAppearance: branding?.footerAppearance ?? null,
+    // Revalidado aqui (não só confiando em quem gravou) — ver comentário
+    // de customTheme no schema.prisma. null quando ausente/inválido, quem
+    // consome cai no fallback de sempre (resolverTemaEfetivo em temas.ts).
+    customTheme: parseTokensTemaSeguro(branding?.customTheme),
   };
 }
 

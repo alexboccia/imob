@@ -84,6 +84,26 @@ test.describe("Configurações", () => {
     await expect(page.getByText(`Ficará assim: ${prefixo.toUpperCase()}-100001`)).toBeVisible();
   });
 
+  test("gerar tema pelo logotipo: seção aparece, e sem logo salvo mostra erro amigável (sem quebrar)", async ({ page }) => {
+    await expect(page.getByText("🎨 Gerar tema pelo logotipo")).toBeVisible();
+    await expect(
+      page.getByText(
+        "Crie automaticamente uma combinação de cores baseada na identidade visual da sua imobiliária."
+      )
+    ).toBeVisible();
+
+    // ORG_A não tem logotipo salvo no seed determinístico — a Server
+    // Action sempre releem o logo do banco (nunca confia em estado do
+    // client), então o botão continua visível e clicável mesmo sem logo;
+    // ao clicar, a resposta é um erro amigável, sem quebrar a tela e sem
+    // alterar nenhum tema (ver seção 12 do pedido).
+    await page.getByRole("button", { name: "Gerar paleta do logotipo" }).click();
+    await expect(
+      page.getByText(/Nenhum logotipo salvo ainda/)
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Aplicar paleta" })).toHaveCount(0);
+  });
+
   test("375px: sem overflow horizontal e sem quebra caractere-a-caractere", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 900 });
     await page.goto("/app/configuracoes");
@@ -105,6 +125,13 @@ test.describe("Configurações", () => {
     await expect(rotuloTema).toBeVisible();
     const largura = await rotuloTema.evaluate((el) => el.getBoundingClientRect().width);
     expect(largura, `largura do rótulo 'Grafite': ${largura}px`).toBeGreaterThan(20);
+
+    // Seção "Gerar tema pelo logotipo" continua legível em mobile — o
+    // scrollWidth já checado acima cobre overflow da página inteira;
+    // aqui só confirma que o título não quebrou em 1 caractere por linha.
+    const tituloGerador = page.getByText("🎨 Gerar tema pelo logotipo");
+    const larguraGerador = await tituloGerador.evaluate((el) => el.getBoundingClientRect().width);
+    expect(larguraGerador, `largura do título 'Gerar tema pelo logotipo': ${larguraGerador}px`).toBeGreaterThan(100);
   });
 
   test("360px: sem overflow horizontal", async ({ page }) => {
@@ -126,6 +153,17 @@ test.describe("Configurações", () => {
 
   test("768px: sem overflow horizontal", async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 900 });
+    await page.goto("/app/configuracoes");
+
+    const m = await page.evaluate(() => ({
+      innerWidth: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(m.scrollWidth <= m.innerWidth + 1, `innerWidth=${m.innerWidth} scrollWidth=${m.scrollWidth}`).toBe(true);
+  });
+
+  test("1024px: sem overflow horizontal", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 900 });
     await page.goto("/app/configuracoes");
 
     const m = await page.evaluate(() => ({

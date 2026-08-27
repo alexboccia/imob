@@ -29,6 +29,7 @@ export default async function ConfiguracoesPage() {
           favicon: branding.faviconUrl,
           nomePublico: branding.displayName,
           footerAppearance: branding.footerAppearance,
+          temaCustomizado: branding.customTheme,
         }}
       />
     </div>

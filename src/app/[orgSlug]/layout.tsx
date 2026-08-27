@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { buscarBranding } from "@/lib/branding";
-import { resolverTema } from "@/lib/branding/temas";
+import { resolverTemaEfetivo } from "@/lib/branding/temas";
 import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
@@ -114,7 +114,7 @@ export default async function PublicLayout({
       buscarBranding(organizationId),
     ])
   );
-  const tema = resolverTema(branding.themeId);
+  const tema = resolverTemaEfetivo(branding.themeId, branding.customTheme);
   // Fase P.10 — mesmo fallback elegante de generateMetadata acima:
   // Organization.name nunca deixa de existir, então o site público nunca
   // fica sem nome mesmo sem branding configurado.

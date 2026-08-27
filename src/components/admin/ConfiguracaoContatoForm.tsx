@@ -15,6 +15,8 @@ import { LogoRodapeUpload } from "@/components/admin/LogoRodapeUpload";
 import { FaviconUpload } from "@/components/admin/FaviconUpload";
 import { SeletorTema } from "@/components/admin/SeletorTema";
 import { SeletorAparenciaRodape } from "@/components/admin/SeletorAparenciaRodape";
+import { GeradorTemaLogotipo } from "@/components/admin/GeradorTemaLogotipo";
+import { resolverTemaEfetivo, THEME_ID_CUSTOMIZADO, type TokensTema } from "@/lib/branding/temas";
 
 type ConfiguracaoInicial = {
   telefone: string;
@@ -32,6 +34,7 @@ type ConfiguracaoInicial = {
   favicon: string | null;
   nomePublico: string | null;
   footerAppearance: string | null;
+  temaCustomizado: TokensTema | null;
 };
 
 export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicial }) {
@@ -69,7 +72,15 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           </div>
           <LogoUpload logoInicial={config.logo} alturaInicial={config.logoAltura} />
           <FaviconUpload faviconInicial={config.favicon} />
-          <SeletorTema themeIdAtual={config.themeId} />
+          <SeletorTema
+            themeIdAtual={config.themeId}
+            temaCustomizado={
+              config.temaCustomizado
+                ? resolverTemaEfetivo(THEME_ID_CUSTOMIZADO, config.temaCustomizado)
+                : null
+            }
+          />
+          <GeradorTemaLogotipo />
 
           <div className="min-w-0 space-y-6 border-t pt-6">
             <div className="min-w-0 space-y-1.5">

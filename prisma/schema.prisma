@@ -740,6 +740,15 @@ model OrganizationSettings {
 // injeção, sem precisar de validação Zod de hex. Duplicar com campos hex
 // soltos reabriria o risco que o catálogo existe pra fechar. Ver
 // relatório da Fase P.10, item "branding" — decisão documentada.
+//
+// customTheme (abaixo) NÃO reabre esse risco: nunca é texto livre vindo
+// de um input do usuário — é sempre o JSON gerado deterministicamente a
+// partir do logotipo (src/lib/branding/gerar-paleta.ts), nunca aceito
+// vindo do client (nem no "gerar" nem no "aplicar", ver
+// aplicarPaletaGerada em configuracoes/actions.ts), e revalidado
+// estritamente por tokensTemaSchema (7 chaves fixas, cada uma
+// "oklch(L C H)") toda vez que é lido de volta — mesmo shape/rigor do
+// catálogo fixo, só que gerado em vez de escrito à mão.
 model OrganizationBranding {
   organizationId   String       @id
   organization     Organization @relation(fields: [organizationId], references: [id])
@@ -754,6 +763,12 @@ model OrganizationBranding {
   // rodapé já tinha antes deste campo existir, nenhum tenant existente
   // muda de aparência só por essa migration.
   footerAppearance String       @default("AUTO")
+  // Tema gerado automaticamente a partir do logotipo (ver comentário
+  // acima do model) — só é lido quando themeId = "custom"
+  // (THEME_ID_CUSTOMIZADO, temas.ts). null enquanto ninguém gerou/aplicou
+  // uma paleta ainda; nenhum tenant existente é afetado por este campo
+  // (themeId continua "classic-blue" por padrão).
+  customTheme      Json?
   updatedAt        DateTime     @updatedAt
 
   @@map("organization_branding")

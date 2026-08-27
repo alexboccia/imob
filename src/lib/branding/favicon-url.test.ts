@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
-import { validarFaviconUrl } from "@/lib/branding/favicon-url";
+import { validarFaviconUrl, validarUrlMidiaOrganizacao } from "@/lib/branding/favicon-url";
 
 const R2_PUBLIC_URL_TESTE = "https://pub-test123.r2.dev";
 const ORG_ID = "org-abc123";
@@ -76,5 +76,49 @@ describe("validarFaviconUrl", () => {
     vi.stubEnv("R2_PUBLIC_URL", "");
     const url = `${R2_PUBLIC_URL_TESTE}/${ORG_ID}/site/${UUID_VALIDO}.png`;
     expect(validarFaviconUrl(url, ORG_ID)).toBe(false);
+  });
+});
+
+// validarUrlMidiaOrganizacao é a mesma checagem generalizada (usada
+// também pra validar o logo antes de buscá-lo no servidor pra gerar a
+// paleta automática, ver extrair-paleta-logo.ts) — validarFaviconUrl é
+// hoje só um wrapper dela, então a bateria abaixo espelha a de cima
+// (nenhum comportamento novo, só um nome de função mais genérico).
+describe("validarUrlMidiaOrganizacao — mesma checagem, uso genérico (logo/logo do rodapé/favicon)", () => {
+  beforeEach(() => {
+    vi.stubEnv("R2_PUBLIC_URL", R2_PUBLIC_URL_TESTE);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("asset válido do próprio tenant é aceito", () => {
+    const url = `${R2_PUBLIC_URL_TESTE}/${ORG_ID}/site/${UUID_VALIDO}.webp`;
+    expect(validarUrlMidiaOrganizacao(url, ORG_ID)).toBe(true);
+  });
+
+  test("asset de outra organização é rejeitado (isolamento de tenant no nível de URL)", () => {
+    const url = `${R2_PUBLIC_URL_TESTE}/outra-org-999/site/${UUID_VALIDO}.png`;
+    expect(validarUrlMidiaOrganizacao(url, ORG_ID)).toBe(false);
+  });
+
+  test("URL externa arbitrária é rejeitada (defesa contra SSRF)", () => {
+    const url = `https://attacker.com/${ORG_ID}/site/${UUID_VALIDO}.png`;
+    expect(validarUrlMidiaOrganizacao(url, ORG_ID)).toBe(false);
+  });
+
+  test("host com prefixo parecido mas origin diferente é rejeitado", () => {
+    const url = `https://pub-test123.r2.dev.attacker.com/${ORG_ID}/site/${UUID_VALIDO}.png`;
+    expect(validarUrlMidiaOrganizacao(url, ORG_ID)).toBe(false);
+  });
+
+  test("pasta diferente de 'site' é rejeitada", () => {
+    const url = `${R2_PUBLIC_URL_TESTE}/${ORG_ID}/imoveis/${UUID_VALIDO}.png`;
+    expect(validarUrlMidiaOrganizacao(url, ORG_ID)).toBe(false);
+  });
+
+  test("string que não é URL é rejeitada", () => {
+    expect(validarUrlMidiaOrganizacao("não-é-url", ORG_ID)).toBe(false);
   });
 });

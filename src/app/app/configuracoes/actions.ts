@@ -18,9 +18,12 @@ import {
   sucesso,
 } from "@/lib/action-result";
 import { tagConfiguracao, tagBranding } from "@/lib/cache-tags";
-import { CATALOGO_TEMAS } from "@/lib/branding/temas";
+import { CATALOGO_TEMAS, THEME_ID_CUSTOMIZADO } from "@/lib/branding/temas";
 import { CATALOGO_APARENCIA_RODAPE } from "@/lib/branding/aparencia-rodape";
-import { validarFaviconUrl } from "@/lib/branding/favicon-url";
+import { validarFaviconUrl, validarUrlMidiaOrganizacao } from "@/lib/branding/favicon-url";
+import { gerarPaletaDoLogo, type MotivoFalhaExtracao } from "@/lib/branding/extrair-paleta-logo";
+import { tokensTemaSchema } from "@/lib/branding/tokens-tema-schema";
+import type { TokensTema } from "@/lib/branding/temas";
 
 const vazioParaNulo = (v: unknown) =>
   typeof v === "string" && v.trim() ? v.trim() : undefined;
@@ -54,13 +57,17 @@ const configuracaoSchema = z.object({
     CATALOGO_APARENCIA_RODAPE.map((opcao) => opcao.id) as [string, ...string[]],
     { message: "Aparência de rodapé inválida." }
   ),
-  // Só um dos 6 temas pré-definidos do catálogo — nunca cor livre. Um
-  // valor fora do catálogo (ex: manipulação do formulário) falha a
-  // validação e a submissão inteira é rejeitada, em vez de gravar um
-  // themeId inválido (resolverTema() cairia no padrão de qualquer forma,
-  // mas rejeitar aqui evita gravar lixo no banco).
+  // Um dos 6 temas pré-definidos do catálogo, OU o sentinela "custom"
+  // (THEME_ID_CUSTOMIZADO) — nunca cor livre nos dois casos: "custom"
+  // só faz sentido escolhido quando a organização já tem um
+  // OrganizationBranding.customTheme válido gerado via
+  // aplicarPaletaGerada abaixo (nunca setado por este formulário
+  // diretamente); se não tiver, resolverTemaEfetivo cai no tema padrão
+  // de qualquer forma — nunca quebra, só não é o resultado visual
+  // esperado. Um valor fora dessas opções falha a validação e a
+  // submissão inteira é rejeitada, em vez de gravar um themeId inválido.
   themeId: z.enum(
-    Object.keys(CATALOGO_TEMAS) as [string, ...string[]],
+    [THEME_ID_CUSTOMIZADO, ...Object.keys(CATALOGO_TEMAS)] as [string, ...string[]],
     { message: "Tema inválido." }
   ),
   favicon: z.preprocess(vazioParaNulo, z.string().optional()),
@@ -178,4 +185,118 @@ export async function salvarConfiguracaoContato(
   });
 
   return sucesso("Configurações salvas.");
+}
+
+// ---------- Tema personalizado gerado a partir do logotipo ----------
+
+type MotivoFalhaPaletaCompleto = MotivoFalhaExtracao | "sem_logo" | "logo_invalido";
+
+function mensagemFalhaPaleta(motivo: MotivoFalhaPaletaCompleto): string {
+  switch (motivo) {
+    case "sem_logo":
+      return "Nenhum logotipo salvo ainda — envie um logotipo e clique em \"Salvar alterações\" antes de gerar uma paleta automática.";
+    case "logo_invalido":
+      return "Logotipo inválido — envie a imagem novamente em Identidade visual.";
+    case "falha_download":
+      return "Não foi possível acessar o logotipo configurado. Tente novamente.";
+    case "arquivo_grande_demais":
+      return "O logotipo configurado é grande demais para ser analisado.";
+    case "falha_processamento":
+      return "Não foi possível processar a imagem do logotipo.";
+    case "sem_pixels_opacos":
+      return "O logotipo está totalmente transparente — não há cor para extrair.";
+    case "sem_cor_dominante":
+      return "Não encontramos uma cor de marca clara nesse logotipo (ele parece ser só preto, branco ou cinza). Tente um logotipo com mais cor.";
+  }
+}
+
+export type ResultadoPreviaPaleta = { ok: true; tokens: TokensTema } | { ok: false; erro: string };
+
+// Resolve o logotipo ATUAL da organização autenticada (nunca de uma URL
+// vinda do client — session/DB são a única fonte) e roda a extração de
+// paleta. Compartilhado por gerarPreviaPaletaLogotipo (só leitura) e
+// aplicarPaletaGerada (persiste) — cada chamada RE-GERA do zero, nunca
+// confia num resultado antigo devolvido ao client; é isso que garante
+// que "aplicar" nunca persiste uma cor que não veio de uma nova análise
+// determinística do logotipo real desta organização.
+async function resolverPaletaAtual(organizationId: string): Promise<ResultadoPreviaPaleta> {
+  const settings = await prisma.organizationSettings.findFirst({
+    where: { organizationId },
+    select: { logoUrl: true },
+  });
+  const logoUrl = settings?.logoUrl;
+  if (!logoUrl) return { ok: false, erro: mensagemFalhaPaleta("sem_logo") };
+
+  // Defesa contra SSRF: só buscamos uma URL comprovadamente dentro do
+  // bucket R2 oficial, no prefixo desta organização — mesma checagem já
+  // usada pro favicon (favicon-url.ts), nunca um fetch pra URL arbitrária.
+  if (!validarUrlMidiaOrganizacao(logoUrl, organizationId)) {
+    return { ok: false, erro: mensagemFalhaPaleta("logo_invalido") };
+  }
+
+  const resultado = await gerarPaletaDoLogo(logoUrl);
+  if (!resultado.ok) return { ok: false, erro: mensagemFalhaPaleta(resultado.motivo) };
+  return { ok: true, tokens: resultado.tokens };
+}
+
+// Só leitura — NUNCA escreve no banco. "Gerar" é deliberadamente uma
+// ação separada de "aplicar" (aplicarPaletaGerada abaixo): esta função
+// existe só pra alimentar a prévia da UI (ver GeradorTemaLogotipo.tsx).
+export async function gerarPreviaPaletaLogotipo(): Promise<ResultadoPreviaPaleta> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  if (!temPapel(session.user.role, PAPEIS_GESTAO_CONFIGURACOES)) {
+    return { ok: false, erro: "Você não tem permissão para gerar uma paleta." };
+  }
+
+  const organizationId = await requireOrganizationId();
+  return resolverPaletaAtual(organizationId);
+}
+
+// Persiste o tema personalizado — SÓ é chamada quando o usuário clica
+// "Aplicar paleta" (nunca automaticamente pelo upload do logo). Re-gera a
+// paleta do zero a partir do logotipo atual (não recebe/confia em nada
+// vindo do client) e valida o formato estrutural de novo
+// (tokensTemaSchema) antes de gravar — defesa em profundidade, mesmo
+// resultado sendo gerado por este mesmo servidor.
+export async function aplicarPaletaGerada(): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  if (!temPapel(session.user.role, PAPEIS_GESTAO_CONFIGURACOES)) {
+    return erroAcessoNegado();
+  }
+
+  const organizationId = await requireOrganizationId();
+  const resultado = await resolverPaletaAtual(organizationId);
+  if (!resultado.ok) return erroGenerico(resultado.erro);
+
+  const validado = tokensTemaSchema.safeParse(resultado.tokens);
+  if (!validado.success) {
+    return erroGenerico("Falha ao gerar a paleta — tente novamente.");
+  }
+
+  await withOrganization(organizationId, async () => {
+    await prisma.organizationBranding.upsert({
+      where: { organizationId },
+      update: { themeId: THEME_ID_CUSTOMIZADO, customTheme: validado.data },
+      create: { organizationId, themeId: THEME_ID_CUSTOMIZADO, customTheme: validado.data },
+    });
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "OrganizationBranding",
+      action: "custom_theme_applied",
+      payload: { origem: "logo" },
+    });
+
+    revalidatePath("/app/configuracoes");
+    revalidatePath("/app/imoveis");
+    updateTag(tagBranding(organizationId));
+    // Mesma rede de segurança documentada em salvarConfiguracaoContato
+    // acima — não confiar só em updateTag() invalidar o site público.
+    revalidatePath("/", "layout");
+  });
+
+  return sucesso("Paleta personalizada aplicada.");
 }

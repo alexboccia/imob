@@ -117,3 +117,38 @@ export const CATALOGO_TEMAS: Record<string, Tema> = {
 export function resolverTema(themeId: string | null | undefined): Tema {
   return CATALOGO_TEMAS[themeId ?? ""] ?? CATALOGO_TEMAS[TEMA_PADRAO_ID];
 }
+
+// Sentinela de themeId reservado pro tema gerado automaticamente a partir
+// do logotipo (ver gerar-paleta.ts) — nunca existe no CATALOGO_TEMAS fixo
+// acima de propósito (catálogo continua sendo só os 6 temas prontos,
+// nunca ganha uma entrada "customizável"). O valor persistido de verdade
+// fica em OrganizationBranding.customTheme (JSON validado, ver
+// tokens-tema-schema.ts), não aqui.
+export const THEME_ID_CUSTOMIZADO = "custom";
+
+// Label exibido tanto pelo swatch em SeletorTema.tsx quanto por
+// resolverTemaEfetivo abaixo — uma única fonte pro texto, nunca duplicado.
+export const LABEL_TEMA_CUSTOMIZADO = "Personalizado (gerado do logotipo)";
+
+// Mesmo contrato de resolverTema, mas também considera um tema
+// personalizado (gerado do logotipo) quando themeId === "custom" e o
+// JSON persistido é válido. Ponto de entrada usado por
+// [orgSlug]/layout.tsx no lugar de resolverTema puro — resolverTema
+// continua existindo e sendo usado sozinho onde só o catálogo fixo faz
+// sentido (ex: SeletorTema já sabe listar os 6 temas prontos por conta
+// própria). Nunca lança: customTheme inválido/ausente cai no mesmo
+// fallback de sempre (TEMA_PADRAO_ID), exatamente como um themeId
+// desconhecido cairia.
+export function resolverTemaEfetivo(
+  themeId: string | null | undefined,
+  temaCustomizado: TokensTema | null | undefined
+): Tema {
+  if (themeId === THEME_ID_CUSTOMIZADO && temaCustomizado) {
+    return {
+      id: THEME_ID_CUSTOMIZADO,
+      label: LABEL_TEMA_CUSTOMIZADO,
+      ...temaCustomizado,
+    };
+  }
+  return resolverTema(themeId);
+}
