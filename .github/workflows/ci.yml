@@ -74,6 +74,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Checar se a migration mais recente tem operação destrutiva (informativo)
+        # Nunca falha o job — só anota no resumo do run (ver
+        # scripts/check-latest-migration.ts e
+        # docs/operations/rollback-runbook.md, seção 2). A decisão de
+        # prosseguir com uma migration destrutiva legítima é de quem
+        # revisa o PR, não deste passo.
+        run: npx tsx scripts/check-latest-migration.ts
+
       - name: Preparar banco de teste (cria se preciso + aplica migrations)
         run: npx tsx scripts/prepare-test-db.ts
 
