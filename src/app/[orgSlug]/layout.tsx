@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
@@ -147,8 +148,18 @@ export default async function PublicLayout({
         basePath={basePath}
       />
       <main className="flex-1">{children}</main>
-      <footer className="border-t mt-16">
-        <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-gray-500">
+      <footer className="mt-16 border-t bg-gray-50">
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 py-8 sm:flex-row sm:justify-between">
+          <span className="text-base font-semibold text-gray-900">{nomePublico}</span>
+          <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-gray-600">
+            {navLinks(basePath).map((link) => (
+              <Link key={link.href} href={link.href} className="hover:text-primary">
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+        <div className="border-t px-4 py-4 text-center text-xs text-gray-500">
           © {new Date().getFullYear()} {nomePublico}. Todos os direitos
           reservados.
         </div>

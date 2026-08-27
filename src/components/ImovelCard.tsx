@@ -11,7 +11,13 @@ import {
   formatarPreco,
   rotulosAtivos,
 } from "@/lib/format";
-import { IconeChevronEsquerdo, IconeChevronDireito } from "@/components/icons";
+import {
+  IconeChevronEsquerdo,
+  IconeChevronDireito,
+  IconeQuartos,
+  IconeVaga,
+} from "@/components/icons";
+import { TITULO_CARD } from "@/lib/site-typography";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -58,7 +64,7 @@ export function ImovelCard({
   return (
     <Link
       href={`${basePath}/imoveis/${imovel.id}`}
-      className="block rounded-lg border overflow-hidden hover:shadow-md transition-shadow"
+      className="block overflow-hidden rounded-xl border border-gray-200 bg-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
     >
       <div className="relative aspect-[4/3] bg-gray-100 group">
         {fotos.length > 0 ? (
@@ -142,26 +148,38 @@ export function ImovelCard({
         )}
       </div>
       <div className="p-4">
-        <p className="text-xs text-gray-500">
+        <p className="text-xs font-medium tracking-wide text-gray-500 uppercase">
           {imovel.tipo} ·{" "}
           {FINALIDADE_LABEL[imovel.finalidade] ?? imovel.finalidade}
         </p>
-        <h3 className="mt-1 font-medium">{imovel.titulo}</h3>
-        <p className="text-sm text-gray-500">
+        <h3 className={`mt-1.5 line-clamp-1 ${TITULO_CARD}`}>{imovel.titulo}</h3>
+        <p className="mt-0.5 text-sm text-gray-500">
           {imovel.bairro}, {imovel.cidade} - {imovel.estado}
         </p>
-        <div className="mt-2 flex items-center justify-between">
-          <span className="font-semibold">
+        <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3">
+          <span className="text-lg font-bold text-gray-900">
             {imovel.preco != null
               ? formatarPreco(imovel.preco)
               : imovel.precoAluguel != null
                 ? `${formatarPreco(imovel.precoAluguel)}/mês`
                 : formatarPreco(null)}
           </span>
-          <span className="text-sm text-gray-500">
-            {imovel.quartos ? `${imovel.quartos} qts` : ""}
-            {imovel.vagasGaragem ? ` · ${imovel.vagasGaragem} vagas` : ""}
-          </span>
+          {(imovel.quartos || imovel.vagasGaragem) && (
+            <span className="flex items-center gap-3 text-sm text-gray-500">
+              {imovel.quartos ? (
+                <span className="flex items-center gap-1">
+                  <IconeQuartos className="size-4" />
+                  {imovel.quartos}
+                </span>
+              ) : null}
+              {imovel.vagasGaragem ? (
+                <span className="flex items-center gap-1">
+                  <IconeVaga className="size-4" />
+                  {imovel.vagasGaragem}
+                </span>
+              ) : null}
+            </span>
+          )}
         </div>
       </div>
     </Link>

@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ImovelCard } from "@/components/ImovelCard";
-import { SlideshowHome } from "@/components/SlideshowHome";
-import { BuscaHome } from "@/components/BuscaHome";
+import { HeroHome } from "@/components/HeroHome";
+import { PainelBuscaHome } from "@/components/PainelBuscaHome";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
 import { getOrganizationBySlug } from "@/lib/tenant";
@@ -12,6 +12,7 @@ import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
 import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 import { Button } from "@/components/ui/button";
+import { TITULO_SECAO } from "@/lib/site-typography";
 import type { Prisma } from "@/generated/prisma/client";
 
 // Sem force-dynamic (removido do layout): as listas de imóveis desta
@@ -84,7 +85,7 @@ function SecaoImoveis({
   return (
     <section className="mx-auto max-w-6xl px-4 py-12">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold">{titulo}</h2>
+        <h2 className={TITULO_SECAO}>{titulo}</h2>
         {verTudoHref && (
           <Button
             variant="link"
@@ -152,50 +153,19 @@ export default async function HomePage({
         buscarImoveis(organizationId, { status: "AVAILABLE" }, 6)
       );
 
+  // Proposta 2 — hero único (sem carrossel) usando a capa do primeiro
+  // imóvel marcado pra aparecer no destaque da home (hasSlideshow),
+  // mesma fonte de dados que o antigo slideshow já usava — nenhum imóvel
+  // marcado cai num gradiente neutro (ver HeroHome), nunca um "sem foto".
+  const imagemHero = imoveisSlideshow[0]?.media[0]?.url ?? null;
+
   return (
     <div>
-      {imoveisSlideshow.length > 0 ? (
-        <SlideshowHome
-          imoveis={imoveisSlideshow.map((imovel) => ({
-            id: imovel.id,
-            titulo: imovel.title,
-            tipo: imovel.type,
-            finalidade: imovel.purpose,
-            bairro: imovel.neighborhood,
-            cidade: imovel.city,
-            estado: imovel.state,
-            preco: imovel.price?.toString() ?? null,
-            precoAluguel: imovel.rentPrice?.toString() ?? null,
-            midias: imovel.media.map((m) => ({ url: m.url })),
-          }))}
-          basePath={basePath}
-        />
-      ) : (
-        <section className="border-b bg-gray-50">
-          <div className="mx-auto max-w-6xl px-4 py-16 text-center">
-            <h1 className="text-3xl sm:text-4xl font-semibold">
-              Encontre o imóvel ideal para comprar ou alugar
-            </h1>
-            <p className="mt-4 text-gray-600">
-              Apartamentos, casas e imóveis comerciais selecionados para você.
-            </p>
-            <Button
-              size="lg"
-              className="mt-8"
-              nativeButton={false}
-              render={<Link href={`${basePath}/imoveis`} />}
-            >
-              Ver imóveis disponíveis
-            </Button>
-          </div>
-        </section>
-      )}
+      <HeroHome imagemUrl={imagemHero} />
 
-      <BuscaHome
+      <PainelBuscaHome
         tipos={dadosFiltros.tipos}
         bairros={dadosFiltros.bairros}
-        caracteristicas={dadosFiltros.caracteristicas}
-        orgSlug={orgSlug}
         basePath={basePath}
       />
 
@@ -220,7 +190,7 @@ export default async function HomePage({
 
       {temRotulos ? null : geral.length === 0 ? (
         <section className="mx-auto max-w-6xl px-4 py-12">
-          <h2 className="text-xl font-semibold mb-6">Imóveis disponíveis</h2>
+          <h2 className={`${TITULO_SECAO} mb-6`}>Imóveis disponíveis</h2>
           <p className="text-gray-500">
             Nenhum imóvel publicado ainda. Assim que forem cadastrados no
             painel administrativo, eles aparecerão aqui.

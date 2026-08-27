@@ -34,6 +34,7 @@ import {
   IconeVaga,
 } from "@/components/icons";
 import { IconeCaracteristica } from "@/lib/caracteristicas-icones";
+import { TITULO_DETALHE, TITULO_BLOCO, TITULO_SECAO } from "@/lib/site-typography";
 
 // Página de detalhe não tem tag de invalidação própria (preço/status
 // mudam por edição de imóvel, sem updateTag associado) — sem
@@ -281,7 +282,7 @@ export default async function DetalheImovelPage({
             {formatarCodigoImovel(imovel.code, configContato.codigoImovelPrefixo)}
           </Badge>
         </p>
-        <h1 className="text-2xl font-semibold">{imovel.title}</h1>
+        <h1 className={TITULO_DETALHE}>{imovel.title}</h1>
         {imovel.developer && (
           <p className="text-sm text-gray-600 mt-1">
             Responsável pela obra: <strong>{imovel.developer}</strong>
@@ -328,13 +329,13 @@ export default async function DetalheImovelPage({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mt-10">
         <div className="sm:col-span-2 space-y-6">
           <div>
-            <h2 className="font-semibold mb-2">Descrição</h2>
+            <h2 className={`${TITULO_BLOCO} mb-2`}>Descrição</h2>
             <p className="text-gray-700 whitespace-pre-line">
               {imovel.description ?? "Sem descrição disponível."}
             </p>
           </div>
           <div>
-            <h2 className="font-semibold mb-2">Características do imóvel</h2>
+            <h2 className={`${TITULO_BLOCO} mb-2`}>Características do imóvel</h2>
             <ul className="grid grid-cols-2 gap-y-1 text-sm text-gray-700">
               {imovel.totalArea && (
                 <ItemCaracteristica icon={IconeArea}>
@@ -374,7 +375,7 @@ export default async function DetalheImovelPage({
 
           {imovel.condoFeatures.length > 0 && (
             <div>
-              <h2 className="font-semibold mb-2">Características do condomínio</h2>
+              <h2 className={`${TITULO_BLOCO} mb-2`}>Características do condomínio</h2>
               <ul className="grid grid-cols-2 gap-y-1 text-sm text-gray-700">
                 {imovel.condoFeatures.map((c) => (
                   <ItemCaracteristicaCatalogo key={c} nome={c} />
@@ -395,7 +396,7 @@ export default async function DetalheImovelPage({
           )}
 
           <div>
-            <h2 className="font-semibold mb-2">Localização</h2>
+            <h2 className={`${TITULO_BLOCO} mb-2`}>Localização</h2>
             <p className="text-sm text-gray-700 mb-3">
               {enderecoCompleto ? `${enderecoCompleto}, ` : ""}
               {imovel.city} - {imovel.state}
@@ -504,7 +505,7 @@ export default async function DetalheImovelPage({
 
       {imoveisProximos.length > 0 && (
         <section className="mt-16 pt-8 border-t">
-          <h2 className="text-xl font-semibold mb-6">
+          <h2 className={`${TITULO_SECAO} mb-6`}>
             Imóveis próximos que você pode gostar
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

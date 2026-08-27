@@ -3,11 +3,31 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { IconeMenu, IconeFechar } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 
 type NavLink = { href: string; label: string };
+
+// Proposta 2 — header com mais presença visual (altura/logo/fonte
+// maiores, item ativo destacado) em vez do menu pequeno anterior. Mesmas
+// rotas reais de sempre (navLinks vem de [orgSlug]/layout.tsx, nenhum
+// link novo/fictício), mesmo mecanismo de Sheet mobile (agora com
+// AnimatePresence, já existia).
+function estaAtivo(href: string, pathname: string, searchAtual: string): boolean {
+  const [caminho, query] = href.split("?");
+  if (pathname !== caminho) return false;
+  if (!query) return true;
+  // Compara só os parâmetros presentes no link (ex: finalidade=SALE) —
+  // um link "Comprar" não precisa saber sobre outros filtros que o
+  // usuário possa ter adicionado na URL atual.
+  const paramsLink = new URLSearchParams(query);
+  const paramsAtuais = new URLSearchParams(searchAtual);
+  return Array.from(paramsLink.entries()).every(
+    ([chave, valor]) => paramsAtuais.get(chave) === valor
+  );
+}
 
 export function SiteHeader({
   nome,
@@ -23,9 +43,12 @@ export function SiteHeader({
   basePath: string;
 }) {
   const [aberto, setAberto] = useState(false);
-  const altura = logoAltura && logoAltura > 0 ? logoAltura : 40;
+  const altura = logoAltura && logoAltura > 0 ? logoAltura : 48;
   const largura = Math.min(altura * 4, 280);
   const headerRef = useRef<HTMLElement>(null);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchAtual = searchParams.toString();
 
   // A altura real do header varia com logoAltura (configurável por
   // organização) e com a quebra do menu mobile — outros elementos sticky
@@ -56,7 +79,7 @@ export function SiteHeader({
       // por cima dele durante o scroll.
       className="border-b sticky top-0 bg-background z-30"
     >
-      <div className="mx-auto max-w-6xl flex items-center justify-between px-4 py-4">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:py-6">
         <Link
           href={basePath || "/"}
           className="flex items-center"
@@ -77,16 +100,26 @@ export function SiteHeader({
               />
             </span>
           ) : (
-            <span className="font-semibold text-lg">{nome}</span>
+            <span className="text-xl font-bold tracking-tight">{nome}</span>
           )}
         </Link>
 
-        <nav className="hidden sm:flex gap-6 text-sm">
-          {navLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="hover:underline">
-              {link.label}
-            </Link>
-          ))}
+        <nav className="hidden items-center gap-8 sm:flex">
+          {navLinks.map((link) => {
+            const ativo = estaAtivo(link.href, pathname, searchAtual);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={ativo ? "page" : undefined}
+                className={`text-base font-medium transition-colors ${
+                  ativo ? "text-primary" : "text-gray-700 hover:text-primary"
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <Button
@@ -115,17 +148,23 @@ export function SiteHeader({
             transition={{ duration: 0.2, ease: "easeInOut" }}
             className="sm:hidden overflow-hidden border-t bg-background"
           >
-            <nav className="px-4 py-3 flex flex-col gap-1 text-sm">
-              {navLinks.map((link) => (
+            <nav className="flex flex-col gap-1 px-4 py-3">
+              {navLinks.map((link) => {
+                const ativo = estaAtivo(link.href, pathname, searchAtual);
+                return (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="py-2"
+                  aria-current={ativo ? "page" : undefined}
+                  className={`rounded-md px-2 py-2.5 text-base font-medium ${
+                    ativo ? "bg-primary/10 text-primary" : "text-gray-700"
+                  }`}
                   onClick={() => setAberto(false)}
                 >
                   {link.label}
                 </Link>
-              ))}
+                );
+              })}
             </nav>
           </motion.div>
         )}

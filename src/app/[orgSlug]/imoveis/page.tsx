@@ -12,6 +12,7 @@ import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
 import { interpretarPaginacao, normalizarBusca, totalDePaginas } from "@/lib/pagination";
 import { metadataPaginaPublica } from "@/lib/seo";
+import { TITULO_PAGINA } from "@/lib/site-typography";
 import type { Prisma } from "@/generated/prisma/client";
 
 // Canonical aponta sempre pra URL base, sem os parâmetros de
@@ -241,8 +242,14 @@ export default async function ListaImoveisPage({
         }}
       />
 
-      <div className="flex items-center justify-between mb-4 mt-6">
-        <h1 className="text-2xl font-semibold">
+      {/* flex-col sm:flex-row: achado real de responsividade — com a
+          tipografia maior/mais pesada da Proposta 2 (TITULO_PAGINA), o
+          título dividindo a mesma linha que "Ordenar por" não cabia mais
+          em 375px sem quebrar em 3 linhas espremidas. Abaixo de `sm`,
+          título e ordenação empilham; a partir daí, voltam a dividir a
+          linha como antes. */}
+      <div className="mb-4 mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className={TITULO_PAGINA}>
           {params.lancamento === "1"
             ? "Lançamentos"
             : params.destaque === "1"
