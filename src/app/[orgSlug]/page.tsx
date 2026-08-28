@@ -118,10 +118,9 @@ export default async function HomePage({
   const basePath = resolverBasePath(orgSlug);
   const ultimosCadastrados = { createdAt: "desc" } as const;
 
-  const [imoveisSlideshow, lancamentos, destaques, oportunidades, dadosFiltros] =
+  const [lancamentos, destaques, oportunidades, dadosFiltros] =
     await withOrganization(organizationId, () =>
       Promise.all([
-        buscarImoveis(organizationId, { status: "AVAILABLE", hasSlideshow: true }, 10),
         buscarImoveis(
           organizationId,
           { status: "AVAILABLE", isLaunch: true },
@@ -153,11 +152,10 @@ export default async function HomePage({
         buscarImoveis(organizationId, { status: "AVAILABLE" }, 6)
       );
 
-  // Proposta 2 — hero único (sem carrossel) usando a capa do primeiro
-  // imóvel marcado pra aparecer no destaque da home (hasSlideshow),
-  // mesma fonte de dados que o antigo slideshow já usava — nenhum imóvel
-  // marcado cai num gradiente neutro (ver HeroHome), nunca um "sem foto".
-  const imagemHero = imoveisSlideshow[0]?.media[0]?.url ?? null;
+  // Imagem fixa de marca (family/lifestyle) — não depende mais da foto
+  // de nenhum imóvel específico (ver HeroHome, que já trata null caindo
+  // num gradiente neutro caso este asset algum dia seja removido).
+  const imagemHero = "/hero-home.png";
 
   return (
     <div>
