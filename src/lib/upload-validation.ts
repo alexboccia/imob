@@ -72,6 +72,12 @@ export const PASTAS_PERMITIDAS: Record<string, { categorias: readonly Categoria[
   imoveis: { categorias: ["imagem"] },
   usuarios: { categorias: ["imagem"] },
   site: { categorias: ["imagem"] },
+  // Imagem do Hero da Home pública — mesma categoria "imagem" de sempre
+  // (mesmo teto de tamanho), só que o conteúdo é sempre reprocessado
+  // (nunca guardado como veio) antes de ir pro R2, ver
+  // hero-image-processar.ts (chamado só pela rota de upload quando
+  // pasta === "hero").
+  hero: { categorias: ["imagem"] },
 };
 
 export function extrairExtensao(nomeArquivo: string): string | null {

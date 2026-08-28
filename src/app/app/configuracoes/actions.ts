@@ -51,6 +51,12 @@ const configuracaoSchema = z.object({
   // Logotipo dedicado ao rodapé (OrganizationSettings.footerLogoUrl) —
   // mesmo tratamento de `logo` acima, campo opcional e independente.
   logoRodape: z.preprocess(vazioParaNulo, z.string().optional()),
+  // Imagem do Hero da Home (OrganizationSettings.heroImageUrl) — mesmo
+  // tratamento de `logo`/`logoRodape`, campo opcional. Revalidada contra
+  // o prefixo do próprio tenant no R2 abaixo (mesma checagem do
+  // favicon) antes de persistir — nunca aceitar uma URL arbitrária vinda
+  // do client como imagem do Hero.
+  heroImage: z.preprocess(vazioParaNulo, z.string().optional()),
   // Aparência do rodapé: só um dos valores do catálogo fixo (mesmo
   // racional de themeId acima) — nunca cor/CSS livre.
   footerAparencia: z.enum(
@@ -118,6 +124,15 @@ export async function salvarConfiguracaoContato(
     );
   }
 
+  // Mesma defesa contra SSRF/URL arbitrária do favicon acima — a imagem
+  // do Hero só pode apontar pro objeto que o próprio upload desta
+  // organização acabou de gravar no R2, nunca uma URL externa.
+  if (campos.heroImage && !validarUrlMidiaOrganizacao(campos.heroImage, organizationId, "hero")) {
+    return erroGenerico(
+      "Imagem do Hero inválida — envie a imagem novamente em Identidade visual."
+    );
+  }
+
   const dados = {
     phone: campos.telefone ?? null,
     email: campos.email ?? null,
@@ -130,6 +145,7 @@ export async function salvarConfiguracaoContato(
     logoUrl: campos.logo ?? null,
     logoHeight: alturaLogo(campos.logoAltura),
     footerLogoUrl: campos.logoRodape ?? null,
+    heroImageUrl: campos.heroImage ?? null,
   };
 
   await withOrganization(organizationId, async () => {

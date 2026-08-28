@@ -122,3 +122,36 @@ describe("validarUrlMidiaOrganizacao — mesma checagem, uso genérico (logo/log
     expect(validarUrlMidiaOrganizacao("não-é-url", ORG_ID)).toBe(false);
   });
 });
+
+// Parâmetro `pasta` (usado pela imagem do Hero, pasta "hero") — mesma
+// checagem, prefixo diferente. "site" continua o padrão implícito (todo
+// call site pré-existente passa a funcionar sem alterações).
+describe("validarUrlMidiaOrganizacao — parâmetro pasta (imagem do Hero)", () => {
+  beforeEach(() => {
+    vi.stubEnv("R2_PUBLIC_URL", R2_PUBLIC_URL_TESTE);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("aceita asset do próprio tenant na pasta 'hero' quando pasta='hero' é passada", () => {
+    const url = `${R2_PUBLIC_URL_TESTE}/${ORG_ID}/hero/${UUID_VALIDO}.webp`;
+    expect(validarUrlMidiaOrganizacao(url, ORG_ID, "hero")).toBe(true);
+  });
+
+  test("URL na pasta 'hero' é rejeitada quando validada com o padrão (pasta='site')", () => {
+    const url = `${R2_PUBLIC_URL_TESTE}/${ORG_ID}/hero/${UUID_VALIDO}.webp`;
+    expect(validarUrlMidiaOrganizacao(url, ORG_ID)).toBe(false);
+  });
+
+  test("URL na pasta 'site' é rejeitada quando validada explicitamente contra 'hero'", () => {
+    const url = `${R2_PUBLIC_URL_TESTE}/${ORG_ID}/site/${UUID_VALIDO}.webp`;
+    expect(validarUrlMidiaOrganizacao(url, ORG_ID, "hero")).toBe(false);
+  });
+
+  test("isolamento de tenant continua valendo com pasta explícita", () => {
+    const url = `${R2_PUBLIC_URL_TESTE}/outra-org-999/hero/${UUID_VALIDO}.webp`;
+    expect(validarUrlMidiaOrganizacao(url, ORG_ID, "hero")).toBe(false);
+  });
+});

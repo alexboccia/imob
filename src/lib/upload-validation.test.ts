@@ -37,6 +37,11 @@ describe("validarArquivo — upload válido", () => {
     const webp = await validarArquivo(arquivo(CABECALHO_WEBP, "foto.webp", "image/webp"), "site");
     expect(webp.ok).toBe(true);
   });
+
+  test("aceita a pasta 'hero' (imagem do Hero da Home)", async () => {
+    const r = await validarArquivo(arquivo(CABECALHO_JPEG, "hero.jpg", "image/jpeg"), "hero");
+    expect(r.ok).toBe(true);
+  });
 });
 
 describe("validarArquivo — tipo inválido", () => {

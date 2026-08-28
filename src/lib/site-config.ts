@@ -13,3 +13,11 @@ export const siteConfig = {
 // níveis, só o nome muda.
 export const DESCRICAO_PADRAO_SITE =
   "Encontre o imóvel ideal para comprar ou alugar.";
+
+// Compartilhada entre [orgSlug]/page.tsx (fallback quando
+// OrganizationSettings.heroImageUrl é null) e HeroImageUpload.tsx (mesma
+// imagem exibida no preview do admin quando a organização nunca
+// customizou/restaurou o padrão) — mesmo asset estático nos dois
+// lugares, nunca duplicado. Asset local em public/, não R2 (é o mesmo
+// pra qualquer organização, sem tenant).
+export const IMAGEM_HERO_PADRAO = "/hero-home.png";

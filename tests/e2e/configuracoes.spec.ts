@@ -26,9 +26,27 @@ test.describe("Configurações", () => {
   test("controles de upload de logo e favicon permanecem presentes", async ({ page }) => {
     await expect(page.getByText("Logotipo", { exact: true })).toBeVisible();
     await expect(page.getByText("Favicon", { exact: true })).toBeVisible();
-    // Três inputs de arquivo reais (logo cabeçalho + favicon + logo
-    // rodapé), sem alterar a lógica dos dois já existentes.
-    await expect(page.locator('input[type="file"]')).toHaveCount(3);
+    // Quatro inputs de arquivo reais (logo cabeçalho + favicon + logo
+    // rodapé + imagem do Hero), sem alterar a lógica dos já existentes.
+    await expect(page.locator('input[type="file"]')).toHaveCount(4);
+  });
+
+  test("imagem principal da Home: seção aparece com preview do fallback padrão, sem 'Restaurar' quando não customizada", async ({ page }) => {
+    await expect(page.getByText("Imagem principal da Home", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Esta imagem aparece em destaque no topo do seu site.")
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Recomendado: imagem horizontal, em alta resolução/)
+    ).toBeVisible();
+
+    // ORG_A nunca customizou — preview mostra o fallback padrão do
+    // produto, e "Restaurar imagem padrão" não faz sentido (já é o
+    // padrão), então não aparece.
+    const preview = page.getByAltText("Prévia da imagem principal da Home");
+    await expect(preview).toBeVisible();
+    await expect(preview).toHaveAttribute("src", /hero-home/);
+    await expect(page.getByRole("button", { name: "Restaurar imagem padrão" })).toHaveCount(0);
   });
 
   test("rodapé do site: upload dedicado e as 3 opções de aparência aparecem, AUTO é o padrão", async ({ page }) => {
@@ -132,6 +150,12 @@ test.describe("Configurações", () => {
     const tituloGerador = page.getByText("🎨 Gerar tema pelo logotipo");
     const larguraGerador = await tituloGerador.evaluate((el) => el.getBoundingClientRect().width);
     expect(larguraGerador, `largura do título 'Gerar tema pelo logotipo': ${larguraGerador}px`).toBeGreaterThan(100);
+
+    // Preview da imagem do Hero cabe na viewport (max-w-2xl com w-full —
+    // nunca deve ultrapassar 375px de largura real renderizada).
+    const previewHero = page.getByAltText("Prévia da imagem principal da Home");
+    const larguraPreview = await previewHero.evaluate((el) => el.getBoundingClientRect().width);
+    expect(larguraPreview, `largura do preview do Hero: ${larguraPreview}px`).toBeLessThanOrEqual(375);
   });
 
   test("360px: sem overflow horizontal", async ({ page }) => {

@@ -18,6 +18,7 @@ async function buscarConfiguracaoContatoSemCache(organizationId: string) {
     logo: settings?.logoUrl ?? null,
     logoAltura: settings?.logoHeight ?? LOGO_ALTURA_PADRAO,
     logoRodape: settings?.footerLogoUrl ?? null,
+    heroImage: settings?.heroImageUrl ?? null,
   };
 }
 

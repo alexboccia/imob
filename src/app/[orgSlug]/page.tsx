@@ -11,6 +11,8 @@ import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
 import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
+import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
+import { IMAGEM_HERO_PADRAO } from "@/lib/site-config";
 import { Button } from "@/components/ui/button";
 import { TITULO_SECAO } from "@/lib/site-typography";
 import type { Prisma } from "@/generated/prisma/client";
@@ -118,7 +120,7 @@ export default async function HomePage({
   const basePath = resolverBasePath(orgSlug);
   const ultimosCadastrados = { createdAt: "desc" } as const;
 
-  const [lancamentos, destaques, oportunidades, dadosFiltros] =
+  const [lancamentos, destaques, oportunidades, dadosFiltros, config] =
     await withOrganization(organizationId, () =>
       Promise.all([
         buscarImoveis(
@@ -140,6 +142,7 @@ export default async function HomePage({
           ultimosCadastrados
         ),
         buscarDadosFiltros(organizationId),
+        buscarConfiguracaoContato(organizationId),
       ])
     );
 
@@ -152,10 +155,13 @@ export default async function HomePage({
         buscarImoveis(organizationId, { status: "AVAILABLE" }, 6)
       );
 
-  // Imagem fixa de marca (family/lifestyle) — não depende mais da foto
-  // de nenhum imóvel específico (ver HeroHome, que já trata null caindo
-  // num gradiente neutro caso este asset algum dia seja removido).
-  const imagemHero = "/hero-home.png";
+  // Imagem configurável por organização (Configurações → Identidade
+  // visual → Imagem principal da Home) — cai no asset fixo de marca
+  // (IMAGEM_HERO_PADRAO) quando a organização nunca customizou ou clicou
+  // em "Restaurar imagem padrão". HeroHome também trata null (caindo num
+  // gradiente neutro), mas na prática isso nunca acontece aqui: sempre
+  // temos pelo menos o fallback estático.
+  const imagemHero = config.heroImage ?? IMAGEM_HERO_PADRAO;
 
   return (
     <div>

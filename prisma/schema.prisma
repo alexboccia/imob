@@ -720,6 +720,13 @@ model OrganizationSettings {
   // (R2, upload por /api/admin/upload), só um segundo slot, opcional. Sem
   // isto, o rodapé cai no MESMO logoUrl do cabeçalho (ver SiteFooter.tsx).
   footerLogoUrl      String?
+  // Imagem de fundo do Hero da Home pública (site/[orgSlug]/page.tsx) —
+  // mesmo asset de sempre (R2, upload por /api/admin/upload, pasta
+  // "hero", sempre reprocessada/recodificada, ver hero-image-processar.ts).
+  // null (nenhum tenant enviou ainda, ou "Restaurar imagem padrão") cai
+  // no fallback estático do produto (IMAGEM_HERO_PADRAO, site-config.ts)
+  // — a Home nunca fica sem Hero.
+  heroImageUrl       String?
   updatedAt          DateTime     @updatedAt
 
   @@map("organization_settings")

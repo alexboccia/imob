@@ -12,6 +12,7 @@ import {
   imovelValidoParaOrganizacao,
   PASTAS_PERMITIDAS,
 } from "@/lib/upload-validation";
+import { processarImagemHero } from "@/lib/hero-image-processar";
 import { obterKvStore } from "@/lib/kv-store";
 import { verificarLimiteUpload } from "@/lib/rate-limit";
 import { cabecalhosLimiteExcedido } from "@/lib/rate-limit-response";
@@ -29,6 +30,7 @@ const PAPEIS_POR_PASTA: Record<string, ReadonlySet<string> | null> = {
   imoveis: null,
   usuarios: PAPEIS_GESTAO_USUARIOS,
   site: PAPEIS_GESTAO_CONFIGURACOES,
+  hero: PAPEIS_GESTAO_CONFIGURACOES,
 };
 
 function erro(mensagem: string, status: number) {
@@ -124,11 +126,29 @@ export async function POST(request: Request) {
     return erro(validacao.erro, validacao.status);
   }
 
+  let bytes: Buffer = Buffer.from(await arquivo.arrayBuffer());
+  let extensao = validacao.extensao;
+  let mime = validacao.mime;
+
+  // Hero da Home: reprocessa sempre (nunca guarda o arquivo como veio) —
+  // corrige orientação EXIF, valida dimensões mínimas e recodifica pra
+  // WebP. Ver hero-image-processar.ts — único ponto que decodifica isto
+  // com sharp.
+  if (pasta === "hero") {
+    const processado = await processarImagemHero(bytes);
+    if (!processado.ok) {
+      return erro(processado.erro, processado.status);
+    }
+    bytes = processado.bytes;
+    extensao = "webp";
+    mime = "image/webp";
+  }
+
   // organizationId sempre vem da sessão (requireOrganizationId), nunca do
   // cliente; uuid gerado no servidor; extensão derivada do MIME já
-  // validado — o nome original do arquivo nunca entra na chave.
-  const chave = `${organizationId}/${pasta}/${crypto.randomUUID()}.${validacao.extensao}`;
-  const bytes = Buffer.from(await arquivo.arrayBuffer());
+  // validado (ou, pro Hero, do formato final após reprocessamento) — o
+  // nome original do arquivo nunca entra na chave.
+  const chave = `${organizationId}/${pasta}/${crypto.randomUUID()}.${extensao}`;
   const nomeOriginalSanitizado = sanitizarNomeLogico(arquivo.name);
 
   try {
@@ -138,7 +158,7 @@ export async function POST(request: Request) {
         Bucket: bucket,
         Key: chave,
         Body: bytes,
-        ContentType: validacao.mime,
+        ContentType: mime,
       })
     );
   } catch (erroEnvio) {

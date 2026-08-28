@@ -16,6 +16,7 @@ import { FaviconUpload } from "@/components/admin/FaviconUpload";
 import { SeletorTema } from "@/components/admin/SeletorTema";
 import { SeletorAparenciaRodape } from "@/components/admin/SeletorAparenciaRodape";
 import { GeradorTemaLogotipo } from "@/components/admin/GeradorTemaLogotipo";
+import { HeroImageUpload } from "@/components/admin/HeroImageUpload";
 import { resolverTemaEfetivo, THEME_ID_CUSTOMIZADO, type TokensTema } from "@/lib/branding/temas";
 
 type ConfiguracaoInicial = {
@@ -30,6 +31,7 @@ type ConfiguracaoInicial = {
   logo: string | null;
   logoAltura: number;
   logoRodape: string | null;
+  heroImage: string | null;
   themeId: string | null;
   favicon: string | null;
   nomePublico: string | null;
@@ -81,6 +83,10 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
             }
           />
           <GeradorTemaLogotipo />
+
+          <div className="min-w-0 border-t pt-6">
+            <HeroImageUpload heroImageInicial={config.heroImage} />
+          </div>
 
           <div className="min-w-0 space-y-6 border-t pt-6">
             <div className="min-w-0 space-y-1.5">
