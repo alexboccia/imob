@@ -43,17 +43,23 @@ export function HeroHome({
           // não tem efeito nenhum aqui nesse eixo — é puramente cosmético,
           // mantido só por padronização com o Y.
           //
-          // Y=55% em object-position AQUI tem efeito real (há corte
-          // vertical nativo do cover-fit): a maioria das fotos "família na
-          // sala" tem gente na metade inferior do quadro (sentados/no
-          // chão) e teto/janela/parede na metade superior, então cortar um
-          // pouco mais de CIMA que de BAIXO mantém rostos no quadro. origin-y
-          // usa o mesmo valor (55%) pra o corte do scale não brigar com o
-          // do object-position.
+          // Y=35% em object-position AQUI tem efeito real (há corte
+          // vertical nativo do cover-fit): quanto mais larga a viewport
+          // (altura do hero não cresce junto — é definida pelo conteúdo,
+          // não pela largura), mais extremo o corte vertical necessário.
+          // Um Y mais alto (ex: 50-55%) deixa pouco espaço entre o título
+          // e a cabeça de quem está sentado — bom em telas comuns, mas em
+          // telas bem largas (~2500px+) empurra as cabeças pra cima, quase
+          // embaixo do título. 35% (mais perto de 0% = mostra mais TOPO da
+          // foto) sacrifica parte do colo/pernas (corta mais de BAIXO) em
+          // troca de manter uma folga confortável acima da cabeça de todo
+          // mundo em qualquer largura — rosto é a prioridade #1 da
+          // composição, colo/tapete não. origin-y usa o mesmo valor (35%)
+          // pra o corte do scale não brigar com o do object-position.
           //
           // 1.15 é a MENOR escala que ainda protege o sujeito mais à
           // direita do quadro contra o card em qualquer largura ≥1024px —
-          // testado exaustivamente (1024 a 2338px) contra duas fotos reais
+          // testado exaustivamente (1024 a 2692px) contra duas fotos reais
           // com composições bem diferentes; escalas maiores cortavam quem
           // ficava mais à esquerda em telas mais estreitas (o card ocupa
           // proporcionalmente MAIS da largura quanto mais estreita a tela,
@@ -66,7 +72,7 @@ export function HeroHome({
             alt=""
             fill
             priority
-            className="object-cover lg:scale-[1.15] lg:origin-[100%_55%] lg:object-[center_55%]"
+            className="object-cover lg:scale-[1.15] lg:origin-[100%_35%] lg:object-[center_35%]"
             sizes="100vw"
           />
         ) : (
