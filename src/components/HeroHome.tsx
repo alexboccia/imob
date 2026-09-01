@@ -76,11 +76,13 @@ export function HeroHome({
             que à direita (onde fica o card branco, que já garante seu
             próprio contraste) — mesmo racional de sempre: overlay neutro
             (nunca a cor do tema), pra legibilidade funcionar em qualquer
-            organização/tema. */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/20 lg:bg-gradient-to-r lg:from-black/80 lg:via-black/55 lg:to-black/25" />
+            organização/tema. Bem mais leve que antes — só o suficiente
+            pra segurar contraste do título sobre céu/janela claros, sem
+            lavar a cor real da foto. */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/20 to-transparent lg:bg-gradient-to-r lg:from-black/45 lg:via-black/20 lg:to-transparent" />
       </div>
 
-      <div className="relative mx-auto max-w-6xl px-4 py-14 sm:py-20 lg:py-24">
+      <div className="relative mx-auto max-w-6xl px-4 py-14 sm:py-20 lg:py-12">
         <div className="flex flex-col items-center gap-10 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
           <div className="max-w-xl text-center lg:flex-1 lg:text-left">
             <h1 className={TITULO_HERO}>Encontre o imóvel ideal para você</h1>
