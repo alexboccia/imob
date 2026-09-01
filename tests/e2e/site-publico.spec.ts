@@ -319,20 +319,22 @@ test.describe("Site público — Hero + painel de busca (Proposta 2, correção)
     await page.goto("/");
 
     const headline = page.getByRole("heading", { level: 1, name: "Encontre o imóvel ideal para você" });
-    // Topo do card (não o botão "Buscar imóveis", que fica no rodapé de
-    // um card alto — comparar sua posição Y com a da headline não prova
-    // nada sobre "lado a lado", já que um card vertical alto naturalmente
-    // termina bem mais abaixo).
-    const painelTopo = page.getByLabel("Bairro", { exact: true });
-    const [boxHeadline, boxPainelTopo] = await Promise.all([headline.boundingBox(), painelTopo.boundingBox()]);
+    // Aba "Alugar" é o primeiro elemento visível dentro do card — seu
+    // topo É o topo visual do painel (mais confiável que "Bairro", que
+    // fica bem mais abaixo dentro de um card alto e não prova nada sobre
+    // alinhamento).
+    const abaAlugar = page.getByRole("button", { name: "Alugar", exact: true });
+    const [boxHeadline, boxAbaAlugar] = await Promise.all([headline.boundingBox(), abaAlugar.boundingBox()]);
 
     expect(boxHeadline).not.toBeNull();
-    expect(boxPainelTopo).not.toBeNull();
-    // Lado a lado: o topo do painel fica à direita de onde a headline
-    // termina, e sua linha de base está dentro da faixa vertical da
-    // headline (mesma composição horizontal, não empilhado abaixo dela).
-    expect(boxPainelTopo!.x).toBeGreaterThan(boxHeadline!.x + boxHeadline!.width);
-    expect(boxPainelTopo!.y).toBeLessThan(boxHeadline!.y + boxHeadline!.height);
+    expect(boxAbaAlugar).not.toBeNull();
+    // Lado a lado: o painel fica à direita de onde a headline termina.
+    expect(boxAbaAlugar!.x).toBeGreaterThan(boxHeadline!.x + boxHeadline!.width);
+    // Alinhamento óptico (ver HeroHome.tsx: lg:items-start): o topo da
+    // headline fica próximo do topo do painel, não "afundado" no meio de
+    // um card bem mais alto — tolerância generosa (não pixel-perfeito),
+    // só o suficiente pra pegar uma regressão real de alinhamento.
+    expect(Math.abs(boxHeadline!.y - boxAbaAlugar!.y)).toBeLessThan(60);
   });
 
   test("mobile (375px): painel empilha abaixo da headline, full-width", async ({ page }) => {
