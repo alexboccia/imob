@@ -28,20 +28,36 @@ export function HeroHome({
           // enquadramento horizontal em "centro", que em desktop cai bem
           // onde o card de busca fica (lado direito) e pode cobrir rostos
           // em fotos de família (padrão comum de foto de estoque
-          // "lifestyle"). lg:scale-110 dá folga de corte extra nos dois
+          // "lifestyle"). lg:scale-105 dá folga de corte extra nos dois
           // eixos sem depender do aspect-ratio da imagem, e
-          // lg:object-[30%_38%] usa essa folga pra puxar o foco pra
-          // cima/esquerda — mantém o sujeito principal visível e afastado
-          // do card, sem esconder nada no mobile (empilhado, sem esse
-          // conflito) nem exigir configuração de focal point por imagem.
-          // É um padrão de enquadramento razoável pra QUALQUER foto nesse
-          // layout (headline+card), não um ajuste específico pra esta.
+          // lg:object-[30%_55%] usa essa folga pra reposicionar o foco.
+          //
+          // object-position: X% Y% NÃO é "puxa o foco pra X%/Y%" — é o
+          // inverso: em cada eixo, a % indica o quanto da imagem fica
+          // ANTES do ponto de corte (0% = mostra o topo/esquerda, corta
+          // embaixo/direita; 100% = mostra embaixo/direita, corta o
+          // topo/esquerda). X=30% (mais perto de 0%) corta mais a DIREITA
+          // — onde o card fica — e preserva a ESQUERDA, onde o sujeito
+          // principal normalmente está numa composição headline+card.
+          // Y=55% (pouco acima do centro) corta um pouco mais de CIMA que
+          // de BAIXO — a maioria das fotos "família na sala" tem gente na
+          // metade inferior do quadro (sentados) e teto/janela/parede na
+          // metade superior. Um scale mais agressivo (110%) deixa pouca
+          // folga vertical sobrando e corta cabeça ou colo dependendo da
+          // largura da viewport — 105% é o suficiente pra reenquadrar sem
+          // apertar demais o range vertical que cabe.
+          //
+          // Sem esconder nada no mobile (empilhado, sem esse conflito) nem
+          // exigir configuração de focal point por imagem — é um padrão de
+          // enquadramento razoável pra QUALQUER foto nesse layout
+          // (headline+card), validado com duas fotos reais diferentes, não
+          // um ajuste específico pra uma só.
           <Image
             src={imagemUrl}
             alt=""
             fill
             priority
-            className="object-cover lg:scale-110 lg:object-[30%_38%]"
+            className="object-cover lg:scale-105 lg:object-[30%_55%]"
             sizes="100vw"
           />
         ) : (
