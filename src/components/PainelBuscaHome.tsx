@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { MapPin, Map as MapaIcone, Home as IconeCasa, Search } from "lucide-react";
+import { MapPin, Map as MapaIcone, Home as IconeCasa, Banknote, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -235,7 +235,10 @@ export function PainelBuscaHome({
               onValueChange={(v) => setTipo(v ?? SENTINELA_TODOS_TIPOS)}
               name={tipo === SENTINELA_TODOS_TIPOS ? undefined : "tipo"}
             >
-              <SelectTrigger id="busca-home-tipo" className="h-12 w-full rounded-lg border-gray-200 px-3">
+              <SelectTrigger
+                id="busca-home-tipo"
+                className="w-full rounded-lg border-gray-200 px-3 data-[size=default]:h-12"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -256,6 +259,7 @@ export function PainelBuscaHome({
 
           <div className="min-w-0">
             <label htmlFor="busca-home-valor" className={classeLabel}>
+              <Banknote className="size-3.5" />
               {labelValor}
             </label>
             {/* Duas entradas deliberadas: a visível formata com separador
