@@ -24,10 +24,11 @@ test.describe("Site público — Home (Proposta 2)", () => {
     // Comprar/Alugar + campos reais do painel de busca.
     await expect(page.getByRole("button", { name: "Comprar", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Alugar", exact: true })).toBeVisible();
-    await expect(page.getByLabel("Bairro")).toBeVisible();
+    await expect(page.getByLabel("Cidade", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Bairro", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Tipo de imóvel")).toBeVisible();
-    await expect(page.getByLabel("Valor mínimo")).toBeVisible();
-    await expect(page.getByLabel("Valor máximo")).toBeVisible();
+    // Aba padrão é Comprar — último campo é "Valor até".
+    await expect(page.getByLabel("Valor até")).toBeVisible();
     await expect(page.getByRole("button", { name: "Buscar imóveis" })).toBeVisible();
   });
 
@@ -65,21 +66,137 @@ test.describe("Site público — Home (Proposta 2)", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Resultados da busca");
   });
 
-  test("painel de busca da Home executa a busca real (Comprar/Alugar + bairro + tipo + valor)", async ({ page }) => {
+  test("painel de busca da Home (Comprar): cidade + bairro + tipo + valor até geram a URL certa e filtram de verdade", async ({ page }) => {
+    await page.goto("/");
+
+    await page.getByLabel("Cidade", { exact: true }).click();
+    await page.getByLabel("Cidade", { exact: true }).fill("São");
+    await page.getByRole("option", { name: "São Paulo" }).click();
+
+    await page.getByLabel("Bairro", { exact: true }).click();
+    await page.getByLabel("Bairro", { exact: true }).fill("Centro");
+    await page.getByRole("option", { name: "Centro" }).click();
+
+    await page.getByLabel("Tipo de imóvel").click();
+    await page.getByRole("option", { name: "Apartamento", exact: true }).click();
+
+    await page.getByLabel("Valor até").fill("900000");
+    await page.getByRole("button", { name: "Buscar imóveis" }).click();
+
+    await page.waitForURL(/\/imoveis\?/);
+    const url = new URL(page.url());
+    expect(url.searchParams.get("finalidade")).toBe("SALE");
+    expect(url.searchParams.get("cidade")).toBe("São Paulo");
+    expect(url.searchParams.get("bairro")).toBe("Centro");
+    expect(url.searchParams.get("tipo")).toBe("Apartamento");
+    expect(url.searchParams.get("precoMax")).toBe("900000");
+    // Resultado real: o imóvel de venda seedado (price=500000, São
+    // Paulo/Centro/Apartamento) atende todos os critérios.
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Resultados da busca");
+    await expect(page.getByText("Nenhum imóvel encontrado")).toHaveCount(0);
+  });
+
+  test("painel de busca da Home (Alugar): rótulo do valor muda pra 'Aluguel até' e filtra por rentPrice, nunca por price de venda", async ({ page }) => {
     await page.goto("/");
 
     await page.getByRole("button", { name: "Alugar", exact: true }).click();
-    await page.getByLabel("Bairro").selectOption("Centro");
-    await page.getByLabel("Tipo de imóvel").selectOption("Apartamento");
-    await page.getByLabel("Valor mínimo").fill("1000");
+    await expect(page.getByLabel("Aluguel até")).toBeVisible();
+    await expect(page.getByLabel("Valor até")).toHaveCount(0);
+
+    await page.getByLabel("Cidade", { exact: true }).click();
+    await page.getByLabel("Cidade", { exact: true }).fill("Campinas");
+    await page.getByRole("option", { name: "Campinas" }).click();
+    await page.getByLabel("Aluguel até").fill("3000");
     await page.getByRole("button", { name: "Buscar imóveis" }).click();
 
     await page.waitForURL(/\/imoveis\?/);
     const url = new URL(page.url());
     expect(url.searchParams.get("finalidade")).toBe("RENT");
-    expect(url.searchParams.get("bairro")).toBe("Centro");
-    expect(url.searchParams.get("tipo")).toBe("Apartamento");
-    expect(url.searchParams.get("precoMin")).toBe("1000");
+    expect(url.searchParams.get("cidade")).toBe("Campinas");
+    expect(url.searchParams.get("precoMax")).toBe("3000");
+    // Prova real do bug corrigido: o imóvel de aluguel seedado
+    // (rentPrice=2500, price=null, Campinas/Cambuí) aparece — se o filtro
+    // ainda estivesse aplicando em `price` (nulo pra este imóvel), o
+    // resultado viria vazio.
+    await expect(page.getByText("Apartamento para alugar, 45m² – Cambuí")).toBeVisible();
+  });
+
+  test("cidade → bairro: trocar de cidade limpa um bairro que não pertence mais a ela", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page.getByPlaceholder("Selecione uma cidade primeiro")).toBeVisible();
+
+    await page.getByLabel("Cidade", { exact: true }).click();
+    await page.getByLabel("Cidade", { exact: true }).fill("São Paulo");
+    await page.getByRole("option", { name: "São Paulo" }).click();
+    await page.getByLabel("Bairro", { exact: true }).click();
+    await page.getByLabel("Bairro", { exact: true }).fill("Centro");
+    await page.getByRole("option", { name: "Centro" }).click();
+    await expect(page.getByLabel("Bairro", { exact: true })).toHaveValue("Centro");
+
+    // Troca de cidade — bairro de São Paulo não existe em Campinas,
+    // então precisa ser limpo (não pode viajar silenciosamente no form).
+    await page.getByLabel("Cidade", { exact: true }).click();
+    await page.getByLabel("Cidade", { exact: true }).fill("");
+    await page.getByLabel("Cidade", { exact: true }).fill("Campinas");
+    await page.getByRole("option", { name: "Campinas" }).click();
+    await expect(page.getByLabel("Bairro", { exact: true })).toHaveValue("");
+  });
+
+  test("bairro fica desabilitado até uma cidade ser escolhida", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByLabel("Bairro", { exact: true })).toBeDisabled();
+    await page.getByLabel("Cidade", { exact: true }).click();
+    await page.getByLabel("Cidade", { exact: true }).fill("São Paulo");
+    await page.getByRole("option", { name: "São Paulo" }).click();
+    await expect(page.getByLabel("Bairro", { exact: true })).toBeEnabled();
+  });
+
+  test("tipo de imóvel: dropdown agrupa por Residencial/Comercial (catálogo real do tenant)", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel("Tipo de imóvel").click();
+    await expect(page.getByRole("group", { name: "Residencial" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Comercial" })).toBeVisible();
+    await expect(page.getByRole("option", { name: "Apartamento", exact: true })).toBeVisible();
+    await expect(page.getByRole("option", { name: "Sala Comercial" })).toBeVisible();
+  });
+
+  test("'Todos os imóveis' (padrão do Tipo) não envia parâmetro tipo na URL", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Buscar imóveis" }).click();
+    await page.waitForURL(/\/imoveis/);
+    const url = new URL(page.url());
+    expect(url.searchParams.has("tipo")).toBe(false);
+  });
+
+  test("cidade: navegação por teclado (ArrowDown + Enter) seleciona uma opção", async ({ page }) => {
+    await page.goto("/");
+    const campo = page.getByLabel("Cidade", { exact: true });
+    await campo.click();
+    await campo.fill("a"); // vogal presente em ambas as cidades seedadas
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    // Alguma das duas cidades reais foi selecionada — nunca um texto
+    // arbitrário fora da lista de opções.
+    const valor = await campo.inputValue();
+    expect(["São Paulo", "Campinas"]).toContain(valor);
+  });
+
+  test("cidade: Escape fecha o dropdown sem alterar a seleção", async ({ page }) => {
+    await page.goto("/");
+    const campo = page.getByLabel("Cidade", { exact: true });
+    await campo.click();
+    await campo.fill("São");
+    await expect(page.getByRole("option", { name: "São Paulo" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("option", { name: "São Paulo" })).toBeHidden();
+  });
+
+  test("cidade sem resultado mostra mensagem amigável, sem quebrar", async ({ page }) => {
+    await page.goto("/");
+    await page.getByLabel("Cidade", { exact: true }).click();
+    await page.getByLabel("Cidade", { exact: true }).fill("Cidade Que Nao Existe Em Lugar Nenhum");
+    await expect(page.getByText("Nenhuma cidade encontrada.")).toBeVisible();
   });
 
   test("card de imóvel leva pro detalhe", async ({ page }) => {
@@ -154,6 +271,21 @@ test.describe("Site público — responsividade (360/375/768/1024/1440)", () => 
       }
     });
 
+    test(`Home ${width}px: dropdown de Cidade e de Tipo abertos não causam overflow horizontal`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+
+      await page.getByLabel("Cidade", { exact: true }).click();
+      await page.getByLabel("Cidade", { exact: true }).fill("a");
+      await expect(page.getByRole("option").first()).toBeVisible();
+      expect(await semOverflow(page), `Home @ ${width}px com dropdown de Cidade aberto`).toBe(true);
+      await page.keyboard.press("Escape");
+
+      await page.getByLabel("Tipo de imóvel").click();
+      await expect(page.getByRole("option").first()).toBeVisible();
+      expect(await semOverflow(page), `Home @ ${width}px com dropdown de Tipo aberto`).toBe(true);
+    });
+
     test(`Listagem ${width}px: sem overflow horizontal`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/imoveis");
@@ -191,7 +323,7 @@ test.describe("Site público — Hero + painel de busca (Proposta 2, correção)
     // um card alto — comparar sua posição Y com a da headline não prova
     // nada sobre "lado a lado", já que um card vertical alto naturalmente
     // termina bem mais abaixo).
-    const painelTopo = page.getByLabel("Bairro");
+    const painelTopo = page.getByLabel("Bairro", { exact: true });
     const [boxHeadline, boxPainelTopo] = await Promise.all([headline.boundingBox(), painelTopo.boundingBox()]);
 
     expect(boxHeadline).not.toBeNull();

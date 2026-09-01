@@ -7,6 +7,7 @@ import { FiltrosImoveis } from "@/components/FiltrosImoveis";
 import { PaginacaoPublica } from "@/components/PaginacaoPublica";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
+import { campoPrecoPorFinalidade } from "@/lib/imovel-filtros";
 import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
@@ -46,6 +47,7 @@ type SearchParams = {
   busca?: string;
   finalidade?: string;
   tipo?: string | string[];
+  cidade?: string;
   bairro?: string | string[];
   caracteristicas?: string | string[];
   precoMin?: string;
@@ -137,12 +139,16 @@ export default async function ListaImoveisPage({
         : tiposDaCategoria.length > 0
           ? { type: { in: tiposDaCategoria } }
           : {}),
+      ...(params.cidade ? { city: { equals: params.cidade, mode: "insensitive" } } : {}),
       ...(bairros.length > 0
         ? { neighborhood: { in: bairros, mode: "insensitive" } }
         : {}),
+      // "Comprar" filtra por `price` (venda); "Alugar" filtra por
+      // `rentPrice` — nunca o preço de venda pra uma busca de aluguel
+      // (ver campoPrecoPorFinalidade, imovel-filtros.ts).
       ...(precoMin !== undefined || precoMax !== undefined
         ? {
-            price: {
+            [campoPrecoPorFinalidade(params.finalidade)]: {
               ...(precoMin !== undefined ? { gte: precoMin } : {}),
               ...(precoMax !== undefined ? { lte: precoMax } : {}),
             },
@@ -215,7 +221,7 @@ export default async function ListaImoveisPage({
     <div className="mx-auto max-w-6xl px-4 py-10">
       <FiltrosImoveis
         tipos={dadosFiltros.tipos.map((t) => t.nome)}
-        bairros={dadosFiltros.bairros}
+        bairros={dadosFiltros.bairros.map((b) => b.nome)}
         caracteristicas={dadosFiltros.caracteristicas}
         orgSlug={orgSlug}
         basePath={basePath}
@@ -229,6 +235,7 @@ export default async function ListaImoveisPage({
           busca: params.busca ?? "",
         }}
         paramsExtras={{
+          cidade: params.cidade ?? "",
           areaMin: params.areaMin ?? "",
           areaMax: params.areaMax ?? "",
           quartos: params.quartos ?? "",

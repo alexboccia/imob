@@ -34,6 +34,15 @@ export function formatarPreco(valor: unknown) {
 // FiltrosImoveis) é a string de dígitos em centavos, nunca o número
 // float direto — evita os bugs de arredondamento clássicos de máscara
 // de moeda digitada da direita pra esquerda.
+// Faixa de preço em filtros (Home/FiltrosImoveis) é sempre em reais
+// inteiros — diferente do CampoMoeda (usado no cadastro do imóvel), que
+// mascara centavos dígito a dígito. O texto digitado já É o valor em
+// reais; isto só adiciona separador de milhar pra leitura, nunca decimal.
+export function formatarMilharDigitos(valor: string): string {
+  if (!valor) return "";
+  return Number(valor).toLocaleString("pt-BR");
+}
+
 export function paraDigitosMoeda(valor: string | number | null | undefined): string {
   if (valor === null || valor === undefined || valor === "") return "";
   const numero = Number(valor);

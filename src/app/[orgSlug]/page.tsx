@@ -168,6 +168,7 @@ export default async function HomePage({
       <HeroHome imagemUrl={imagemHero}>
         <PainelBuscaHome
           tipos={dadosFiltros.tipos}
+          cidades={dadosFiltros.cidades}
           bairros={dadosFiltros.bairros}
           basePath={basePath}
         />

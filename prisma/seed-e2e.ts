@@ -34,6 +34,14 @@ export const IDS_E2E = {
   imovelOrgAgenda: "e2e-imovel-org-agenda",
   // Redesenho de Imóveis — ver duplicata em tests/e2e/helpers.ts.
   imovelComBadgesOrgA: "e2e-imovel-badges-a",
+  // Busca do Hero — segunda cidade/bairro (todo o resto do seed usa só
+  // "São Paulo"/"Centro") + RENT com rentPrice preenchido e price nulo,
+  // pra exercitar de verdade: autocomplete de cidade com >1 opção,
+  // dependência cidade→bairro, e o filtro de valor aplicando no campo
+  // certo por finalidade (bug real corrigido nesta feature — ver
+  // imovel-filtros.ts).
+  imovelAluguelOrgA: "e2e-imovel-aluguel-a",
+  imovelComercialOrgA: "e2e-imovel-comercial-a",
 };
 
 // Fase P.10 — hostname fixo, custom domain ATIVO da Organização B, usado
@@ -133,6 +141,14 @@ async function garantirImovel(opcoes: {
   isFeatured?: boolean;
   isLaunch?: boolean;
   hasSlideshow?: boolean;
+  // Busca do Hero — overrides opcionais, todos com o mesmo default de
+  // sempre (nenhum call site existente muda de comportamento).
+  type?: string;
+  purpose?: "SALE" | "RENT";
+  neighborhood?: string;
+  city?: string;
+  price?: number | null;
+  rentPrice?: number | null;
 }) {
   // update reseta os mesmos campos do create — specs de edição (ex: "editar
   // imóvel") mudam o título do imóvel seedado, então sem isso o seed
@@ -140,13 +156,14 @@ async function garantirImovel(opcoes: {
   const dados = {
     organizationId: opcoes.organizationId,
     title: opcoes.title,
-    type: "Apartamento",
-    purpose: "SALE",
+    type: opcoes.type ?? "Apartamento",
+    purpose: opcoes.purpose ?? "SALE",
     status: "AVAILABLE",
-    neighborhood: "Centro",
-    city: "São Paulo",
+    neighborhood: opcoes.neighborhood ?? "Centro",
+    city: opcoes.city ?? "São Paulo",
     state: "SP",
-    price: 500000,
+    price: opcoes.price === undefined ? 500000 : opcoes.price,
+    rentPrice: opcoes.rentPrice ?? null,
     isOpportunity: opcoes.isOpportunity ?? false,
     isFeatured: opcoes.isFeatured ?? false,
     isLaunch: opcoes.isLaunch ?? false,
@@ -290,6 +307,8 @@ async function main() {
           "e2e-imovel-org-b",
           IDS_E2E.imovelOrgAgenda,
           IDS_E2E.imovelComBadgesOrgA,
+          IDS_E2E.imovelAluguelOrgA,
+          IDS_E2E.imovelComercialOrgA,
         ],
       },
     },
@@ -342,6 +361,31 @@ async function main() {
     id: "e2e-imovel-org-b",
     organizationId: orgB.organization.id,
     title: "Imóvel da Organização B",
+  });
+
+  // Busca do Hero — segunda cidade/bairro + aluguel com rentPrice
+  // (nenhum outro imóvel de Org A tem RENT nem cidade diferente de "São
+  // Paulo"/"Centro"). Usa o próprio "Apartamento" já cadastrado no
+  // catálogo — não precisa de um tipo novo pra isso.
+  await garantirImovel({
+    id: IDS_E2E.imovelAluguelOrgA,
+    organizationId: orgA.organization.id,
+    title: "Apartamento para alugar, 45m² – Cambuí",
+    purpose: "RENT",
+    city: "Campinas",
+    neighborhood: "Cambuí",
+    price: null,
+    rentPrice: 2500,
+  });
+  // "Sala Comercial" já existe no CATÁLOGO (garantirTipoImovel acima),
+  // mas buscarDadosFiltros só lista tipos que estão de fato EM USO por
+  // um imóvel AVAILABLE — sem isto, o grupo "Comercial" do dropdown de
+  // Tipo (Home) nunca aparece de verdade em nenhum teste.
+  await garantirImovel({
+    id: IDS_E2E.imovelComercialOrgA,
+    organizationId: orgA.organization.id,
+    title: "Sala comercial para alugar, 32m² – Centro",
+    type: "Sala Comercial",
   });
 
   await garantirTipoImovel({ organizationId: orgAgenda.organization.id, name: "Apartamento" });

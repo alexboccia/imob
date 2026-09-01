@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { normalizarTexto } from "@/lib/texto";
-import { FINALIDADE_LABEL, formatarPreco } from "@/lib/format";
+import { FINALIDADE_LABEL, formatarPreco, formatarMilharDigitos } from "@/lib/format";
 import { IconeFiltros, IconeChevronBaixo, IconeFechar } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -203,15 +203,6 @@ function FiltroPillLabel({
       )}
     </>
   );
-}
-
-// Faixa de preço é sempre em reais inteiros — diferente do CampoMoeda
-// (usado no cadastro do imóvel), que mascara centavos dígito a dígito.
-// Aqui o texto digitado já É o valor em reais, só formatado com
-// separador de milhar pra leitura.
-function formatarMilhar(valor: string): string {
-  if (!valor) return "";
-  return Number(valor).toLocaleString("pt-BR");
 }
 
 function rotuloMultiplo(
@@ -415,7 +406,7 @@ export function FiltrosImoveis({
                 <Input
                   type="text"
                   inputMode="numeric"
-                  value={formatarMilhar(precoMin)}
+                  value={formatarMilharDigitos(precoMin)}
                   onChange={(e) =>
                     setPrecoMin(e.target.value.replace(/\D/g, "").slice(0, 12))
                   }
@@ -431,7 +422,7 @@ export function FiltrosImoveis({
                 <Input
                   type="text"
                   inputMode="numeric"
-                  value={formatarMilhar(precoMax)}
+                  value={formatarMilharDigitos(precoMax)}
                   onChange={(e) =>
                     setPrecoMax(e.target.value.replace(/\D/g, "").slice(0, 12))
                   }
