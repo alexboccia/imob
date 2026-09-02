@@ -40,6 +40,88 @@ test.describe("Site público — Home (Proposta 2)", () => {
     await expect(nav.getByRole("link", { name: "Lançamentos" })).toHaveAttribute("href", /lancamento=1/);
   });
 
+  // Estado ativo do menu (SiteHeader): o contorno do item selecionado sai
+  // de `aria-current="page"`, derivado da URL real (pathname + query), não
+  // de estado de React — por isso os casos abaixo entram por deep link
+  // direto, sem clicar, que é o cenário que quebraria se alguém trocasse
+  // por estado local. Asserção pelo atributo/semântica, não por cor.
+  for (const { rota, ativo } of [
+    { rota: "/imoveis?finalidade=SALE", ativo: "Comprar" },
+    { rota: "/imoveis?finalidade=RENT", ativo: "Alugar" },
+    { rota: "/imoveis?lancamento=1", ativo: "Lançamentos" },
+  ]) {
+    test(`menu marca só "${ativo}" como ativo em ${rota} (deep link, sobrevive a refresh)`, async ({
+      page,
+    }) => {
+      await page.goto(rota);
+      const nav = page.locator("header nav");
+      await expect(nav.locator('a[aria-current="page"]')).toHaveCount(1);
+      await expect(nav.locator('a[aria-current="page"]')).toHaveText(ativo);
+    });
+  }
+
+  test("menu: clicar em Comprar/Alugar/Lançamentos leva à URL certa e move o estado ativo, sem deslocar o layout", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const nav = page.locator("header nav");
+    // Nenhum dos três é destino da Home, então nada fica ativo aqui.
+    await expect(nav.locator('a[aria-current="page"]')).toHaveCount(0);
+
+    // Geometria dos itens antes de qualquer seleção — o item ativo ganha
+    // borda colorida, mas a borda já existe (transparente) no estado
+    // inativo, então nada pode mudar de tamanho/posição ao alternar.
+    const caixas = async () =>
+      nav.locator("a").evaluateAll((els) =>
+        els.map((e) => {
+          const r = e.getBoundingClientRect();
+          return { x: Math.round(r.x), largura: Math.round(r.width), altura: Math.round(r.height) };
+        })
+      );
+    const geometriaInicial = await caixas();
+    // Os três têm a mesma altura (padding uniforme).
+    expect(new Set(geometriaInicial.map((c) => c.altura)).size).toBe(1);
+
+    for (const { rotulo, paramEsperado } of [
+      { rotulo: "Comprar", paramEsperado: /finalidade=SALE/ },
+      { rotulo: "Alugar", paramEsperado: /finalidade=RENT/ },
+      { rotulo: "Lançamentos", paramEsperado: /lancamento=1/ },
+    ]) {
+      await nav.getByRole("link", { name: rotulo }).click();
+      await page.waitForURL(paramEsperado);
+      await expect(nav.locator('a[aria-current="page"]')).toHaveCount(1);
+      await expect(nav.locator('a[aria-current="page"]')).toHaveText(rotulo);
+      expect(await caixas()).toEqual(geometriaInicial);
+    }
+  });
+
+  test("menu: contorno do item ativo usa a cor do tenant, e os inativos não têm borda visível", async ({
+    page,
+  }) => {
+    await page.goto("/imoveis?finalidade=SALE");
+    const nav = page.locator("header nav");
+    const bordas = await nav.locator("a").evaluateAll((els) =>
+      els.map((e) => ({
+        rotulo: e.textContent?.trim(),
+        ativo: e.getAttribute("aria-current") === "page",
+        cor: getComputedStyle(e).borderTopColor,
+        // A --primary é injetada por organização em [orgSlug]/layout.tsx;
+        // comparar contra ela (em vez de uma cor literal) é o que prova
+        // que o contorno acompanha a paleta de qualquer tenant.
+        primariaDoTenant: getComputedStyle(e).getPropertyValue("--primary").trim(),
+      }))
+    );
+    const ativo = bordas.find((b) => b.ativo)!;
+    const inativos = bordas.filter((b) => !b.ativo);
+
+    expect(ativo.rotulo).toBe("Comprar");
+    expect(ativo.cor).toBe(ativo.primariaDoTenant);
+    // Inativos mantêm a borda (sem layout shift), mas transparente.
+    for (const inativo of inativos) {
+      expect(inativo.cor).toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+    }
+  });
+
   test("Lançamentos, Destaques e Oportunidades mostram o imóvel com os 3 badges; 'Ver tudo' aponta pro filtro certo", async ({
     page,
   }) => {

@@ -104,7 +104,17 @@ export function SiteHeader({
           )}
         </Link>
 
-        <nav className="hidden items-center gap-8 sm:flex">
+        {/* gap menor que o de antes (era gap-8) porque agora cada item tem
+            padding horizontal próprio — o espaçamento ÓPTICO entre os
+            rótulos continua equivalente, mas o contorno do item ativo
+            ganha respiro em vez de colar no texto. A borda existe nos três
+            estados (transparente quando inativo, cor do tenant quando
+            ativo) pra trocar de item não deslocar nada — mesmo padrão do
+            Button do projeto. Cor vem de `border-primary`/`text-primary`,
+            que resolvem pra --primary injetada por organização em
+            [orgSlug]/layout.tsx: nada hardcoded, acompanha a paleta de
+            qualquer tenant. */}
+        <nav className="hidden items-center gap-1 sm:flex">
           {navLinks.map((link) => {
             const ativo = estaAtivo(link.href, pathname, searchAtual);
             return (
@@ -112,8 +122,10 @@ export function SiteHeader({
                 key={link.href}
                 href={link.href}
                 aria-current={ativo ? "page" : undefined}
-                className={`text-base font-medium transition-colors ${
-                  ativo ? "text-primary" : "text-gray-700 hover:text-primary"
+                className={`rounded-full border px-4 py-2 text-base font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+                  ativo
+                    ? "border-primary text-primary"
+                    : "border-transparent text-gray-700 hover:bg-primary/5 hover:text-primary"
                 }`}
               >
                 {link.label}
