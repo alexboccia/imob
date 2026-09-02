@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import {
   IconeMensagem,
+  IconeWhatsApp,
   IconeTelefone,
   IconeEmail,
   IconeFechar,
@@ -17,12 +18,14 @@ function OpcaoContato({
   subtitulo,
   href,
   externo,
+  corIcone = "bg-primary text-primary-foreground",
 }: {
   icone: React.ReactNode;
   titulo: string;
   subtitulo: string;
   href: string;
   externo?: boolean;
+  corIcone?: string;
 }) {
   return (
     <a
@@ -31,7 +34,9 @@ function OpcaoContato({
       rel={externo ? "noopener noreferrer" : undefined}
       className="flex items-center gap-3 border rounded-xl p-3 hover:bg-gray-50 transition-colors"
     >
-      <span className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+      <span
+        className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${corIcone}`}
+      >
         {icone}
       </span>
       <span>
@@ -100,11 +105,12 @@ export function BotaoContatoFlutuante({
         <div className="space-y-3">
           {whatsappDigitos && (
             <OpcaoContato
-              icone={<IconeMensagem className="w-5 h-5" />}
+              icone={<IconeWhatsApp className="w-5 h-5" />}
               titulo={`WhatsApp ${nome}`}
               subtitulo="Fale conosco agora"
               href={whatsappHref}
               externo
+              corIcone="bg-[#25D366] text-white"
             />
           )}
           {telefoneDigitos && (
