@@ -238,6 +238,70 @@ describe("gerarPreviaPaletaLogotipo / aplicarPaletaGerada — autorização, iso
     expect(branding).toBeNull();
   });
 
+  // A action devolve os tokens gravados pra a UI sincronizar com a fonte
+  // de verdade (em vez de manter uma cópia local que pode divergir).
+  test("aplicar devolve os tokens efetivamente persistidos", async () => {
+    cenarioA = await criarCenario();
+    await configurarLogo(cenarioA.organization.id, urlLogoValida(cenarioA.organization.id));
+    autenticarComo(cenarioA);
+
+    const editados = { ...TOKENS_FALSOS, primary: "oklch(0.32 0.1 254)" };
+    const resultado = await aplicarPaletaGerada(editados);
+
+    expect(resultado.success).toBe(true);
+    expect(resultado.tokens).toEqual(editados);
+
+    const branding = await prisma.organizationBranding.findUnique({
+      where: { organizationId: cenarioA.organization.id },
+    });
+    // O que voltou pra UI é exatamente o que está no banco.
+    expect(branding?.customTheme).toEqual(resultado.tokens);
+  });
+
+  // Aplicar várias vezes seguidas: cada aplicação parte do valor anterior
+  // e persiste o novo, sem precisar gerar de novo no meio.
+  test("aplicações repetidas persistem sempre o último valor", async () => {
+    cenarioA = await criarCenario();
+    await configurarLogo(cenarioA.organization.id, urlLogoValida(cenarioA.organization.id));
+    autenticarComo(cenarioA);
+
+    for (const cor of ["oklch(0.2 0.05 100)", "oklch(0.6 0.15 200)", "oklch(0.4 0.1 300)"]) {
+      const resultado = await aplicarPaletaGerada({ ...TOKENS_FALSOS, primary: cor });
+      expect(resultado.success).toBe(true);
+      expect(resultado.tokens?.primary).toBe(cor);
+
+      const branding = await prisma.organizationBranding.findUnique({
+        where: { organizationId: cenarioA.organization.id },
+      });
+      expect((branding?.customTheme as { primary: string }).primary).toBe(cor);
+    }
+  });
+
+  // Erro do servidor não pode "sumir" com nada: quando a validação
+  // recusa, nada é gravado e a UI segue com o que o usuário digitou.
+  test("payload recusado não deixa gravação parcial de nenhuma cor", async () => {
+    cenarioA = await criarCenario();
+    await configurarLogo(cenarioA.organization.id, urlLogoValida(cenarioA.organization.id));
+    autenticarComo(cenarioA);
+
+    // Primeiro grava um estado válido conhecido.
+    await aplicarPaletaGerada({ ...TOKENS_FALSOS, primary: "oklch(0.5 0.2 40)" });
+
+    // Agora tenta um payload em que SÓ UMA cor é inválida.
+    const resultado = await aplicarPaletaGerada({ ...TOKENS_FALSOS, border: "#ff0000" });
+    expect(resultado.success).toBe(false);
+    expect(resultado.tokens).toBeUndefined();
+
+    const branding = await prisma.organizationBranding.findUnique({
+      where: { organizationId: cenarioA.organization.id },
+    });
+    // Continua exatamente o estado anterior — nada foi alterado.
+    expect((branding?.customTheme as { primary: string; border: string })).toEqual({
+      ...TOKENS_FALSOS,
+      primary: "oklch(0.5 0.2 40)",
+    });
+  });
+
   test("falha na extração (ex: logo sem cor dominante) não altera o branding existente", async () => {
     cenarioA = await criarCenario();
     await configurarLogo(cenarioA.organization.id, urlLogoValida(cenarioA.organization.id));

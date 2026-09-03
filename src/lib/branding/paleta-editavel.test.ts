@@ -57,17 +57,32 @@ describe("aplicarCorNaPaleta — cada cor é independente", () => {
     expect(nova.link).toBe(PALETA_BASE.link);
   });
 
+  // Mesma lista de inválidos que o campo da UI recusa — a regra é uma só
+  // (hexValido), então o conversor precisa recusar exatamente o mesmo.
   test("hex inválido devolve a paleta inalterada, sem quebrar a prévia", () => {
-    for (const invalido of ["", "#12", "vermelho", "#GGGGGG", "123456"]) {
+    for (const invalido of [
+      "",
+      "   ",
+      "#",
+      "#12",
+      "#12345",
+      "#1234567",
+      "#GGGGGG",
+      "#12GG45",
+      "123456",
+      "#fff",
+      "vermelho",
+    ]) {
       expect(aplicarCorNaPaleta(PALETA_BASE, "primary", invalido)).toEqual(PALETA_BASE);
     }
   });
 
-  test("aceita #RRGGBB em maiúsculas e a forma curta #RGB", () => {
+  test("aceita #RRGGBB em maiúsculas e minúsculas", () => {
     expect(hexDe(aplicarCorNaPaleta(PALETA_BASE, "primary", "#FFFFFF"), "primary")).toBe("#ffffff");
     expect(hexDe(aplicarCorNaPaleta(PALETA_BASE, "primary", "#000000"), "primary")).toBe("#000000");
     expect(hexDe(aplicarCorNaPaleta(PALETA_BASE, "primary", "#f13041"), "primary")).toBe("#f13041");
-    expect(hexDe(aplicarCorNaPaleta(PALETA_BASE, "primary", "#fff"), "primary")).toBe("#ffffff");
+    expect(hexDe(aplicarCorNaPaleta(PALETA_BASE, "primary", "#17345B"), "primary")).toBe("#17345b");
+    expect(hexDe(aplicarCorNaPaleta(PALETA_BASE, "primary", "#ABCDEF"), "primary")).toBe("#abcdef");
   });
 
   test("edições sucessivas em cores diferentes se acumulam", () => {

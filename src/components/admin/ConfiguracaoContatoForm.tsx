@@ -83,7 +83,10 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
                 : null
             }
           />
-          <GeradorTemaLogotipo />
+          {/* A paleta persistida do tenant vira a base editável da
+              seção — é o que faz a tela continuar mostrando as cores
+              atuais ao voltar/recarregar, em vez de exigir 'Gerar'. */}
+          <GeradorTemaLogotipo paletaInicial={config.temaCustomizado} />
 
           <div className="min-w-0 border-t pt-6">
             <HeroImageUpload heroImageInicial={config.heroImage} />

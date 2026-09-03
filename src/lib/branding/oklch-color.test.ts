@@ -3,6 +3,8 @@ import {
   srgbParaOklch,
   oklchParaSrgb,
   oklchParaHex,
+  hexParaOklch,
+  hexValido,
   formatarOklch,
   parseOklchSeguro,
   razaoContraste,
@@ -57,10 +59,39 @@ describe("oklchParaHex", () => {
 });
 
 describe("formatarOklch — formato idêntico ao catálogo fixo", () => {
-  test("gera 'oklch(L C H)' com H inteiro", () => {
-    expect(formatarOklch({ l: 0.5523, c: 0.1789, h: 254.6 })).toMatch(
-      /^oklch\(0\.552 0\.179 255\)$/
-    );
+  test("gera 'oklch(L C H)' no formato aceito de volta pelo parser", () => {
+    const formatado = formatarOklch({ l: 0.5523, c: 0.1789, h: 254.6 });
+    expect(formatado).toMatch(/^oklch\(\d+(\.\d+)? \d+(\.\d+)? \d+(\.\d+)?\)$/);
+    expect(parseOklchSeguro(formatado)).not.toBeNull();
+  });
+
+  test("não inventa casas decimais em valores curtos", () => {
+    expect(formatarOklch({ l: 0.55, c: 0.18, h: 255 })).toBe("oklch(0.55 0.18 255)");
+  });
+
+  // A paleta virou editável por hex (ver GeradorTemaLogotipo): o usuário
+  // digita #17345B, isso é convertido pra oklch, persistido, relido e
+  // mostrado de volta como hex. Se a serialização perder precisão, o
+  // campo devolve uma cor diferente da que a pessoa digitou. Com as 3
+  // casas/hue inteiro de antes isso acontecia em ~52% das cores.
+  test("ida e volta hex -> oklch -> hex preserva o valor exato", () => {
+    for (const hex of [
+      "#17345b",
+      "#f13041",
+      "#000000",
+      "#ffffff",
+      "#ec0bfc",
+      "#1a02bc",
+      "#f58017",
+      "#6c70fc",
+      "#9c6ae8",
+      "#123456",
+    ]) {
+      const oklch = hexParaOklch(hex);
+      expect(oklch).not.toBeNull();
+      const voltou = oklchParaHex(parseOklchSeguro(formatarOklch(oklch!))!);
+      expect(voltou).toBe(hex);
+    }
   });
 
   test("clampa L, C e H fora de faixa antes de formatar", () => {
@@ -125,5 +156,40 @@ describe("razaoContraste — WCAG", () => {
   test("quase-preto tem mais contraste contra branco do que um cinza médio", () => {
     const cinzaMedio = srgbParaOklch(128, 128, 128);
     expect(razaoContraste(QUASE_PRETO, BRANCO)).toBeGreaterThan(razaoContraste(cinzaMedio, BRANCO));
+  });
+});
+
+// Regra única de cor digitável, compartilhada por campo da paleta,
+// conta-gotas e conversão. Os casos abaixo são exatamente os aceitos e
+// recusados especificados para o campo.
+describe("hexValido — #RRGGBB estrito", () => {
+  test("aceita os formatos válidos", () => {
+    for (const v of ["#000000", "#FFFFFF", "#ffffff", "#f13041", "#17345B", "#ABCDEF"]) {
+      expect(hexValido(v)).toBe(true);
+    }
+  });
+
+  test("recusa os formatos inválidos", () => {
+    for (const v of [
+      "123456",
+      "#12345",
+      "#1234567",
+      "#GGGGGG",
+      "#12GG45",
+      "#",
+      "",
+      "   ",
+      "#FFF",
+      "rgb(0,0,0)",
+      null,
+      undefined,
+      123456,
+    ]) {
+      expect(hexValido(v)).toBe(false);
+    }
+  });
+
+  test("ignora espaços em volta de um valor válido", () => {
+    expect(hexValido("  #f13041  ")).toBe(true);
   });
 });

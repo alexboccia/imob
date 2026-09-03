@@ -314,7 +314,11 @@ export async function gerarPreviaPaletaLogotipo(): Promise<ResultadoPreviaPaleta
 //
 // Sem tokens (chamada legada/sem prévia), cai no comportamento anterior:
 // re-gera do logotipo atual.
-export async function aplicarPaletaGerada(tokens?: unknown): Promise<ActionState> {
+export type ResultadoAplicarPaleta = ActionState & { tokens?: TokensTema };
+
+export async function aplicarPaletaGerada(
+  tokens?: unknown
+): Promise<ResultadoAplicarPaleta> {
   const session = await auth();
   if (!session) redirect("/app/login");
   if (!temPapel(session.user.role, PAPEIS_GESTAO_CONFIGURACOES)) {
@@ -358,5 +362,8 @@ export async function aplicarPaletaGerada(tokens?: unknown): Promise<ActionState
     revalidatePath("/", "layout");
   });
 
-  return sucesso("Paleta personalizada aplicada.");
+  // Devolve o que FOI GRAVADO (pós-validação), não o que o client
+  // mandou: é isso que deixa a UI sincronizar com a fonte de verdade em
+  // vez de manter uma cópia própria que pode divergir do banco.
+  return { ...sucesso("Paleta personalizada aplicada."), tokens: validado.data };
 }

@@ -50,31 +50,27 @@ export function srgbParaOklch(r: number, g: number, b: number): Oklch {
   return { l: L, c: C, h: C < 1e-6 ? 0 : H };
 }
 
-// "#RRGGBB" (ou "#RGB") → OKLCH. Ponto de entrada pra cor escolhida pelo
-// usuário no conta-gotas da paleta sugerida (EyeDropper devolve
-// `sRGBHex`), que precisa virar o mesmo formato oklch(...) usado em todo
-// o resto do branding. Devolve null pra qualquer coisa fora do formato —
-// quem chama trata como "ignora a seleção", nunca grava lixo.
-// O "#" é obrigatório: é o formato que a EyeDropper API devolve
-// (`sRGBHex`) e o que a UI mostra. Aceitar "123456" solto só abriria
-// espaço pra entrada ambígua sem nenhum ganho.
-const PADRAO_HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+// REGRA ÚNICA de cor digitável no produto: exatamente "#RRGGBB".
+//
+// Deliberadamente estrita — não aceita "#RGB" nem hex sem "#". É o
+// formato que a EyeDropper API devolve (`sRGBHex`), o que a UI mostra e o
+// que os campos de cor da paleta aceitam, então client e servidor
+// validam pela MESMA regra em vez de cada camada ter a sua.
+const PADRAO_HEX = /^#[0-9a-f]{6}$/i;
 
+export function hexValido(valor: unknown): valor is string {
+  return typeof valor === "string" && PADRAO_HEX.test(valor.trim());
+}
+
+// "#RRGGBB" → OKLCH, o formato usado em todo o branding. Devolve null pra
+// qualquer coisa fora do padrão — quem chama trata como "ignora este
+// valor", nunca grava lixo.
 export function hexParaOklch(valor: unknown): Oklch | null {
-  if (typeof valor !== "string") return null;
-  const m = PADRAO_HEX.exec(valor.trim());
-  if (!m) return null;
-  const digitos = m[1];
-  const cheio =
-    digitos.length === 3
-      ? digitos
-          .split("")
-          .map((d) => d + d)
-          .join("")
-      : digitos;
-  const r = parseInt(cheio.slice(0, 2), 16);
-  const g = parseInt(cheio.slice(2, 4), 16);
-  const b = parseInt(cheio.slice(4, 6), 16);
+  if (!hexValido(valor)) return null;
+  const digitos = valor.trim().slice(1);
+  const r = parseInt(digitos.slice(0, 2), 16);
+  const g = parseInt(digitos.slice(2, 4), 16);
+  const b = parseInt(digitos.slice(4, 6), 16);
   return srgbParaOklch(r, g, b);
 }
 
@@ -136,20 +132,27 @@ export function razaoContraste(corA: Oklch, corB: Oklch): number {
 export const BRANCO: Oklch = { l: 1, c: 0, h: 0 };
 export const QUASE_PRETO: Oklch = { l: 0.2, c: 0, h: 0 };
 
-// Formato textual EXATO do catálogo fixo (ver branding/temas.ts) —
-// "oklch(<L> <C> <H>)", L/C com até 3 casas, H inteiro. Nunca serializar
-// cor de outra forma: é este formato que parseOklchSeguro (abaixo) aceita
-// de volta, fechando o ciclo geração→persistência→leitura sem nunca
-// aceitar CSS livre.
+// Formato textual "oklch(<L> <C> <H>)", o mesmo do catálogo fixo (ver
+// branding/temas.ts). Nunca serializar cor de outra forma: é este formato
+// que parseOklchSeguro (abaixo) aceita de volta, fechando o ciclo
+// geração→persistência→leitura sem nunca aceitar CSS livre.
 export function formatarOklch({ l, c, h }: Oklch): string {
   const L = clamp(l, 0, 1);
   const C = clamp(c, 0, 0.4);
-  const H = ((Math.round(h) % 360) + 360) % 360;
-  return `oklch(${round3(L)} ${round3(C)} ${H})`;
+  const H = ((h % 360) + 360) % 360;
+  // Precisão suficiente pra ida-e-volta hex -> oklch -> hex devolver
+  // EXATAMENTE o mesmo hex de 8 bits. Com as 3 casas (e hue inteiro) de
+  // antes, ~52% das cores voltavam com 1 unidade de diferença em algum
+  // canal — invisível a olho nu, mas visível no campo de cor da paleta,
+  // onde o usuário digita #17345B e receberia #18345b de volta ao
+  // aplicar. Valores curtos continuam curtos ("0.55" segue "0.55"):
+  // toString() não inventa zeros à direita.
+  return `oklch(${arredondar(L, 5)} ${arredondar(C, 5)} ${arredondar(H, 2)})`;
 }
 
-function round3(v: number): string {
-  return (Math.round(v * 1000) / 1000).toString();
+function arredondar(v: number, casas: number): string {
+  const fator = 10 ** casas;
+  return (Math.round(v * fator) / fator).toString();
 }
 
 // Único ponto de entrada pra transformar uma STRING (vinda do banco, nunca
