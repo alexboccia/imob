@@ -108,6 +108,83 @@ export const CATALOGO_TEMAS: Record<string, Tema> = {
     border: "oklch(0.88 0.03 300)",
     link: "oklch(0.5 0.19 300)",
   },
+  // --- Ampliação do catálogo (5 opções) ---
+  // Mesma calibração dos temas acima: primaryHover ~0.06-0.07 de
+  // luminosidade abaixo de primary (diferença perceptível sem trocar de
+  // cor), primaryLight/secondary/border claros no mesmo matiz, e
+  // onPrimary escolhido pelo contraste MEDIDO com razaoContraste (não
+  // "branco por padrão"). As cinco passam WCAG AA tanto pro texto sobre
+  // o botão quanto pro link sobre fundo branco — ver temas.test.ts, que
+  // recalcula isso a cada rodada em vez de confiar nestes comentários.
+  petrol: {
+    id: "petrol",
+    label: "Azul Petróleo",
+    // Teal profundo (matiz 215), entre o azul e o verde — bem longe do
+    // classic-blue (255, mais claro e saturado) e do forest (165).
+    primary: "oklch(0.45 0.08 215)",
+    primaryHover: "oklch(0.38 0.085 215)",
+    primaryLight: "oklch(0.93 0.03 215)",
+    onPrimary: "oklch(1 0 0)",
+    secondary: "oklch(0.96 0.018 215)",
+    border: "oklch(0.88 0.025 215)",
+    link: "oklch(0.45 0.08 215)",
+  },
+  terracotta: {
+    id: "terracotta",
+    label: "Terracota",
+    // Matiz 45 (barro/telha) com croma contido: quente e arquitetônico
+    // sem virar laranja vivo, e claro o bastante pra não se confundir
+    // com o wine (15, bem mais escuro).
+    primary: "oklch(0.52 0.11 45)",
+    primaryHover: "oklch(0.45 0.115 45)",
+    primaryLight: "oklch(0.93 0.035 45)",
+    onPrimary: "oklch(1 0 0)",
+    secondary: "oklch(0.96 0.02 45)",
+    border: "oklch(0.88 0.028 45)",
+    link: "oklch(0.52 0.11 45)",
+  },
+  emerald: {
+    id: "emerald",
+    label: "Esmeralda",
+    // Verde-joia: mais claro E bem mais saturado que o forest, com o
+    // matiz puxado pra 150 pra a diferença ser óbvia lado a lado (o
+    // forest é um verde fechado e dessaturado, este é vívido).
+    primary: "oklch(0.52 0.16 150)",
+    primaryHover: "oklch(0.45 0.165 150)",
+    primaryLight: "oklch(0.93 0.04 150)",
+    onPrimary: "oklch(1 0 0)",
+    secondary: "oklch(0.96 0.02 150)",
+    border: "oklch(0.88 0.03 150)",
+    link: "oklch(0.52 0.16 150)",
+  },
+  navy: {
+    id: "navy",
+    label: "Marinho",
+    // Azul institucional profundo (L 0.3): o contraste altíssimo com
+    // branco (~13.9:1) é justamente o que dá o ar sóbrio/bancário, e a
+    // escuridão o separa do classic-blue sem mudar de família.
+    primary: "oklch(0.3 0.09 265)",
+    primaryHover: "oklch(0.24 0.09 265)",
+    primaryLight: "oklch(0.93 0.03 265)",
+    onPrimary: "oklch(1 0 0)",
+    secondary: "oklch(0.96 0.018 265)",
+    border: "oklch(0.88 0.025 265)",
+    link: "oklch(0.3 0.09 265)",
+  },
+  rosewood: {
+    id: "rosewood",
+    label: "Rosé",
+    // Rosé queimado/dusty (matiz 25, croma baixo): o croma contido é o
+    // que evita o rosa infantil, e a luminosidade mais alta separa do
+    // wine, que é o vizinho mais próximo em matiz.
+    primary: "oklch(0.52 0.08 25)",
+    primaryHover: "oklch(0.45 0.085 25)",
+    primaryLight: "oklch(0.93 0.03 25)",
+    onPrimary: "oklch(1 0 0)",
+    secondary: "oklch(0.96 0.018 25)",
+    border: "oklch(0.88 0.025 25)",
+    link: "oklch(0.52 0.08 25)",
+  },
 };
 
 // Fallback obrigatório: linha OrganizationBranding ausente, themeId nulo/
@@ -120,8 +197,8 @@ export function resolverTema(themeId: string | null | undefined): Tema {
 
 // Sentinela de themeId reservado pro tema gerado automaticamente a partir
 // do logotipo (ver gerar-paleta.ts) — nunca existe no CATALOGO_TEMAS fixo
-// acima de propósito (catálogo continua sendo só os 6 temas prontos,
-// nunca ganha uma entrada "customizável"). O valor persistido de verdade
+// acima de propósito (catálogo continua sendo só os temas prontos, nunca
+// ganha uma entrada "customizável"). O valor persistido de verdade
 // fica em OrganizationBranding.customTheme (JSON validado, ver
 // tokens-tema-schema.ts), não aqui.
 export const THEME_ID_CUSTOMIZADO = "custom";
@@ -135,7 +212,7 @@ export const LABEL_TEMA_CUSTOMIZADO = "Personalizado (gerado do logotipo)";
 // JSON persistido é válido. Ponto de entrada usado por
 // [orgSlug]/layout.tsx no lugar de resolverTema puro — resolverTema
 // continua existindo e sendo usado sozinho onde só o catálogo fixo faz
-// sentido (ex: SeletorTema já sabe listar os 6 temas prontos por conta
+// sentido (ex: SeletorTema já sabe listar os temas prontos por conta
 // própria). Nunca lança: customTheme inválido/ausente cai no mesmo
 // fallback de sempre (TEMA_PADRAO_ID), exatamente como um themeId
 // desconhecido cairia.

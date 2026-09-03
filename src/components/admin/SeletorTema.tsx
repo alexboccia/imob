@@ -32,16 +32,19 @@ function SwatchTema({ tema, selecionado }: { tema: Tema; selecionado: boolean })
   );
 }
 
-// Grade dos 6 temas pré-definidos — nunca um color picker livre. Cada
-// opção é um radio nativo (name="themeId") com as pastilhas de cor lidas
-// direto do catálogo em código, renderizadas no servidor.
+// Grade dos temas pré-definidos — nunca um color picker livre. Cada opção
+// é um radio nativo (name="themeId") com as pastilhas de cor lidas direto
+// do catálogo em código, renderizadas no servidor. A grade é derivada de
+// CATALOGO_TEMAS, sem lista/posição fixa: acrescentar um tema ao catálogo
+// já o faz aparecer aqui (e ser aceito pela action, que monta o enum de
+// themeId a partir das mesmas chaves).
 //
 // temaCustomizado (opcional): quando a organização já gerou/aplicou uma
 // paleta a partir do logotipo (ver GeradorTemaLogotipo.tsx), aparece como
-// uma 7ª pastilha nesta mesma grade — mesmo componente/estilo dos temas
-// prontos, só que com as cores geradas em vez de escritas à mão. Some da
-// lista se a organização nunca gerou uma (nada pra mostrar ainda), mas
-// nunca impede voltar a escolher qualquer um dos 6 temas prontos.
+// uma pastilha a mais no fim desta mesma grade — mesmo componente/estilo
+// dos temas prontos, só que com as cores geradas em vez de escritas à
+// mão. Some da lista se a organização nunca gerou uma (nada pra mostrar
+// ainda), mas nunca impede voltar a escolher qualquer tema do catálogo.
 export function SeletorTema({
   themeIdAtual,
   temaCustomizado,
