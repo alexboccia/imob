@@ -50,6 +50,34 @@ export function srgbParaOklch(r: number, g: number, b: number): Oklch {
   return { l: L, c: C, h: C < 1e-6 ? 0 : H };
 }
 
+// "#RRGGBB" (ou "#RGB") → OKLCH. Ponto de entrada pra cor escolhida pelo
+// usuário no conta-gotas da paleta sugerida (EyeDropper devolve
+// `sRGBHex`), que precisa virar o mesmo formato oklch(...) usado em todo
+// o resto do branding. Devolve null pra qualquer coisa fora do formato —
+// quem chama trata como "ignora a seleção", nunca grava lixo.
+// O "#" é obrigatório: é o formato que a EyeDropper API devolve
+// (`sRGBHex`) e o que a UI mostra. Aceitar "123456" solto só abriria
+// espaço pra entrada ambígua sem nenhum ganho.
+const PADRAO_HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+export function hexParaOklch(valor: unknown): Oklch | null {
+  if (typeof valor !== "string") return null;
+  const m = PADRAO_HEX.exec(valor.trim());
+  if (!m) return null;
+  const digitos = m[1];
+  const cheio =
+    digitos.length === 3
+      ? digitos
+          .split("")
+          .map((d) => d + d)
+          .join("")
+      : digitos;
+  const r = parseInt(cheio.slice(0, 2), 16);
+  const g = parseInt(cheio.slice(2, 4), 16);
+  const b = parseInt(cheio.slice(4, 6), 16);
+  return srgbParaOklch(r, g, b);
+}
+
 // OKLCH → sRGB 0-255 (clampado). Usado pra checar contraste (via
 // luminância relativa WCAG) e pra exibir o hex de prévia na UI — nunca
 // pra reconstruir o valor persistido, que continua sendo a string

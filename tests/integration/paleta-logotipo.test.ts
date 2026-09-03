@@ -168,6 +168,76 @@ describe("gerarPreviaPaletaLogotipo / aplicarPaletaGerada — autorização, iso
     expect(brandingB).toBeNull();
   });
 
+  // A paleta sugerida virou editável (conta-gotas por cor, ver
+  // GeradorTemaLogotipo.tsx). Estes casos travam o contrato que isso
+  // exige da action: aplicar precisa gravar o que está NA TELA, não uma
+  // re-geração do logotipo — senão a cor escolhida pelo usuário some
+  // silenciosamente no momento de aplicar.
+  test("aplicar com cores editadas persiste EXATAMENTE o que veio da prévia", async () => {
+    cenarioA = await criarCenario();
+    await configurarLogo(cenarioA.organization.id, urlLogoValida(cenarioA.organization.id));
+    autenticarComo(cenarioA);
+    vi.mocked(gerarPaletaDoLogo).mockResolvedValue({
+      ok: true,
+      tokens: TOKENS_FALSOS,
+      corMarca: { l: 0.5, c: 0.2, h: 40 },
+    });
+
+    // Só "primary" foi trocada no conta-gotas; o resto veio da geração.
+    const editados = { ...TOKENS_FALSOS, primary: "oklch(0.319 0.072 251)" };
+    const resultado = await aplicarPaletaGerada(editados);
+    expect(resultado.success).toBe(true);
+
+    const branding = await prisma.organizationBranding.findUnique({
+      where: { organizationId: cenarioA.organization.id },
+    });
+    expect(branding?.customTheme).toEqual(editados);
+    // Prova que não caiu de volta na paleta re-gerada do logotipo.
+    expect(branding?.customTheme).not.toEqual(TOKENS_FALSOS);
+  });
+
+  test("aplicar sem tokens continua re-gerando do logotipo (comportamento anterior preservado)", async () => {
+    cenarioA = await criarCenario();
+    await configurarLogo(cenarioA.organization.id, urlLogoValida(cenarioA.organization.id));
+    autenticarComo(cenarioA);
+    vi.mocked(gerarPaletaDoLogo).mockResolvedValue({
+      ok: true,
+      tokens: TOKENS_FALSOS,
+      corMarca: { l: 0.5, c: 0.2, h: 40 },
+    });
+
+    expect((await aplicarPaletaGerada()).success).toBe(true);
+    const branding = await prisma.organizationBranding.findUnique({
+      where: { organizationId: cenarioA.organization.id },
+    });
+    expect(branding?.customTheme).toEqual(TOKENS_FALSOS);
+  });
+
+  // O que impede CSS arbitrário não é a origem do valor, e sim o
+  // tokensTemaSchema — que continua sendo aplicado sobre o que vem do
+  // client. Sem isto, aceitar tokens do client seria de fato um buraco.
+  test("tokens inválidos vindos do client são recusados, sem gravar nada", async () => {
+    cenarioA = await criarCenario();
+    await configurarLogo(cenarioA.organization.id, urlLogoValida(cenarioA.organization.id));
+    autenticarComo(cenarioA);
+
+    for (const invalido of [
+      { ...TOKENS_FALSOS, primary: "red; background: url(x)" },
+      { ...TOKENS_FALSOS, primary: "#ff0000" },
+      { ...TOKENS_FALSOS, primary: "oklch(5 0.2 40)" },
+      { ...TOKENS_FALSOS, extra: "oklch(0.5 0.2 40)" },
+      { primary: "oklch(0.5 0.2 40)" },
+    ]) {
+      const resultado = await aplicarPaletaGerada(invalido);
+      expect(resultado.success).toBe(false);
+    }
+
+    const branding = await prisma.organizationBranding.findUnique({
+      where: { organizationId: cenarioA.organization.id },
+    });
+    expect(branding).toBeNull();
+  });
+
   test("falha na extração (ex: logo sem cor dominante) não altera o branding existente", async () => {
     cenarioA = await criarCenario();
     await configurarLogo(cenarioA.organization.id, urlLogoValida(cenarioA.organization.id));

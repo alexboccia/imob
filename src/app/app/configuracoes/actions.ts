@@ -298,12 +298,23 @@ export async function gerarPreviaPaletaLogotipo(): Promise<ResultadoPreviaPaleta
 }
 
 // Persiste o tema personalizado — SÓ é chamada quando o usuário clica
-// "Aplicar paleta" (nunca automaticamente pelo upload do logo). Re-gera a
-// paleta do zero a partir do logotipo atual (não recebe/confia em nada
-// vindo do client) e valida o formato estrutural de novo
-// (tokensTemaSchema) antes de gravar — defesa em profundidade, mesmo
-// resultado sendo gerado por este mesmo servidor.
-export async function aplicarPaletaGerada(): Promise<ActionState> {
+// "Aplicar paleta" (nunca automaticamente pelo upload do logo, nem ao
+// mexer no conta-gotas da prévia).
+//
+// Recebe os tokens EXIBIDOS na prévia porque a paleta sugerida passou a
+// ser editável (conta-gotas por cor, ver GeradorTemaLogotipo.tsx): se
+// aqui re-gerasse do logotipo como antes, as cores ajustadas pelo usuário
+// seriam silenciosamente descartadas no momento de aplicar. Aceitar os
+// tokens do client NÃO afrouxa a segurança que o formato antigo dava: o
+// que impedia CSS arbitrário nunca foi a origem do valor, e sim o
+// tokensTemaSchema (oklch(L C H) com faixas numéricas fechadas, .strict()),
+// que continua sendo aplicado abaixo antes de qualquer gravação — some
+// com qualquer string que não seja uma cor OKLCH válida. Permissão de
+// gestão de configurações também continua exigida acima.
+//
+// Sem tokens (chamada legada/sem prévia), cai no comportamento anterior:
+// re-gera do logotipo atual.
+export async function aplicarPaletaGerada(tokens?: unknown): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
   if (!temPapel(session.user.role, PAPEIS_GESTAO_CONFIGURACOES)) {
@@ -311,10 +322,15 @@ export async function aplicarPaletaGerada(): Promise<ActionState> {
   }
 
   const organizationId = await requireOrganizationId();
-  const resultado = await resolverPaletaAtual(organizationId);
-  if (!resultado.ok) return erroGenerico(resultado.erro);
 
-  const validado = tokensTemaSchema.safeParse(resultado.tokens);
+  let tokensParaValidar: unknown = tokens;
+  if (tokensParaValidar === undefined || tokensParaValidar === null) {
+    const resultado = await resolverPaletaAtual(organizationId);
+    if (!resultado.ok) return erroGenerico(resultado.erro);
+    tokensParaValidar = resultado.tokens;
+  }
+
+  const validado = tokensTemaSchema.safeParse(tokensParaValidar);
   if (!validado.success) {
     return erroGenerico("Falha ao gerar a paleta — tente novamente.");
   }
