@@ -122,7 +122,7 @@ export function SiteHeader({
                 key={link.href}
                 href={link.href}
                 aria-current={ativo ? "page" : undefined}
-                className={`rounded-full border px-4 py-2 text-base font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+                className={`rounded-lg border px-4 py-2 text-base font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
                   ativo
                     ? "border-primary text-primary"
                     : "border-transparent text-gray-700 hover:bg-primary/5 hover:text-primary"
