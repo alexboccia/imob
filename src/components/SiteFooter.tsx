@@ -6,6 +6,7 @@ import {
   IconeYoutube,
   IconeLinkedin,
 } from "@/components/icones-sociais";
+import { LOGO_RODAPE_ALTURA_PADRAO, larguraCaixaLogoRodape } from "@/lib/logo";
 import { resolverAparenciaRodape } from "@/lib/branding/aparencia-rodape";
 
 type NavLink = { href: string; label: string };
@@ -79,6 +80,7 @@ export function SiteFooter({
   nome,
   logo,
   logoRodape,
+  logoRodapeAltura,
   aparencia,
   basePath,
   navLinks,
@@ -87,6 +89,7 @@ export function SiteFooter({
   nome: string;
   logo?: string | null;
   logoRodape?: string | null;
+  logoRodapeAltura?: number | null;
   aparencia?: string | null;
   basePath: string;
   navLinks: NavLink[];
@@ -104,6 +107,13 @@ export function SiteFooter({
   // (onde o próprio fundo já é claro).
   const logoAtivo = logoRodape ?? logo;
   const usarChip = !logoRodape && modo !== "LIGHT";
+  // Altura configurável por organização (footerLogoHeight). Sem valor
+  // salvo, cai no padrão que É o tamanho fixo que o rodapé sempre teve —
+  // quem nunca configurou não vê diferença nenhuma. A largura acompanha a
+  // altura na mesma proporção de antes, e como a imagem é object-contain,
+  // a caixa é só o espaço máximo: o logo nunca distorce.
+  const alturaLogo = logoRodapeAltura ?? LOGO_RODAPE_ALTURA_PADRAO;
+  const larguraLogo = larguraCaixaLogoRodape(alturaLogo);
 
   return (
     <footer className={`mt-16 ${cores.fundoClasse} ${cores.texto}`} style={cores.fundoStyle}>
@@ -115,14 +125,26 @@ export function SiteFooter({
                 // Chip claro atrás do logo: contraste garantido em fundo
                 // escuro sem forçar a recolorir a imagem enviada por cada
                 // organização (que pode ter cores/gradiente próprios).
-                <span className="relative inline-flex h-11 items-center rounded-lg bg-white px-3">
-                  <span className="relative block h-6 w-28">
-                    <Image src={logoAtivo} alt={nome} fill sizes="112px" className="object-contain object-left" />
+                <span
+                  className="relative inline-flex items-center rounded-lg bg-white px-3"
+                  style={{ height: alturaLogo }}
+                >
+                  {/* Respiro interno do chip: os mesmos 20px (44 - 24) que
+                      ele já tinha no tamanho fixo, agora relativos à altura
+                      escolhida — o logo nunca encosta na borda do chip. */}
+                  <span
+                    className="relative block"
+                    style={{ height: Math.max(alturaLogo - 20, 12), width: larguraLogo }}
+                  >
+                    <Image src={logoAtivo} alt={nome} fill sizes={`${larguraLogo}px`} className="object-contain object-left" />
                   </span>
                 </span>
               ) : (
-                <span className="relative block h-11 w-28">
-                  <Image src={logoAtivo} alt={nome} fill sizes="112px" className="object-contain object-left" />
+                <span
+                  className="relative block"
+                  style={{ height: alturaLogo, width: larguraLogo }}
+                >
+                  <Image src={logoAtivo} alt={nome} fill sizes={`${larguraLogo}px`} className="object-contain object-left" />
                 </span>
               )
             ) : (

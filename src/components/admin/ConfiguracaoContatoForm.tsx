@@ -31,6 +31,7 @@ type ConfiguracaoInicial = {
   logo: string | null;
   logoAltura: number;
   logoRodape: string | null;
+  logoRodapeAltura: number;
   heroImage: string | null;
   themeId: string | null;
   favicon: string | null;
@@ -95,7 +96,10 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
                 Use uma versão do logotipo adequada ao fundo do rodapé.
               </p>
             </div>
-            <LogoRodapeUpload logoInicial={config.logoRodape} />
+            <LogoRodapeUpload
+              logoInicial={config.logoRodape}
+              alturaInicial={config.logoRodapeAltura}
+            />
             <SeletorAparenciaRodape aparenciaAtual={config.footerAppearance} />
           </div>
         </CardContent>

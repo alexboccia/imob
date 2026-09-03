@@ -8,7 +8,14 @@ import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { logActivity } from "@/lib/activity-log";
-import { LOGO_ALTURA_MIN, LOGO_ALTURA_MAX, LOGO_ALTURA_PADRAO } from "@/lib/logo";
+import {
+  LOGO_ALTURA_MIN,
+  LOGO_ALTURA_MAX,
+  LOGO_ALTURA_PADRAO,
+  LOGO_RODAPE_ALTURA_MIN,
+  LOGO_RODAPE_ALTURA_MAX,
+  LOGO_RODAPE_ALTURA_PADRAO,
+} from "@/lib/logo";
 import { temPapel, PAPEIS_GESTAO_CONFIGURACOES } from "@/lib/authorization";
 import {
   type ActionState,
@@ -51,6 +58,12 @@ const configuracaoSchema = z.object({
   // Logotipo dedicado ao rodapé (OrganizationSettings.footerLogoUrl) —
   // mesmo tratamento de `logo` acima, campo opcional e independente.
   logoRodape: z.preprocess(vazioParaNulo, z.string().optional()),
+  // Altura do logo do rodapé — mesmo tratamento de `logoAltura`, com
+  // clamp próprio (ver alturaLogoRodape abaixo).
+  logoRodapeAltura: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
+    z.number().optional()
+  ),
   // Imagem do Hero da Home (OrganizationSettings.heroImageUrl) — mesmo
   // tratamento de `logo`/`logoRodape`, campo opcional. Revalidada contra
   // o prefixo do próprio tenant no R2 abaixo (mesma checagem do
@@ -92,6 +105,20 @@ function alturaLogo(valor: number | undefined) {
     return LOGO_ALTURA_PADRAO;
   }
   return Math.min(LOGO_ALTURA_MAX, Math.max(LOGO_ALTURA_MIN, Math.round(valor)));
+}
+
+// Mesmo racional de alturaLogo, com os limites do rodapé: valor ausente
+// ou inválido (texto, negativo, NaN) cai no padrão em vez de gravar lixo,
+// e o clamp impede que um número absurdo vindo do form quebre o layout do
+// rodapé.
+function alturaLogoRodape(valor: number | undefined) {
+  if (valor === undefined || !Number.isFinite(valor) || valor <= 0) {
+    return LOGO_RODAPE_ALTURA_PADRAO;
+  }
+  return Math.min(
+    LOGO_RODAPE_ALTURA_MAX,
+    Math.max(LOGO_RODAPE_ALTURA_MIN, Math.round(valor))
+  );
 }
 
 export async function salvarConfiguracaoContato(
@@ -145,6 +172,7 @@ export async function salvarConfiguracaoContato(
     logoUrl: campos.logo ?? null,
     logoHeight: alturaLogo(campos.logoAltura),
     footerLogoUrl: campos.logoRodape ?? null,
+    footerLogoHeight: alturaLogoRodape(campos.logoRodapeAltura),
     heroImageUrl: campos.heroImage ?? null,
   };
 

@@ -152,6 +152,7 @@ export default async function PublicLayout({
         nome={nomePublico}
         logo={config.logo}
         logoRodape={config.logoRodape}
+        logoRodapeAltura={config.logoRodapeAltura}
         aparencia={branding.footerAppearance}
         basePath={basePath}
         // Contato acrescentado só no footer (rota pública real,

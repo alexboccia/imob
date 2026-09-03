@@ -3,14 +3,29 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  LOGO_RODAPE_ALTURA_MIN,
+  LOGO_RODAPE_ALTURA_MAX,
+  LOGO_RODAPE_ALTURA_PADRAO,
+  larguraCaixaLogoRodape,
+} from "@/lib/logo";
 
 // Slot de logo dedicado ao rodapé (OrganizationSettings.footerLogoUrl) —
-// opcional e independente do logo do cabeçalho (LogoUpload.tsx). Sem
-// campo de altura (diferente de LogoUpload): o rodapé usa uma altura fixa
-// própria (ver SiteFooter.tsx), não configurável por organização.
-export function LogoRodapeUpload({ logoInicial }: { logoInicial: string | null }) {
+// opcional e independente do logo do cabeçalho (LogoUpload.tsx),
+// inclusive na altura: o rodapé costuma usar outra arte (versão clara pra
+// fundo escuro) e raramente quer o mesmo tamanho do topo, por isso tem
+// altura própria (footerLogoHeight) em vez de herdar a do cabeçalho.
+export function LogoRodapeUpload({
+  logoInicial,
+  alturaInicial,
+}: {
+  logoInicial: string | null;
+  alturaInicial: number;
+}) {
   const [logo, setLogo] = useState(logoInicial);
+  const [altura, setAltura] = useState(alturaInicial || LOGO_RODAPE_ALTURA_PADRAO);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -42,7 +57,13 @@ export function LogoRodapeUpload({ logoInicial }: { logoInicial: string | null }
       <Label>Logotipo do rodapé</Label>
       <input type="hidden" name="logoRodape" value={logo ?? ""} />
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-        <div className="relative h-11 w-44 max-w-full shrink-0 overflow-hidden rounded-md border bg-gray-50">
+        {/* A caixa da prévia usa a MESMA altura/proporção que o rodapé do
+            site vai usar (larguraCaixaLogoRodape), então o que aparece
+            aqui ao mexer no campo é o tamanho real, não uma aproximação. */}
+        <div
+          className="relative max-w-full shrink-0 overflow-hidden rounded-md border bg-gray-50"
+          style={{ height: altura, width: larguraCaixaLogoRodape(altura), maxWidth: "100%" }}
+        >
           {logo ? (
             <Image src={logo} alt="Logotipo do rodapé" fill className="object-contain" />
           ) : (
@@ -73,9 +94,29 @@ export function LogoRodapeUpload({ logoInicial }: { logoInicial: string | null }
           {erro && <p className="min-w-0 break-words text-xs text-destructive">{erro}</p>}
         </div>
       </div>
+      <div className="min-w-0 space-y-1.5 pt-1">
+        <Label htmlFor="logoRodapeAltura">Altura do logotipo no rodapé (px)</Label>
+        <Input
+          id="logoRodapeAltura"
+          name="logoRodapeAltura"
+          type="number"
+          min={LOGO_RODAPE_ALTURA_MIN}
+          max={LOGO_RODAPE_ALTURA_MAX}
+          value={altura}
+          onChange={(e) => {
+            const valor = Number(e.target.value);
+            if (Number.isFinite(valor)) setAltura(valor);
+          }}
+          className="w-24"
+        />
+      </div>
+
       <p className="min-w-0 break-words text-xs text-muted-foreground">
         Opcional. Se nenhum logotipo do rodapé for enviado, o rodapé usa o
-        mesmo logotipo do cabeçalho (ou o nome da imobiliária em texto).
+        mesmo logotipo do cabeçalho (ou o nome da imobiliária em texto). A
+        altura (entre {LOGO_RODAPE_ALTURA_MIN}px e {LOGO_RODAPE_ALTURA_MAX}px)
+        vale para o logotipo do rodapé e é independente da altura do
+        cabeçalho — a imagem é ajustada sem distorcer.
       </p>
     </div>
   );

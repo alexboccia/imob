@@ -720,6 +720,13 @@ model OrganizationSettings {
   // (R2, upload por /api/admin/upload), só um segundo slot, opcional. Sem
   // isto, o rodapé cai no MESMO logoUrl do cabeçalho (ver SiteFooter.tsx).
   footerLogoUrl      String?
+  // Altura (px) do logotipo no rodapé — equivalente a logoHeight, mas
+  // independente: o rodapé costuma pedir um tamanho diferente do
+  // cabeçalho (fundo escuro, versão alternativa do logo). null = altura
+  // padrão do rodapé (ver LOGO_RODAPE_ALTURA_PADRAO em src/lib/logo.ts),
+  // que é exatamente o tamanho fixo que o rodapé usava antes deste campo
+  // existir — nenhum tenant muda de aparência por não ter configurado.
+  footerLogoHeight   Int?
   // Imagem de fundo do Hero da Home pública (site/[orgSlug]/page.tsx) —
   // mesmo asset de sempre (R2, upload por /api/admin/upload, pasta
   // "hero", sempre reprocessada/recodificada, ver hero-image-processar.ts).

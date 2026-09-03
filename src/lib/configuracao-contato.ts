@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { LOGO_ALTURA_PADRAO } from "@/lib/logo";
+import { LOGO_ALTURA_PADRAO, LOGO_RODAPE_ALTURA_PADRAO } from "@/lib/logo";
 import { tagConfiguracao } from "@/lib/cache-tags";
 
 async function buscarConfiguracaoContatoSemCache(organizationId: string) {
@@ -18,6 +18,7 @@ async function buscarConfiguracaoContatoSemCache(organizationId: string) {
     logo: settings?.logoUrl ?? null,
     logoAltura: settings?.logoHeight ?? LOGO_ALTURA_PADRAO,
     logoRodape: settings?.footerLogoUrl ?? null,
+    logoRodapeAltura: settings?.footerLogoHeight ?? LOGO_RODAPE_ALTURA_PADRAO,
     heroImage: settings?.heroImageUrl ?? null,
   };
 }

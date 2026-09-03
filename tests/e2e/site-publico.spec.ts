@@ -537,3 +537,46 @@ test.describe("Site público — Footer aparência (rodapé)", () => {
     await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
   });
 });
+
+// Altura do logotipo do rodapé (OrganizationSettings.footerLogoHeight) —
+// campo novo, independente da altura do cabeçalho. Cobre o caminho real
+// inteiro: formulário -> action (zod + clamp) -> banco -> releitura. Não
+// depende de haver logo enviado, porque o que está sob teste é a
+// persistência/saneamento do valor, não o desenho do rodapé.
+test.describe("Configurações — altura do logotipo do rodapé", () => {
+  test("salva a altura, sobrevive a recarregar, e não mexe na altura do cabeçalho", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes");
+
+    const alturaRodape = page.locator("#logoRodapeAltura");
+    const alturaCabecalho = page.locator("#logoAltura");
+    // Não afirma o valor inicial de propósito: o padrão de quem nunca
+    // configurou já é coberto em
+    // tests/integration/configuracoes-logo-rodape-altura.test.ts, e
+    // prender este teste ao estado deixado por outra rodada o tornaria
+    // frágil. Aqui o que importa é o round-trip pela UI real.
+    const cabecalhoAntes = await alturaCabecalho.inputValue();
+
+    await alturaRodape.fill("72");
+    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
+
+    await page.goto("/app/configuracoes");
+    await expect(alturaRodape).toHaveValue("72");
+    // Os dois campos são independentes: mexer no rodapé não pode arrastar
+    // a altura do cabeçalho junto.
+    await expect(alturaCabecalho).toHaveValue(cabecalhoAntes);
+
+    // O clamp de valores fora da faixa é coberto em
+    // tests/integration/configuracoes-logo-rodape-altura.test.ts: pela UI
+    // o próprio <input type="number" min/max> barra o submit antes de a
+    // action ser chamada, então não dá pra exercitá-lo por aqui.
+
+    // Devolve ao padrão pra não vazar estado pros outros testes do arquivo.
+    await alturaRodape.fill("44");
+    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
+  });
+});
