@@ -362,6 +362,17 @@ model Interaction {
   notes      String?
   occurredAt DateTime        @default(now())
 
+  // De onde veio o contato quando ele nasceu no site público: página do
+  // imóvel, página de contato ou "anuncie seu imóvel" (catálogo em
+  // código, ver src/lib/captacao.ts). String e não enum pelo mesmo
+  // motivo do themeId: origens novas não devem exigir migration.
+  //
+  // Nullable e sem default de propósito: interação registrada à mão pelo
+  // corretor no painel não tem origem de site, e as que já existiam
+  // continuam null — nenhuma delas ganha uma origem inventada
+  // retroativamente.
+  origin     String?
+
   @@index([personId])
   @@map("interactions")
 }

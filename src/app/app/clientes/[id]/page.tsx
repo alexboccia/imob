@@ -10,6 +10,7 @@ import { hasModule } from "@/lib/entitlements";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
 import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
 import { buscarSugestoesLocalizacao } from "@/lib/sugestoes-localizacao";
+import { rotuloOrigemCaptacao } from "@/lib/captacao";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -325,10 +326,19 @@ export default async function DetalheClientePage({
               <li key={interacao.id}>
                 <Card>
                   <CardContent className="text-sm">
-                    <p className="font-medium flex items-center gap-2">
+                    <p className="font-medium flex flex-wrap items-center gap-2">
                       <Badge variant="secondary">
                         {TIPO_INTERACAO_LABEL[interacao.type]}
                       </Badge>
+                      {/* Origem só existe em contato vindo do site
+                          público; interação registrada à mão pelo
+                          corretor e as anteriores a este campo não têm
+                          etiqueta, em vez de mostrarem um rótulo vazio. */}
+                      {rotuloOrigemCaptacao(interacao.origin) && (
+                        <Badge variant="outline">
+                          {rotuloOrigemCaptacao(interacao.origin)}
+                        </Badge>
+                      )}
                       {interacao.occurredAt.toLocaleString("pt-BR")}
                     </p>
                     {interacao.property && (

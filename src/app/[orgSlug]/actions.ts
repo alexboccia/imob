@@ -14,6 +14,7 @@ import { verificarLimiteFormulario, normalizarContato, type FormularioTipo } fro
 import { registrarAbuso } from "@/lib/abuse-log";
 import { hashCurto } from "@/lib/hash";
 import { resolverPessoaParaFormularioPublico } from "@/lib/person-dedup";
+import { ORIGENS_CAPTACAO, origemDoContato } from "@/lib/captacao";
 
 // orgSlug chega via .bind(null, orgSlug) nos Client Components que chamam
 // estas actions (ContatoForm/AnuncieForm/FormularioContato) — é input do
@@ -162,6 +163,11 @@ export async function enviarContato(
           propertyId: imovelIdValidado,
           type: "MESSAGE",
           notes: mensagem,
+          // Derivada do imóvel JÁ validado contra esta organização, não
+          // de um campo do formulário: um imovelId de outro tenant é
+          // anulado acima e o contato cai como "página de contato", em
+          // vez de forjar origem de um imóvel que não é desta org.
+          origin: origemDoContato(imovelIdValidado),
         },
       });
     }
@@ -224,12 +230,12 @@ export async function enviarAnuncioProprietario(
     return protecao.erro ? { sucesso: false, erro: protecao.erro } : { sucesso: true };
   }
 
-  await withOrganization(organizationId, async () => {
+  const { conflitoDedup } = await withOrganization(organizationId, async () => {
     // Mesma deduplicação de enviarContato — se a Person já existir (por
     // e-mail ou telefone), só adiciona o role OWNER (sem remover
     // LEAD/CLIENT que já existam); em conflito de identidade, não cria
     // nada, mesma decisão de produto.
-    await resolverPessoaParaFormularioPublico({
+    const resolucao = await resolverPessoaParaFormularioPublico({
       organizationId,
       nome,
       email: email || null,
@@ -238,7 +244,43 @@ export async function enviarAnuncioProprietario(
       source: "WEBSITE",
       notesNaCriacao: `Quer anunciar imóvel: ${descricaoImovel}`,
     });
+
+    // A descrição do imóvel agora vira Interaction, sempre. Antes ela ia
+    // apenas em notesNaCriacao, que só é usada quando a Person é CRIADA:
+    // um proprietário que já tinha contatado a imobiliária antes enviava
+    // a descrição e ela se perdia por completo — sem interação, sem
+    // notes, sem e-mail. O corretor via um lead novo com papel de
+    // proprietário e nenhuma pista do que a pessoa queria anunciar.
+    if (resolucao.tipo !== "conflito") {
+      await prisma.interaction.create({
+        data: {
+          organizationId,
+          personId: resolucao.personId,
+          type: "MESSAGE",
+          notes: `Quer anunciar imóvel: ${descricaoImovel}`,
+          origin: ORIGENS_CAPTACAO.ANUNCIE,
+        },
+      });
+    }
+
+    return { conflitoDedup: resolucao.tipo === "conflito" };
   });
+
+  // E-mail para a imobiliária, como o formulário de contato já fazia.
+  // Sem isto, uma solicitação de anúncio só existia dentro do painel e
+  // ninguém era avisado de que ela chegou.
+  const configContato = await buscarConfiguracaoContato(organizationId);
+  if (configContato.email && (await hasModule(organizationId, "email"))) {
+    await enviarEmailContato({
+      organizationId,
+      para: configContato.email,
+      nomeLead: nome,
+      emailLead: email || null,
+      telefoneLead: telefone,
+      mensagem: `Quer anunciar imóvel: ${descricaoImovel}`,
+      avisoConflitoDedup: conflitoDedup,
+    });
+  }
 
   return { sucesso: true };
 }
