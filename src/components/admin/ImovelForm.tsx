@@ -1,15 +1,12 @@
 "use client";
 
 import { useActionState } from "react";
-import {
-  ESTAGIO_OBRA_LABEL,
-  FINALIDADE_LABEL,
-  STATUS_IMOVEL_LABEL,
-} from "@/lib/format";
+import { FINALIDADE_LABEL, STATUS_IMOVEL_LABEL } from "@/lib/format";
 import { ESTADO_INICIAL_ACAO, type ActionState } from "@/lib/action-result";
 import { MediaUploader, type MidiaItem } from "@/components/admin/MediaUploader";
 import { CamposEndereco } from "@/components/admin/CamposEndereco";
 import { SeletorCaracteristicas } from "@/components/admin/SeletorCaracteristicas";
+import { SecaoLancamentoFields } from "@/components/admin/SecaoLancamentoFields";
 import { BotaoSalvarImovel } from "@/components/admin/BotaoSalvarImovel";
 import { CampoMoeda } from "@/components/admin/CampoMoeda";
 import { ErroCampo } from "@/components/admin/ErroCampo";
@@ -199,13 +196,12 @@ export function ImovelForm({
         </div>
       </div>
 
+      {/* "Lançamento" saiu deste grupo e virou seção própria (abaixo),
+          junto dos campos que só existem por causa dele. Aqui ficam os
+          rótulos que são só marcação comercial, sem campo associado. */}
       <div>
         <Label className="mb-2">Rótulos</Label>
         <div className="flex flex-col gap-2">
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox name="lancamento" defaultChecked={v.lancamento ?? false} />
-            Lançamento
-          </label>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox name="destaque" defaultChecked={v.destaque ?? false} />
             Destaque
@@ -220,61 +216,19 @@ export function ImovelForm({
         </div>
       </div>
 
+      <SecaoLancamentoFields
+        valores={{
+          lancamento: v.lancamento,
+          construtora: v.construtora,
+          estagioObra: v.estagioObra,
+          previsaoEntrega: v.previsaoEntrega,
+        }}
+      />
+
       <label className="flex items-center gap-2 text-sm">
         <Checkbox name="slideshow" defaultChecked={v.slideshow ?? false} />
         Adicionar ao slideshow da página inicial
       </label>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="construtora">Construtora/Incorporadora</Label>
-        <Input
-          id="construtora"
-          name="construtora"
-          defaultValue={v.construtora ?? ""}
-          placeholder="Ex: Cyrela"
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="estagioObra">Evolução da obra</Label>
-          <Select name="estagioObra" defaultValue={v.estagioObra ?? ""}>
-            <SelectTrigger id="estagioObra" className="w-full">
-              <SelectValue>
-                {(valor: string) =>
-                  valor ? (ESTAGIO_OBRA_LABEL[valor] ?? valor) : "Não se aplica"
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">Não se aplica</SelectItem>
-              {Object.entries(ESTAGIO_OBRA_LABEL).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="previsaoEntrega">Previsão de entrega</Label>
-          <Input
-            id="previsaoEntrega"
-            name="previsaoEntrega"
-            type="month"
-            defaultValue={
-              v.previsaoEntrega
-                ? `${v.previsaoEntrega.getUTCFullYear()}-${String(
-                    v.previsaoEntrega.getUTCMonth() + 1
-                  ).padStart(2, "0")}`
-                : ""
-            }
-          />
-          <p className="text-xs text-muted-foreground">
-            Usada quando o estágio ainda não é &quot;Pronto para morar&quot;.
-          </p>
-        </div>
-      </div>
 
       <CamposEndereco
         valoresIniciais={{

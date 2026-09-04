@@ -360,3 +360,111 @@ test.describe("Imóveis", () => {
     expect(avisosDeSelectValue, JSON.stringify(avisos)).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------
+// Cadastro de lançamento (Fase 3.1). Dois testes cobrem o ciclo todo, de
+// propósito: criar e salvar um imóvel é caro, e a lição da fase anterior
+// foi que repetir setup administrativo por asserção degrada o E2E. Cada
+// teste cria UM imóvel e verifica tudo que depende dele.
+// ---------------------------------------------------------------------
+
+test.describe("Imóveis — cadastro de lançamento", () => {
+  const secao = (page: import("@playwright/test").Page) =>
+    page.locator("fieldset").filter({ hasText: "Este imóvel é um lançamento" });
+
+  test("seção de lançamento: fechada por padrão, abre ao marcar e orienta o preenchimento", async ({
+    page,
+  }) => {
+    await page.goto("/app/imoveis/novo");
+    const fs = secao(page);
+    await expect(fs).toBeVisible();
+
+    // Campos da obra não poluem o cadastro de um imóvel comum.
+    await expect(page.locator("#construtora")).toHaveCount(0);
+    await expect(page.locator("#estagioObra")).toHaveCount(0);
+    await expect(page.locator("#previsaoEntrega")).toHaveCount(0);
+
+    await page.getByText("Este imóvel é um lançamento").click();
+    await expect(page.locator("#construtora")).toBeVisible();
+    await expect(page.locator("#estagioObra")).toBeVisible();
+    await expect(page.locator("#previsaoEntrega")).toBeVisible();
+
+    // Sem nada preenchido, explica o que esses campos fazem no site.
+    await expect(fs.getByText("0 de 3 informações preenchidas")).toBeVisible();
+    await expect(fs.getByText(/enriquecem a página pública/)).toBeVisible();
+
+    // A contagem é derivada em runtime, não persistida.
+    await page.locator("#construtora").fill("Construtora Teste");
+    await expect(fs.getByText("1 de 3 informações preenchidas")).toBeVisible();
+    await page.locator("#previsaoEntrega").fill("2027-06");
+    await expect(fs.getByText("2 de 3 informações preenchidas")).toBeVisible();
+    await expect(fs.getByText(/enriquecem a página pública/)).toHaveCount(0);
+  });
+
+  test("lançamento completo: salva, sobrevive ao reload, chega ao site e desmarcar não apaga nada", async ({
+    page,
+  }) => {
+    const titulo = `Lançamento E2E ${Date.now()}`;
+    const construtora = "Construtora E2E Fase 3.1";
+
+    await page.goto("/app/imoveis/novo");
+    await page.locator("#titulo").fill(titulo);
+    await page.locator('input[name="bairro"]').fill("Centro");
+    await page.locator('input[name="cidade"]').fill("São Paulo");
+    await page.locator('select[name="estado"]').selectOption("SP");
+
+    // Novo imóvel nasce como Rascunho (comportamento correto: rascunho
+    // não aparece no site). Publicar é necessário pra este teste chegar
+    // até a página pública.
+    await page.locator("#status").click();
+    await page.getByRole("option", { name: "Disponível" }).click();
+
+    await page.getByText("Este imóvel é um lançamento").click();
+    await page.locator("#construtora").fill(construtora);
+    await page.locator("#previsaoEntrega").fill("2027-06");
+    await page.locator("#estagioObra").click();
+    await page.getByRole("option", { name: /Em construção/ }).click();
+
+    await page.getByRole("button", { name: "Salvar imóvel" }).click();
+    await page.waitForURL(/\/app\/imoveis\/[^/]+\?salvo=1/);
+    const idImovel = new URL(page.url()).pathname.split("/").pop()!;
+
+    // 1) Reload mantém os três valores.
+    await page.goto(`/app/imoveis/${idImovel}`);
+    await expect(page.locator("#construtora")).toHaveValue(construtora);
+    await expect(page.locator("#previsaoEntrega")).toHaveValue("2027-06");
+    await expect(secao(page).getByText("3 de 3 informações preenchidas")).toBeVisible();
+
+    // 2) Os dados chegam à página pública com o mês certo — sem
+    //    deslocamento de timezone (junho não pode virar maio).
+    await page.goto(`/imoveis/${idImovel}`);
+    const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
+    await expect(cabecalho.getByText("Em construção")).toBeVisible();
+    await expect(cabecalho.getByText("Junho de 2027")).toBeVisible();
+    await expect(cabecalho.getByText(construtora)).toBeVisible();
+
+    // 3) Desmarcar "lançamento" NÃO apaga os dados da obra: a seção
+    //    continua aberta porque há conteúdo, e salvar preserva tudo.
+    await page.goto(`/app/imoveis/${idImovel}`);
+    await page.getByText("Este imóvel é um lançamento").click();
+    await expect(page.locator("#construtora")).toHaveValue(construtora);
+    await page.getByRole("button", { name: "Salvar imóvel" }).click();
+    await page.waitForURL(/\/app\/imoveis\/[^/]+\?salvo=1/);
+
+    await page.goto(`/app/imoveis/${idImovel}`);
+    await expect(page.locator("#construtora")).toHaveValue(construtora);
+    await expect(page.locator("#previsaoEntrega")).toHaveValue("2027-06");
+    await expect(secao(page).getByText("3 de 3 informações preenchidas")).toBeVisible();
+
+    // 4) Sem o rótulo, o SELO de lançamento some — mas o destaque de
+    //    obra continua, porque a obra continua em andamento. É a regra
+    //    de imovel-lancamento.ts: estágio em andamento já basta, o
+    //    rótulo é posicionamento comercial e o estágio é fato sobre a
+    //    construção. Desmarcar um não apaga o outro.
+    await page.goto(`/imoveis/${idImovel}`);
+    const cab = page.locator("h1").locator("xpath=ancestor::div[2]");
+    await expect(cab.getByText("Lançamento", { exact: true })).toHaveCount(0);
+    await expect(cab.getByText("Previsão de entrega:")).toBeVisible();
+    await expect(cab.getByText("Junho de 2027")).toBeVisible();
+  });
+});

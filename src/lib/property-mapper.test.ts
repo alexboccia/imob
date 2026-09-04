@@ -200,3 +200,114 @@ describe("midiasParaCriar", () => {
     ]);
   });
 });
+
+// ---------------------------------------------------------------------
+// Campos de lançamento (Fase 3.1). A previsão de entrega vem de um
+// <input type="month">, é gravada como Date e lida de volta pelo
+// formulário e pela página pública — três pontos onde um deslize de
+// timezone move o mês. Estes testes fixam o round-trip.
+// ---------------------------------------------------------------------
+describe("camposImovel — lançamento", () => {
+  function dadosLancamento(
+    overrides: Partial<DadosImovelFormulario> = {}
+  ): DadosImovelFormulario {
+    return {
+      titulo: "Lançamento na planta",
+      tipo: "Apartamento",
+      finalidade: "SALE",
+      status: "AVAILABLE",
+      bairro: "Centro",
+      cidade: "São Paulo",
+      estado: "sp",
+      lancamento: true,
+      destaque: false,
+      oportunidade: false,
+      slideshow: false,
+      caracteristicasImovel: [],
+      caracteristicasCondominio: [],
+      ...overrides,
+    };
+  }
+
+  test("previsão de entrega: 'YYYY-MM' vira o dia 1 do mês certo, em UTC", () => {
+    const campos = camposImovel(dadosLancamento({ previsaoEntrega: "2027-06" }));
+    const data = campos.deliveryForecast!;
+    expect(data.getUTCFullYear()).toBe(2027);
+    expect(data.getUTCMonth()).toBe(5); // junho
+    expect(data.getUTCDate()).toBe(1);
+    expect(data.toISOString()).toBe("2027-06-01T00:00:00.000Z");
+  });
+
+  // O bug que este teste impede: com `new Date(ano, mes-1, 1)` (horário
+  // local), em qualquer fuso negativo a data cai no mês ANTERIOR quando
+  // lida em UTC — "Junho/2027" vira Maio/2027 no formulário e no site.
+  test("nenhum mês é deslocado por timezone — os doze meses fazem round-trip", () => {
+    for (let mes = 1; mes <= 12; mes++) {
+      const valor = `2027-${String(mes).padStart(2, "0")}`;
+      const data = camposImovel(dadosLancamento({ previsaoEntrega: valor }))
+        .deliveryForecast!;
+      const volta = `${data.getUTCFullYear()}-${String(
+        data.getUTCMonth() + 1
+      ).padStart(2, "0")}`;
+      expect(volta, `mês ${valor} não sobreviveu ao round-trip`).toBe(valor);
+    }
+  });
+
+  test("janeiro e dezembro não trocam de ano", () => {
+    const jan = camposImovel(dadosLancamento({ previsaoEntrega: "2028-01" }))
+      .deliveryForecast!;
+    expect(jan.getUTCFullYear()).toBe(2028);
+    expect(jan.getUTCMonth()).toBe(0);
+
+    const dez = camposImovel(dadosLancamento({ previsaoEntrega: "2027-12" }))
+      .deliveryForecast!;
+    expect(dez.getUTCFullYear()).toBe(2027);
+    expect(dez.getUTCMonth()).toBe(11);
+  });
+
+  test("sem previsão preenchida, grava null — nunca uma data inventada", () => {
+    expect(camposImovel(dadosLancamento()).deliveryForecast).toBeNull();
+    expect(
+      camposImovel(dadosLancamento({ previsaoEntrega: "" })).deliveryForecast
+    ).toBeNull();
+  });
+
+  test("construtora com espaços em volta é normalizada", () => {
+    expect(
+      camposImovel(dadosLancamento({ construtora: "  Construtora X  " })).developer
+    ).toBe("Construtora X");
+  });
+
+  // Sem o trim, "   " era gravado como string truthy e virava uma linha
+  // "Construtora:" vazia no cabeçalho público do imóvel.
+  test("construtora só com espaços vira null, não string vazia", () => {
+    expect(camposImovel(dadosLancamento({ construtora: "   " })).developer).toBeNull();
+    expect(camposImovel(dadosLancamento({ construtora: "" })).developer).toBeNull();
+    expect(camposImovel(dadosLancamento()).developer).toBeNull();
+  });
+
+  test("estágio da obra: 'não se aplica' grava null, valor do enum é preservado", () => {
+    expect(camposImovel(dadosLancamento({ estagioObra: "" })).constructionStage).toBeNull();
+    expect(
+      camposImovel(dadosLancamento({ estagioObra: "UNDER_CONSTRUCTION" }))
+        .constructionStage
+    ).toBe("UNDER_CONSTRUCTION");
+  });
+
+  // Os campos de obra são independentes do rótulo no banco: desmarcar
+  // "Lançamento" não pode apagar dado de obra já preenchido.
+  test("desmarcar lançamento não zera os campos de obra", () => {
+    const campos = camposImovel(
+      dadosLancamento({
+        lancamento: false,
+        construtora: "Construtora X",
+        estagioObra: "UNDER_CONSTRUCTION",
+        previsaoEntrega: "2027-06",
+      })
+    );
+    expect(campos.isLaunch).toBe(false);
+    expect(campos.developer).toBe("Construtora X");
+    expect(campos.constructionStage).toBe("UNDER_CONSTRUCTION");
+    expect(campos.deliveryForecast).not.toBeNull();
+  });
+});

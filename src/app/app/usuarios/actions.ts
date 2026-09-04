@@ -11,6 +11,7 @@ import { verificarLimiteUsuarios, LimiteDoPlanoError } from "@/lib/entitlements"
 import { logActivity } from "@/lib/activity-log";
 import { temPapel, PAPEIS_GESTAO_USUARIOS } from "@/lib/authorization";
 import { LIMITE_BIO_PUBLICA, LIMITE_CRECI } from "@/lib/perfil-publico-limites";
+import { urlDeUploadValida } from "@/lib/upload-url";
 import {
   type ActionState,
   erroAcessoNegado,
@@ -181,6 +182,15 @@ export async function atualizarUsuario(
   const parsed = atualizarUsuarioSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return erroValidacao(parsed.error);
   const dados = parsed.data;
+
+  // As fotos vêm de /api/admin/upload (autenticado, por papel, com
+  // validação de arquivo) e voltam num campo escondido do formulário.
+  // Como qualquer campo, uma chamada direta à action poderia mandar
+  // outra URL — daí a checagem contra o host de upload do produto. A
+  // foto pública é a que mais importa aqui: ela é renderizada no site.
+  if (!urlDeUploadValida(dados.foto) || !urlDeUploadValida(dados.perfilPublicoFoto)) {
+    return erroGenerico("Imagem inválida: envie a foto pelo próprio formulário.");
+  }
 
   const organizationId = await requireOrganizationId();
   const membershipAlvo = await prisma.organizationMember.findFirst({

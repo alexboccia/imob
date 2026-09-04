@@ -25,6 +25,15 @@ const MEDIA_TYPE_PARA_TIPO_MIDIA = {
   FLOOR_PLAN: "PLANTA",
 } as const;
 
+// Prisma devolve Decimal (objeto com toString) para colunas monetárias.
+// null continua null — nunca vira 0, que seria "preço zero" em vez de
+// "sem preço".
+function decimalParaNumero(valor: unknown): number | null {
+  if (valor === null || valor === undefined) return null;
+  const n = Number(valor.toString());
+  return Number.isNaN(n) ? null : n;
+}
+
 export default async function EditarImovelPage({
   params,
 }: {
@@ -109,10 +118,16 @@ export default async function EditarImovelPage({
           estado: imovel.state,
           latitude: imovel.latitude,
           longitude: imovel.longitude,
-          preco: imovel.price,
-          precoAluguel: imovel.rentPrice,
-          precoCondominio: imovel.condoFee,
-          precoIptu: imovel.propertyTax,
+          // Decimal do Prisma não é objeto serializável: passá-lo direto
+          // pro formulário (Client Component) faz o React avisar
+          // "Only plain objects can be passed to Client Components" no
+          // console a cada campo de preço preenchido. O formulário já
+          // trata esses valores como número, então a conversão acontece
+          // aqui, na fronteira servidor→cliente.
+          preco: decimalParaNumero(imovel.price),
+          precoAluguel: decimalParaNumero(imovel.rentPrice),
+          precoCondominio: decimalParaNumero(imovel.condoFee),
+          precoIptu: decimalParaNumero(imovel.propertyTax),
           areaTotal: imovel.totalArea,
           areaPrivativa: imovel.privateArea,
           quartos: imovel.bedrooms,

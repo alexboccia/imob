@@ -86,6 +86,11 @@ export function parseImovelFormData(
   };
 }
 
+// "YYYY-MM" do <input type="month"> -> Date em UTC no dia 1. UTC é
+// obrigatório aqui: com Date(ano, mes-1, 1) local, um fuso negativo
+// grava o mês anterior às 21h e "Junho/2027" volta como Maio/2027 na
+// leitura. Quem lê usa getUTC* pelo mesmo motivo (ver
+// SecaoLancamentoFields e imovel-lancamento.ts).
 function parseMesAno(valor: string | undefined): Date | null {
   if (!valor) return null;
   const [ano, mes] = valor.split("-").map(Number);
@@ -133,7 +138,10 @@ export function camposImovel(dados: DadosImovelFormulario) {
     hasSlideshow: dados.slideshow,
     constructionStage: dados.estagioObra || null,
     deliveryForecast: parseMesAno(dados.previsaoEntrega),
-    developer: dados.construtora || null,
+    // trim: é o único campo de texto livre desta seção. Sem ele, um
+    // valor só com espaços era gravado como "   " — truthy no site
+    // público, virando "Construtora:   " no cabeçalho do imóvel.
+    developer: dados.construtora?.trim() || null,
   };
 }
 
