@@ -19,3 +19,13 @@ export const LOGO_RODAPE_ALTURA_MAX = 96;
 export function larguraCaixaLogoRodape(altura: number): number {
   return Math.round(altura * (112 / 44));
 }
+
+// Largura da caixa do logo no CABEÇALHO e nos blocos do site público que
+// reexibem a marca (ver BlocoInstitucional.tsx). Mesma fórmula que o
+// SiteHeader já usava inline (altura × 4, com teto de 280px) — extraída
+// pra que header e blocos comerciais não divirjam quando o tenant muda a
+// altura do logo. Teto existe porque uma logo muito horizontal com altura
+// alta empurraria o menu pra fora da linha.
+export function larguraCaixaLogo(altura: number): number {
+  return Math.min(altura * 4, 280);
+}

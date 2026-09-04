@@ -9,6 +9,32 @@ import { ORG_A, login } from "./helpers";
 // aparece na listagem geral/busca). Ver prisma/seed-e2e.ts.
 const IMOVEL_COM_BADGES = "Apartamento com 2 quartos à venda, 58m² – Santo Amaro";
 
+// Nome público da organização A no seed (prisma/seed-e2e.ts) — o bloco
+// institucional monta o título a partir dele, então o teste confere que o
+// texto vem do TENANT e não de uma string fixa no componente.
+const NOME_ORG_A = process.env.ORG_NAME ?? "Organização E2E A";
+
+// OrganizationSettings é estado GLOBAL do tenant: o seed não o cria e
+// também não o apaga entre rodadas, então um teste que salva contato
+// contamina os seguintes se depender da ordem de execução. Todo teste que
+// se importa com esses campos define explicitamente o estado que espera,
+// pelo painel (que é o caminho real: salvar → invalidar cache → site
+// público), em vez de assumir o que ficou da rodada anterior.
+async function definirContato(
+  page: import("@playwright/test").Page,
+  valores: { whatsapp?: string; telefone?: string; email?: string }
+) {
+  await page.goto("/app/configuracoes");
+  await page.locator("#whatsapp").fill(valores.whatsapp ?? "");
+  await page.locator("#telefone").fill(valores.telefone ?? "");
+  await page.locator("#email").fill(valores.email ?? "");
+  await page.getByRole("button", { name: "Salvar alterações" }).click();
+  // O formulário de Configurações só mostra feedback visível em caso de
+  // ERRO (comportamento pré-existente, ver configuracoes.spec.ts) — o
+  // sinal de conclusão é o botão sair do estado "Salvando...".
+  await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
+}
+
 async function semOverflow(page: import("@playwright/test").Page) {
   return page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 }
@@ -578,5 +604,172 @@ test.describe("Configurações — altura do logotipo do rodapé", () => {
     await alturaRodape.fill("44");
     await page.getByRole("button", { name: "Salvar alterações" }).click();
     await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
+  });
+});
+
+// ---------------------------------------------------------------------
+// Camada comercial da Home (Fase 1): faixa de confiança, captação de
+// proprietário e bloco institucional. O que estes testes protegem, além
+// de "renderizou": que NADA aqui inventa dado. O seed não cria
+// OrganizationSettings, então o estado padrão do site de teste é
+// justamente o pior caso — tenant sem telefone, sem WhatsApp, sem rede
+// social — e é nele que a degradação precisa ser elegante.
+// ---------------------------------------------------------------------
+
+test.describe("Site público — Home comercial (Fase 1)", () => {
+  test("menu principal ganha 'Anuncie seu imóvel' apontando pra rota real, sem perder os três de sempre", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const nav = page.locator("header nav");
+    await expect(nav.getByRole("link", { name: "Comprar" })).toHaveAttribute("href", /finalidade=SALE/);
+    await expect(nav.getByRole("link", { name: "Alugar" })).toHaveAttribute("href", /finalidade=RENT/);
+    await expect(nav.getByRole("link", { name: "Lançamentos" })).toHaveAttribute("href", /lancamento=1/);
+    await expect(nav.getByRole("link", { name: "Anuncie seu imóvel" })).toHaveAttribute(
+      "href",
+      /\/anuncie$/
+    );
+  });
+
+  test("'Anuncie seu imóvel' recebe o mesmo estado ativo dos outros itens", async ({ page }) => {
+    await page.goto("/anuncie");
+    const nav = page.locator("header nav");
+    await expect(nav.locator('a[aria-current="page"]')).toHaveCount(1);
+    await expect(nav.locator('a[aria-current="page"]')).toHaveText("Anuncie seu imóvel");
+  });
+
+  test("faixa de confiança aparece abaixo do hero e não afirma número nenhum", async ({ page }) => {
+    await page.goto("/");
+    const faixa = page.getByRole("region", { name: "Como trabalhamos" });
+    await expect(faixa).toBeVisible();
+    await expect(faixa.locator("li")).toHaveCount(3);
+
+    // Nenhuma estatística inventada: o produto não tem dado agregado real
+    // de imóveis vendidos/clientes/anos de mercado, então a faixa não pode
+    // conter dígito nenhum.
+    const texto = (await faixa.innerText()).trim();
+    expect(texto).not.toMatch(/\d/);
+  });
+
+  test("seção de captação leva ao formulário real de /anuncie", async ({ page }) => {
+    await page.goto("/");
+    const captacao = page.locator("section").filter({ hasText: "Vai vender ou alugar?" }).last();
+    await expect(captacao.getByRole("heading", { name: "Vai vender ou alugar?" })).toBeVisible();
+
+    const cta = captacao.getByRole("link", { name: "Anuncie seu imóvel" });
+    await expect(cta).toHaveAttribute("href", /\/anuncie$/);
+    await cta.click();
+    await page.waitForURL("**/anuncie");
+    await expect(page.getByRole("heading", { name: "Anuncie seu imóvel", level: 1 })).toBeVisible();
+    await expect(page.locator("form")).toBeVisible();
+  });
+
+  test("bloco institucional usa o nome real do tenant e linka pro /contato real", async ({ page }) => {
+    await page.goto("/");
+    const bloco = page.locator("section").filter({ hasText: "Atendimento" }).last();
+    await expect(
+      bloco.getByRole("heading", { name: `Atendimento ${NOME_ORG_A}` })
+    ).toBeVisible();
+
+    const contato = bloco.getByRole("link", { name: "Entrar em contato" });
+    await expect(contato).toHaveAttribute("href", /\/contato$/);
+    await contato.click();
+    await page.waitForURL("**/contato");
+  });
+
+  test("CTAs comerciais são links de verdade, não elementos com role=button", async ({ page }) => {
+    await page.goto("/");
+    for (const nome of ["Anuncie seu imóvel", "Entrar em contato"]) {
+      const link = page.locator("main").getByRole("link", { name: nome });
+      await expect(link.first()).toBeVisible();
+      await expect(link.first()).toHaveAttribute("href", /.+/);
+    }
+  });
+
+  test("sem WhatsApp configurado, a Home não mostra CTA de WhatsApp nem link wa.me quebrado", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    await definirContato(page, {});
+
+    await page.goto("/");
+    await expect(page.locator('main a[href*="wa.me"]')).toHaveCount(0);
+    await expect(page.locator("main").getByText("Falar no WhatsApp")).toHaveCount(0);
+  });
+});
+
+test.describe("Site público — Home comercial: dados reais do tenant", () => {
+  // Configura contato pelo painel (não por escrita direta no banco) para
+  // exercitar o caminho real: salvar → invalidar cache → site público.
+  test("com WhatsApp/telefone/e-mail salvos, a Home mostra os canais do PRÓPRIO tenant", async ({
+    page,
+  }) => {
+    const whatsapp = "+55 (11) 98888-7777";
+    const telefone = "+55 (11) 3333-4444";
+    const email = "atendimento@e2e.test";
+
+    await login(page, ORG_A);
+    try {
+      await definirContato(page, { whatsapp, telefone, email });
+
+      await page.goto("/");
+      const bloco = page.locator("section").filter({ hasText: "Atendimento" }).last();
+      await expect(bloco.getByText(whatsapp)).toBeVisible();
+      await expect(bloco.getByText(telefone)).toBeVisible();
+      await expect(bloco.getByText(email)).toBeVisible();
+
+      // Link montado com os dígitos do número do TENANT — nunca um número
+      // fixo do produto.
+      const wa = page.locator('main a[href*="wa.me"]').first();
+      await expect(wa).toHaveAttribute("href", /wa\.me\/5511988887777/);
+      await expect(page.locator("main").getByText("Falar no WhatsApp").first()).toBeVisible();
+    } finally {
+      // Restaura mesmo se alguma asserção acima falhar: sem isto, uma
+      // falha aqui derruba por tabela os testes de degradação.
+      await definirContato(page, {});
+    }
+  });
+});
+
+test.describe("Site público — Home comercial: responsividade", () => {
+  for (const largura of [375, 768, 1024, 1280, 1440]) {
+    test(`${largura}px: seções comerciais sem overflow horizontal`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.goto("/");
+      await expect(page.locator("section").filter({ hasText: "Vai vender ou alugar?" }).last()).toBeVisible();
+      expect(await semOverflow(page)).toBe(true);
+    });
+  }
+
+  // O quarto item do menu não cabe ao lado do logo entre 640 e 767px — é
+  // por isso que o menu horizontal passou a começar em md (768) e não em
+  // sm (640). Este teste existe pra que voltar o breakpoint pra sm
+  // reapareça como falha, não como header de duas linhas em produção.
+  test("entre 640 e 767px o menu fica no hamburguer, sem quebrar o header em duas linhas", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 700, height: 800 });
+    await page.goto("/");
+    await expect(page.locator("header nav")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Abrir menu" })).toBeVisible();
+
+    const linhas = await page.evaluate(() => {
+      const links = [...document.querySelectorAll("header nav a")];
+      return new Set(links.map((l) => Math.round(l.getBoundingClientRect().top))).size;
+    });
+    expect(linhas).toBeLessThanOrEqual(1);
+  });
+
+  test("768px: menu horizontal volta, com os quatro itens em uma linha só", async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 800 });
+    await page.goto("/");
+    const nav = page.locator("header nav");
+    await expect(nav).toBeVisible();
+    await expect(nav.locator("a")).toHaveCount(4);
+    const linhas = await page.evaluate(() => {
+      const links = [...document.querySelectorAll("header nav a")];
+      return new Set(links.map((l) => Math.round(l.getBoundingClientRect().top))).size;
+    });
+    expect(linhas).toBe(1);
   });
 });

@@ -61,11 +61,18 @@ export async function generateMetadata({
 // sem forçar toda página pública (inclusive /contato, que não tem
 // nenhum dado dinâmico próprio) a renderizar do zero em toda requisição.
 
+// "Anuncie seu imóvel" entra no menu principal ao lado dos três de
+// sempre: é a única rota pública do site que fala com quem TEM imóvel em
+// vez de quem procura, e estava alcançável só por link direto. Aponta pra
+// /[orgSlug]/anuncie, que já existe e funciona (AnuncieForm) — nenhum
+// link novo é inventado aqui. O estado ativo funciona sozinho: o
+// SiteHeader deriva de href + pathname, não de uma lista fixa.
 function navLinks(basePath: string) {
   return [
     { href: `${basePath}/imoveis?finalidade=SALE`, label: "Comprar" },
     { href: `${basePath}/imoveis?finalidade=RENT`, label: "Alugar" },
     { href: `${basePath}/imoveis?lancamento=1`, label: "Lançamentos" },
+    { href: `${basePath}/anuncie`, label: "Anuncie seu imóvel" },
   ];
 }
 

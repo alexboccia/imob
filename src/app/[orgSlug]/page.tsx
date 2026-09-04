@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { ImovelCard } from "@/components/ImovelCard";
 import { HeroHome } from "@/components/HeroHome";
 import { PainelBuscaHome } from "@/components/PainelBuscaHome";
+import { SecaoImoveis } from "@/components/SecaoImoveis";
+import { FaixaConfianca } from "@/components/FaixaConfianca";
+import { SecaoCaptacao } from "@/components/SecaoCaptacao";
+import { BlocoInstitucional } from "@/components/BlocoInstitucional";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
 import { getOrganizationBySlug } from "@/lib/tenant";
@@ -12,8 +14,8 @@ import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
 import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
+import { buscarBranding } from "@/lib/branding";
 import { IMAGEM_HERO_PADRAO } from "@/lib/site-config";
-import { Button } from "@/components/ui/button";
 import { TITULO_SECAO } from "@/lib/site-typography";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -71,43 +73,6 @@ function buscarImoveis(
   });
 }
 
-function SecaoImoveis({
-  titulo,
-  imoveis,
-  verTudoHref,
-  basePath,
-}: {
-  titulo: string;
-  imoveis: ReturnType<typeof paraImovelCard>[];
-  verTudoHref?: string;
-  basePath: string;
-}) {
-  if (imoveis.length === 0) return null;
-
-  return (
-    <section className="mx-auto max-w-6xl px-4 py-12">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className={TITULO_SECAO}>{titulo}</h2>
-        {verTudoHref && (
-          <Button
-            variant="link"
-            className="h-auto p-0"
-            nativeButton={false}
-            render={<Link href={verTudoHref} />}
-          >
-            Ver tudo
-          </Button>
-        )}
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {imoveis.map((imovel) => (
-          <ImovelCard key={imovel.id} imovel={imovel} basePath={basePath} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
 export default async function HomePage({
   params,
 }: {
@@ -120,7 +85,7 @@ export default async function HomePage({
   const basePath = resolverBasePath(orgSlug);
   const ultimosCadastrados = { createdAt: "desc" } as const;
 
-  const [lancamentos, destaques, oportunidades, dadosFiltros, config] =
+  const [lancamentos, destaques, oportunidades, dadosFiltros, config, branding] =
     await withOrganization(organizationId, () =>
       Promise.all([
         buscarImoveis(
@@ -143,8 +108,15 @@ export default async function HomePage({
         ),
         buscarDadosFiltros(organizationId),
         buscarConfiguracaoContato(organizationId),
+        buscarBranding(organizationId),
       ])
     );
+
+  // Mesmo nome público que o header/footer e o <title> já usam (ver
+  // [orgSlug]/layout.tsx): displayName quando configurado, senão o nome
+  // da Organization, que nunca falta. Nenhuma imobiliária é citada em
+  // código — o texto dos blocos comerciais é montado a partir daqui.
+  const nomePublico = branding.displayName ?? organization.name;
 
   const temRotulos =
     lancamentos.length > 0 || destaques.length > 0 || oportunidades.length > 0;
@@ -173,6 +145,8 @@ export default async function HomePage({
           basePath={basePath}
         />
       </HeroHome>
+
+      <FaixaConfianca />
 
       <SecaoImoveis
         titulo="Lançamentos"
@@ -209,6 +183,28 @@ export default async function HomePage({
           basePath={basePath}
         />
       )}
+
+      <SecaoCaptacao
+        basePath={basePath}
+        nome={nomePublico}
+        whatsapp={config.whatsapp}
+      />
+
+      <BlocoInstitucional
+        nome={nomePublico}
+        logo={config.logo}
+        logoAltura={config.logoAltura}
+        telefone={config.telefone}
+        email={config.email}
+        whatsapp={config.whatsapp}
+        redesSociais={{
+          instagram: config.instagram,
+          facebook: config.facebook,
+          youtube: config.youtube,
+          linkedin: config.linkedin,
+        }}
+        basePath={basePath}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { IconeMenu, IconeFechar } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { larguraCaixaLogo } from "@/lib/logo";
 
 type NavLink = { href: string; label: string };
 
@@ -44,7 +45,7 @@ export function SiteHeader({
 }) {
   const [aberto, setAberto] = useState(false);
   const altura = logoAltura && logoAltura > 0 ? logoAltura : 48;
-  const largura = Math.min(altura * 4, 280);
+  const largura = larguraCaixaLogo(altura);
   const headerRef = useRef<HTMLElement>(null);
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -114,7 +115,13 @@ export function SiteHeader({
             que resolvem pra --primary injetada por organização em
             [orgSlug]/layout.tsx: nada hardcoded, acompanha a paleta de
             qualquer tenant. */}
-        <nav className="hidden items-center gap-1 sm:flex">
+        {/* Menu horizontal só a partir de md (768px), não de sm (640px):
+            com o quarto item ("Anuncie seu imóvel") os rótulos deixam de
+            caber ao lado do logo em 640-767px e o nav quebrava em duas
+            linhas, esticando o header. Abaixo de md o mesmo menu aparece
+            no Sheet, que já existia — nenhum link some, muda só onde ele
+            é mostrado. */}
+        <nav className="hidden items-center gap-1 md:flex">
           {navLinks.map((link) => {
             const ativo = estaAtivo(link.href, pathname, searchAtual);
             return (
@@ -141,7 +148,7 @@ export function SiteHeader({
           onClick={() => setAberto((a) => !a)}
           aria-label={aberto ? "Fechar menu" : "Abrir menu"}
           aria-expanded={aberto}
-          className="sm:hidden"
+          className="md:hidden"
         >
           {aberto ? (
             <IconeFechar className="w-6 h-6" />
@@ -158,7 +165,7 @@ export function SiteHeader({
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="sm:hidden overflow-hidden border-t bg-background"
+            className="md:hidden overflow-hidden border-t bg-background"
           >
             <nav className="flex flex-col gap-1 px-4 py-3">
               {navLinks.map((link) => {
