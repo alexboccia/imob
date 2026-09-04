@@ -1074,10 +1074,21 @@ test.describe("Detalhe do imóvel — responsividade e isolamento", () => {
 // finally — publicar é estado global do tenant.
 // ---------------------------------------------------------------------
 
+// A URL de edição do owner é estável dentro de uma rodada (o id do
+// membro vem do seed). Descobrir uma vez e reusar evita passar pela
+// listagem a cada chamada — com ~17 chamadas por rodada, essa navegação
+// extra sozinha custava minutos no CI.
+let urlEdicaoOwner: string | null = null;
+
 async function abrirEdicaoDoOwner(page: import("@playwright/test").Page) {
-  await page.goto("/app/usuarios");
-  await page.getByRole("link", { name: new RegExp(ORG_A.email) }).first().click();
-  await page.waitForURL(/\/app\/usuarios\/.+/);
+  if (urlEdicaoOwner) {
+    await page.goto(urlEdicaoOwner);
+  } else {
+    await page.goto("/app/usuarios");
+    await page.getByRole("link", { name: new RegExp(ORG_A.email) }).first().click();
+    await page.waitForURL(/\/app\/usuarios\/.+/);
+    urlEdicaoOwner = new URL(page.url()).pathname;
+  }
   await expect(page.getByText("Perfil público", { exact: true })).toBeVisible();
 }
 
@@ -1098,7 +1109,11 @@ async function definirPerfilPublico(
   if (marcado !== valores.publicar) {
     await page.getByTestId("perfil-publico-ativo").click();
   }
-  await page.getByRole("button", { name: /^Salvar/ }).click();
+  // Nome EXATO: o botão vira "Salvando..." enquanto a action roda, e um
+  // /^Salvar/ casa os dois estados — durante a transição isso resolve
+  // pra dois elementos (strict mode) ou pro botão já desabilitado, o que
+  // no CI aparece como timeout de 30s em vez de erro claro.
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await page.waitForURL(/\/app\/usuarios$/);
 }
 
@@ -1191,7 +1206,14 @@ test.describe("Perfil público do corretor — WhatsApp", () => {
   const WA_ORG = "+55 (11) 98888-7777";
   const WA_CORRETOR = "11977776666";
 
-  test("corretor publicado COM WhatsApp público: o CTA usa o número dele", async ({ page }) => {
+  // Publicar um perfil e salvar contato são round-trips completos pelo
+  // painel. Este teste cobre as duas asserções que dependem do MESMO
+  // setup — qual número o CTA usa e se a mensagem contextual da Fase 2
+  // sobrevive à troca de destinatário — em vez de montar o cenário duas
+  // vezes.
+  test("corretor publicado COM WhatsApp público: CTA usa o número dele, sem perder a mensagem contextual", async ({
+    page,
+  }) => {
     await login(page, ORG_A);
     try {
       await definirContato(page, { whatsapp: WA_ORG });
@@ -1200,6 +1222,11 @@ test.describe("Perfil público do corretor — WhatsApp", () => {
       await page.goto(URL_IMOVEL);
       const href = await page.locator('a[href*="wa.me"]').first().getAttribute("href");
       expect(href).toContain(`wa.me/${WA_CORRETOR}`);
+
+      const texto = decodeURIComponent(new URL(href!).searchParams.get("text") ?? "");
+      expect(texto).toContain(IMOVEL_COM_BADGES);
+      expect(texto).toMatch(/cód\.\s*\S*100\d+/i);
+      expect(texto).toContain("São Paulo");
     } finally {
       await definirPerfilPublico(page, { publicar: false });
       await definirContato(page, {});
@@ -1258,44 +1285,36 @@ test.describe("Perfil público do corretor — WhatsApp", () => {
     }
   });
 
-  test("a mensagem contextual do imóvel não regride com o perfil publicado", async ({ page }) => {
-    await login(page, ORG_A);
-    try {
-      await definirContato(page, { whatsapp: WA_ORG });
-      await definirPerfilPublico(page, { publicar: true, whatsapp: WA_CORRETOR });
-
-      await page.goto(URL_IMOVEL);
-      const href = await page.locator('a[href*="wa.me"]').first().getAttribute("href");
-      const texto = decodeURIComponent(new URL(href!).searchParams.get("text") ?? "");
-      expect(texto).toContain(IMOVEL_COM_BADGES);
-      expect(texto).toMatch(/cód\.\s*\S*100\d+/i);
-      expect(texto).toContain("São Paulo");
-    } finally {
-      await definirPerfilPublico(page, { publicar: false });
-      await definirContato(page, {});
-    }
-  });
 });
 
 test.describe("Perfil público do corretor — responsividade do card", () => {
-  for (const largura of [375, 768, 1024, 1280, 1440]) {
-    test(`${largura}px: card com perfil publicado não quebra`, async ({ page }) => {
-      await login(page, ORG_A);
-      try {
-        await definirPerfilPublico(page, {
-          publicar: true,
-          creci: "CRECI 54.952-F",
-          bio: "Apresentacao profissional usada para checar o layout do card em varias larguras.",
-        });
+  // Um teste só, publicando UMA vez e variando a viewport: publicar é um
+  // round-trip completo pelo painel (navegar, preencher, salvar,
+  // redirecionar), e repetir isso por breakpoint custava dez saves pra
+  // verificar o que só depende da largura da janela. A cobertura é a
+  // mesma — cada largura continua sendo verificada.
+  test("card com perfil publicado não quebra em nenhuma largura", async ({ page }) => {
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, {
+        publicar: true,
+        creci: "CRECI 54.952-F",
+        bio: "Apresentacao profissional usada para checar o layout do card em varias larguras.",
+      });
+
+      for (const largura of [375, 768, 1024, 1280, 1440]) {
         await page.setViewportSize({ width: largura, height: 900 });
         await page.goto(URL_IMOVEL);
-        await expect(page.getByText("Corretor(a) responsável")).toBeVisible();
-        expect(await semOverflow(page)).toBe(true);
-      } finally {
-        await definirPerfilPublico(page, { publicar: false });
+        await expect(
+          page.getByText("Corretor(a) responsável"),
+          `perfil deveria aparecer em ${largura}px`
+        ).toBeVisible();
+        expect(await semOverflow(page), `overflow em ${largura}px`).toBe(true);
       }
-    });
-  }
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+    }
+  });
 });
 
 // ---------------------------------------------------------------------
