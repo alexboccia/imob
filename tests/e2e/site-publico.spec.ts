@@ -1297,3 +1297,133 @@ test.describe("Perfil público do corretor — responsividade do card", () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------
+// Lançamento / em construção (Fase 3). Mesma rota do detalhe: o que muda
+// é a PRIORIDADE do que aparece primeiro, sempre condicionada a dado
+// real.
+//
+// Três fixtures cobrem os três estados:
+//   - imovelComBadgesOrgA .......... lançamento com ficha completa
+//     (rótulo + obra em andamento + previsão + construtora + ficha)
+//   - imovelLancamentoMinimoOrgA ... rótulo de lançamento e nada mais
+//   - imovelParaEditarOrgA ......... imóvel comum, sem nada de obra
+// ---------------------------------------------------------------------
+
+const URL_LANCAMENTO_MINIMO = `/imoveis/${IDS_E2E.imovelLancamentoMinimoOrgA}`;
+const URL_IMOVEL_PRONTO = `/imoveis/${IDS_E2E.imovelParaEditarOrgA}`;
+
+test.describe("Detalhe — experiência de lançamento", () => {
+  test("lançamento com obra: estágio, previsão e construtora ganham destaque no topo", async ({
+    page,
+  }) => {
+    await page.goto(URL_IMOVEL);
+    const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
+    await expect(cabecalho.getByText("Obra:")).toBeVisible();
+    await expect(cabecalho.getByText("Em construção")).toBeVisible();
+    await expect(cabecalho.getByText("Previsão de entrega:")).toBeVisible();
+    await expect(cabecalho.getByText("Construtora:")).toBeVisible();
+  });
+
+  test("previsão de entrega respeita a granularidade real do dado (mês/ano, nunca dia)", async ({
+    page,
+  }) => {
+    await page.goto(URL_IMOVEL);
+    // deliveryForecast do seed é 2027-06; o formulário admin é um
+    // <input type="month">, então dia nunca é informação real.
+    await expect(page.getByText("Junho de 2027")).toBeVisible();
+    await expect(page.getByText(/\d{1,2} de junho/i)).toHaveCount(0);
+  });
+
+  test("estágio da obra usa os valores reais do enum — sem percentual inventado", async ({
+    page,
+  }) => {
+    await page.goto(URL_IMOVEL);
+    const texto = await page.locator("main").innerText();
+    // O domínio só conhece Na planta / Em construção / Pronto para morar.
+    expect(texto).not.toMatch(/\d+\s*%/);
+    expect(texto).not.toMatch(/conclu[ií]d[oa]s?\s*:/i);
+  });
+
+  test("com obra em andamento, a evolução vem antes da descrição", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    const titulos = await page.locator("main h2").allInnerTexts();
+    const iObra = titulos.findIndex((t) => /Evolução da obra/.test(t));
+    const iDescricao = titulos.indexOf("Descrição");
+    expect(iObra).toBeGreaterThanOrEqual(0);
+    expect(iObra).toBeLessThan(iDescricao);
+  });
+
+  test("resumo comercial mostra atributos reais e nenhum contador em zero", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    const resumo = page.getByRole("region", { name: "Resumo do imóvel" });
+    await expect(resumo).toBeVisible();
+    await expect(resumo.getByText("52 m²")).toBeVisible();
+    // suites = 0 no seed.
+    await expect(resumo.getByText("Suítes")).toHaveCount(0);
+    // Sem duplicar o que já está em destaque no cabeçalho.
+    await expect(resumo.getByText("Entrega")).toHaveCount(0);
+  });
+
+  test("lançamento MÍNIMO: rótulo aparece, mas nenhum bloco vazio é criado", async ({ page }) => {
+    await page.goto(URL_LANCAMENTO_MINIMO);
+    await expect(page.getByText("Lançamento", { exact: true }).first()).toBeVisible();
+
+    const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
+    await expect(cabecalho.getByText("Obra:")).toHaveCount(0);
+    await expect(cabecalho.getByText("Previsão de entrega:")).toHaveCount(0);
+    await expect(cabecalho.getByText("Construtora:")).toHaveCount(0);
+
+    await expect(page.getByRole("heading", { name: /Evolução da obra/ })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Plantas e imagens" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Resumo do imóvel" })).toHaveCount(0);
+  });
+
+  test("imóvel comum NÃO recebe a UI de lançamento", async ({ page }) => {
+    await page.goto(URL_IMOVEL_PRONTO);
+    const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
+    await expect(cabecalho.getByText("Obra:")).toHaveCount(0);
+    await expect(cabecalho.getByText("Previsão de entrega:")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: /Evolução da obra/ })).toHaveCount(0);
+  });
+
+  test("sem vídeo cadastrado, nenhum player ou botão de vídeo é renderizado", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    await expect(page.locator("#videos")).toHaveCount(0);
+  });
+
+  test("375px: o lançamento completo não estoura a viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 900 });
+    await page.goto(URL_IMOVEL);
+    await expect(page.getByRole("heading", { name: /Evolução da obra/ })).toBeVisible();
+    expect(await semOverflow(page)).toBe(true);
+  });
+});
+
+// Trava semântica: o domínio NÃO tem empreendimento nem unidades — cada
+// Property é um imóvel independente (auditado na Fase 3). A seção de
+// relacionados é proximidade geográfica, e chamá-la de "outras unidades"
+// afirmaria uma relação que não existe no banco. Este teste existe pra
+// que essa regressão apareça como falha, e não como texto plausível.
+test.describe("Detalhe — relacionados não são 'unidades'", () => {
+  for (const [nome, url] of [
+    ["lançamento", URL_IMOVEL],
+    ["lançamento mínimo", URL_LANCAMENTO_MINIMO],
+    ["imóvel comum", URL_IMOVEL_PRONTO],
+  ] as const) {
+    test(`${nome}: nada é rotulado como unidade de um empreendimento`, async ({ page }) => {
+      await page.goto(url);
+      const texto = await page.locator("main").innerText();
+      expect(texto).not.toMatch(/outras unidades/i);
+      expect(texto).not.toMatch(/unidades dispon/i);
+      expect(texto).not.toMatch(/a partir de/i);
+    });
+  }
+
+  test("a seção de relacionados mantém o rótulo semanticamente correto", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    await expect(
+      page.getByRole("heading", { name: "Imóveis próximos que você pode gostar" })
+    ).toBeVisible();
+  });
+});

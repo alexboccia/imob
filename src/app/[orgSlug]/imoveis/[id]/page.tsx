@@ -35,7 +35,14 @@ import {
   CaracteristicasCondominio,
 } from "@/components/imovel/CaracteristicasImovel";
 import { CardContatoImovel } from "@/components/imovel/CardContatoImovel";
+import { ResumoComercialImovel } from "@/components/imovel/ResumoComercialImovel";
 import { BarraCtaImovel } from "@/components/imovel/BarraCtaImovel";
+import {
+  ehLancamento,
+  estaEmObra,
+  previsaoEntregaPorExtenso,
+  rotuloEstagioObra,
+} from "@/lib/imovel-lancamento";
 import { Badge } from "@/components/ui/badge";
 import { TITULO_DETALHE, TITULO_BLOCO, TITULO_SECAO } from "@/lib/site-typography";
 
@@ -246,6 +253,17 @@ export default async function DetalheImovelPage({
   // formulário do card, em vez de duplicar o formulário na barra.
   const idFormulario = "contato-imovel";
 
+  // Lançamento/em construção: mesma rota, mesma composição de sempre —
+  // o que muda é a PRIORIDADE. Prazo de entrega, estágio e construtora
+  // deixam de ser metadado no rodapé do cabeçalho e sobem, porque são
+  // exatamente o que decide a compra de um imóvel que ainda não existe.
+  // Tudo continua condicionado a dado real: sem estágio, sem previsão ou
+  // sem construtora cadastrados, cada peça simplesmente não aparece.
+  const lancamento = ehLancamento(imovel);
+  const estagioObra = rotuloEstagioObra(imovel);
+  const previsaoEntrega = previsaoEntregaPorExtenso(imovel.deliveryForecast);
+  const emObra = estaEmObra(imovel);
+
   return (
     <>
       {/* Hierarquia do topo: tipo/finalidade e rótulos primeiro (o que o
@@ -284,12 +302,46 @@ export default async function DetalheImovelPage({
           {enderecoCompleto ? `${enderecoCompleto}, ` : ""}
           {imovel.city} - {imovel.state}
         </p>
+
+        {/* Num lançamento, estágio e prazo saem do metadado e viram
+            informação de primeira linha: quem olha um imóvel que ainda
+            não existe decide por "quando fica pronto" tanto quanto por
+            preço. Cada item só existe se o campo estiver preenchido —
+            estágio vem do enum real (três valores, sem percentual) e a
+            entrega respeita a granularidade mês/ano do formulário. */}
+        {lancamento && (estagioObra || previsaoEntrega || imovel.developer) && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+            {estagioObra && (
+              <p className="text-gray-700">
+                <span className="text-gray-500">Obra:</span>{" "}
+                <strong className="font-semibold">{estagioObra}</strong>
+              </p>
+            )}
+            {previsaoEntrega && (
+              <p className="text-gray-700">
+                <span className="text-gray-500">Previsão de entrega:</span>{" "}
+                <strong className="font-semibold">{previsaoEntrega}</strong>
+              </p>
+            )}
+            {imovel.developer && (
+              <p className="text-gray-700">
+                <span className="text-gray-500">Construtora:</span>{" "}
+                <strong className="font-semibold">{imovel.developer}</strong>
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
           <span>
             Cód.{" "}
             {formatarCodigoImovel(imovel.code, configContato.codigoImovelPrefixo)}
           </span>
-          {imovel.developer && (
+          {/* Construtora continua aqui SÓ pra imóvel que não é lançamento
+              (o campo é opcional e pode estar preenchido de qualquer
+              forma) — no lançamento ela já apareceu acima, e repetir
+              seria ruído. */}
+          {!lancamento && imovel.developer && (
             <span>Responsável pela obra: {imovel.developer}</span>
           )}
           {imovel.publishedAt && (
@@ -316,6 +368,20 @@ export default async function DetalheImovelPage({
           (ver globals.css), não aqui: o rodapé fica fora deste container
           e também precisa escapar da barra. */}
       <div className="mx-auto max-w-6xl px-4 py-10">
+      {/* Leitura rápida logo abaixo da galeria: atributos físicos do
+          imóvel, e some por inteiro quando não há nenhum deles. Obra e
+          entrega ficam DE FORA de propósito — já aparecem em destaque no
+          cabeçalho e voltam, com contexto, na timeline logo abaixo;
+          repetir aqui seria a mesma informação três vezes na mesma tela. */}
+      <ResumoComercialImovel
+        totalArea={imovel.totalArea}
+        privateArea={imovel.privateArea}
+        bedrooms={imovel.bedrooms}
+        suites={imovel.suites}
+        bathrooms={imovel.bathrooms}
+        parkingSpots={imovel.parkingSpots}
+      />
+
       {videos.length > 0 && (
         <div id="videos" className="mt-6 space-y-4 scroll-mt-6">
           {videos.map((video) => (
@@ -337,6 +403,19 @@ export default async function DetalheImovelPage({
           cobre a conversão. */}
       <div className="mt-10 grid grid-cols-1 gap-8 lg:grid-cols-3">
         <div className="space-y-8 lg:col-span-2">
+          {/* Com obra em andamento, a evolução vem ANTES da descrição:
+              é a pergunta que o visitante faz primeiro num imóvel que
+              ainda está sendo construído. Pronto (ou sem estágio
+              cadastrado), o bloco continua na posição de sempre, mais
+              abaixo — ver EvolucaoObra adiante, que só renderiza uma vez
+              porque a condição das duas posições é mutuamente exclusiva. */}
+          {emObra && (
+            <EvolucaoObra
+              estagioObra={imovel.constructionStage}
+              previsaoEntrega={imovel.deliveryForecast}
+            />
+          )}
+
           {imovel.description && (
             <section>
               <h2 className={`${TITULO_BLOCO} mb-3`}>Descrição</h2>
@@ -353,10 +432,12 @@ export default async function DetalheImovelPage({
 
           <CaracteristicasCondominio itens={imovel.condoFeatures} />
 
-          <EvolucaoObra
-            estagioObra={imovel.constructionStage}
-            previsaoEntrega={imovel.deliveryForecast}
-          />
+          {!emObra && (
+            <EvolucaoObra
+              estagioObra={imovel.constructionStage}
+              previsaoEntrega={imovel.deliveryForecast}
+            />
+          )}
 
           {plantas.length > 0 && (
             <div>

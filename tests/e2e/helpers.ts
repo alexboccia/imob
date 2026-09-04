@@ -41,6 +41,12 @@ export const IDS_E2E = {
   // rentPrice e sem condomínio, IPTU, obra nem foto, usado pra provar que
   // cada bloco opcional da página some quando o dado não existe.
   imovelAluguelOrgA: "e2e-imovel-aluguel-a",
+  // Fase 3 — lançamento MÍNIMO: tem o rótulo "Lançamento" e nada mais
+  // (sem estágio de obra, previsão, construtora, planta ou
+  // característica). Contraponto do imovelComBadgesOrgA, que tem a ficha
+  // completa: juntos provam que cada bloco da experiência de lançamento
+  // aparece por dado real e some sozinho quando o dado não existe.
+  imovelLancamentoMinimoOrgA: "e2e-imovel-comercial-a",
 };
 
 // Fase P.10 — mesmo valor de prisma/seed-e2e.ts (duplicado de propósito,

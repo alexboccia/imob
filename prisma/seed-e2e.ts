@@ -163,6 +163,7 @@ async function garantirImovel(opcoes: {
   responsibleMemberId?: string | null;
   condoFee?: number | null;
   propertyTax?: number | null;
+  developer?: string | null;
 }) {
   // update reseta os mesmos campos do create — specs de edição (ex: "editar
   // imóvel") mudam o título do imóvel seedado, então sem isso o seed
@@ -196,6 +197,7 @@ async function garantirImovel(opcoes: {
     responsibleMemberId: opcoes.responsibleMemberId ?? null,
     condoFee: opcoes.condoFee ?? null,
     propertyTax: opcoes.propertyTax ?? null,
+    developer: opcoes.developer ?? null,
   } as const;
 
   return prisma.property.upsert({
@@ -391,6 +393,10 @@ async function main() {
     // renderizado ser determinístico entre rodadas.
     constructionStage: "UNDER_CONSTRUCTION",
     deliveryForecast: new Date("2027-06-01T00:00:00.000Z"),
+    // String livre (Property.developer, "Construtora/Incorporadora" no
+    // formulário) — nome fictício de fixture, não uma entidade do
+    // domínio: o projeto não tem model de construtora.
+    developer: "Construtora E2E",
     // Único imóvel do seed com a ficha completa — sem isto, descrição,
     // características, condomínio e custos nunca renderizavam em teste
     // nenhum, e a página de detalhe era exercitada só no seu estado mais
@@ -444,6 +450,12 @@ async function main() {
     organizationId: orgA.organization.id,
     title: "Sala comercial para alugar, 32m² – Centro",
     type: "Sala Comercial",
+    // Fase 3 — lançamento MÍNIMO: tem o rótulo comercial e nada mais
+    // (sem estágio de obra, sem previsão de entrega, sem construtora,
+    // sem planta, sem características). É o contraponto do imóvel de
+    // badges e serve pra provar que cada bloco opcional da experiência
+    // de lançamento some sozinho em vez de virar seção vazia.
+    isLaunch: true,
   });
 
   await garantirTipoImovel({ organizationId: orgAgenda.organization.id, name: "Apartamento" });

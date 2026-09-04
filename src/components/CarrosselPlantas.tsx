@@ -11,6 +11,7 @@ import {
   IconeChevronDireito,
   IconeFechar,
 } from "@/components/icons";
+import { TITULO_BLOCO } from "@/lib/site-typography";
 
 type Planta = { id: string; url: string };
 
@@ -39,7 +40,10 @@ export function CarrosselPlantas({ plantas }: { plantas: Planta[] }) {
 
   return (
     <div>
-      <h2 className="font-semibold mb-4">Plantas e imagens</h2>
+      {/* TITULO_BLOCO: mesmo peso dos demais títulos de seção do detalhe
+          (Descrição, Características, Localização) — antes era um
+          font-semibold solto, menor que os vizinhos. */}
+      <h2 className={`${TITULO_BLOCO} mb-4`}>Plantas e imagens</h2>
 
       <div className="flex items-center justify-center gap-4">
         {plantas.length > 1 && (
