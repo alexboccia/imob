@@ -1060,3 +1060,240 @@ test.describe("Detalhe do imóvel — responsividade e isolamento", () => {
     expect(resposta?.status()).toBe(404);
   });
 });
+
+// ---------------------------------------------------------------------
+// Perfil público do corretor (Fase 2.1) — regra de PRIVACIDADE.
+//
+// O seed deixa o imóvel com badges sob responsabilidade do OWNER da
+// organização, sem perfil público: é o pior caso de propósito. Antes
+// desta fase esse membro era publicado automaticamente no site (o nome do
+// usuário administrativo aparecia como "Corretor(a) responsável") só por
+// ser o responsável pelo imóvel.
+//
+// Os testes que publicam alguém fazem isso pelo painel e restauram em
+// finally — publicar é estado global do tenant.
+// ---------------------------------------------------------------------
+
+async function abrirEdicaoDoOwner(page: import("@playwright/test").Page) {
+  await page.goto("/app/usuarios");
+  await page.getByRole("link", { name: new RegExp(ORG_A.email) }).first().click();
+  await page.waitForURL(/\/app\/usuarios\/.+/);
+  await expect(page.getByText("Perfil público", { exact: true })).toBeVisible();
+}
+
+async function definirPerfilPublico(
+  page: import("@playwright/test").Page,
+  valores: { publicar: boolean; creci?: string; bio?: string; whatsapp?: string }
+) {
+  await abrirEdicaoDoOwner(page);
+  await page.locator("#perfilPublicoCreci").fill(valores.creci ?? "");
+  await page.locator("#perfilPublicoBio").fill(valores.bio ?? "");
+  await page.locator("#perfilPublicoWhatsapp").fill(valores.whatsapp ?? "");
+
+  const marcado =
+    (await page
+      .getByTestId("perfil-publico-ativo")
+      .locator('[role="checkbox"]')
+      .getAttribute("aria-checked")) === "true";
+  if (marcado !== valores.publicar) {
+    await page.getByTestId("perfil-publico-ativo").click();
+  }
+  await page.getByRole("button", { name: /^Salvar/ }).click();
+  await page.waitForURL(/\/app\/usuarios$/);
+}
+
+test.describe("Perfil público do corretor — privacidade", () => {
+  test("membro existente nasce NÃO publicado, mesmo sendo OWNER e responsável pelo imóvel", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    await abrirEdicaoDoOwner(page);
+    await expect(
+      page.getByTestId("perfil-publico-ativo").locator('[role="checkbox"]')
+    ).toHaveAttribute("aria-checked", "false");
+  });
+
+  test("responsável sem opt-in: nenhuma identidade pessoal no detalhe do imóvel", async ({
+    page,
+  }) => {
+    await page.goto(URL_IMOVEL);
+    // O rótulo que antes acompanhava o nome do usuário administrativo.
+    await expect(page.getByText("Corretor(a) responsável")).toHaveCount(0);
+
+    // E-mail de login jamais chega ao HTML público por causa desta feature.
+    const html = await page.content();
+    expect(html).not.toContain(ORG_A.email);
+  });
+
+  test("papel OWNER/ADMIN não publica ninguém automaticamente", async ({ page }) => {
+    // O responsável do imóvel É o OWNER da organização (ver seed-e2e.ts).
+    // Se papel implicasse publicação, o bloco apareceria aqui.
+    await page.goto(URL_IMOVEL);
+    await expect(page.getByText("Corretor(a) responsável")).toHaveCount(0);
+  });
+
+  test("dados preenchidos SEM publicar não aparecem no site", async ({ page }) => {
+    const creci = "CRECI 11.111-J";
+    const bio = "Apresentacao que nao deve ser publicada.";
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, { publicar: false, creci, bio, whatsapp: "11955554444" });
+
+      await page.goto(URL_IMOVEL);
+      const html = await page.content();
+      expect(html).not.toContain(creci);
+      expect(html).not.toContain(bio);
+      expect(html).not.toContain("11955554444");
+      await expect(page.getByText("Corretor(a) responsável")).toHaveCount(0);
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+    }
+  });
+
+  test("com opt-in, a identidade comercial aparece; ao despublicar, some sem perder os dados", async ({
+    page,
+  }) => {
+    const creci = "CRECI 54.952-F";
+    const bio = "Atuo com imoveis residenciais na zona sul.";
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, { publicar: true, creci, bio });
+
+      await page.goto(URL_IMOVEL);
+      await expect(page.getByText("Corretor(a) responsável")).toBeVisible();
+      await expect(page.getByText(creci)).toBeVisible();
+      await expect(page.getByText(bio)).toBeVisible();
+
+      // Despublicar sem tocar nos campos: some do site...
+      await definirPerfilPublico(page, { publicar: false, creci, bio });
+      await page.goto(URL_IMOVEL);
+      await expect(page.getByText("Corretor(a) responsável")).toHaveCount(0);
+      expect(await page.content()).not.toContain(creci);
+
+      // ...mas os dados continuam salvos no painel.
+      await abrirEdicaoDoOwner(page);
+      await expect(page.locator("#perfilPublicoCreci")).toHaveValue(creci);
+      await expect(page.locator("#perfilPublicoBio")).toHaveValue(bio);
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+    }
+  });
+
+  test("perfil de outro tenant nunca aparece no site desta organização", async ({ page }) => {
+    // O imóvel da organização B não é servido aqui em nenhuma hipótese,
+    // então nem o membro dela pode alcançar esta página.
+    const resposta = await page.goto(`/imoveis/${IDS_E2E.imovelOrgB}`);
+    expect(resposta?.status()).toBe(404);
+  });
+});
+
+test.describe("Perfil público do corretor — WhatsApp", () => {
+  const WA_ORG = "+55 (11) 98888-7777";
+  const WA_CORRETOR = "11977776666";
+
+  test("corretor publicado COM WhatsApp público: o CTA usa o número dele", async ({ page }) => {
+    await login(page, ORG_A);
+    try {
+      await definirContato(page, { whatsapp: WA_ORG });
+      await definirPerfilPublico(page, { publicar: true, whatsapp: WA_CORRETOR });
+
+      await page.goto(URL_IMOVEL);
+      const href = await page.locator('a[href*="wa.me"]').first().getAttribute("href");
+      expect(href).toContain(`wa.me/${WA_CORRETOR}`);
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+      await definirContato(page, {});
+    }
+  });
+
+  test("corretor publicado SEM WhatsApp público: cai no número da imobiliária", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    try {
+      await definirContato(page, { whatsapp: WA_ORG });
+      await definirPerfilPublico(page, { publicar: true, whatsapp: "" });
+
+      await page.goto(URL_IMOVEL);
+      const href = await page.locator('a[href*="wa.me"]').first().getAttribute("href");
+      expect(href).toContain("wa.me/5511988887777");
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+      await definirContato(page, {});
+    }
+  });
+
+  test("corretor NÃO publicado: o WhatsApp dele nunca é usado, nem o público", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    try {
+      await definirContato(page, { whatsapp: WA_ORG });
+      await definirPerfilPublico(page, { publicar: false, whatsapp: WA_CORRETOR });
+
+      await page.goto(URL_IMOVEL);
+      const href = await page.locator('a[href*="wa.me"]').first().getAttribute("href");
+      expect(href).toContain("wa.me/5511988887777");
+      expect(href).not.toContain(WA_CORRETOR);
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+      await definirContato(page, {});
+    }
+  });
+
+  test("sem WhatsApp em lugar nenhum: sem CTA, mas o formulário continua", async ({ page }) => {
+    await login(page, ORG_A);
+    try {
+      await definirContato(page, {});
+      await definirPerfilPublico(page, { publicar: true, whatsapp: "" });
+
+      await page.goto(URL_IMOVEL);
+      await expect(page.locator('a[href*="wa.me"]')).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Enviar mensagem" })).toBeVisible();
+      // A identidade do profissional continua aparecendo — o que sumiu
+      // foi só o canal que não existe.
+      await expect(page.getByText("Corretor(a) responsável")).toBeVisible();
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+    }
+  });
+
+  test("a mensagem contextual do imóvel não regride com o perfil publicado", async ({ page }) => {
+    await login(page, ORG_A);
+    try {
+      await definirContato(page, { whatsapp: WA_ORG });
+      await definirPerfilPublico(page, { publicar: true, whatsapp: WA_CORRETOR });
+
+      await page.goto(URL_IMOVEL);
+      const href = await page.locator('a[href*="wa.me"]').first().getAttribute("href");
+      const texto = decodeURIComponent(new URL(href!).searchParams.get("text") ?? "");
+      expect(texto).toContain(IMOVEL_COM_BADGES);
+      expect(texto).toMatch(/cód\.\s*\S*100\d+/i);
+      expect(texto).toContain("São Paulo");
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+      await definirContato(page, {});
+    }
+  });
+});
+
+test.describe("Perfil público do corretor — responsividade do card", () => {
+  for (const largura of [375, 768, 1024, 1280, 1440]) {
+    test(`${largura}px: card com perfil publicado não quebra`, async ({ page }) => {
+      await login(page, ORG_A);
+      try {
+        await definirPerfilPublico(page, {
+          publicar: true,
+          creci: "CRECI 54.952-F",
+          bio: "Apresentacao profissional usada para checar o layout do card em varias larguras.",
+        });
+        await page.setViewportSize({ width: largura, height: 900 });
+        await page.goto(URL_IMOVEL);
+        await expect(page.getByText("Corretor(a) responsável")).toBeVisible();
+        expect(await semOverflow(page)).toBe(true);
+      } finally {
+        await definirPerfilPublico(page, { publicar: false });
+      }
+    });
+  }
+});

@@ -3,8 +3,9 @@ import { FormularioContato } from "@/components/FormularioContato";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
-import { IconeWhatsApp } from "@/components/icons";
+import { IconePessoa, IconeWhatsApp } from "@/components/icons";
 import { formatarPreco } from "@/lib/format";
+import type { CorretorPublico } from "@/lib/perfil-publico-corretor";
 
 // Card lateral de conversão do detalhe do imóvel. A hierarquia é
 // deliberada — preço, CTA de WhatsApp, divisor, formulário — porque é
@@ -22,9 +23,7 @@ export type ValoresImovel = {
   purpose: string;
 };
 
-export type ResponsavelImovel = {
-  user: { name: string; avatarUrl: string | null };
-} | null;
+
 
 // Valores só aparecem quando existem de verdade. Nada de "sob consulta"
 // inventado para condomínio/IPTU: sem o campo preenchido, a linha some.
@@ -77,13 +76,60 @@ export function ValoresDoImovel({ imovel }: { imovel: ValoresImovel }) {
   );
 }
 
+// Apresentação compacta: foto, nome, CRECI e o papel. A apresentação
+// (bio) entra em texto pequeno e limitado a três linhas — o imóvel
+// continua sendo o produto da página, e uma bio longa aqui empurraria o
+// formulário pra fora da tela.
+function IdentidadeCorretor({ corretor }: { corretor: CorretorPublico }) {
+  return (
+    <div className="border-t pt-4">
+      <div className="flex items-center gap-3">
+        <span className="relative size-11 shrink-0 overflow-hidden rounded-full border bg-secondary">
+          {corretor.foto ? (
+            <Image
+              src={corretor.foto}
+              alt={`Foto de ${corretor.nome}`}
+              fill
+              sizes="44px"
+              className="object-cover"
+            />
+          ) : (
+            // Placeholder neutro, nunca as iniciais do usuário interno:
+            // sem foto pública enviada, não há foto pra mostrar.
+            <span
+              aria-hidden
+              className="flex size-full items-center justify-center text-primary"
+            >
+              <IconePessoa className="size-5" />
+            </span>
+          )}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-gray-900">
+            {corretor.nome}
+          </span>
+          <span className="block text-xs text-gray-500">
+            {corretor.creci ? `${corretor.creci} · ` : ""}Corretor(a)
+            responsável
+          </span>
+        </span>
+      </div>
+      {corretor.bio && (
+        <p className="mt-3 line-clamp-3 text-xs leading-relaxed text-gray-600">
+          {corretor.bio}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function CardContatoImovel({
   imovel,
   imovelId,
   orgSlug,
   whatsappHref,
   mensagemFormulario,
-  responsavel,
+  corretor,
   idFormulario,
 }: {
   imovel: ValoresImovel;
@@ -95,7 +141,10 @@ export function CardContatoImovel({
   // pra baixo.
   whatsappHref: string | null;
   mensagemFormulario: string;
-  responsavel: ResponsavelImovel;
+  // null = nenhum profissional autorizado a aparecer (ver
+  // resolverCorretorPublico). O card degrada pra identidade
+  // institucional simplesmente omitindo o bloco.
+  corretor: CorretorPublico | null;
   idFormulario: string;
 }) {
   return (
@@ -119,38 +168,14 @@ export function CardContatoImovel({
           </a>
         )}
 
-        {/* Responsável pelo anúncio: dado que a página já exibia, mantido
-            como está e em formato compacto pra não separar o preço do
-            formulário. Nada NOVO de OrganizationMember/User é publicado
-            aqui — publicar corretor de propósito depende de um campo de
-            autorização que o schema ainda não tem. */}
-        {responsavel && (
-          <div className="flex items-center gap-3 border-t pt-4">
-            <span className="relative size-11 shrink-0 overflow-hidden rounded-full border bg-gray-100">
-              {responsavel.user.avatarUrl ? (
-                <Image
-                  src={responsavel.user.avatarUrl}
-                  alt={responsavel.user.name}
-                  fill
-                  sizes="44px"
-                  className="object-cover"
-                />
-              ) : (
-                <span className="flex size-full items-center justify-center bg-primary font-semibold text-primary-foreground">
-                  {responsavel.user.name.charAt(0).toUpperCase()}
-                </span>
-              )}
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-medium">
-                {responsavel.user.name}
-              </span>
-              <span className="block text-xs text-gray-500">
-                Corretor(a) responsável
-              </span>
-            </span>
-          </div>
-        )}
+        {/* Identidade comercial do profissional — só quando resolverCorretorPublico
+            devolveu alguém, ou seja, só com opt-in explícito. Sem perfil
+            publicado este bloco inteiro não existe e o card mostra apenas
+            preço, CTA e formulário, que já são a identidade da própria
+            imobiliária (logo e nome estão no cabeçalho e no rodapé do
+            site). Antes daqui, o nome do usuário administrativo era
+            publicado automaticamente por ser responsável pelo imóvel. */}
+        {corretor && <IdentidadeCorretor corretor={corretor} />}
 
         <div id={idFormulario} className="space-y-3 border-t pt-4 scroll-mt-24">
           <p className="text-sm font-medium">Enviar mensagem</p>

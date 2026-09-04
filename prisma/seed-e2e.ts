@@ -160,6 +160,7 @@ async function garantirImovel(opcoes: {
   parkingSpots?: number | null;
   propertyFeatures?: string[];
   condoFeatures?: string[];
+  responsibleMemberId?: string | null;
   condoFee?: number | null;
   propertyTax?: number | null;
 }) {
@@ -192,6 +193,7 @@ async function garantirImovel(opcoes: {
     parkingSpots: opcoes.parkingSpots ?? null,
     propertyFeatures: opcoes.propertyFeatures ?? [],
     condoFeatures: opcoes.condoFeatures ?? [],
+    responsibleMemberId: opcoes.responsibleMemberId ?? null,
     condoFee: opcoes.condoFee ?? null,
     propertyTax: opcoes.propertyTax ?? null,
   } as const;
@@ -406,6 +408,12 @@ async function main() {
     condoFeatures: ["Portaria 24 horas", "Salão de festas"],
     condoFee: 850,
     propertyTax: 320,
+    // Responsável é o OWNER da organização, DE PROPÓSITO e sem perfil
+    // público habilitado: é o cenário que prova a regra de privacidade —
+    // ser responsável pelo imóvel (e ainda por cima ser OWNER) não
+    // publica ninguém no site. O caso publicado é montado pelos próprios
+    // testes, pelo painel, e desfeito no fim.
+    responsibleMemberId: orgA.membro.id,
   });
   await garantirImovel({
     id: "e2e-imovel-org-b",

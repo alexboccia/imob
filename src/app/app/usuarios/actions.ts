@@ -10,6 +10,7 @@ import { requireOrganizationId } from "@/lib/tenant";
 import { verificarLimiteUsuarios, LimiteDoPlanoError } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
 import { temPapel, PAPEIS_GESTAO_USUARIOS } from "@/lib/authorization";
+import { LIMITE_BIO_PUBLICA, LIMITE_CRECI } from "@/lib/perfil-publico-limites";
 import {
   type ActionState,
   erroAcessoNegado,
@@ -140,7 +141,31 @@ const atualizarUsuarioSchema = z.object({
     .min(6, "A nova senha precisa ter ao menos 6 caracteres.")
     .optional()
     .or(z.literal("")),
+  // Perfil público do profissional. Aceita os campos SEMPRE (mesmo com a
+  // exibição desmarcada) de propósito: dá pra montar o perfil antes de
+  // publicar, e desmarcar depois não apaga nada. Quem decide o que vai ao
+  // ar é só perfilPublicoAtivo, lido pelo site em
+  // resolverCorretorPublico.
+  perfilPublicoAtivo: booleanCheckbox,
+  perfilPublicoCreci: z
+    .string()
+    .max(LIMITE_CRECI, `Use no máximo ${LIMITE_CRECI} caracteres.`)
+    .optional()
+    .or(z.literal("")),
+  perfilPublicoFoto: z.string().optional().or(z.literal("")),
+  perfilPublicoBio: z
+    .string()
+    .max(LIMITE_BIO_PUBLICA, `Use no máximo ${LIMITE_BIO_PUBLICA} caracteres.`)
+    .optional()
+    .or(z.literal("")),
+  perfilPublicoWhatsapp: z.string().optional().or(z.literal("")),
 });
+
+// "" e espaços viram null: um campo em branco é ausência de dado, não uma
+// string vazia que depois vira linha vazia no card do site.
+function textoOuNulo(valor: string | undefined): string | null {
+  return valor?.trim() || null;
+}
 
 export async function atualizarUsuario(
   membershipId: string,
@@ -214,6 +239,13 @@ export async function atualizarUsuario(
       status: dados.ativo ? "ACTIVE" : "SUSPENDED",
       whatsapp: dados.whatsapp ? dados.whatsapp.replace(/\D/g, "") : null,
       contactEmail: dados.emailContato || null,
+      publicProfileEnabled: dados.perfilPublicoAtivo,
+      publicCreci: textoOuNulo(dados.perfilPublicoCreci),
+      publicPhotoUrl: textoOuNulo(dados.perfilPublicoFoto),
+      publicBio: textoOuNulo(dados.perfilPublicoBio),
+      publicWhatsapp: dados.perfilPublicoWhatsapp
+        ? dados.perfilPublicoWhatsapp.replace(/\D/g, "") || null
+        : null,
     },
   });
 
@@ -225,8 +257,29 @@ export async function atualizarUsuario(
     action: "updated",
   });
 
+  // Publicar/despublicar um profissional é uma decisão de privacidade —
+  // vale ter na trilha quem virou a chave e quando. Só o booleano entra
+  // no payload: CRECI, apresentação, foto e telefone continuam fora do
+  // log, seguindo o padrão do projeto de não guardar conteúdo sensível
+  // na trilha técnica.
+  if (membershipAlvo.publicProfileEnabled !== dados.perfilPublicoAtivo) {
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "OrganizationMember",
+      entityId: membershipId,
+      action: dados.perfilPublicoAtivo
+        ? "public_profile_enabled"
+        : "public_profile_disabled",
+    });
+  }
+
   revalidatePath("/app/usuarios");
   revalidatePath(`/app/usuarios/${membershipId}`);
+  // O detalhe público dos imóveis deste membro passa a mostrar (ou deixa
+  // de mostrar) a identidade comercial — sem isto, publicar ou despublicar
+  // só apareceria no site quando o revalidate de 60s do detalhe expirasse.
+  revalidatePath("/[orgSlug]/imoveis/[id]", "page");
   redirect("/app/usuarios");
 }
 

@@ -631,10 +631,39 @@ model OrganizationMember {
   user           User             @relation(fields: [userId], references: [id])
   role           OrganizationRole
   status         MemberStatus     @default(ACTIVE)
+  // Contatos OPERACIONAIS do membro (uso interno/administrativo): é o
+  // número que a equipe usa entre si e nas ferramentas do painel. Não são
+  // dados de publicação — ver os campos public* abaixo, que existem
+  // justamente porque um número cadastrado pra trabalhar não é
+  // consentimento pra aparecer no site.
   whatsapp       String?
   contactEmail   String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+
+  // ---------- Identidade comercial pública do profissional ----------
+  // Separada da identidade interna (User.name/avatarUrl, que existem pro
+  // painel e são globais ao User, atravessando organizações). Estes
+  // campos vivem no VÍNCULO porque a identidade profissional é com a
+  // imobiliária: o mesmo User pode atuar em duas organizações com CRECI,
+  // foto e apresentação diferentes — e autorizado a aparecer em uma sem
+  // estar em outra.
+  //
+  // publicProfileEnabled é o ÚNICO portão de publicação e nasce false:
+  // nenhum membro existente passa a aparecer no site por causa desta
+  // migration, e papel (OWNER/ADMIN), ser responsável por um imóvel, ter
+  // WhatsApp ou ter avatar NÃO implicam publicação. Desligar a flag para
+  // de publicar sem apagar nada — dá pra preparar o perfil antes e
+  // despublicar depois sem perder o conteúdo.
+  publicProfileEnabled Boolean @default(false)
+  publicCreci          String?
+  publicPhotoUrl       String?
+  publicBio            String?
+  // WhatsApp declarado PARA o site, separado do operacional acima. Sem
+  // ele o CTA do imóvel cai no número institucional da organização — o
+  // número de trabalho do membro nunca é publicado por conveniência.
+  publicWhatsapp       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   notificationPreferences    NotificationPreference[]
   responsibleProperties      Property[]               @relation("PropertyResponsibleMember")

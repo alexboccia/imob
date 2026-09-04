@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { atualizarUsuario } from "@/app/app/usuarios/actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PerfilPublicoCorretorFields } from "@/components/admin/PerfilPublicoCorretorFields";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,6 +34,13 @@ export function EditarUsuarioForm({
     foto: string | null;
     whatsapp: string | null;
     emailContato: string | null;
+    perfilPublico: {
+      publicado: boolean;
+      creci: string | null;
+      foto: string | null;
+      bio: string | null;
+      whatsapp: string | null;
+    };
   };
   ehVoceMesmo: boolean;
   podeGerenciarOwner: boolean;
@@ -58,10 +66,15 @@ export function EditarUsuarioForm({
             <ErroCampo erros={estado.fieldErrors?.nome} />
           </div>
 
-          <FotoCorretorUpload fotoInicial={usuario.foto} />
+          <FotoCorretorUpload
+            fotoInicial={usuario.foto}
+            label="Foto no painel"
+            alt="Foto do usuário no painel"
+            descricao="Usada apenas dentro do painel. Não aparece no site público."
+          />
 
           <div className="space-y-1.5">
-            <Label htmlFor="whatsapp">WhatsApp do corretor (opcional)</Label>
+            <Label htmlFor="whatsapp">WhatsApp operacional (opcional)</Label>
             <Input
               id="whatsapp"
               name="whatsapp"
@@ -69,8 +82,8 @@ export function EditarUsuarioForm({
               placeholder="5511999998888 (DDI + DDD + número, só dígitos)"
             />
             <p className="text-xs text-muted-foreground">
-              Se vazio, os botões de WhatsApp dos imóveis deste corretor usam
-              o número configurado em Configurações.
+              Uso interno da equipe. Não é publicado no site — para isso há
+              o WhatsApp público, na seção Perfil público abaixo.
             </p>
             <ErroCampo erros={estado.fieldErrors?.whatsapp} />
           </div>
@@ -91,6 +104,11 @@ export function EditarUsuarioForm({
             </p>
             <ErroCampo erros={estado.fieldErrors?.emailContato} />
           </div>
+
+          <PerfilPublicoCorretorFields
+            valores={usuario.perfilPublico}
+            erros={estado.fieldErrors}
+          />
 
           {ehVoceMesmo ? (
             <>

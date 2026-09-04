@@ -43,6 +43,13 @@ export default async function EditarUsuarioPage({
           foto: membro.user.avatarUrl,
           whatsapp: membro.whatsapp,
           emailContato: membro.contactEmail,
+          perfilPublico: {
+            publicado: membro.publicProfileEnabled,
+            creci: membro.publicCreci,
+            foto: membro.publicPhotoUrl,
+            bio: membro.publicBio,
+            whatsapp: membro.publicWhatsapp,
+          },
         }}
         ehVoceMesmo={membro.id === session?.user.organizationMemberId}
         podeGerenciarOwner={session?.user.role === "OWNER"}

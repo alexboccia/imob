@@ -10,6 +10,7 @@ import {
   Mail,
   Share2,
   Heart,
+  User,
   ZoomIn,
   ZoomOut,
   LayoutGrid,
@@ -77,6 +78,13 @@ export function IconeEmail(props: { className?: string }) {
 
 export function IconeCompartilhar(props: { className?: string }) {
   return <Share2 className={props.className} />;
+}
+
+// Placeholder neutro do perfil público do profissional quando não há foto
+// enviada — nunca as iniciais do usuário do painel, que são identidade
+// interna (ver perfil-publico-corretor.ts).
+export function IconePessoa(props: { className?: string }) {
+  return <User className={props.className} />;
 }
 
 export function IconeCoracao(props: {

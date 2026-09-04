@@ -10,6 +10,10 @@ import {
 } from "@/lib/format";
 import { linkWhatsApp } from "@/lib/whatsapp";
 import {
+  resolverCorretorPublico,
+  resolverWhatsAppDoImovel,
+} from "@/lib/perfil-publico-corretor";
+import {
   enderecoPublico,
   mensagemFormularioImovel,
   mensagemWhatsAppImovel,
@@ -48,8 +52,19 @@ const buscarImovel = cache(async (id: string, organizationId: string) => {
     where: { id, organizationId },
     include: {
       media: { orderBy: [{ isCover: "desc" }, { order: "asc" }] },
+      // Só o que pode ser publicado. O WhatsApp operacional do membro,
+      // o contactEmail e o User.avatarUrl (foto do painel) ficam
+      // deliberadamente FORA do select: se não chegam à página, não há
+      // caminho por onde vazem pra renderização, mesmo por engano.
       responsibleMember: {
-        select: { whatsapp: true, user: { select: { name: true, avatarUrl: true } } },
+        select: {
+          publicProfileEnabled: true,
+          publicCreci: true,
+          publicPhotoUrl: true,
+          publicBio: true,
+          publicWhatsapp: true,
+          user: { select: { name: true } },
+        },
       },
     },
   });
@@ -196,13 +211,20 @@ export default async function DetalheImovelPage({
   const videos = imovel.media.filter((m) => m.type === "VIDEO");
   const plantas = imovel.media.filter((m) => m.type === "FLOOR_PLAN");
 
-  // Número do membro responsável quando existir, senão o da organização.
-  // linkWhatsApp devolve NULL quando nenhum dos dois está preenchido — e
-  // é isso que faz todo CTA de WhatsApp desta página desaparecer, em vez
-  // de renderizar "wa.me/?text=..." (link que abre erro no WhatsApp),
-  // que era o comportamento anterior.
-  const whatsappNumero =
-    imovel.responsibleMember?.whatsapp || configContato.whatsapp;
+  // Identidade comercial pública: null a menos que o membro responsável
+  // tenha OPT-IN explícito. Sem isso, a página se comporta como se não
+  // houvesse profissional e mostra só a imobiliária — papel (OWNER/ADMIN)
+  // e ser responsável pelo imóvel não publicam ninguém.
+  const corretorPublico = resolverCorretorPublico(imovel.responsibleMember);
+
+  // WhatsApp público do profissional quando publicado, senão o da
+  // organização, senão nenhum. linkWhatsApp devolve NULL no último caso —
+  // e é isso que faz todo CTA de WhatsApp desaparecer, em vez de
+  // renderizar "wa.me/?text=..." (link que abre erro no WhatsApp).
+  const whatsappNumero = resolverWhatsAppDoImovel(
+    imovel.responsibleMember,
+    configContato.whatsapp
+  );
 
   const whatsappHref = linkWhatsApp(
     whatsappNumero,
@@ -374,7 +396,7 @@ export default async function DetalheImovelPage({
           orgSlug={orgSlug}
           whatsappHref={whatsappHref}
           mensagemFormulario={mensagemContato}
-          responsavel={imovel.responsibleMember}
+          corretor={corretorPublico}
           idFormulario={idFormulario}
         />
       </div>
