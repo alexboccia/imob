@@ -149,6 +149,19 @@ async function garantirImovel(opcoes: {
   city?: string;
   price?: number | null;
   rentPrice?: number | null;
+  constructionStage?: "PRE_CONSTRUCTION" | "UNDER_CONSTRUCTION" | "READY_TO_MOVE" | null;
+  deliveryForecast?: Date | null;
+  description?: string | null;
+  totalArea?: number | null;
+  privateArea?: number | null;
+  bedrooms?: number | null;
+  suites?: number | null;
+  bathrooms?: number | null;
+  parkingSpots?: number | null;
+  propertyFeatures?: string[];
+  condoFeatures?: string[];
+  condoFee?: number | null;
+  propertyTax?: number | null;
 }) {
   // update reseta os mesmos campos do create — specs de edição (ex: "editar
   // imóvel") mudam o título do imóvel seedado, então sem isso o seed
@@ -168,6 +181,19 @@ async function garantirImovel(opcoes: {
     isFeatured: opcoes.isFeatured ?? false,
     isLaunch: opcoes.isLaunch ?? false,
     hasSlideshow: opcoes.hasSlideshow ?? false,
+    constructionStage: opcoes.constructionStage ?? null,
+    deliveryForecast: opcoes.deliveryForecast ?? null,
+    description: opcoes.description ?? null,
+    totalArea: opcoes.totalArea ?? null,
+    privateArea: opcoes.privateArea ?? null,
+    bedrooms: opcoes.bedrooms ?? null,
+    suites: opcoes.suites ?? null,
+    bathrooms: opcoes.bathrooms ?? null,
+    parkingSpots: opcoes.parkingSpots ?? null,
+    propertyFeatures: opcoes.propertyFeatures ?? [],
+    condoFeatures: opcoes.condoFeatures ?? [],
+    condoFee: opcoes.condoFee ?? null,
+    propertyTax: opcoes.propertyTax ?? null,
   } as const;
 
   return prisma.property.upsert({
@@ -356,6 +382,30 @@ async function main() {
     isFeatured: true,
     isLaunch: true,
     hasSlideshow: true,
+    // Único imóvel do seed com obra em andamento: sem ele nenhum spec
+    // conseguia exercitar EvolucaoObra (linha do tempo + previsão de
+    // entrega), que é o caminho de lançamento/em construção da MESMA
+    // rota de detalhe. Data fixa (não relativa a "hoje") pra o texto
+    // renderizado ser determinístico entre rodadas.
+    constructionStage: "UNDER_CONSTRUCTION",
+    deliveryForecast: new Date("2027-06-01T00:00:00.000Z"),
+    // Único imóvel do seed com a ficha completa — sem isto, descrição,
+    // características, condomínio e custos nunca renderizavam em teste
+    // nenhum, e a página de detalhe era exercitada só no seu estado mais
+    // vazio. suites: 0 é proposital: prova que um contador em zero NÃO
+    // vira linha de característica (ver CaracteristicasImovel.tsx).
+    description:
+      "Apartamento em construção com dois dormitórios.\n\nSegundo parágrafo da descrição, usado para verificar que a quebra de linha do texto original é preservada na página pública.",
+    totalArea: 58,
+    privateArea: 52,
+    bedrooms: 2,
+    suites: 0,
+    bathrooms: 2,
+    parkingSpots: 1,
+    propertyFeatures: ["Aceita pet", "Piscina"],
+    condoFeatures: ["Portaria 24 horas", "Salão de festas"],
+    condoFee: 850,
+    propertyTax: 320,
   });
   await garantirImovel({
     id: "e2e-imovel-org-b",

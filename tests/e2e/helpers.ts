@@ -37,6 +37,10 @@ export const IDS_E2E = {
   // Oportunidades/Destaques sempre com pelo menos 1 registro real,
   // deterministicamente, em qualquer ordem de execução dos specs.
   imovelComBadgesOrgA: "e2e-imovel-badges-a",
+  // Fase 2 (detalhe do imóvel) — o contraponto do imóvel acima: RENT com
+  // rentPrice e sem condomínio, IPTU, obra nem foto, usado pra provar que
+  // cada bloco opcional da página some quando o dado não existe.
+  imovelAluguelOrgA: "e2e-imovel-aluguel-a",
 };
 
 // Fase P.10 — mesmo valor de prisma/seed-e2e.ts (duplicado de propósito,

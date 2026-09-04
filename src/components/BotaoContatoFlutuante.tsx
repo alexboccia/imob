@@ -68,7 +68,7 @@ export function BotaoContatoFlutuante({
   const telefoneHref = `tel:+${telefoneDigitos}`;
 
   return (
-    <div className="fixed bottom-6 right-6 z-40">
+    <div data-contato-flutuante className="fixed bottom-6 right-6 z-40">
       {/* Fica sempre montado (a animação do Motion só controla opacidade/
           escala) para o ModalContato dentro dele não perder o próprio
           estado quando o balão fecha. */}

@@ -33,7 +33,13 @@ export function EvolucaoObra({
         </Tooltip>
       </h2>
 
-      <div className="flex items-start">
+      {/* A linha do tempo tem largura mínima fixa (3 etapas de w-28 mais
+          os conectores), que estoura 375px e empurrava a página inteira
+          pra fora da viewport. Rola dentro do próprio bloco em vez de
+          arrastar o documento — mesmo tratamento que o projeto já dá a
+          tabelas largas. Sem efeito acima de sm, onde tudo cabe. */}
+      <div className="-mx-1 overflow-x-auto px-1">
+        <div className="flex items-start">
         {ORDEM.map((estagio, i) => {
           const status =
             i < indiceAtual ? "concluido" : i === indiceAtual ? "atual" : "futuro";
@@ -113,6 +119,7 @@ export function EvolucaoObra({
             </div>
           );
         })}
+        </div>
       </div>
     </div>
   );

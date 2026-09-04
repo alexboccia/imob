@@ -1,15 +1,19 @@
 import { cache } from "react";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import {
   FINALIDADE_LABEL,
   formatarCodigoImovel,
-  formatarPreco,
   formatarTempoRelativo,
   rotulosAtivos,
 } from "@/lib/format";
+import { linkWhatsApp } from "@/lib/whatsapp";
+import {
+  enderecoPublico,
+  mensagemFormularioImovel,
+  mensagemWhatsAppImovel,
+} from "@/lib/imovel-contato";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { distanciaEmKm, formatarDistancia } from "@/lib/geo";
 import { paraImovelCard } from "@/lib/imovel-card";
@@ -18,22 +22,17 @@ import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
 import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 import { GaleriaFotos } from "@/components/GaleriaFotos";
-import { FormularioContato } from "@/components/FormularioContato";
+import { BotaoCompartilhar } from "@/components/BotaoCompartilhar";
 import { EvolucaoObra } from "@/components/EvolucaoObra";
 import { CarrosselPlantas } from "@/components/CarrosselPlantas";
 import { ImovelCard } from "@/components/ImovelCard";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
-  IconeCheck,
-  IconeArea,
-  IconeQuartos,
-  IconeSuite,
-  IconeBanheiro,
-  IconeVaga,
-} from "@/components/icons";
-import { IconeCaracteristica } from "@/lib/caracteristicas-icones";
+  CaracteristicasImovel,
+  CaracteristicasCondominio,
+} from "@/components/imovel/CaracteristicasImovel";
+import { CardContatoImovel } from "@/components/imovel/CardContatoImovel";
+import { BarraCtaImovel } from "@/components/imovel/BarraCtaImovel";
+import { Badge } from "@/components/ui/badge";
 import { TITULO_DETALHE, TITULO_BLOCO, TITULO_SECAO } from "@/lib/site-typography";
 
 // Página de detalhe não tem tag de invalidação própria (preço/status
@@ -43,33 +42,6 @@ import { TITULO_DETALHE, TITULO_BLOCO, TITULO_SECAO } from "@/lib/site-typograph
 // evita que um imóvel vendido/alterado continue aparecendo desatualizado
 // por tempo indefinido.
 export const revalidate = 60;
-
-function ItemCaracteristica({
-  icon: Icone = IconeCheck,
-  children,
-}: {
-  icon?: (props: { className?: string }) => React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <li className="flex items-center gap-2">
-      <Icone className="w-4 h-4 text-success shrink-0" />
-      <span>{children}</span>
-    </li>
-  );
-}
-
-function ItemCaracteristicaCatalogo({ nome }: { nome: string }) {
-  return (
-    <li className="flex items-center gap-2">
-      <IconeCaracteristica
-        nome={nome}
-        className="w-4 h-4 text-success shrink-0"
-      />
-      <span>{nome}</span>
-    </li>
-  );
-}
 
 const buscarImovel = cache(async (id: string, organizationId: string) => {
   return prisma.property.findUnique({
@@ -224,21 +196,20 @@ export default async function DetalheImovelPage({
   const videos = imovel.media.filter((m) => m.type === "VIDEO");
   const plantas = imovel.media.filter((m) => m.type === "FLOOR_PLAN");
 
+  // Número do membro responsável quando existir, senão o da organização.
+  // linkWhatsApp devolve NULL quando nenhum dos dois está preenchido — e
+  // é isso que faz todo CTA de WhatsApp desta página desaparecer, em vez
+  // de renderizar "wa.me/?text=..." (link que abre erro no WhatsApp),
+  // que era o comportamento anterior.
   const whatsappNumero =
     imovel.responsibleMember?.whatsapp || configContato.whatsapp;
 
-  const whatsappHref = `https://wa.me/${whatsappNumero.replace(/\D/g, "")}?text=${encodeURIComponent(
-    `Olá! Tenho interesse no imóvel "${imovel.title}" (${imovel.neighborhood}, ${imovel.city}).`
-  )}`;
+  const whatsappHref = linkWhatsApp(
+    whatsappNumero,
+    mensagemWhatsAppImovel(imovel, configContato.codigoImovelPrefixo)
+  );
 
-  const enderecoCompleto = [
-    imovel.street && imovel.number
-      ? `${imovel.street}, ${imovel.number}`
-      : imovel.street,
-    imovel.neighborhood,
-  ]
-    .filter(Boolean)
-    .join(" - ");
+  const enderecoCompleto = enderecoPublico(imovel);
 
   const temCoordenadas = imovel.latitude !== null && imovel.longitude !== null;
   const linkGoogleMaps = temCoordenadas
@@ -247,57 +218,65 @@ export default async function DetalheImovelPage({
         `${enderecoCompleto}, ${imovel.city} - ${imovel.state}`
       )}`;
 
-  const verboFinalidade =
-    imovel.purpose === "RENT"
-      ? "alugar"
-      : imovel.purpose === "SALE_AND_RENT"
-        ? "comprar ou alugar"
-        : "comprar";
+  const mensagemContato = mensagemFormularioImovel(imovel, organization.name);
 
-  const precoPrincipal = imovel.price ?? imovel.rentPrice;
-
-  const mensagemContato = `Olá, gostaria de ter mais informações para ${verboFinalidade}: ${
-    imovel.type.toLowerCase()
-  }, ${formatarPreco(precoPrincipal)}, ${enderecoCompleto ? `${enderecoCompleto}, ` : ""}${
-    imovel.city
-  } - ${imovel.state} que encontrei no site da ${organization.name}. Aguardo seu contato.`;
+  // Âncora usada pela barra fixa do mobile pra saltar direto pro
+  // formulário do card, em vez de duplicar o formulário na barra.
+  const idFormulario = "contato-imovel";
 
   return (
     <>
+      {/* Hierarquia do topo: tipo/finalidade e rótulos primeiro (o que o
+          visitante usa pra saber se a página é pra ele), título e
+          localização em seguida, e a data de publicação por último, mais
+          discreta — antes ela competia em peso com o endereço. O código
+          saiu da mesma linha dos rótulos e virou item de metadado, onde
+          é procurado quando alguém já decidiu ligar. Mesmos dados de
+          sempre, nenhum campo novo. */}
       <div className="mx-auto max-w-6xl px-4 pt-6">
-        <p className="text-sm text-gray-500 mb-2">
-          {imovel.type} ·{" "}
-          {FINALIDADE_LABEL[imovel.purpose] ?? imovel.purpose}
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium text-gray-600">
+            {imovel.type} · {FINALIDADE_LABEL[imovel.purpose] ?? imovel.purpose}
+          </p>
           {rotulosAtivos({
             lancamento: imovel.isLaunch,
             destaque: imovel.isFeatured,
             oportunidade: imovel.isOpportunity,
           }).map((rotulo) => (
-            <Badge key={rotulo.chave} className={`ml-2 ${rotulo.className}`}>
+            <Badge key={rotulo.chave} className={rotulo.className}>
               {rotulo.label}
             </Badge>
           ))}
-          <Badge variant="secondary" className="ml-2">
-            # Cód:{" "}
-            {formatarCodigoImovel(imovel.code, configContato.codigoImovelPrefixo)}
-          </Badge>
-        </p>
-        <h1 className={TITULO_DETALHE}>{imovel.title}</h1>
-        {imovel.developer && (
-          <p className="text-sm text-gray-600 mt-1">
-            Responsável pela obra: <strong>{imovel.developer}</strong>
-          </p>
-        )}
-        <p className="text-gray-500 mt-1">
+        </div>
+        <div className="mt-2 flex items-start justify-between gap-4">
+          <h1 className={TITULO_DETALHE}>{imovel.title}</h1>
+          {/* Compartilhar também aqui, não só dentro da galeria: um imóvel
+              sem foto não renderiza galeria nenhuma e ficava sem nenhuma
+              forma de compartilhar o link. */}
+          <BotaoCompartilhar
+            titulo={imovel.title}
+            className="mt-1 flex size-9 shrink-0 items-center justify-center rounded-full border text-gray-600 outline-none transition-colors hover:border-primary hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50"
+          />
+        </div>
+        <p className="mt-2 text-base text-gray-600">
           {enderecoCompleto ? `${enderecoCompleto}, ` : ""}
           {imovel.city} - {imovel.state}
         </p>
-        {imovel.publishedAt && (
-          <p className="text-xs text-gray-400 mt-1">
-            Publicado {formatarTempoRelativo(imovel.publishedAt)}, atualizado{" "}
-            {formatarTempoRelativo(imovel.updatedAt)}.
-          </p>
-        )}
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
+          <span>
+            Cód.{" "}
+            {formatarCodigoImovel(imovel.code, configContato.codigoImovelPrefixo)}
+          </span>
+          {imovel.developer && (
+            <span>Responsável pela obra: {imovel.developer}</span>
+          )}
+          {imovel.publishedAt && (
+            <span>
+              Publicado {formatarTempoRelativo(imovel.publishedAt)}, atualizado{" "}
+              {formatarTempoRelativo(imovel.updatedAt)}
+            </span>
+          )}
+        </div>
       </div>
 
       <GaleriaFotos
@@ -311,6 +290,9 @@ export default async function DetalheImovelPage({
         nome={organization.name}
       />
 
+      {/* O espaço pra barra fixa de conversão é reservado no <body>
+          (ver globals.css), não aqui: o rodapé fica fora deste container
+          e também precisa escapar da barra. */}
       <div className="mx-auto max-w-6xl px-4 py-10">
       {videos.length > 0 && (
         <div id="videos" className="mt-6 space-y-4 scroll-mt-6">
@@ -326,63 +308,28 @@ export default async function DetalheImovelPage({
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mt-10">
-        <div className="sm:col-span-2 space-y-6">
-          <div>
-            <h2 className={`${TITULO_BLOCO} mb-2`}>Descrição</h2>
-            <p className="text-gray-700 whitespace-pre-line">
-              {imovel.description ?? "Sem descrição disponível."}
-            </p>
-          </div>
-          <div>
-            <h2 className={`${TITULO_BLOCO} mb-2`}>Características do imóvel</h2>
-            <ul className="grid grid-cols-2 gap-y-1 text-sm text-gray-700">
-              {imovel.totalArea && (
-                <ItemCaracteristica icon={IconeArea}>
-                  Área total: {imovel.totalArea} m²
-                </ItemCaracteristica>
-              )}
-              {imovel.privateArea && (
-                <ItemCaracteristica icon={IconeArea}>
-                  Área privativa: {imovel.privateArea} m²
-                </ItemCaracteristica>
-              )}
-              {imovel.bedrooms !== null && (
-                <ItemCaracteristica icon={IconeQuartos}>
-                  Quartos: {imovel.bedrooms}
-                </ItemCaracteristica>
-              )}
-              {imovel.suites !== null && (
-                <ItemCaracteristica icon={IconeSuite}>
-                  Suítes: {imovel.suites}
-                </ItemCaracteristica>
-              )}
-              {imovel.bathrooms !== null && (
-                <ItemCaracteristica icon={IconeBanheiro}>
-                  Banheiros: {imovel.bathrooms}
-                </ItemCaracteristica>
-              )}
-              {imovel.parkingSpots !== null && (
-                <ItemCaracteristica icon={IconeVaga}>
-                  Vagas de garagem: {imovel.parkingSpots}
-                </ItemCaracteristica>
-              )}
-              {imovel.propertyFeatures.map((c) => (
-                <ItemCaracteristicaCatalogo key={c} nome={c} />
-              ))}
-            </ul>
-          </div>
-
-          {imovel.condoFeatures.length > 0 && (
-            <div>
-              <h2 className={`${TITULO_BLOCO} mb-2`}>Características do condomínio</h2>
-              <ul className="grid grid-cols-2 gap-y-1 text-sm text-gray-700">
-                {imovel.condoFeatures.map((c) => (
-                  <ItemCaracteristicaCatalogo key={c} nome={c} />
-                ))}
-              </ul>
-            </div>
+      {/* Duas colunas só a partir de lg: entre 640 e 1023px o card
+          lateral espremia a coluna de conteúdo em 2/3 de uma tela já
+          estreita, deixando descrição e características com linhas
+          curtíssimas. Abaixo de lg tudo empilha e a barra fixa do rodapé
+          cobre a conversão. */}
+      <div className="mt-10 grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <div className="space-y-8 lg:col-span-2">
+          {imovel.description && (
+            <section>
+              <h2 className={`${TITULO_BLOCO} mb-3`}>Descrição</h2>
+              {/* max-w-prose limita a linha a ~65 caracteres: sem isso,
+                  em 1280px+ a descrição virava linhas longas demais pra
+                  leitura confortável. leading-relaxed e whitespace-pre-line
+                  preservam a quebra de parágrafo que o corretor escreveu. */}
+              <p className="max-w-prose whitespace-pre-line leading-relaxed text-gray-700">
+                {imovel.description}
+              </p>
+            </section>
           )}
+          <CaracteristicasImovel imovel={imovel} />
+
+          <CaracteristicasCondominio itens={imovel.condoFeatures} />
 
           <EvolucaoObra
             estagioObra={imovel.constructionStage}
@@ -395,9 +342,9 @@ export default async function DetalheImovelPage({
             </div>
           )}
 
-          <div>
-            <h2 className={`${TITULO_BLOCO} mb-2`}>Localização</h2>
-            <p className="text-sm text-gray-700 mb-3">
+          <section>
+            <h2 className={`${TITULO_BLOCO} mb-3`}>Localização</h2>
+            <p className="mb-3 text-sm text-gray-700">
               {enderecoCompleto ? `${enderecoCompleto}, ` : ""}
               {imovel.city} - {imovel.state}
             </p>
@@ -418,89 +365,18 @@ export default async function DetalheImovelPage({
             >
               Ver no Google Maps
             </a>
-          </div>
+          </section>
         </div>
 
-        <Card className="h-fit">
-          <CardContent className="space-y-3">
-            {imovel.price != null && (
-              <div>
-                {imovel.purpose === "SALE_AND_RENT" && (
-                  <Badge variant="secondary" className="mb-1">
-                    Para comprar
-                  </Badge>
-                )}
-                <p className="text-2xl font-semibold">
-                  {formatarPreco(imovel.price)}
-                </p>
-              </div>
-            )}
-            {imovel.rentPrice != null && (
-              <div>
-                {imovel.purpose === "SALE_AND_RENT" && (
-                  <Badge variant="secondary" className="mb-1">
-                    Para alugar
-                  </Badge>
-                )}
-                <p className="text-2xl font-semibold">
-                  {formatarPreco(imovel.rentPrice)}
-                  <span className="text-sm font-normal text-gray-500">/mês</span>
-                </p>
-              </div>
-            )}
-            {imovel.condoFee && (
-              <p className="text-sm text-gray-500">
-                Condomínio: {formatarPreco(imovel.condoFee)}
-              </p>
-            )}
-            {imovel.propertyTax && (
-              <p className="text-sm text-gray-500">
-                IPTU: {formatarPreco(imovel.propertyTax)}
-              </p>
-            )}
-            <Button
-              size="lg"
-              className="w-full bg-whatsapp-brand hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active"
-              nativeButton={false}
-              render={
-                <a href={whatsappHref} target="_blank" rel="noopener noreferrer" />
-              }
-            >
-              Falar no WhatsApp
-            </Button>
-            {imovel.responsibleMember && (
-              <div className="flex flex-col items-center text-center pt-3 border-t">
-                <div className="relative w-16 h-16 rounded-full overflow-hidden border bg-gray-100 shrink-0">
-                  {imovel.responsibleMember.user.avatarUrl ? (
-                    <Image
-                      src={imovel.responsibleMember.user.avatarUrl}
-                      alt={imovel.responsibleMember.user.name}
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-primary text-primary-foreground font-semibold">
-                      {imovel.responsibleMember.user.name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                </div>
-                <p className="mt-2 font-medium text-sm">
-                  {imovel.responsibleMember.user.name}
-                </p>
-                <p className="text-xs text-gray-500">Corretor(a) responsável</p>
-              </div>
-            )}
-            <div className="pt-3 border-t space-y-3">
-              <p className="font-medium text-sm">Enviar mensagem</p>
-              <FormularioContato
-                imovelId={imovel.id}
-                mensagemPreenchida={mensagemContato}
-                idPrefixo="aside-"
-                orgSlug={orgSlug}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <CardContatoImovel
+          imovel={imovel}
+          imovelId={imovel.id}
+          orgSlug={orgSlug}
+          whatsappHref={whatsappHref}
+          mensagemFormulario={mensagemContato}
+          responsavel={imovel.responsibleMember}
+          idFormulario={idFormulario}
+        />
       </div>
 
       {imoveisProximos.length > 0 && (
@@ -523,6 +399,13 @@ export default async function DetalheImovelPage({
         </section>
       )}
       </div>
+
+      <BarraCtaImovel
+        price={imovel.price}
+        rentPrice={imovel.rentPrice}
+        whatsappHref={whatsappHref}
+        hrefFormulario={`#${idFormulario}`}
+      />
     </>
   );
 }

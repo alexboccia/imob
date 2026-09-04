@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ORG_A, login } from "./helpers";
+import { IDS_E2E, ORG_A, login } from "./helpers";
 
 // Redesign do site público (Proposta 2) — roda no host padrão (sem
 // prefixo de slug: PUBLIC_ORG_SLUG=e2e-org-a em .env.test), já seedado
@@ -355,7 +355,10 @@ test.describe("Site público — listagem e detalhe", () => {
 
     await expect(page.getByRole("heading", { level: 1, name: IMOVEL_COM_BADGES })).toBeVisible();
     await expect(page.getByText("R$ 500.000", { exact: true }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Falar no WhatsApp" })).toBeVisible();
+    // O CTA de WhatsApp deixou de ser incondicional: sem número
+    // configurado no tenant ele não existe (antes renderizava um link
+    // "wa.me/" vazio). O formulário é o canal que existe sempre — os
+    // dois modos têm testes próprios em "Detalhe do imóvel — WhatsApp".
     await expect(page.getByRole("button", { name: "Enviar mensagem" })).toBeVisible();
   });
 });
@@ -771,5 +774,289 @@ test.describe("Site público — Home comercial: responsividade", () => {
       return new Set(links.map((l) => Math.round(l.getBoundingClientRect().top))).size;
     });
     expect(linhas).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------
+// Detalhe do imóvel (Fase 2) — camada comercial. O seed não cria
+// OrganizationSettings, então o estado padrão é o tenant SEM WhatsApp, e
+// é nele que os CTAs precisam sumir sem deixar link quebrado. O modo com
+// WhatsApp é configurado pelo painel dentro do próprio teste, com
+// restauração garantida.
+//
+// O imóvel usado (imovelComBadgesOrgA) é o único do seed com ficha
+// completa: descrição em dois parágrafos, áreas, contadores (incluindo
+// suites: 0 de propósito), características de imóvel e de condomínio,
+// condomínio/IPTU e obra em andamento.
+// ---------------------------------------------------------------------
+
+const URL_IMOVEL = `/imoveis/${IDS_E2E.imovelComBadgesOrgA}`;
+
+test.describe("Detalhe do imóvel — conteúdo real", () => {
+  test("hierarquia do topo: tipo/finalidade, rótulos, título, endereço e código", async ({
+    page,
+  }) => {
+    await page.goto(URL_IMOVEL);
+    await expect(page.getByRole("heading", { level: 1, name: IMOVEL_COM_BADGES })).toBeVisible();
+    // Escopado ao cabeçalho: os cards de "imóveis próximos" repetem o
+    // mesmo par tipo/finalidade mais abaixo na página.
+    const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
+    await expect(cabecalho.getByText("Apartamento · Comprar")).toBeVisible();
+    for (const rotulo of ["Lançamento", "Destaque", "Oportunidade"]) {
+      await expect(page.getByText(rotulo, { exact: true }).first()).toBeVisible();
+    }
+    // O código pode ou não ter prefixo — configuracoes.spec.ts grava um
+    // propertyCodePrefix no MESMO tenant, e o prefixo é um recurso real
+    // do produto. O teste prova que o código está na página, sem acoplar
+    // ao formato que outro spec pode ter deixado configurado.
+    await expect(cabecalho.getByText(/Cód\.\s*\S+/)).toBeVisible();
+    await expect(page.getByText("Centro, São Paulo - SP").first()).toBeVisible();
+  });
+
+  test("descrição preserva a quebra de parágrafo do texto original", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    const descricao = page.getByRole("heading", { name: "Descrição" }).locator("xpath=../p");
+    await expect(descricao).toContainText("Apartamento em construção com dois dormitórios.");
+    await expect(descricao).toContainText("Segundo parágrafo da descrição");
+    await expect(descricao).toHaveCSS("white-space", "pre-line");
+  });
+
+  test("características reais aparecem; contador em zero NÃO vira item", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    const bloco = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "Características do imóvel" }) });
+    await expect(bloco.getByText("Área total: 58 m²")).toBeVisible();
+    await expect(bloco.getByText("Quartos: 2")).toBeVisible();
+    await expect(bloco.getByText("Banheiros: 2")).toBeVisible();
+    await expect(bloco.getByText("Vagas de garagem: 1")).toBeVisible();
+    await expect(bloco.getByText("Aceita pet")).toBeVisible();
+
+    // suites = 0 no seed: zero não é característica, e numa lista com
+    // ícone de confirmação verde lido rápido vira o oposto do dado.
+    await expect(page.getByText(/Suítes:\s*0/)).toHaveCount(0);
+  });
+
+  test("características do condomínio aparecem quando existem", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    const bloco = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "Características do condomínio" }) });
+    await expect(bloco.getByText("Portaria 24 horas")).toBeVisible();
+    await expect(bloco.getByText("Salão de festas")).toBeVisible();
+  });
+
+  test("imóvel sem condomínio não renderiza o título do bloco", async ({ page }) => {
+    await page.goto(`/imoveis/${IDS_E2E.imovelAluguelOrgA}`);
+    await expect(
+      page.getByRole("heading", { name: "Características do condomínio" })
+    ).toHaveCount(0);
+  });
+
+  test("preço, condomínio e IPTU reais; aluguel mostra /mês", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    await expect(page.getByText("R$ 500.000", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Condomínio:")).toBeVisible();
+    await expect(page.getByText("IPTU:")).toBeVisible();
+
+    await page.goto(`/imoveis/${IDS_E2E.imovelAluguelOrgA}`);
+    await expect(page.getByText("R$ 2.500").first()).toBeVisible();
+    await expect(page.getByText("/mês").first()).toBeVisible();
+    // Sem condomínio/IPTU cadastrados, as linhas não existem.
+    await expect(page.getByText("Condomínio:")).toHaveCount(0);
+    await expect(page.getByText("IPTU:")).toHaveCount(0);
+  });
+
+  test("localização e link do Google Maps continuam funcionando", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    await expect(page.getByRole("heading", { name: "Localização" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Ver no Google Maps" })).toHaveAttribute(
+      "href",
+      /google\.com\/maps/
+    );
+  });
+
+  test("imóveis próximos aparecem e nunca incluem o próprio imóvel", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    const secao = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: /Imóveis próximos/ }) });
+    await expect(secao).toBeVisible();
+    await expect(secao.getByText(IMOVEL_COM_BADGES, { exact: true })).toHaveCount(0);
+    await expect(secao.locator(`a[href*="${IDS_E2E.imovelComBadgesOrgA}"]`)).toHaveCount(0);
+  });
+
+  test("compartilhar copia a URL do imóvel, sem o fragmento da âncora", async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto(URL_IMOVEL);
+    // Sem Web Share API o componente cai no clipboard, que é o caminho
+    // testável — a folha nativa do navegador não é automatizável.
+    await page.evaluate(() => {
+      delete (window.navigator as unknown as { share?: unknown }).share;
+    });
+    await page.locator('button[aria-label="Compartilhar"]').first().click();
+    await expect(page.getByText("Link copiado!")).toBeVisible();
+    const copiado = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copiado).toContain(`/imoveis/${IDS_E2E.imovelComBadgesOrgA}`);
+    expect(copiado).not.toContain("#");
+  });
+
+  test("compartilhar existe mesmo em imóvel sem foto (fora da galeria)", async ({ page }) => {
+    await page.goto(`/imoveis/${IDS_E2E.imovelAluguelOrgA}`);
+    await expect(page.locator('button[aria-label="Compartilhar"]').first()).toBeVisible();
+  });
+});
+
+test.describe("Detalhe do imóvel — lançamento / em construção", () => {
+  test("evolução da obra e previsão de entrega continuam renderizando", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    await expect(page.getByRole("heading", { name: /Evolução da obra/ })).toBeVisible();
+    // Escopado ao bloco da obra: "em construção" também aparece no texto
+    // da descrição deste imóvel.
+    const obra = page
+      .locator("div")
+      .filter({ has: page.getByRole("heading", { name: /Evolução da obra/ }) })
+      .last();
+    await expect(obra.getByText("Em construção", { exact: true })).toBeVisible();
+    await expect(obra.getByText("Na planta", { exact: true })).toBeVisible();
+    await expect(obra.getByText("Pronto para morar", { exact: true })).toBeVisible();
+    // deliveryForecast fixo no seed (2027-06), formatado como mês/ano.
+    await expect(obra.getByText(/jun\/27/i)).toBeVisible();
+  });
+
+  test("imóvel sem obra cadastrada não mostra o bloco", async ({ page }) => {
+    await page.goto(`/imoveis/${IDS_E2E.imovelAluguelOrgA}`);
+    await expect(page.getByRole("heading", { name: /Evolução da obra/ })).toHaveCount(0);
+  });
+
+  test("375px: a linha do tempo da obra rola dentro do bloco, sem estourar a página", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 900 });
+    await page.goto(URL_IMOVEL);
+    await expect(page.getByRole("heading", { name: /Evolução da obra/ })).toBeVisible();
+    expect(await semOverflow(page)).toBe(true);
+  });
+});
+
+test.describe("Detalhe do imóvel — WhatsApp", () => {
+  test("sem WhatsApp configurado: nenhum CTA e nenhum link wa.me vazio; formulário continua", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    await definirContato(page, {});
+
+    await page.goto(URL_IMOVEL);
+    await expect(page.locator('a[href*="wa.me"]')).toHaveCount(0);
+    await expect(page.getByText("Falar no WhatsApp")).toHaveCount(0);
+
+    // Nunca um href tipo "https://wa.me/?text=..." — link que abre erro.
+    const hrefsQuebrados = await page.evaluate(() =>
+      [...document.querySelectorAll("a[href]")].filter((a) =>
+        /wa\.me\/(\?|$)/.test(a.getAttribute("href") ?? "")
+      ).length
+    );
+    expect(hrefsQuebrados).toBe(0);
+
+    // O canal que existe sempre.
+    await expect(page.getByRole("button", { name: "Enviar mensagem" })).toBeVisible();
+  });
+
+  test("com WhatsApp configurado: CTA usa o número do tenant e mensagem com o imóvel", async ({
+    page,
+  }) => {
+    const whatsapp = "+55 (11) 98888-7777";
+    await login(page, ORG_A);
+    try {
+      await definirContato(page, { whatsapp });
+
+      await page.goto(URL_IMOVEL);
+      const cta = page.locator('a[href*="wa.me"]').first();
+      await expect(cta).toBeVisible();
+
+      const href = await cta.getAttribute("href");
+      expect(href).toContain("wa.me/5511988887777");
+
+      // Mensagem contextual: identifica o imóvel por título e código.
+      const texto = decodeURIComponent(new URL(href!).searchParams.get("text") ?? "");
+      expect(texto).toContain(IMOVEL_COM_BADGES);
+      // Mesma razão do teste de hierarquia: aceita código com ou sem
+      // prefixo do tenant, desde que o número do imóvel esteja lá.
+      expect(texto).toMatch(/cód\.\s*\S*100\d+/i);
+      expect(texto).toContain("São Paulo");
+    } finally {
+      await definirContato(page, {});
+    }
+  });
+});
+
+test.describe("Detalhe do imóvel — conversão no mobile", () => {
+  test.use({ viewport: { width: 375, height: 800 } });
+
+  test("barra fixa mostra o preço e leva ao formulário sem rolar a página inteira", async ({
+    page,
+  }) => {
+    await page.goto(URL_IMOVEL);
+    const barra = page.locator("[data-cta-imovel]");
+    await expect(barra).toBeVisible();
+    await expect(barra.getByText("R$ 500.000")).toBeVisible();
+
+    await barra.getByRole("link", { name: "Contato" }).click();
+    await expect(page.locator("#contato-imovel")).toBeInViewport();
+  });
+
+  test("a barra não cobre o rodapé nem o fim do conteúdo", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(300);
+    const colide = await page.evaluate(() => {
+      const barra = document.querySelector("[data-cta-imovel]")!.getBoundingClientRect();
+      const footer = document.querySelector("footer")!.getBoundingClientRect();
+      return footer.bottom > barra.top && footer.top < barra.bottom;
+    });
+    expect(colide).toBe(false);
+  });
+
+  test("o botão flutuante de contato não cobre os botões da barra", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    const colide = await page.evaluate(() => {
+      const fl = document.querySelector("[data-contato-flutuante]")!.getBoundingClientRect();
+      const barra = document.querySelector("[data-cta-imovel]")!;
+      return [...barra.querySelectorAll("a")].some((a) => {
+        const r = a.getBoundingClientRect();
+        return !(fl.bottom <= r.top || fl.top >= r.bottom || fl.right <= r.left || fl.left >= r.right);
+      });
+    });
+    expect(colide).toBe(false);
+  });
+
+  test("a barra é exclusiva do detalhe — a Home não a renderiza", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator("[data-cta-imovel]")).toHaveCount(0);
+  });
+});
+
+test.describe("Detalhe do imóvel — responsividade e isolamento", () => {
+  for (const largura of [375, 768, 1024, 1280, 1440]) {
+    test(`${largura}px: sem overflow horizontal`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.goto(URL_IMOVEL);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      expect(await semOverflow(page)).toBe(true);
+    });
+  }
+
+  test("acima de lg a barra fixa não existe (o card lateral fica visível)", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(URL_IMOVEL);
+    await expect(page.locator("[data-cta-imovel]")).toBeHidden();
+  });
+
+  test("imóvel de outro tenant não é servido por esta organização", async ({ page }) => {
+    const resposta = await page.goto(`/imoveis/${IDS_E2E.imovelOrgB}`);
+    expect(resposta?.status()).toBe(404);
   });
 });

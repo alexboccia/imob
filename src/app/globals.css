@@ -188,3 +188,24 @@
     @apply font-sans;
   }
 }
+
+/* Dois elementos fixos disputam o canto inferior direito no mobile: o
+   botão flutuante de contato (no layout público, todas as páginas) e a
+   barra de conversão do detalhe do imóvel. Sem isto o balão cobre o
+   botão de WhatsApp da barra em 375px.
+
+   O layout não sabe qual rota está renderizando e a barra é Server
+   Component, então a convivência é resolvida onde ela de fato existe —
+   no CSS: quando a página tem a barra, o botão flutuante sobe acima
+   dela. Acima de lg a barra não é renderizada e nada muda. */
+@media (max-width: 1023px) {
+  body:has([data-cta-imovel]) [data-contato-flutuante] {
+    bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+  /* O espaço pra barra precisa vir DEPOIS do rodapé, não dentro do
+     container de conteúdo: reservado só ali, o rodapé (que é irmão do
+     <main>) continuava passando por baixo da barra ao rolar até o fim. */
+  body:has([data-cta-imovel]) {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+}

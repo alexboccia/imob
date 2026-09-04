@@ -8,12 +8,12 @@ import type { Swiper as SwiperType } from "swiper";
 import "swiper/css";
 import { AnimatePresence, motion } from "motion/react";
 import { ModalContato } from "@/components/ModalContato";
-import { Button } from "@/components/ui/button";
+import { BotaoCompartilhar } from "@/components/BotaoCompartilhar";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   IconeChevronEsquerdo,
   IconeChevronDireito,
   IconeFechar,
-  IconeCompartilhar,
   IconeZoomMais,
   IconeZoomMenos,
   IconeGrade,
@@ -35,7 +35,10 @@ export function GaleriaFotos({
   fotos: Foto[];
   titulo: string;
   imovelId: string;
-  whatsappHref: string;
+  // null quando o tenant não tem WhatsApp configurado — o CTA da barra
+  // do lightbox some, e o ModalContato (que já aceita a prop opcional)
+  // segue oferecendo o formulário. Nunca renderiza "wa.me/" vazio.
+  whatsappHref: string | null;
   mensagemContato: string;
   temVideo?: boolean;
   orgSlug: string;
@@ -45,7 +48,6 @@ export function GaleriaFotos({
   const [indice, setIndice] = useState(0);
   const [aberto, setAberto] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [linkCopiado, setLinkCopiado] = useState(false);
   const thumbsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const swiperInlineRef = useRef<SwiperType | null>(null);
   const swiperLightboxRef = useRef<SwiperType | null>(null);
@@ -88,21 +90,6 @@ export function GaleriaFotos({
       swiperLightboxRef.current?.slideTo(indice);
     }
   }, [indice, aberto, fotos.length]);
-
-  async function compartilhar() {
-    const url = window.location.href;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: titulo, url });
-      } catch {
-        // usuário cancelou o compartilhamento
-      }
-      return;
-    }
-    await navigator.clipboard.writeText(url);
-    setLinkCopiado(true);
-    setTimeout(() => setLinkCopiado(false), 2000);
-  }
 
   function zoomMais() {
     setZoom((z) => Math.min(3, z + 0.5));
@@ -207,21 +194,10 @@ export function GaleriaFotos({
         </Button>
 
         <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={compartilhar}
-              aria-label="Compartilhar"
-              className="w-9 h-9 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow"
-            >
-              <IconeCompartilhar className="w-4 h-4" />
-            </button>
-            {linkCopiado && (
-              <span className="absolute top-full right-0 mt-1 whitespace-nowrap text-xs bg-white text-gray-900 px-2 py-1 rounded shadow">
-                Link copiado!
-              </span>
-            )}
-          </div>
+<BotaoCompartilhar
+              titulo={titulo}
+              className="flex size-9 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow hover:bg-white"
+            />
         </div>
 
         {fotos.length > 1 && (
@@ -380,21 +356,10 @@ export function GaleriaFotos({
           </Button>
 
           <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
-            <div className="relative">
-              <button
-                type="button"
-                onClick={compartilhar}
-                aria-label="Compartilhar"
-                className="w-9 h-9 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow"
-              >
-                <IconeCompartilhar className="w-4 h-4" />
-              </button>
-              {linkCopiado && (
-                <span className="absolute top-full right-0 mt-1 whitespace-nowrap text-xs bg-white text-gray-900 px-2 py-1 rounded shadow">
-                  Link copiado!
-                </span>
-              )}
-            </div>
+<BotaoCompartilhar
+              titulo={titulo}
+              className="flex size-9 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow hover:bg-white"
+            />
           </div>
 
           {temVideo && (
@@ -489,21 +454,10 @@ export function GaleriaFotos({
             </Swiper>
 
             <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={compartilhar}
-                  aria-label="Compartilhar"
-                  className="w-9 h-9 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow"
-                >
-                  <IconeCompartilhar className="w-4 h-4" />
-                </button>
-                {linkCopiado && (
-                  <span className="absolute top-full right-0 mt-1 whitespace-nowrap text-xs bg-white text-gray-900 px-2 py-1 rounded shadow">
-                    Link copiado!
-                  </span>
-                )}
-              </div>
+<BotaoCompartilhar
+              titulo={titulo}
+              className="flex size-9 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow hover:bg-white"
+            />
             </div>
           </div>
 
@@ -540,19 +494,23 @@ export function GaleriaFotos({
             className="flex items-center gap-2"
             onClick={(e) => e.stopPropagation()}
           >
-            <Button
-              className="bg-whatsapp-brand hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active"
-              nativeButton={false}
-              render={
-                <a href={whatsappHref} target="_blank" rel="noopener noreferrer" />
-              }
-            >
-              WhatsApp
-            </Button>
+            {whatsappHref && (
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={buttonVariants({
+                  className:
+                    "bg-whatsapp-brand text-white hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active",
+                })}
+              >
+                WhatsApp
+              </a>
+            )}
             <ModalContato
               imovelId={imovelId}
               mensagemPreenchida={mensagemContato}
-              whatsappHref={whatsappHref}
+              whatsappHref={whatsappHref ?? undefined}
               className="bg-white text-gray-900 rounded-md px-4 py-2 text-sm font-medium hover:bg-gray-100"
               orgSlug={orgSlug}
               nome={nome}
