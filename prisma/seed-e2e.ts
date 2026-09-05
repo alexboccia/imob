@@ -42,6 +42,13 @@ export const IDS_E2E = {
   // imovel-filtros.ts).
   imovelAluguelOrgA: "e2e-imovel-aluguel-a",
   imovelComercialOrgA: "e2e-imovel-comercial-a",
+  // Analytics comercial (Fase 5) — imóveis da Organização D, ver seção
+  // "Organização D" em main(). Três papéis distintos e fixos: o campeão
+  // do ranking, o segundo colocado e um que NUNCA recebe contato (prova
+  // que imóvel sem contato não vira linha em zero).
+  imovelTopOrgAnalytics: "e2e-imovel-analytics-top",
+  imovelSecundarioOrgAnalytics: "e2e-imovel-analytics-2",
+  imovelSemContatoOrgAnalytics: "e2e-imovel-analytics-sem-contato",
 };
 
 // Fase P.10 — hostname fixo, custom domain ATIVO da Organização B, usado
@@ -322,11 +329,32 @@ async function main() {
     role: "OWNER",
   });
 
+  // Organização D: dedicada exclusivamente a analytics.spec.ts, pelo mesmo
+  // motivo estrutural da Organização C. As asserções de Analytics são
+  // números ABSOLUTOS (7 contatos, 3 pessoas, +250%) — só sustentáveis num
+  // tenant onde nenhum outro spec escreve. Em particular, Org A recebe
+  // contatos reais de public-form.spec.ts (PUBLIC_ORG_SLUG aponta pra ela),
+  // o que tornaria qualquer número absoluto dependente da ordem de
+  // execução dos specs.
+  const orgAnalytics = await garantirOrganizacaoComDono({
+    slug: "e2e-org-analytics",
+    name: "Organização E2E Analytics",
+    planId: planoCompleto.id,
+    email: "owner-analytics@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+
   // Specs como "criar imóvel" e "formulário público cria lead" criam dados
   // novos a cada rodada — sem isso o banco de teste acumularia lixo entre
   // execuções do Playwright. Person cascateia Interaction ao ser apagada;
   // Property (fora dos ids fixos) cascateia Media/PropertyStatusHistory.
-  const idsOrgs = [orgA.organization.id, orgB.organization.id, orgAgenda.organization.id];
+  const idsOrgs = [
+    orgA.organization.id,
+    orgB.organization.id,
+    orgAgenda.organization.id,
+    orgAnalytics.organization.id,
+  ];
   await prisma.person.deleteMany({ where: { organizationId: { in: idsOrgs } } });
   await prisma.property.deleteMany({
     where: {
@@ -339,6 +367,9 @@ async function main() {
           IDS_E2E.imovelComBadgesOrgA,
           IDS_E2E.imovelAluguelOrgA,
           IDS_E2E.imovelComercialOrgA,
+          IDS_E2E.imovelTopOrgAnalytics,
+          IDS_E2E.imovelSecundarioOrgAnalytics,
+          IDS_E2E.imovelSemContatoOrgAnalytics,
         ],
       },
     },
@@ -465,6 +496,104 @@ async function main() {
     title: "Apartamento E2E Agenda",
   });
 
+  // -----------------------------------------------------------------
+  // Organização D — fixture determinística do Analytics comercial
+  // -----------------------------------------------------------------
+  // Todos os `occurredAt` são posicionados em DIAS RELATIVOS a agora, ao
+  // meio-dia UTC: o seed roda em qualquer data e os eventos sempre caem
+  // nas mesmas janelas (7d / 30d / 13 semanas), sem nenhuma data
+  // hardcoded que "expiraria". Meio-dia (não 00:00 nem 23:59) mantém
+  // distância folgada das bordas de dia UTC, então nem o fuso do runner
+  // nem o instante da execução podem empurrar um evento pro balde
+  // vizinho.
+  //
+  // Os números que a spec afirma saem daqui e de mais lugar nenhum:
+  //   contatos comerciais (30d) ....... 7
+  //   pessoas distintas ............... 3
+  //   imóveis com contato ............. 2
+  //   proprietários querendo anunciar . 1
+  //   período anterior (30d) .......... 2  -> variação +250%
+  //   interações SEM origem (30d) ..... 1  -> nota de método
+  //   origens: IMOVEL 4 · ANUNCIE 2 · CONTATO 1
+  await garantirTipoImovel({ organizationId: orgAnalytics.organization.id, name: "Apartamento" });
+  await garantirImovel({
+    id: IDS_E2E.imovelTopOrgAnalytics,
+    organizationId: orgAnalytics.organization.id,
+    title: "Cobertura Analytics mais procurada",
+    neighborhood: "Moema",
+  });
+  await garantirImovel({
+    id: IDS_E2E.imovelSecundarioOrgAnalytics,
+    organizationId: orgAnalytics.organization.id,
+    title: "Studio Analytics segundo colocado",
+  });
+  await garantirImovel({
+    id: IDS_E2E.imovelSemContatoOrgAnalytics,
+    organizationId: orgAnalytics.organization.id,
+    title: "Sobrado Analytics sem nenhum contato",
+  });
+
+  // As Person desta organização já foram apagadas pelo deleteMany acima
+  // (idsOrgs inclui orgAnalytics), então são recriadas do zero a cada
+  // rodada — nunca acumulam entre execuções.
+  const leadRecorrente = await prisma.person.create({
+    data: {
+      organizationId: orgAnalytics.organization.id,
+      name: "Lead Analytics Recorrente",
+      roles: ["LEAD"],
+      source: "WEBSITE",
+    },
+  });
+  const leadOcasional = await prisma.person.create({
+    data: {
+      organizationId: orgAnalytics.organization.id,
+      name: "Lead Analytics Ocasional",
+      roles: ["LEAD"],
+      source: "WEBSITE",
+    },
+  });
+  const proprietarioAnalytics = await prisma.person.create({
+    data: {
+      organizationId: orgAnalytics.organization.id,
+      name: "Proprietário Analytics",
+      roles: ["OWNER"],
+      source: "WEBSITE",
+    },
+  });
+
+  const AGORA_SEED = Date.now();
+  const diasAtras = (dias: number) => {
+    const base = new Date(AGORA_SEED - dias * 24 * 60 * 60 * 1000);
+    return new Date(
+      Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), 12, 0, 0, 0)
+    );
+  };
+
+  await prisma.interaction.createMany({
+    data: [
+      // 4 contatos de UMA única pessoa — é o que prova, na tela, que
+      // "contatos recebidos" (7) e "pessoas que procuraram" (3) são
+      // métricas diferentes e não podem ser lidas como a mesma coisa.
+      { organizationId: orgAnalytics.organization.id, personId: leadRecorrente.id, propertyId: IDS_E2E.imovelTopOrgAnalytics, type: "MESSAGE", origin: "IMOVEL", occurredAt: diasAtras(1) },
+      { organizationId: orgAnalytics.organization.id, personId: leadRecorrente.id, propertyId: IDS_E2E.imovelTopOrgAnalytics, type: "MESSAGE", origin: "IMOVEL", occurredAt: diasAtras(2) },
+      { organizationId: orgAnalytics.organization.id, personId: leadRecorrente.id, propertyId: IDS_E2E.imovelTopOrgAnalytics, type: "MESSAGE", origin: "IMOVEL", occurredAt: diasAtras(3) },
+      { organizationId: orgAnalytics.organization.id, personId: leadRecorrente.id, type: "MESSAGE", origin: "CONTATO", occurredAt: diasAtras(2) },
+      // Segundo imóvel do ranking.
+      { organizationId: orgAnalytics.organization.id, personId: leadOcasional.id, propertyId: IDS_E2E.imovelSecundarioOrgAnalytics, type: "MESSAGE", origin: "IMOVEL", occurredAt: diasAtras(4) },
+      // 2 pedidos de anúncio do MESMO proprietário — 1 proprietário
+      // interessado, nunca 2.
+      { organizationId: orgAnalytics.organization.id, personId: proprietarioAnalytics.id, type: "MESSAGE", origin: "ANUNCIE", occurredAt: diasAtras(1) },
+      { organizationId: orgAnalytics.organization.id, personId: proprietarioAnalytics.id, type: "MESSAGE", origin: "ANUNCIE", occurredAt: diasAtras(5) },
+      // Ruído deliberado: registro interno da equipe, origin=null. Não
+      // pode entrar em nenhum número — só na nota de método.
+      { organizationId: orgAnalytics.organization.id, personId: leadRecorrente.id, type: "CALL", origin: null, occurredAt: diasAtras(2) },
+      // Período ANTERIOR (dia 35 e 40 -> dentro dos 30 dias anteriores):
+      // base da comparação. 7 vs 2 = +250%.
+      { organizationId: orgAnalytics.organization.id, personId: leadOcasional.id, type: "MESSAGE", origin: "CONTATO", occurredAt: diasAtras(35) },
+      { organizationId: orgAnalytics.organization.id, personId: leadOcasional.id, type: "MESSAGE", origin: "CONTATO", occurredAt: diasAtras(40) },
+    ],
+  });
+
   // Fase P.10 — custom domain fixo e ATIVO da Organização B (ver
   // HOSTNAME_E2E_ORG_B acima).
   await prisma.organizationDomain.upsert({
@@ -484,6 +613,9 @@ async function main() {
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);
   console.log(
     `  Org C (dedicada à Agenda, CRM habilitado): slug=${orgAgenda.organization.slug} login=owner-agenda@e2e.test`
+  );
+  console.log(
+    `  Org D (dedicada ao Analytics, CRM habilitado): slug=${orgAnalytics.organization.slug} login=owner-analytics@e2e.test`
   );
 }
 

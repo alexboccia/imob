@@ -26,6 +26,15 @@ export const ORG_AGENDA = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Analytics comercial (Fase 5) — organização dedicada, pelo mesmo motivo
+// estrutural de ORG_AGENDA: as asserções do Analytics são números
+// absolutos, e Org A recebe contatos reais de public-form.spec.ts.
+export const ORG_ANALYTICS = {
+  slug: "e2e-org-analytics",
+  email: "owner-analytics@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const IDS_E2E = {
   imovelParaEditarOrgA: "e2e-imovel-editar-a",
   membroOwnerOrgB: "e2e-membro-owner-b",
@@ -47,6 +56,12 @@ export const IDS_E2E = {
   // completa: juntos provam que cada bloco da experiência de lançamento
   // aparece por dado real e some sozinho quando o dado não existe.
   imovelLancamentoMinimoOrgA: "e2e-imovel-comercial-a",
+  // Fase 5 — imóveis da Organização de Analytics (ver prisma/seed-e2e.ts,
+  // seção "Organização D"): campeão do ranking, segundo colocado e um que
+  // nunca recebe contato nenhum.
+  imovelTopOrgAnalytics: "e2e-imovel-analytics-top",
+  imovelSecundarioOrgAnalytics: "e2e-imovel-analytics-2",
+  imovelSemContatoOrgAnalytics: "e2e-imovel-analytics-sem-contato",
 };
 
 // Fase P.10 — mesmo valor de prisma/seed-e2e.ts (duplicado de propósito,

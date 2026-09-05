@@ -149,3 +149,30 @@ export function rotulosAtivos(imovel: {
 }) {
   return ROTULOS_IMOVEL.filter((r) => imovel[r.chave]);
 }
+
+// -----------------------------------------------------------------------
+// Formatação numérica do Analytics comercial (Fase 5)
+// -----------------------------------------------------------------------
+// Mora AQUI, e não em analytics-comercial.ts, por uma razão estrutural:
+// AnalyticsSerieContatos é um client component (recharts), e importar um
+// VALOR de analytics-comercial.ts arrastaria o módulo inteiro — e com ele
+// @/lib/prisma e node:async_hooks — pro bundle do navegador (erro real:
+// "the chunking context does not support external modules"). Tipos são
+// apagados na compilação e podem continuar vindo de lá; funções, não.
+// format.ts não importa nada e por isso é seguro dos dois lados.
+
+const formatadorNumeroPtBr = new Intl.NumberFormat("pt-BR");
+
+export function formatarNumero(valor: number): string {
+  return formatadorNumeroPtBr.format(valor);
+}
+
+// Percentual sem casa decimal: a precisão de "23,7%" é falsa quando o
+// denominador são 19 contatos. O inteiro comunica a ordem de grandeza,
+// que é tudo que esse número significa. Sinal explícito (+/−) porque o
+// valor representa variação, não proporção.
+export function formatarPercentualInteiro(valor: number): string {
+  const arredondado = Math.round(valor);
+  const sinal = arredondado > 0 ? "+" : arredondado < 0 ? "−" : "";
+  return `${sinal}${formatadorNumeroPtBr.format(Math.abs(arredondado))}%`;
+}

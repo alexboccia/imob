@@ -17,6 +17,12 @@ const NAV_LINKS = [
   { href: "/app/clientes", label: "Clientes", modulo: "crm" },
   { href: "/app/pipeline", label: "Pipeline", modulo: "crm" },
   { href: "/app/agenda", label: "Agenda", modulo: "crm" },
+  // Analytics comercial (Fase 5) — mesmo portão de módulo das outras
+  // telas de CRM: é uma agregação de Interaction, exatamente o dado que
+  // Clientes/Pipeline/Agenda já mostram linha a linha. Fica logo depois
+  // delas, fechando o bloco de CRM, e nunca antes de Imóveis/Clientes
+  // (que são o trabalho diário, não a leitura gerencial).
+  { href: "/app/analytics", label: "Analytics", modulo: "crm" },
   { href: "/app/caracteristicas", label: "Características" },
   { href: "/app/tipos-imovel", label: "Tipos de imóvel" },
   { href: "/app/usuarios", label: "Usuários" },
