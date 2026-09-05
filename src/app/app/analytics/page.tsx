@@ -12,6 +12,7 @@ import { AnalyticsKpiCards } from "@/components/admin/analytics/AnalyticsKpiCard
 import { AnalyticsSerieContatos } from "@/components/admin/analytics/AnalyticsSerieContatos";
 import { AnalyticsOrigens } from "@/components/admin/analytics/AnalyticsOrigens";
 import { AnalyticsTopImoveis } from "@/components/admin/analytics/AnalyticsTopImoveis";
+import { AnalyticsFunilDigital } from "@/components/admin/analytics/AnalyticsFunilDigital";
 
 // Analytics comercial (Fase 5).
 //
@@ -92,10 +93,15 @@ export default async function AnalyticsPage({
         periodoLabel={periodoLabel}
       />
 
+      {/* Funil digital (Fase 6) ao lado da origem dos contatos: as duas
+          respondem "de onde veio o interesse", uma pelo comportamento no
+          site, outra pela página que originou o contato. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <AnalyticsFunilDigital funil={analytics.funil} periodoLabel={periodoLabel} />
         <AnalyticsOrigens origens={analytics.origens} total={analytics.contatos.atual} />
-        <AnalyticsTopImoveis imoveis={analytics.topImoveis} />
       </div>
+
+      <AnalyticsTopImoveis imoveis={analytics.topImoveis} />
 
       {/* Nota de método — a tela declara em texto o que ela conta e o que
           ela NÃO conta. É isso que impede o corretor de ler estes números
@@ -120,6 +126,15 @@ export default async function AnalyticsPage({
           <li>
             Um mesmo contato conta como 1 contato; uma mesma pessoa que voltou várias vezes conta
             como 1 pessoa.
+          </li>
+          <li>
+            Uma visualização é a página de um imóvel aberta no navegador de uma pessoa, contada no
+            máximo uma vez a cada 30 minutos por visitante e por imóvel. Rastreadores que não
+            executam JavaScript, prefetch e verificações automáticas não entram.
+          </li>
+          <li>
+            Visualizações e cliques passaram a ser medidos a partir da publicação desta versão —
+            não existe histórico anterior, e nada foi estimado para trás.
           </li>
           <li>
             O período anterior usado na comparação tem exatamente o mesmo número de dias, colado

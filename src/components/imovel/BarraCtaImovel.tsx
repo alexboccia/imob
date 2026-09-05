@@ -1,5 +1,6 @@
 import { buttonVariants } from "@/components/ui/button";
 import { IconeWhatsApp } from "@/components/icons";
+import { RastreioCliqueWhatsApp } from "@/components/analytics/RastreioCliqueWhatsApp";
 import { formatarPreco } from "@/lib/format";
 
 // Barra de conversão fixa no rodapé, só no mobile. No desktop o card
@@ -18,6 +19,8 @@ export function BarraCtaImovel({
   price,
   rentPrice,
   whatsappHref,
+  orgSlug,
+  imovelId,
   hrefFormulario,
 }: {
   price: unknown;
@@ -25,6 +28,8 @@ export function BarraCtaImovel({
   // null = tenant sem WhatsApp configurado: a barra continua existindo,
   // com o contato pelo formulário ocupando a largura toda.
   whatsappHref: string | null;
+  orgSlug: string;
+  imovelId: string;
   hrefFormulario: string;
 }) {
   const valor = price ?? rentPrice;
@@ -55,20 +60,24 @@ export function BarraCtaImovel({
             Contato
           </a>
           {whatsappHref && (
-            <a
-              href={whatsappHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Falar no WhatsApp sobre este imóvel"
-              className={buttonVariants({
-                size: "lg",
-                className:
-                  "bg-whatsapp-brand text-white hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active",
-              })}
-            >
-              <IconeWhatsApp className="size-5" />
-              WhatsApp
-            </a>
+            // aria-label e href preservados byte a byte — o wrapper não
+            // participa da árvore de acessibilidade (display: contents).
+            <RastreioCliqueWhatsApp orgSlug={orgSlug} imovelId={imovelId} placement="MOBILE_BAR">
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Falar no WhatsApp sobre este imóvel"
+                className={buttonVariants({
+                  size: "lg",
+                  className:
+                    "bg-whatsapp-brand text-white hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active",
+                })}
+              >
+                <IconeWhatsApp className="size-5" />
+                WhatsApp
+              </a>
+            </RastreioCliqueWhatsApp>
           )}
         </div>
       </div>

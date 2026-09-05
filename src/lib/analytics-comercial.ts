@@ -13,6 +13,7 @@ import {
   type OrigemCaptacao,
 } from "@/lib/captacao";
 import { inicioDoDiaUTC, fimDoDiaUTC } from "@/lib/scheduled-activity-date";
+import { TIPOS_EVENTO_ANALYTICS } from "@/lib/analytics-eventos";
 
 // =======================================================================
 // Analytics comercial (Fase 5) — primeira camada de análise de CAPTAÇÃO
@@ -393,17 +394,156 @@ export function contarContatosPorImovel(
   return contagem;
 }
 
-// Ordena por volume e corta no teto — desempate por id só pra a ordem ser
-// determinística entre execuções (dois imóveis com 3 contatos cada nunca
-// trocam de lugar a cada refresh).
-export function ranquearImoveis(
-  contagem: ReadonlyMap<string, number>,
+export type LinhaMovimentoImovel = {
+  propertyId: string;
+  contatos: number;
+  visualizacoes: number;
+  cliquesWhatsapp: number;
+};
+
+// Ranking de MOVIMENTO do imóvel (Fase 6 — evolução do ranking da Fase 5,
+// que ordenava só por contato).
+//
+// Por que passou a incluir imóvel com visualização e ZERO contato: esse é
+// justamente o diagnóstico mais acionável que o funil digital
+// desbloqueou. Um imóvel com 200 visualizações e nenhum contato é o
+// anúncio que precisa de preço, foto ou texto novo — e no ranking antigo
+// ele simplesmente não existia, porque a tabela só enxergava quem já
+// tinha convertido.
+//
+// A ordem preserva a leitura da Fase 5: contato continua sendo o critério
+// primário, então quem converteu aparece primeiro, como antes.
+// Visualização só desempata e preenche as vagas restantes. Terceiro
+// critério é o id, só pra a ordem ser determinística entre refreshes.
+export function ranquearImoveisPorMovimento(
+  contatos: ReadonlyMap<string, number>,
+  eventos: ReadonlyMap<string, { visualizacoes: number; cliquesWhatsapp: number }>,
   teto: number
-): { propertyId: string; contatos: number }[] {
-  return [...contagem.entries()]
-    .map(([propertyId, contatos]) => ({ propertyId, contatos }))
-    .sort((a, b) => b.contatos - a.contatos || a.propertyId.localeCompare(b.propertyId))
+): LinhaMovimentoImovel[] {
+  const ids = new Set<string>([...contatos.keys(), ...eventos.keys()]);
+  return [...ids]
+    .map((propertyId) => {
+      const digitais = eventos.get(propertyId);
+      return {
+        propertyId,
+        contatos: contatos.get(propertyId) ?? 0,
+        visualizacoes: digitais?.visualizacoes ?? 0,
+        cliquesWhatsapp: digitais?.cliquesWhatsapp ?? 0,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.contatos - a.contatos ||
+        b.visualizacoes - a.visualizacoes ||
+        a.propertyId.localeCompare(b.propertyId)
+    )
     .slice(0, teto);
+}
+
+
+// =======================================================================
+// FUNIL DIGITAL (Fase 6) — VISUALIZAÇÃO -> INTENÇÃO -> CONTATO
+// =======================================================================
+// Três etapas, TRÊS fontes distintas e não sobrepostas:
+//
+//   Visualizações      PropertyAnalyticsEvent, type=PROPERTY_VIEW
+//   Cliques WhatsApp   PropertyAnalyticsEvent, type=WHATSAPP_CLICK
+//   Contatos do imóvel Interaction, origin=IMOVEL e propertyId != null
+//
+// -----------------------------------------------------------------------
+// POR QUE NÃO É UM FUNIL LINEAR
+// -----------------------------------------------------------------------
+// Clicar no WhatsApp e enviar o formulário são CAMINHOS PARALELOS, não
+// degraus consecutivos: quem clica no WhatsApp normalmente NÃO preenche
+// o formulário, e vice-versa. Somar/encadear os dois como se fossem
+// etapas de uma mesma escada produziria uma "taxa de conversão" que não
+// significa nada. A tela mostra as três medidas lado a lado, cada uma
+// com sua definição, e diz isso em texto.
+//
+// Um clique no WhatsApp TAMBÉM não prova conversa: ninguém, deste lado,
+// sabe se a mensagem foi enviada. Por isso a métrica se chama "cliques
+// no WhatsApp"/"intenção", nunca "leads pelo WhatsApp".
+// =======================================================================
+
+export type EtapaFunil = {
+  chave: "VISUALIZACOES" | "WHATSAPP" | "CONTATOS";
+  rotulo: string;
+  // Frase curta que define a métrica na própria tela — nenhum número
+  // aparece sem dizer o que ele conta.
+  definicao: string;
+  total: number;
+};
+
+// -----------------------------------------------------------------------
+// A ÚNICA TAXA SEMANTICAMENTE DEFENSÁVEL DESTA FASE
+// -----------------------------------------------------------------------
+// Fórmula:
+//
+//   taxaContatoPorVisualizacao =
+//       contatos com origin=IMOVEL e propertyId != null
+//     / visualizações válidas de imóveis
+//
+// Numerador e denominador vivem no MESMO universo: ambos são eventos
+// que nasceram na página de um imóvel. É por isso que o numerador NÃO é
+// "todos os contatos": um contato com origin=CONTATO (página geral) ou
+// origin=ANUNCIE (proprietário querendo anunciar) não nasceu de
+// visualização de imóvel nenhuma, e incluí-lo inflaria a taxa com
+// numerador que o denominador não cobre.
+//
+// Denominador zero -> null, nunca 0%. "0% de conversão" quando ninguém
+// visitou o site é uma afirmação falsa sobre o desempenho do corretor;
+// "—" é a verdade. Mesma regra já usada em compararComPeriodoAnterior.
+export function calcularTaxa(numerador: number, denominador: number): number | null {
+  if (denominador <= 0) return null;
+  return (numerador / denominador) * 100;
+}
+
+// Percentual de taxa com 1 casa só quando ela agrega informação (2,4%),
+// inteiro quando não (25%). Nunca "0,00%".
+export function formatarTaxa(valor: number | null): string {
+  if (valor === null) return "—";
+  const casas = valor > 0 && valor < 10 ? 1 : 0;
+  return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: casas }).format(valor)}%`;
+}
+
+export type FunilDigital = {
+  visualizacoes: ComparacaoPeriodo;
+  cliquesWhatsapp: ComparacaoPeriodo;
+  contatosDeImovel: ComparacaoPeriodo;
+  taxaContatoPorVisualizacao: number | null;
+  taxaWhatsappPorVisualizacao: number | null;
+  etapas: EtapaFunil[];
+  // true quando NÃO existe nenhum evento digital em toda a organização —
+  // o que, logo após o deploy da Fase 6, é o estado normal e esperado.
+  // A tela usa isso pra explicar que a medição começou agora, em vez de
+  // mostrar zeros como se fossem desempenho ruim.
+  semHistoricoDigital: boolean;
+};
+
+export type ContagemEventosImovel = { visualizacoes: number; cliquesWhatsapp: number };
+
+// Agrega em memória, numa passada, a partir das linhas cruas já lidas —
+// nunca uma query por imóvel (zero N+1).
+export function agruparEventosPorImovel(
+  eventos: readonly { propertyId: string; type: string }[]
+): Map<string, ContagemEventosImovel> {
+  const porImovel = new Map<string, ContagemEventosImovel>();
+  for (const evento of eventos) {
+    const atual = porImovel.get(evento.propertyId) ?? { visualizacoes: 0, cliquesWhatsapp: 0 };
+    if (evento.type === TIPOS_EVENTO_ANALYTICS.PROPERTY_VIEW) atual.visualizacoes += 1;
+    else if (evento.type === TIPOS_EVENTO_ANALYTICS.WHATSAPP_CLICK) atual.cliquesWhatsapp += 1;
+    porImovel.set(evento.propertyId, atual);
+  }
+  return porImovel;
+}
+
+export function contarPorTipo(
+  eventos: readonly { type: string }[],
+  tipo: string
+): number {
+  let total = 0;
+  for (const evento of eventos) if (evento.type === tipo) total += 1;
+  return total;
 }
 
 const TETO_TOP_IMOVEIS = 5;
@@ -415,6 +555,13 @@ export type ImovelMaisProcurado = {
   tipo: string;
   localizacao: string;
   contatos: number;
+  // Fase 6 — métricas digitais do MESMO imóvel e do MESMO período.
+  visualizacoes: number;
+  cliquesWhatsapp: number;
+  // contatos / visualizações daquele imóvel. null quando o imóvel não
+  // teve visualização nenhuma no período: sem denominador não existe
+  // taxa, e "0%" seria mentira.
+  taxaConversao: number | null;
 };
 
 export type AnalyticsComercial = {
@@ -430,6 +577,7 @@ export type AnalyticsComercial = {
   serie: PontoSerie[];
   origens: ItemOrigem[];
   topImoveis: ImovelMaisProcurado[];
+  funil: FunilDigital;
 };
 
 // -----------------------------------------------------------------------
@@ -464,7 +612,15 @@ export async function buscarAnalyticsComercial(
   const granularidade = granularidadeDe(periodo);
 
   return withOrganization(organizationId, async () => {
-    const [eventos, contatosAnteriores, interacoesSemOrigem, configContato] = await Promise.all([
+    const [
+      interacoes,
+      contatosAnteriores,
+      interacoesSemOrigem,
+      eventosDigitais,
+      eventosDigitaisAnteriores,
+      totalEventosDigitaisOrg,
+      configContato,
+    ] = await Promise.all([
       prisma.interaction.findMany({
         where: {
           organizationId,
@@ -487,11 +643,44 @@ export async function buscarAnalyticsComercial(
           occurredAt: { gte: janelas.atual.inicio, lte: janelas.atual.fim },
         },
       }),
+      // Fase 6 — eventos digitais do período atual. Uma leitura só, com
+      // as 2 colunas necessárias: dela saem visualizações, cliques de
+      // WhatsApp e o recorte por imóvel do ranking, tudo em memória.
+      // Nunca uma query por imóvel (zero N+1).
+      prisma.propertyAnalyticsEvent.findMany({
+        where: {
+          organizationId,
+          occurredAt: { gte: janelas.atual.inicio, lte: janelas.atual.fim },
+        },
+        select: { propertyId: true, type: true },
+      }),
+      // Período anterior: só as contagens por tipo, nunca as linhas.
+      prisma.propertyAnalyticsEvent.groupBy({
+        by: ["type"],
+        where: {
+          organizationId,
+          occurredAt: { gte: janelas.anterior.inicio, lte: janelas.anterior.fim },
+        },
+        _count: { _all: true },
+      }),
+      // "Esta organização já tem QUALQUER evento digital?" — distingue
+      // "ninguém acessou neste período" de "a medição começou agora e
+      // não existe histórico", que é o estado logo após o deploy.
+      // `take: 1` + select do id: nunca conta a tabela inteira.
+      prisma.propertyAnalyticsEvent.findFirst({
+        where: { organizationId },
+        select: { id: true },
+      }),
       buscarConfiguracaoContato(organizationId),
     ]);
 
-    const contagemPorImovel = contarContatosPorImovel(eventos);
-    const ranking = ranquearImoveis(contagemPorImovel, TETO_TOP_IMOVEIS);
+    const contagemPorImovel = contarContatosPorImovel(interacoes);
+    const eventosPorImovel = agruparEventosPorImovel(eventosDigitais);
+    const ranking = ranquearImoveisPorMovimento(
+      contagemPorImovel,
+      eventosPorImovel,
+      TETO_TOP_IMOVEIS
+    );
 
     // Detalhes só dos que entraram no ranking. `in: []` nunca chega aqui:
     // sem ranking, a query inteira é pulada.
@@ -511,6 +700,61 @@ export async function buscarAnalyticsComercial(
       : [];
     const detalhePorId = new Map(detalhes.map((d) => [d.id, d]));
 
+    // ---- Funil digital (Fase 6) --------------------------------------
+    const visualizacoes = contarPorTipo(eventosDigitais, TIPOS_EVENTO_ANALYTICS.PROPERTY_VIEW);
+    const cliquesWhatsapp = contarPorTipo(eventosDigitais, TIPOS_EVENTO_ANALYTICS.WHATSAPP_CLICK);
+
+    const anterioresPorTipo = new Map(
+      eventosDigitaisAnteriores.map((linha) => [linha.type, linha._count._all])
+    );
+
+    // Numerador da taxa: SÓ contatos que nasceram na página de um imóvel
+    // (origin=IMOVEL e propertyId preenchido) — o mesmo universo do
+    // denominador. Contato geral e "anuncie" ficam de fora de propósito.
+    const contatosDeImovelAtual = interacoes.filter(
+      (i) => i.origin === ORIGENS_CAPTACAO.IMOVEL && i.propertyId !== null
+    ).length;
+
+    const funil: FunilDigital = {
+      visualizacoes: compararComPeriodoAnterior(
+        visualizacoes,
+        anterioresPorTipo.get(TIPOS_EVENTO_ANALYTICS.PROPERTY_VIEW) ?? 0
+      ),
+      cliquesWhatsapp: compararComPeriodoAnterior(
+        cliquesWhatsapp,
+        anterioresPorTipo.get(TIPOS_EVENTO_ANALYTICS.WHATSAPP_CLICK) ?? 0
+      ),
+      // Sem comparação com o período anterior aqui: o número já é
+      // recortado de `interacoes`, e buscar a janela anterior custaria
+      // mais uma query só pra alimentar um segundo delta que a tela não
+      // mostra. `anterior: 0` seria mentira, então repete o atual — o
+      // componente nunca lê a variação desta etapa.
+      contatosDeImovel: compararComPeriodoAnterior(contatosDeImovelAtual, contatosDeImovelAtual),
+      taxaContatoPorVisualizacao: calcularTaxa(contatosDeImovelAtual, visualizacoes),
+      taxaWhatsappPorVisualizacao: calcularTaxa(cliquesWhatsapp, visualizacoes),
+      etapas: [
+        {
+          chave: "VISUALIZACOES",
+          rotulo: "Visualizações",
+          definicao: "Páginas de imóvel abertas no navegador",
+          total: visualizacoes,
+        },
+        {
+          chave: "WHATSAPP",
+          rotulo: "Cliques no WhatsApp",
+          definicao: "Intenção de conversa — não confirma mensagem enviada",
+          total: cliquesWhatsapp,
+        },
+        {
+          chave: "CONTATOS",
+          rotulo: "Contatos pelo imóvel",
+          definicao: "Formulário da página do imóvel registrado no CRM",
+          total: contatosDeImovelAtual,
+        },
+      ],
+      semHistoricoDigital: totalEventosDigitaisOrg === null,
+    };
+
     const topImoveis: ImovelMaisProcurado[] = ranking.flatMap((linha) => {
       const detalhe = detalhePorId.get(linha.propertyId);
       // Imóvel apagado entre a interação e agora (Interaction.propertyId é
@@ -525,6 +769,11 @@ export async function buscarAnalyticsComercial(
           tipo: detalhe.type,
           localizacao: formatarLocalizacaoImovel(detalhe.neighborhood, detalhe.city, detalhe.state),
           contatos: linha.contatos,
+          visualizacoes: linha.visualizacoes,
+          cliquesWhatsapp: linha.cliquesWhatsapp,
+          // Imóvel sem visualização no período (ex.: contato veio antes
+          // do tracking existir) -> null, nunca 0%.
+          taxaConversao: calcularTaxa(linha.contatos, linha.visualizacoes),
         },
       ];
     });
@@ -533,8 +782,8 @@ export async function buscarAnalyticsComercial(
       periodo,
       granularidade,
       janelas,
-      contatos: compararComPeriodoAnterior(eventos.length, contatosAnteriores),
-      pessoasDistintas: contarDistintos(eventos, (e) => e.personId),
+      contatos: compararComPeriodoAnterior(interacoes.length, contatosAnteriores),
+      pessoasDistintas: contarDistintos(interacoes, (e) => e.personId),
       imoveisComContato: contagemPorImovel.size,
       // Pessoas distintas com pelo menos um contato de ANUNCIE. Distinto
       // por personId de propósito: um proprietário que mandou três
@@ -543,13 +792,14 @@ export async function buscarAnalyticsComercial(
       // e OWNER) — são dois recortes diferentes do mesmo período, nunca
       // parcelas de uma soma.
       proprietariosAnunciando: contarDistintos(
-        eventos.filter((e) => e.origin === ORIGENS_CAPTACAO.ANUNCIE),
+        interacoes.filter((e) => e.origin === ORIGENS_CAPTACAO.ANUNCIE),
         (e) => e.personId
       ),
       interacoesSemOrigem,
-      serie: construirSerie(eventos, janelas.atual, granularidade),
-      origens: distribuirPorOrigem(eventos),
+      serie: construirSerie(interacoes, janelas.atual, granularidade),
+      origens: distribuirPorOrigem(interacoes),
       topImoveis,
+      funil,
     };
   });
 }

@@ -10,7 +10,11 @@ import {
   distribuirPorOrigem,
   contarDistintos,
   contarContatosPorImovel,
-  ranquearImoveis,
+  calcularTaxa,
+  formatarTaxa,
+  agruparEventosPorImovel,
+  contarPorTipo,
+  ranquearImoveisPorMovimento,
   eOrigemComercial,
   whereContatoComercial,
   PERIODO_ANALYTICS_DIAS,
@@ -332,8 +336,8 @@ describe("contarDistintos — interações NÃO são pessoas", () => {
   });
 });
 
-describe("top imóveis", () => {
-  const eventos = [
+describe("top imóveis (ranking de movimento)", () => {
+  const interacoes = [
     { propertyId: "imovel-b" },
     { propertyId: "imovel-b" },
     { propertyId: "imovel-b" },
@@ -341,38 +345,110 @@ describe("top imóveis", () => {
     { propertyId: null },
     { propertyId: null },
   ];
+  const semEventos = new Map<string, { visualizacoes: number; cliquesWhatsapp: number }>();
 
   test("agrupa por imóvel e ignora contato geral (sem propertyId)", () => {
-    const contagem = contarContatosPorImovel(eventos);
+    const contagem = contarContatosPorImovel(interacoes);
     expect(contagem.get("imovel-b")).toBe(3);
     expect(contagem.get("imovel-a")).toBe(1);
     expect(contagem.size).toBe(2);
   });
 
-  test("ranqueia por volume e respeita o teto", () => {
-    const ranking = ranquearImoveis(contarContatosPorImovel(eventos), 5);
-    expect(ranking).toEqual([
-      { propertyId: "imovel-b", contatos: 3 },
-      { propertyId: "imovel-a", contatos: 1 },
+  test("contato continua sendo o critério primário (leitura da Fase 5 preservada)", () => {
+    const ranking = ranquearImoveisPorMovimento(contarContatosPorImovel(interacoes), semEventos, 5);
+    expect(ranking.map((r) => r.propertyId)).toEqual(["imovel-b", "imovel-a"]);
+    expect(ranking[0].contatos).toBe(3);
+    expect(ranquearImoveisPorMovimento(contarContatosPorImovel(interacoes), semEventos, 1)).toHaveLength(1);
+  });
+
+  test("imóvel só com visualização entra no ranking (o diagnóstico que a Fase 5 não via)", () => {
+    const eventos = new Map([
+      ["so-visto", { visualizacoes: 200, cliquesWhatsapp: 4 }],
     ]);
-    expect(ranquearImoveis(contarContatosPorImovel(eventos), 1)).toHaveLength(1);
+    const ranking = ranquearImoveisPorMovimento(contarContatosPorImovel(interacoes), eventos, 5);
+    // Quem converteu continua na frente; o muito-visto-sem-contato passa
+    // a existir, em vez de sumir da tabela.
+    expect(ranking.map((r) => r.propertyId)).toEqual(["imovel-b", "imovel-a", "so-visto"]);
+    const soVisto = ranking.find((r) => r.propertyId === "so-visto")!;
+    expect(soVisto).toMatchObject({ contatos: 0, visualizacoes: 200, cliquesWhatsapp: 4 });
   });
 
-  test("imóvel sem nenhum contato simplesmente não aparece (nunca linha em zero)", () => {
-    const contagem = contarContatosPorImovel([{ propertyId: "so-esse" }]);
-    expect(contagem.has("imovel-sem-contato")).toBe(false);
-    expect(ranquearImoveis(contagem, 5).map((r) => r.propertyId)).toEqual(["so-esse"]);
+  test("visualização desempata imóveis com o mesmo número de contatos", () => {
+    const contatos = new Map([["x", 2], ["y", 2]]);
+    const eventos = new Map([["y", { visualizacoes: 50, cliquesWhatsapp: 0 }]]);
+    expect(ranquearImoveisPorMovimento(contatos, eventos, 5).map((r) => r.propertyId)).toEqual(["y", "x"]);
   });
 
-  test("empate é desempatado deterministicamente (mesma ordem a cada refresh)", () => {
-    const contagem = new Map([
-      ["zzz", 2],
-      ["aaa", 2],
-    ]);
-    expect(ranquearImoveis(contagem, 5).map((r) => r.propertyId)).toEqual(["aaa", "zzz"]);
+  test("imóvel sem nenhum movimento não aparece (nunca linha em zero)", () => {
+    const ranking = ranquearImoveisPorMovimento(contarContatosPorImovel([{ propertyId: "so-esse" }]), semEventos, 5);
+    expect(ranking.map((r) => r.propertyId)).toEqual(["so-esse"]);
+    expect(ranking.some((r) => r.propertyId === "imovel-sem-nada")).toBe(false);
   });
 
-  test("nenhum contato com imóvel: ranking vazio, sem quebrar", () => {
-    expect(ranquearImoveis(contarContatosPorImovel([{ propertyId: null }]), 5)).toEqual([]);
+  test("empate total é desempatado deterministicamente (mesma ordem a cada refresh)", () => {
+    const contagem = new Map([["zzz", 2], ["aaa", 2]]);
+    expect(ranquearImoveisPorMovimento(contagem, semEventos, 5).map((r) => r.propertyId)).toEqual(["aaa", "zzz"]);
+  });
+
+  test("nenhum movimento nenhum: ranking vazio, sem quebrar", () => {
+    expect(ranquearImoveisPorMovimento(contarContatosPorImovel([{ propertyId: null }]), semEventos, 5)).toEqual([]);
+  });
+});
+
+describe("funil digital — taxas", () => {
+  test("fórmula: contatos do imóvel / visualizações do imóvel", () => {
+    expect(calcularTaxa(3, 100)).toBeCloseTo(3);
+    expect(calcularTaxa(25, 50)).toBeCloseTo(50);
+  });
+
+  test("DENOMINADOR ZERO devolve null, nunca 0% (0% seria afirmação falsa)", () => {
+    expect(calcularTaxa(0, 0)).toBeNull();
+    expect(calcularTaxa(5, 0)).toBeNull();
+    expect(calcularTaxa(1, -1)).toBeNull();
+    expect(formatarTaxa(calcularTaxa(0, 0))).toBe("—");
+  });
+
+  test("numerador zero com denominador real é 0% de verdade", () => {
+    // Diferente do caso acima: aqui houve visualização e nenhum contato.
+    // Isso É um desempenho, e o número tem que aparecer.
+    expect(calcularTaxa(0, 80)).toBe(0);
+    expect(formatarTaxa(0)).toBe("0%");
+  });
+
+  test("formata sem precisão falsa: 1 casa só quando agrega informação", () => {
+    expect(formatarTaxa(2.4)).toBe("2,4%");
+    expect(formatarTaxa(25)).toBe("25%");
+    expect(formatarTaxa(33.333)).toBe("33%");
+    expect(formatarTaxa(null)).toBe("—");
+  });
+});
+
+describe("funil digital — agregação de eventos", () => {
+  const eventos = [
+    { propertyId: "a", type: "PROPERTY_VIEW" },
+    { propertyId: "a", type: "PROPERTY_VIEW" },
+    { propertyId: "a", type: "WHATSAPP_CLICK" },
+    { propertyId: "b", type: "PROPERTY_VIEW" },
+    { propertyId: "b", type: "TIPO_DESCONHECIDO" },
+  ];
+
+  test("separa visualização de clique, por imóvel, numa passada só", () => {
+    const porImovel = agruparEventosPorImovel(eventos);
+    expect(porImovel.get("a")).toEqual({ visualizacoes: 2, cliquesWhatsapp: 1 });
+    expect(porImovel.get("b")).toEqual({ visualizacoes: 1, cliquesWhatsapp: 0 });
+  });
+
+  test("tipo fora do catálogo não é somado a nenhuma etapa", () => {
+    expect(contarPorTipo(eventos, "PROPERTY_VIEW")).toBe(3);
+    expect(contarPorTipo(eventos, "WHATSAPP_CLICK")).toBe(1);
+    expect(contarPorTipo(eventos, "TIPO_DESCONHECIDO")).toBe(1);
+    const porImovel = agruparEventosPorImovel(eventos);
+    const somaEtapas = [...porImovel.values()].reduce((s, v) => s + v.visualizacoes + v.cliquesWhatsapp, 0);
+    expect(somaEtapas).toBe(4);
+  });
+
+  test("sem eventos: mapa vazio e contagens zero, nunca NaN", () => {
+    expect(agruparEventosPorImovel([]).size).toBe(0);
+    expect(contarPorTipo([], "PROPERTY_VIEW")).toBe(0);
   });
 });

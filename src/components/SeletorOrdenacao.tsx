@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { rotuloSelecionado } from "@/lib/select-rotulo";
 
 const OPCOES = [
   { valor: "relevantes", label: "Mais relevantes" },
@@ -16,6 +17,14 @@ const OPCOES = [
   { valor: "menor_metragem", label: "Menor metragem" },
   { valor: "maior_metragem", label: "Maior metragem" },
 ];
+
+// Mesmo bug do seletor da Home, só menos visível: o Select controlado
+// mostrava "relevantes"/"menor_valor" (o valor cru) no lugar de "Mais
+// relevantes"/"Menor valor". Confirmado no HTML servido por produção
+// antes desta correção.
+const ROTULOS_ORDENACAO: Record<string, string> = Object.fromEntries(
+  OPCOES.map((o) => [o.valor, o.label])
+);
 
 export function SeletorOrdenacao({ valorAtual }: { valorAtual: string }) {
   const router = useRouter();
@@ -39,7 +48,9 @@ export function SeletorOrdenacao({ valorAtual }: { valorAtual: string }) {
       </span>
       <Select value={valorAtual} onValueChange={aoMudar}>
         <SelectTrigger>
-          <SelectValue />
+          <SelectValue>
+            {(valor) => rotuloSelecionado(valor, ROTULOS_ORDENACAO, "Mais relevantes")}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {OPCOES.map((opcao) => (

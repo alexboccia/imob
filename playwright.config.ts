@@ -32,7 +32,24 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    env: { NODE_ENV: "test" },
+    env: {
+      NODE_ENV: "test",
+      // Causa raiz de um flake real e reproduzido: ao longo da suíte
+      // inteira (~300 testes num único servidor), o `next dev` chegava ao
+      // limite de heap e se REINICIAVA sozinho — "Server is approaching
+      // the used memory threshold, restarting..." aparece no log do
+      // WebServer. Toda navegação em voo durante esse reinício morria com
+      // ERR_CONNECTION_REFUSED, derrubando um teste arbitrário (foram
+      // observados três diferentes, em specs diferentes, sempre com essa
+      // mesma mensagem logo antes).
+      //
+      // Isto NÃO é aumento de timeout nem de retries mascarando um
+      // problema: é remover o teto de memória que provoca o reinício. O
+      // padrão do Node numa máquina de 16 GB fica em torno de 2 GB, e o
+      // Turbopack em modo dev, compilando dezenas de rotas ao longo da
+      // suíte, passa disso com folga.
+      NODE_OPTIONS: "--max-old-space-size=6144",
+    },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });

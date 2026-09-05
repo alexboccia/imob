@@ -296,6 +296,7 @@ model Property {
   media               Media[]
   statusHistory       PropertyStatusHistory[]
   interactions        Interaction[]
+  analyticsEvents     PropertyAnalyticsEvent[]
   deals               Deal[]
   portalListings      PortalListing[]
   interests           PropertyInterest[]
@@ -388,6 +389,63 @@ model Interaction {
 // Property pode interessar várias Person. A unicidade real é o PAR
 // (organizationId, personId, propertyId), garantida pelo @@unique abaixo,
 // nunca pela PK.
+// Evento digital do site público sobre um imóvel (Fase 6) — a fonte de
+// verdade das etapas VISUALIZAÇÃO e INTENÇÃO do funil. Catálogo de tipos
+// e placements em código: src/lib/analytics-eventos.ts.
+//
+// Não guarda: IP, User-Agent, e-mail, telefone, nome, nem qualquer
+// fingerprint de device. O único identificador é `visitorHash`, que já
+// chega derivado e ESCOPADO por (visitante, organização, imóvel) — ver a
+// justificativa completa em calcularVisitorHash.
+//
+// NÃO existe evento de "contato enviado" aqui de propósito: essa etapa
+// continua sendo Interaction (origin ∈ ORIGENS_CAPTACAO), fonte única,
+// sem dupla contagem. Ver cabeçalho de analytics-eventos.ts.
+model PropertyAnalyticsEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // Obrigatório: os dois eventos desta fase são, por definição, sobre um
+  // imóvel específico. Um "view" sem imóvel não significaria nada.
+  //
+  // Cascade (não Restrict, não SetNull): telemetria É conteúdo do imóvel,
+  // mesmo grupo de Media/PropertyStatusHistory/PortalListing, e não uma
+  // relação de negócio como PropertyInterest/Deal. Restrict tornaria um
+  // imóvel indeletável assim que recebesse a primeira visualização —
+  // inaceitável. Consequência assumida: apagar um imóvel apaga o
+  // histórico digital dele, e totais de períodos passados mudam. Na
+  // prática o caminho normal do produto é status INACTIVE, não DELETE.
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // String validada por catálogo, não enum do Postgres — mesmo motivo de
+  // Interaction.origin: tipo de evento novo não deve exigir migration.
+  type String
+
+  // Só faz sentido para WHATSAPP_CLICK (qual dos três CTAs). Null para
+  // PROPERTY_VIEW. Coluna validada por catálogo em vez de JSON livre,
+  // pra continuar sendo consultável e de cardinalidade fechada.
+  placement String?
+
+  // sha256(visitorId : organizationId : propertyId), 32 hex. Pseudônimo e
+  // escopado: o mesmo visitante em outro imóvel produz um hash sem
+  // relação computável com este.
+  visitorHash String
+
+  occurredAt DateTime @default(now())
+
+  // Índices derivados das DUAS queries reais que existem, não
+  // especulativos:
+  //   (1) agregações do dashboard — sempre organizationId + faixa de
+  //       occurredAt, agrupando por type e/ou propertyId em memória;
+  //   (2) deduplicação na escrita — organizationId + propertyId + type +
+  //       visitorHash + occurredAt >= corte.
+  @@index([organizationId, occurredAt])
+  @@index([organizationId, propertyId, type, visitorHash, occurredAt])
+  @@map("property_analytics_events")
+}
+
 model PropertyInterest {
   id             String       @id @default(cuid())
   // Sem onDelete explícito: relação obrigatória (String, não String?) sem
@@ -730,6 +788,7 @@ model Organization {
   media                        Media[]
   propertyStatusHistory        PropertyStatusHistory[]
   interactions                 Interaction[]
+  analyticsEvents              PropertyAnalyticsEvent[]
   deals                        Deal[]
   portalListings               PortalListing[]
   featureOptions               FeatureOption[]

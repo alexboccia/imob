@@ -23,12 +23,19 @@ import {
   ComboboxItem,
 } from "@/components/ui/combobox";
 import { normalizarTexto } from "@/lib/texto";
+import { rotuloSelecionado } from "@/lib/select-rotulo";
 import { formatarMilharDigitos } from "@/lib/format";
 import type { TipoComCategoria, BairroComCidade } from "@/lib/filtros-imoveis-data";
 
 type Finalidade = "SALE" | "RENT";
 
 const SENTINELA_TODOS_TIPOS = "__TODOS__";
+// Só a sentinela precisa de tradução: todo tipo real é renderizado com o
+// próprio nome como rótulo (ver SelectItem mais abaixo), e
+// rotuloSelecionado devolve o próprio valor quando ele não está aqui.
+const ROTULOS_TIPO_BUSCA: Record<string, string> = {
+  [SENTINELA_TODOS_TIPOS]: "Todos os imóveis",
+};
 const LABEL_CATEGORIA: Record<string, string> = {
   RESIDENTIAL: "Residencial",
   COMMERCIAL: "Comercial",
@@ -239,7 +246,15 @@ export function PainelBuscaHome({
                 id="busca-home-tipo"
                 className="w-full rounded-lg border-gray-200 px-3 data-[size=default]:h-12"
               >
-                <SelectValue />
+                {/* children como FUNÇÃO: API oficial do Base UI pra
+                    formatar o valor selecionado. Sem isto, o Select
+                    controlado renderiza o valor cru — era assim que
+                    "__TODOS__" aparecia na Home em produção. Nenhuma
+                    semântica muda: `tipo`, o `name` do campo e os
+                    `value` dos itens continuam idênticos. */}
+                <SelectValue>
+                  {(valor) => rotuloSelecionado(valor, ROTULOS_TIPO_BUSCA, "Todos os imóveis")}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={SENTINELA_TODOS_TIPOS}>Todos os imóveis</SelectItem>

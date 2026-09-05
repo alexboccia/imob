@@ -14,6 +14,8 @@ import { ORG_ANALYTICS, ORG_AGENDA, ORG_B, login } from "./helpers";
 //   proprietários querendo anunciar . 1   (com 2 pedidos)
 //   período anterior ................ 2   -> +250%
 //   interações sem origem ........... 1   -> só na nota de método
+//   (Fase 6) visualizações .......... 20
+//   (Fase 6) cliques no WhatsApp .....3
 
 // Lê o valor de um card de KPI pelo título — o número é o <p> irmão
 // dentro do mesmo card, nunca um texto solto da página.
@@ -56,24 +58,47 @@ test.describe("Analytics comercial — tenant com dados", () => {
     await expect(page.getByText("(14%)")).toBeVisible();
   });
 
-  test("top imóveis ranqueia por volume e omite imóvel sem contato", async ({ page }) => {
+  test("ranking de movimento: contato primeiro, e o imóvel só visto passa a existir", async ({ page }) => {
     const tabela = page.locator("table", {
       has: page.getByRole("columnheader", { name: "Imóvel" }),
     });
     const linhas = tabela.locator("tbody tr");
-    await expect(linhas).toHaveCount(2);
+    // 3 linhas, não 2: o terceiro imóvel entra por visualização (Fase 6).
+    await expect(linhas).toHaveCount(3);
 
+    // Contato continua sendo o critério primário — a leitura da Fase 5
+    // não mudou de ordem.
     await expect(linhas.nth(0)).toContainText("Cobertura Analytics mais procurada");
-    await expect(linhas.nth(0)).toContainText("3");
     await expect(linhas.nth(1)).toContainText("Studio Analytics segundo colocado");
-
-    // O imóvel sem nenhum contato nunca vira uma linha em zero.
-    await expect(page.getByText("Sobrado Analytics sem nenhum contato")).toHaveCount(0);
+    // O diagnóstico que a Fase 5 não conseguia mostrar: muito visto, zero
+    // contato. Antes ele simplesmente não aparecia na tabela.
+    await expect(linhas.nth(2)).toContainText("Sobrado Analytics sem nenhum contato");
 
     // Linka pro imóvel no painel (sem expor PII de quem procurou).
     await expect(
       tabela.getByRole("link", { name: "Cobertura Analytics mais procurada" })
     ).toHaveAttribute("href", "/app/imoveis/e2e-imovel-analytics-top");
+  });
+
+  test("funil digital mostra as três etapas e as duas taxas reais", async ({ page }) => {
+    const funil = page.getByRole("region", { name: "Funil digital" });
+    await expect(funil).toBeVisible();
+
+    await expect(funil.getByText("Visualizações", { exact: true })).toBeVisible();
+    await expect(funil.getByText("Cliques no WhatsApp", { exact: true })).toBeVisible();
+    await expect(funil.getByText("Contatos pelo imóvel", { exact: true })).toBeVisible();
+
+    // 20 visualizações, 3 cliques, 4 contatos de imóvel.
+    await expect(funil.getByText("20", { exact: true })).toBeVisible();
+    await expect(funil.getByText("3", { exact: true })).toBeVisible();
+
+    // 4/20 = 20% e 3/20 = 15%, ambas com denominador compatível.
+    await expect(funil.getByText("20%", { exact: true })).toBeVisible();
+    await expect(funil.getByText("15%", { exact: true })).toBeVisible();
+
+    // Honestidade semântica: clique é intenção, nunca "lead".
+    await expect(funil).toContainText("não confirma que a mensagem foi enviada");
+    await expect(funil).not.toContainText("Leads pelo WhatsApp");
   });
 
   test("gráfico monta e a mesma série existe como tabela acessível", async ({ page }) => {
@@ -175,7 +200,12 @@ test.describe("Analytics comercial — tenant sem contatos", () => {
     await expect(
       page.getByText("Ainda não há contatos neste período para distribuir por origem.")
     ).toBeVisible();
-    await expect(page.getByText("Nenhum imóvel recebeu contato neste período.")).toBeVisible();
+    await expect(
+      page.getByText("Nenhum imóvel teve visualização ou contato neste período.")
+    ).toBeVisible();
+    // Tenant sem nenhum evento digital: a tela explica que a medição
+    // começou agora, em vez de mostrar zeros como se fossem desempenho.
+    await expect(page.getByText(/A medição de visualizações e cliques começou agora/)).toBeVisible();
 
     // Nenhum artefato de cálculo vazando pra tela.
     const corpo = (await page.locator("main").textContent()) ?? "";

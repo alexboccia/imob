@@ -9,10 +9,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatarNumero } from "@/lib/format";
-import type { ImovelMaisProcurado } from "@/lib/analytics-comercial";
+import { formatarTaxa, type ImovelMaisProcurado } from "@/lib/analytics-comercial";
 
-// Imóveis que mais geraram contato — a métrica mais acionável da tela: é
-// o que diz onde repetir o anúncio e o que revisar.
+// Imóveis com mais movimento (Fase 6 — evolução da tabela da Fase 5).
+//
+// Antes só listava quem já tinha gerado contato. Agora inclui também o
+// imóvel muito VISTO e sem nenhum contato — que é o diagnóstico mais
+// acionável que o funil digital desbloqueou: 200 visualizações e zero
+// contato é um anúncio com problema de preço, foto ou texto, e antes ele
+// simplesmente não aparecia em lugar nenhum do produto.
 //
 // Conta APENAS contatos comerciais com propertyId real (formulário
 // enviado a partir da página daquele imóvel). Contato geral da página
@@ -28,15 +33,15 @@ export function AnalyticsTopImoveis({ imoveis }: { imoveis: ImovelMaisProcurado[
   return (
     <Card className="min-w-0">
       <CardHeader>
-        <CardTitle className="text-base">Imóveis que mais geraram contato</CardTitle>
+        <CardTitle className="text-base">Imóveis com mais movimento</CardTitle>
         <p className="pt-1 text-sm text-muted-foreground">
-          Contatos enviados a partir da página de cada imóvel.
+          Ordenados por contato e, em seguida, por visualização.
         </p>
       </CardHeader>
       <CardContent>
         {imoveis.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Nenhum imóvel recebeu contato neste período.
+            Nenhum imóvel teve visualização ou contato neste período.
           </p>
         ) : (
           // Sem wrapper de overflow próprio: o componente <Table> já
@@ -57,8 +62,14 @@ export function AnalyticsTopImoveis({ imoveis }: { imoveis: ImovelMaisProcurado[
                 <TableHead scope="col" className="hidden sm:table-cell">
                   Tipo
                 </TableHead>
-                <TableHead scope="col" className="hidden md:table-cell">
+                <TableHead scope="col" className="hidden xl:table-cell">
                   Localização
+                </TableHead>
+                <TableHead scope="col" className="w-0 text-right">
+                  Views
+                </TableHead>
+                <TableHead scope="col" className="w-0 text-right whitespace-nowrap">
+                  WhatsApp
                 </TableHead>
                 {/* w-0: com `w-full` na tabela, uma largura declarada de
                     zero faz o navegador dar a esta coluna exatamente o
@@ -86,17 +97,29 @@ export function AnalyticsTopImoveis({ imoveis }: { imoveis: ImovelMaisProcurado[
                           estreitas, mas o dado não some da tela: volta
                           aqui embaixo do título, onde há largura. */}
                       <span className="sm:hidden"> · {imovel.tipo}</span>
-                      <span className="md:hidden"> · {imovel.localizacao}</span>
+                      <span className="xl:hidden"> · {imovel.localizacao}</span>
                     </span>
                   </TableCell>
                   <TableCell className="hidden whitespace-normal sm:table-cell">
                     {imovel.tipo}
                   </TableCell>
-                  <TableCell className="hidden whitespace-normal md:table-cell">
+                  <TableCell className="hidden whitespace-normal xl:table-cell">
                     {imovel.localizacao}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatarNumero(imovel.visualizacoes)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatarNumero(imovel.cliquesWhatsapp)}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
                     {formatarNumero(imovel.contatos)}
+                    {/* Taxa por imóvel só quando existe denominador —
+                        sem visualização no período não há taxa, e "0%"
+                        seria uma afirmação falsa sobre o anúncio. */}
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      {formatarTaxa(imovel.taxaConversao)}
+                    </span>
                   </TableCell>
                 </TableRow>
               ))}

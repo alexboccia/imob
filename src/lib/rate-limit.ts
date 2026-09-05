@@ -18,6 +18,18 @@ export const LIMITES = {
   formularioDiario: { limite: 20, janelaSegundos: 24 * 60 * 60 },
   uploadPorUsuario: { limite: 30, janelaSegundos: 10 * 60 },
   uploadPorOrganizacao: { limite: 100, janelaSegundos: 10 * 60 },
+  // Tracking digital (Fase 6). Deliberadamente MUITO mais folgado que os
+  // limites de formulário: aqui o custo de errar pra menos é sério —
+  // um visitante legítimo que navega bastante sumiria das métricas e o
+  // dashboard mentiria pro corretor. 300 eventos por IP em 10 minutos é
+  // ordens de grandeza acima de qualquer navegação humana real (a
+  // deduplicação de 30 min já corta repetição no mesmo imóvel), e ainda
+  // assim impede alguém de martelar o endpoint milhões de vezes.
+  //
+  // Balde por organização também: protege UM tenant de ter as métricas
+  // inundadas, sem que o abuso contra ele afete os outros.
+  analyticsPorIp: { limite: 300, janelaSegundos: 10 * 60 },
+  analyticsPorOrganizacao: { limite: 5000, janelaSegundos: 10 * 60 },
 } as const;
 
 // null quando o valor normaliza pra string vazia (só espaços, por
@@ -203,6 +215,30 @@ export async function verificarLimiteFormulario(
 // à parte — isto aqui é só "não mais que N uploads por janela de tempo",
 // não substitui nenhum limite de plano já existente.
 // ---------------------------------------------------------------------
+
+// ---------------------------------------------------------------------
+// Tracking digital (Fase 6): por IP e por organização. Fail-open como
+// todo o resto — sem Upstash configurado, quem chama simplesmente
+// registra o evento (ver comentário de obterKvStore).
+// ---------------------------------------------------------------------
+
+export async function verificarLimiteAnalytics(
+  store: KvStore,
+  params: { ip: string; organizationId: string }
+): Promise<ResultadoLimite> {
+  const { limite: limiteIp, janelaSegundos: janelaIp } = LIMITES.analyticsPorIp;
+  const { limite: limiteOrg, janelaSegundos: janelaOrg } = LIMITES.analyticsPorOrganizacao;
+
+  return aplicarChecagens(store, [
+    { chave: `rl:analytics:ip:${params.ip}`, limite: limiteIp, janelaSegundos: janelaIp, motivo: "ip" },
+    {
+      chave: `rl:analytics:org:${params.organizationId}`,
+      limite: limiteOrg,
+      janelaSegundos: janelaOrg,
+      motivo: "org",
+    },
+  ]);
+}
 
 export async function verificarLimiteUpload(
   store: KvStore,

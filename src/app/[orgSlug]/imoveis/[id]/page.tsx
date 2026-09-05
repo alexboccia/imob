@@ -35,6 +35,7 @@ import {
   CaracteristicasCondominio,
 } from "@/components/imovel/CaracteristicasImovel";
 import { CardContatoImovel } from "@/components/imovel/CardContatoImovel";
+import { RastreioVisualizacaoImovel } from "@/components/analytics/RastreioVisualizacaoImovel";
 import { ResumoComercialImovel } from "@/components/imovel/ResumoComercialImovel";
 import { BarraCtaImovel } from "@/components/imovel/BarraCtaImovel";
 import {
@@ -507,8 +508,16 @@ export default async function DetalheImovelPage({
         price={imovel.price}
         rentPrice={imovel.rentPrice}
         whatsappHref={whatsappHref}
+        orgSlug={orgSlug}
+        imovelId={imovel.id}
         hrefFormulario={`#${idFormulario}`}
       />
+
+      {/* Visualização válida (Fase 6): componente de cliente que não
+          renderiza nada e só dispara o evento depois de a página montar
+          num browser de verdade. Nunca no Server Component — lá, crawler,
+          prefetch, HEAD, metadata e health check virariam audiência. */}
+      <RastreioVisualizacaoImovel orgSlug={orgSlug} imovelId={imovel.id} />
     </>
   );
 }

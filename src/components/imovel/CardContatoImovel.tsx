@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { IconePessoa, IconeWhatsApp } from "@/components/icons";
+import { RastreioCliqueWhatsApp } from "@/components/analytics/RastreioCliqueWhatsApp";
 import { formatarPreco } from "@/lib/format";
 import type { CorretorPublico } from "@/lib/perfil-publico-corretor";
 
@@ -153,19 +154,23 @@ export function CardContatoImovel({
         <ValoresDoImovel imovel={imovel} />
 
         {whatsappHref && (
-          <a
-            href={whatsappHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonVariants({
-              size: "lg",
-              className:
-                "w-full bg-whatsapp-brand text-white hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active",
-            })}
-          >
-            <IconeWhatsApp className="size-5" />
-            Falar no WhatsApp
-          </a>
+          // A âncora abaixo está intocada — mesmo href, target, rel e
+          // classes de antes. O wrapper só escuta o clique borbulhando.
+          <RastreioCliqueWhatsApp orgSlug={orgSlug} imovelId={imovelId} placement="SIDEBAR">
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({
+                size: "lg",
+                className:
+                  "w-full bg-whatsapp-brand text-white hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active",
+              })}
+            >
+              <IconeWhatsApp className="size-5" />
+              Falar no WhatsApp
+            </a>
+          </RastreioCliqueWhatsApp>
         )}
 
         {/* Identidade comercial do profissional — só quando resolverCorretorPublico

@@ -355,6 +355,10 @@ async function main() {
     orgAgenda.organization.id,
     orgAnalytics.organization.id,
   ];
+  // Eventos digitais (Fase 6) — apagados explicitamente: os imóveis de id
+  // fixo sobrevivem ao deleteMany abaixo, então o cascade deles não
+  // limparia nada e as contagens do funil cresceriam a cada rodada.
+  await prisma.propertyAnalyticsEvent.deleteMany({ where: { organizationId: { in: idsOrgs } } });
   await prisma.person.deleteMany({ where: { organizationId: { in: idsOrgs } } });
   await prisma.property.deleteMany({
     where: {
@@ -593,6 +597,67 @@ async function main() {
       { organizationId: orgAnalytics.organization.id, personId: leadOcasional.id, type: "MESSAGE", origin: "CONTATO", occurredAt: diasAtras(40) },
     ],
   });
+
+  // Eventos digitais determinísticos da Organização de Analytics (Fase 6).
+  //
+  // Inseridos direto, sem passar pelo endpoint: são FIXTURE, e o browser
+  // provaria o mecanismo (que é testado à parte, em analytics-tracking
+  // pelo site público) e não os números. `visitorHash` é opaco por
+  // definição — aqui são só valores fixos de 32 hex distintos, que é
+  // exatamente o formato que calcularVisitorHash produz.
+  //
+  // Números que a spec afirma saem daqui:
+  //   visualizações .......... 20  (10 + 4 + 6)
+  //   cliques no WhatsApp ..... 3
+  //   contatos de imóvel ...... 4  (Fase 5: 3 no top + 1 no secundário)
+  //   contato/visualização ... 20% (4/20)
+  //   WhatsApp/visualização .. 15% (3/20)
+  //
+  // O terceiro imóvel tem 6 visualizações e ZERO contato de propósito: é
+  // o diagnóstico que a Fase 6 desbloqueou (anúncio visto e que não
+  // converte) e que o ranking da Fase 5, ordenado só por contato, nunca
+  // mostrava.
+  // WhatsApp da Organização de Analytics — é o que faz os três CTAs
+  // existirem no site público dela. Fica AQUI, e não na Org A, de
+  // propósito: site-publico.spec.ts liga e desliga o WhatsApp da Org A
+  // durante os próprios testes, então depender dele tornaria a spec de
+  // tracking refém da ordem de execução.
+  await prisma.organizationSettings.upsert({
+    where: { organizationId: orgAnalytics.organization.id },
+    update: { whatsapp: "11999990000" },
+    create: {
+      organizationId: orgAnalytics.organization.id,
+      whatsapp: "11999990000",
+      email: "contato@analytics.e2e.test",
+    },
+  });
+
+  const hashVisitante = (n: number) => String(n).padStart(2, "0").repeat(16);
+  const eventosDigitais: {
+    organizationId: string;
+    propertyId: string;
+    type: string;
+    placement: string | null;
+    visitorHash: string;
+    occurredAt: Date;
+  }[] = [];
+  const empilharEventos = (propertyId: string, tipo: string, placement: string | null, quantidade: number, inicio: number) => {
+    for (let i = 0; i < quantidade; i++) {
+      eventosDigitais.push({
+        organizationId: orgAnalytics.organization.id,
+        propertyId,
+        type: tipo,
+        placement,
+        visitorHash: hashVisitante(inicio + i),
+        occurredAt: diasAtras((i % 5) + 1),
+      });
+    }
+  };
+  empilharEventos(IDS_E2E.imovelTopOrgAnalytics, "PROPERTY_VIEW", null, 10, 10);
+  empilharEventos(IDS_E2E.imovelTopOrgAnalytics, "WHATSAPP_CLICK", "SIDEBAR", 3, 30);
+  empilharEventos(IDS_E2E.imovelSecundarioOrgAnalytics, "PROPERTY_VIEW", null, 4, 40);
+  empilharEventos(IDS_E2E.imovelSemContatoOrgAnalytics, "PROPERTY_VIEW", null, 6, 50);
+  await prisma.propertyAnalyticsEvent.createMany({ data: eventosDigitais });
 
   // Fase P.10 — custom domain fixo e ATIVO da Organização B (ver
   // HOSTNAME_E2E_ORG_B acima).

@@ -10,6 +10,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { ModalContato } from "@/components/ModalContato";
 import { BotaoCompartilhar } from "@/components/BotaoCompartilhar";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { enviarEventoAnalytics } from "@/lib/analytics-client";
+import { TIPOS_EVENTO_ANALYTICS } from "@/lib/analytics-eventos";
 import {
   IconeChevronEsquerdo,
   IconeChevronDireito,
@@ -499,6 +501,18 @@ export function GaleriaFotos({
                 href={whatsappHref}
                 target="_blank"
                 rel="noopener noreferrer"
+                // Este componente já é client, então não precisa do
+                // wrapper RastreioCliqueWhatsApp: chama o helper direto.
+                // Síncrono, sem await, com o href intacto — o WhatsApp
+                // abre mesmo se o tracking falhar.
+                onClick={() =>
+                  enviarEventoAnalytics({
+                    orgSlug,
+                    propertyId: imovelId,
+                    type: TIPOS_EVENTO_ANALYTICS.WHATSAPP_CLICK,
+                    placement: "GALLERY",
+                  })
+                }
                 className={buttonVariants({
                   className:
                     "bg-whatsapp-brand text-white hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active",
