@@ -48,7 +48,20 @@ export default defineConfig({
       // padrão do Node numa máquina de 16 GB fica em torno de 2 GB, e o
       // Turbopack em modo dev, compilando dezenas de rotas ao longo da
       // suíte, passa disso com folga.
-      NODE_OPTIONS: "--max-old-space-size=6144",
+      // O teto precisa caber na MÁQUINA, não só no problema. O runner do
+      // GitHub Actions tem ~7 GB de RAM TOTAL e divide isso entre o
+      // servidor Next, o Chromium do Playwright e o Postgres do job —
+      // autorizar 6 GB só de heap ali empurra tudo para swap e o servidor
+      // fica lentíssimo em vez de reiniciar, degradando a suíte inteira.
+      // Na máquina local (16 GB+) o teto generoso é o que resolve o
+      // reinício por memória descrito acima.
+      //
+      // Os dois valores continuam bem ACIMA do padrão do Node (~2 GB),
+      // que era a causa original dos reinícios — o objetivo nunca foi o
+      // número máximo, e sim não esbarrar no teto no meio da suíte.
+      NODE_OPTIONS: process.env.CI
+        ? "--max-old-space-size=3072"
+        : "--max-old-space-size=6144",
     },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
