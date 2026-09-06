@@ -13,13 +13,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SeletorResponsavel } from "@/components/admin/SeletorResponsavel";
+import type { OpcaoResponsavel } from "@/lib/responsavel-negociacao";
 
 export function RelacionarImovelForm({
   pessoaId,
   imoveisDisponiveis,
+  membros,
+  membroAtualId,
 }: {
   pessoaId: string;
   imoveisDisponiveis: { id: string; title: string }[];
+  // Fase 11 — membros ativos da organização e o vínculo de quem está
+  // logado, para o seletor de responsável nascer preenchido com ele.
+  membros: OpcaoResponsavel[];
+  membroAtualId?: string | null;
 }) {
   const acao = criarInteressePessoa.bind(null, pessoaId);
   const [estado, formAction, pendente] = useActionState(acao, ESTADO_INICIAL_ACAO);
@@ -33,7 +41,7 @@ export function RelacionarImovelForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-col sm:flex-row gap-2">
+    <form action={formAction} className="flex flex-col gap-2 sm:flex-row sm:items-end">
       {estado.message && !estado.success && (
         <Alert variant="destructive" className="sm:order-3 sm:basis-full">
           <AlertDescription>{estado.message}</AlertDescription>
@@ -55,6 +63,18 @@ export function RelacionarImovelForm({
             ))}
           </SelectContent>
         </Select>
+      </div>
+      {/* Fase 11 — nasce com o membro logado selecionado, e ele pode
+          trocar ANTES de salvar: quem cria costuma ser quem assume, mas
+          não é uma regra que o produto possa afirmar sozinho. Trocar
+          aqui é mais barato que transferir depois. */}
+      <div className="w-full sm:max-w-xs">
+        <SeletorResponsavel
+          id="responsavelId"
+          membros={membros}
+          valorInicial={membroAtualId ?? ""}
+          rotuloVazio="Sem responsável"
+        />
       </div>
       <Button type="submit" variant="outline" disabled={pendente}>
         {pendente ? "Relacionando..." : "Relacionar imóvel"}

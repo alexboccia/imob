@@ -94,7 +94,10 @@ test.describe("Fechamento — jornada do corretor", () => {
     // página tem outros selects (estágio do funil), então nada de
     // getByRole("combobox").first().
     await page.locator("#propertyId").click();
-    await page.getByRole("option").first().click();
+    // Escopado ao listbox ABERTO: a ficha do cliente também tem um
+    // <select> nativo (responsável), cujas <option> ficam no DOM mesmo
+    // fechadas e casariam um getByRole("option") solto.
+    await page.getByRole("listbox").getByRole("option").first().click();
     await Promise.all([
       page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/app/clientes/")),
       page.getByRole("button", { name: "Relacionar imóvel" }).click(),

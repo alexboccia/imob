@@ -5,7 +5,8 @@ import { normalizarBusca, PAGE_SIZE_PADRAO } from "@/lib/pagination";
 import { ESTAGIOS_INTERESSE, estagioInteresseEncerrado } from "@/lib/property-interest-schema";
 import { obterProximaAcaoComercial, type ProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import { acaoOperacionalDaVisita } from "@/lib/scheduled-activity-date";
-import type { Prisma, PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
+import { paraResponsavel, type ResponsavelNegociacao } from "@/lib/responsavel-negociacao";
+import type { MemberStatus, Prisma, PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 
 // Pipeline (Fase P.4) — projeção operacional de PropertyInterest, NUNCA uma
 // segunda fonte de verdade: nenhuma tabela nova, nenhum campo persistido
@@ -26,6 +27,11 @@ export type ItemPipeline = {
   closedValue: number | null;
   // Fase 10 — comissão do negócio; null = não registrada.
   commissionValue: number | null;
+  // Fase 11 — responsável pela NEGOCIAÇÃO (não pelo imóvel). null =
+  // "Sem responsável": negociação anterior a esta fase (sem backfill) ou
+  // deixada deliberadamente sem dono. Membro inativo continua aparecendo
+  // com nome, marcado como inativo — nunca vira "Sem responsável".
+  responsavel: ResponsavelNegociacao | null;
   // Só usado como critério de DESEMPATE interno de ordenação (grupo "sem
   // visita" de ordenarColuna) — NUNCA exibido como "há X dias nesta
   // etapa". O schema atual não registra quando o stage mudou pela última
@@ -66,6 +72,11 @@ function selectItemPipeline(organizationId: string) {
     closedValue: true,
     commissionValue: true,
     updatedAt: true,
+    // Fase 11 — carregado no MESMO select (join batched pelo Prisma),
+    // nunca uma query por card: zero N+1.
+    responsibleMember: {
+      select: { id: true, status: true, organizationId: true, user: { select: { name: true } } },
+    },
     person: { select: { id: true, name: true, organizationId: true } },
     property: { select: { id: true, title: true, status: true, neighborhood: true, organizationId: true } },
     // organizationId explícito no where da relação — mesma defesa de
@@ -104,6 +115,12 @@ type LinhaBrutaPipeline = {
   closedValue: unknown;
   commissionValue: unknown;
   updatedAt: Date;
+  responsibleMember: {
+    id: string;
+    status: MemberStatus;
+    organizationId: string;
+    user: { name: string | null };
+  } | null;
   person: { id: string; name: string; organizationId: string };
   property: { id: string; title: string; status: PropertyStatus; neighborhood: string; organizationId: string };
   scheduledActivities: { id: string; scheduledAt: Date }[];
@@ -199,6 +216,9 @@ export function paraItemPipeline(
     closedAtISO: linha.closedAt ? linha.closedAt.toISOString() : null,
     closedValue: decimalParaValor(linha.closedValue),
     commissionValue: decimalParaValor(linha.commissionValue),
+    // organizationId conferido dentro de paraResponsavel — mesma defesa
+    // contra anomalia cross-tenant já aplicada a person/property acima.
+    responsavel: paraResponsavel(linha.responsibleMember, organizationId),
     updatedAtISO: linha.updatedAt.toISOString(),
     person,
     property,
@@ -268,12 +288,21 @@ export type FiltrosPipeline = {
   busca: string;
   visao: VisaoPipeline;
   resultado: ResultadoPipeline;
+  // Fase 11 — "" = todos; "SEM" = sem responsável; qualquer outro valor é
+  // um id de OrganizationMember (reconfirmado contra a organização no
+  // where, nunca confiado como veio da URL).
+  responsavel: string;
 };
+
+// Valor especial do filtro para o balde "sem responsável". Não é um id de
+// membro e nunca colide com um cuid.
+export const FILTRO_SEM_RESPONSAVEL = "SEM";
 
 export function interpretarFiltrosPipeline(params: {
   q?: string;
   visao?: string;
   resultado?: string;
+  responsavel?: string;
 }): FiltrosPipeline {
   const busca = normalizarBusca(params.q);
   const visaoBruta = (params.visao ?? "").trim().toUpperCase();
@@ -281,7 +310,25 @@ export function interpretarFiltrosPipeline(params: {
   const resultadoBruto = (params.resultado ?? "").trim().toUpperCase();
   const resultado: ResultadoPipeline =
     resultadoBruto === "GANHO" || resultadoBruto === "PERDIDO" ? resultadoBruto : "TODOS";
-  return { busca, visao, resultado };
+  // Sem allow-list aqui de propósito: a lista de membros válidos é da
+  // organização e exigiria I/O neste parser puro. Um id inexistente ou de
+  // outro tenant não vaza nada — o where sempre reconfirma
+  // organizationId, então o filtro simplesmente não casa nenhuma linha.
+  const responsavel = (params.responsavel ?? "").trim().slice(0, 40);
+  return { busca, visao, resultado, responsavel };
+}
+
+// Traduz o filtro em condição de banco. O `is: { organizationId }` fecha
+// o mesmo canal de vazamento indireto de condicaoBusca: sem ele, um id de
+// membro de outro tenant chutado na URL poderia, em tese, casar uma linha
+// anômala.
+function condicaoResponsavel(
+  responsavel: string,
+  organizationId: string
+): Prisma.PropertyInterestWhereInput | null {
+  if (!responsavel) return null;
+  if (responsavel === FILTRO_SEM_RESPONSAVEL) return { responsibleMemberId: null };
+  return { responsibleMember: { is: { id: responsavel, organizationId } } };
 }
 
 // Busca por nome do cliente OU título do imóvel — mesma técnica de
@@ -300,14 +347,19 @@ function condicaoBusca(busca: string, organizationId: string): Prisma.PropertyIn
 function combinarWhere(
   base: Prisma.PropertyInterestWhereInput,
   busca: string,
-  organizationId: string
+  organizationId: string,
+  responsavel = ""
 ): Prisma.PropertyInterestWhereInput {
-  if (!busca) return base;
+  const extras = [
+    busca ? condicaoBusca(busca, organizationId) : null,
+    condicaoResponsavel(responsavel, organizationId),
+  ].filter((c): c is Prisma.PropertyInterestWhereInput => c !== null);
+  if (extras.length === 0) return base;
   // organizationId repetido no nível de topo (mesmo racional de
   // combinarWhere em agenda.ts): a extensão de tenant-scoping de
   // src/lib/prisma.ts só reconhece organizationId como chave direta do
   // where, não aninhado dentro de um AND.
-  return { organizationId, AND: [base, condicaoBusca(busca, organizationId)] };
+  return { organizationId, AND: [base, ...extras] };
 }
 
 // Teto defensivo da visão "Em andamento" — mesmo racional de
@@ -322,17 +374,18 @@ export const LIMITE_PIPELINE_ABERTO = 300;
 // selectItemPipeline) — nunca uma query por card.
 export async function buscarPipelineAberto(
   organizationId: string,
-  opcoes: { busca?: string; agora?: Date } = {}
+  opcoes: { busca?: string; agora?: Date; responsavel?: string } = {}
 ): Promise<Record<ColunaAberta, ItemPipeline[]>> {
   const agora = opcoes.agora ?? new Date();
   const busca = opcoes.busca ?? "";
+  const responsavel = opcoes.responsavel ?? "";
 
   return withOrganization(organizationId, async () => {
     const base: Prisma.PropertyInterestWhereInput = {
       organizationId,
       stage: { in: [...COLUNAS_ABERTAS] },
     };
-    const where = combinarWhere(base, busca, organizationId);
+    const where = combinarWhere(base, busca, organizationId, responsavel);
 
     const linhas = await prisma.propertyInterest.findMany({
       where,
@@ -355,10 +408,17 @@ export async function buscarPipelineAberto(
 // só cresce com o tempo, ao contrário do board de "em andamento".
 export async function buscarPipelineEncerrado(
   organizationId: string,
-  opcoes: { busca?: string; resultado?: ResultadoPipeline; skip?: number; take?: number } = {}
+  opcoes: {
+    busca?: string;
+    resultado?: ResultadoPipeline;
+    skip?: number;
+    take?: number;
+    responsavel?: string;
+  } = {}
 ): Promise<{ itens: ItemPipeline[]; total: number }> {
   const busca = opcoes.busca ?? "";
   const resultado = opcoes.resultado ?? "TODOS";
+  const responsavel = opcoes.responsavel ?? "";
   const skip = opcoes.skip ?? 0;
   const take = opcoes.take ?? PAGE_SIZE_PADRAO;
 
@@ -369,7 +429,7 @@ export async function buscarPipelineEncerrado(
       organizationId,
       stage: { in: stagesEncerrados },
     };
-    const where = combinarWhere(base, busca, organizationId);
+    const where = combinarWhere(base, busca, organizationId, responsavel);
 
     const [linhas, total] = await Promise.all([
       prisma.propertyInterest.findMany({

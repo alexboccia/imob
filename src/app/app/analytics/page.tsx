@@ -15,6 +15,7 @@ import { AnalyticsTopImoveis } from "@/components/admin/analytics/AnalyticsTopIm
 import { AnalyticsFunilDigital } from "@/components/admin/analytics/AnalyticsFunilDigital";
 import { AnalyticsAquisicao } from "@/components/admin/analytics/AnalyticsAquisicao";
 import { AnalyticsResultado } from "@/components/admin/analytics/AnalyticsResultado";
+import { AnalyticsResponsaveis } from "@/components/admin/analytics/AnalyticsResponsaveis";
 
 // Analytics comercial (Fase 5).
 //
@@ -105,6 +106,14 @@ export default async function AnalyticsPage({
 
       <AnalyticsResultado resultado={analytics.resultado} periodoLabel={periodoLabel} />
 
+      {/* Fase 11 — depois do resultado agregado e antes da aquisição:
+          "quanto a operação fez" -> "quem conduziu" -> "de onde veio". */}
+      <AnalyticsResponsaveis
+        responsaveis={analytics.responsaveis}
+        periodoLabel={periodoLabel}
+        semOwnership={analytics.semOwnership}
+      />
+
       <AnalyticsAquisicao
         aquisicao={analytics.aquisicao}
         periodoLabel={periodoLabel}
@@ -156,6 +165,14 @@ export default async function AnalyticsPage({
             imóvel nem de qualquer percentual — o sistema não tem percentual de comissão
             configurado. Como não se registra a divisão da comissão, nada aqui é receita da
             imobiliária.
+          </li>
+          <li>
+            O responsável é quem <strong>conduz a negociação</strong> — não é o responsável pelo
+            imóvel, nem o responsável pelo cliente, nem quem registrou o contato: são papéis
+            diferentes e o sistema guarda cada um separadamente. Negociações anteriores a esta
+            medição aparecem em “Sem responsável”, porque nenhuma foi atribuída retroativamente. A
+            comissão agrupada por responsável é a dos negócios sob responsabilidade dessa pessoa,
+            e não uma afirmação de quanto ela recebeu.
           </li>
           <li>
             O canal de aquisição descreve <strong>a visita</strong> (de onde a pessoa chegou desta

@@ -18,6 +18,11 @@ import { oportunidadeElegivel } from "@/lib/oportunidade";
 import { agregarValorFechado, decimalParaValor } from "@/lib/valor-fechamento";
 import { agregarComissao } from "@/lib/comissao";
 import {
+  agruparPorResponsavel,
+  paraResponsavel,
+  type LinhaResponsavel,
+} from "@/lib/responsavel-negociacao";
+import {
   classificarCanal,
   rotuloCanal,
   ORDEM_CANAIS,
@@ -864,6 +869,15 @@ export type AnalyticsComercial = {
   funil: FunilDigital;
   aquisicao: Aquisicao;
   resultado: ResultadoComercial;
+  // Fase 11 — uma linha por responsável de negociação, mais o balde
+  // "Sem responsável". Vazio quando a organização não teve nenhuma
+  // oportunidade criada nem fechada no período.
+  responsaveis: LinhaResponsavel[];
+  // true enquanto NENHUMA negociação da organização tiver responsável —
+  // estado normal logo depois do deploy, já que ownership passa a existir
+  // daqui pra frente e não houve backfill. A tela usa isso para explicar
+  // o bloco vazio em vez de fingir que a equipe não produziu nada.
+  semOwnership: boolean;
 };
 
 // -----------------------------------------------------------------------
@@ -908,6 +922,7 @@ export async function buscarAnalyticsComercial(
       oportunidadesCriadas,
       fechamentosDoPeriodo,
       algumaOportunidadeComOrigem,
+      algumaNegociacaoComResponsavel,
       configContato,
     ] = await Promise.all([
       prisma.interaction.findMany({
@@ -1005,6 +1020,11 @@ export async function buscarAnalyticsComercial(
               referrerHost: true,
             },
           },
+          // Fase 11 — responsável no MESMO select (join batched), nunca
+          // uma query por oportunidade.
+          responsibleMember: {
+            select: { id: true, status: true, organizationId: true, user: { select: { name: true } } },
+          },
         },
       }),
       // Fechamentos do período — janela sobre closedAt (o instante real do
@@ -1019,6 +1039,10 @@ export async function buscarAnalyticsComercial(
           stage: true,
           closedValue: true,
           commissionValue: true,
+          // Fase 11 — mesmo join batched do bloco de oportunidades.
+          responsibleMember: {
+            select: { id: true, status: true, organizationId: true, user: { select: { name: true } } },
+          },
           sourceInteraction: {
             select: {
               utmSource: true,
@@ -1036,6 +1060,14 @@ export async function buscarAnalyticsComercial(
       // para nenhuma oportunidade". take implícito de findFirst.
       prisma.propertyInterest.findFirst({
         where: { organizationId, sourceInteractionId: { not: null } },
+        select: { id: true },
+      }),
+      // Fase 11 — mesma pergunta, para ownership: "esta organização já
+      // tem ALGUMA negociação com responsável?". Distingue "medimos e a
+      // equipe não produziu" de "o vínculo ainda não existe para
+      // ninguém" (estado normal logo após o deploy, sem backfill).
+      prisma.propertyInterest.findFirst({
+        where: { organizationId, responsibleMemberId: { not: null } },
         select: { id: true },
       }),
       buscarConfiguracaoContato(organizationId),
@@ -1189,6 +1221,23 @@ export async function buscarAnalyticsComercial(
         commissionValue: f.commissionValue,
       })),
     ];
+    // ---- Performance por responsável (Fase 11) -----------------------
+    // Reaproveita as DUAS coleções já carregadas acima — nenhuma query
+    // nova, nenhuma query por responsável. As coortes seguem separadas:
+    // `oportunidadesCriadas` é a janela de createdAt, `fechamentosDoPeriodo`
+    // é a de closedAt, e agruparPorResponsavel nunca divide uma pela outra.
+    const responsaveis = agruparPorResponsavel(
+      oportunidadesCriadas.map((o) => ({
+        responsavel: paraResponsavel(o.responsibleMember, organizationId),
+      })),
+      fechamentosDoPeriodo.map((f) => ({
+        responsavel: paraResponsavel(f.responsibleMember, organizationId),
+        ganho: f.stage === "WON",
+        closedValue: decimalParaValor(f.closedValue),
+        commissionValue: decimalParaValor(f.commissionValue),
+      }))
+    );
+
     const canais = agruparPorCanal(eventosDigitais, interacoes, oportunidadesPorCanal);
     const campanhas = agruparPorCampanha(eventosDigitais, interacoes, ganhosComValorNumerico);
     const aquisicao: Aquisicao = {
@@ -1244,6 +1293,8 @@ export async function buscarAnalyticsComercial(
       funil,
       aquisicao,
       resultado,
+      responsaveis,
+      semOwnership: algumaNegociacaoComResponsavel === null,
     };
   });
 }

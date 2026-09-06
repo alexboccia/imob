@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { PERIODO_PIPELINE_LABEL, type FiltrosPipeline, type PeriodoPipeline, type VisaoPipeline } from "@/lib/pipeline";
+import { FILTRO_SEM_RESPONSAVEL, PERIODO_PIPELINE_LABEL, type FiltrosPipeline, type PeriodoPipeline, type VisaoPipeline } from "@/lib/pipeline";
+import type { OpcaoResponsavel } from "@/lib/responsavel-negociacao";
 
 const PERIODOS_PIPELINE_OPCOES: readonly PeriodoPipeline[] = ["30d", "90d", "ANO", "TODOS"];
 
@@ -13,31 +14,42 @@ type SearchParams = {
   page?: string;
   periodo?: string;
   prioridade?: string;
+  responsavel?: string;
 };
 
+// Fase 11 — o campo "Corretor" que faltava. A nota abaixo registrava
+// exatamente esta dívida: o filtro não existia porque não havia ownership
+// server-side para filtrar. Agora PropertyInterest.responsibleMemberId
+// existe, e o filtro é um parâmetro de URL como todos os outros.
+//
 // Redesenho do Pipeline — barra operacional única (item 7 do pedido):
 // funde os dois <form> separados que existiam antes (seletor de período
 // isolado + busca/resultado num form próprio) num só submit, sem nenhum
 // campo novo — mesmos 3 parâmetros de URL de sempre (q/periodo/resultado),
 // mesma leitura em page.tsx (interpretarFiltrosPipeline/
-// interpretarPeriodoPipeline, já sanitizados contra enum inválido). Sem
-// "Corretor": não existe hoje como filtro server-side, e inventar um
-// backend novo só pra bater com o mockup está fora do escopo desta
-// correção (ver relatório final).
+// interpretarPeriodoPipeline, já sanitizados contra enum inválido).
 export function PipelineFiltrosBar({
   params,
   filtros,
   periodo,
   visao,
   construirHref,
+  membros,
+  membroAtualId,
 }: {
   params: SearchParams;
   filtros: FiltrosPipeline;
   periodo: PeriodoPipeline;
   visao: VisaoPipeline;
   construirHref: (params: SearchParams, overrides: Partial<SearchParams>, resetarPage: boolean) => string;
+  membros: OpcaoResponsavel[];
+  // Vínculo do usuário logado nesta organização. Sem ele (sessão sem
+  // membership) a opção "Meus negócios" simplesmente não aparece, em vez
+  // de virar um filtro quebrado — estado seguro.
+  membroAtualId: string | null;
 }) {
-  const temFiltroAtivo = filtros.busca !== "" || filtros.resultado !== "TODOS";
+  const temFiltroAtivo =
+    filtros.busca !== "" || filtros.resultado !== "TODOS" || filtros.responsavel !== "";
 
   return (
     <form
@@ -82,6 +94,34 @@ export function PipelineFiltrosBar({
               {PERIODO_PIPELINE_LABEL[opcao]}
             </option>
           ))}
+        </select>
+      </div>
+      {/* "Meus negócios" é a MESMA dimensão de "corretor X": um só
+          <select> resolve os quatro estados pedidos (todos / meus /
+          corretor X / sem responsável) sem inventar um controle novo, e
+          continua cabendo em 375px. O valor de "Meus negócios" é o id do
+          próprio membro — nunca User.id, que é identidade global e não
+          casaria com responsibleMemberId. */}
+      <div className="min-w-0 max-w-full space-y-1">
+        <label htmlFor="pipeline-responsavel" className="text-xs text-muted-foreground">
+          Responsável
+        </label>
+        <select
+          id="pipeline-responsavel"
+          name="responsavel"
+          defaultValue={filtros.responsavel}
+          className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <option value="">Todos</option>
+          {membroAtualId && <option value={membroAtualId}>Meus negócios</option>}
+          <option value={FILTRO_SEM_RESPONSAVEL}>Sem responsável</option>
+          {membros
+            .filter((m) => m.memberId !== membroAtualId)
+            .map((membro) => (
+              <option key={membro.memberId} value={membro.memberId}>
+                {membro.nome}
+              </option>
+            ))}
         </select>
       </div>
       {visao === "ENCERRADA" && (

@@ -15,6 +15,7 @@ import { logActivity } from "@/lib/activity-log";
 import { oportunidadeElegivel } from "@/lib/oportunidade";
 import { interpretarValorFechamento, decimalParaValor } from "@/lib/valor-fechamento";
 import { interpretarComissao, comissaoExcedeValorFechado } from "@/lib/comissao";
+import { membroPodeReceberNegociacao } from "@/lib/responsavel-negociacao";
 import {
   erroAcessoNegado,
   erroGenerico,
@@ -30,6 +31,7 @@ import {
   criarInteresseSchema,
   atualizarEstagioInteresseSchema,
   estagioInteresseEncerrado,
+  ESTAGIOS_INTERESSE,
 } from "@/lib/property-interest-schema";
 
 type EstadoFormulario = { sucesso: boolean; erro?: string; clienteId?: string };
@@ -362,6 +364,76 @@ export async function salvarPreferenciaPessoa(
   });
 }
 
+// =====================================================================
+// Fase 11 — quem é o responsável pela negociação, no momento da criação
+// =====================================================================
+// REGRA ESCOLHIDA (opção C do leque auditado): o responsável nasce sendo
+// o membro que está criando a oportunidade, e o formulário completo
+// permite trocar antes de salvar.
+//
+// Por que auto-atribuir é legítimo AQUI, e não é "silencioso":
+//   1. É a semântica que o próprio produto já adotou para ownership:
+//      Person.assignedMemberId é gravado exatamente assim desde o CRM
+//      (`session.user.organizationMemberId ?? null` em criarPessoa), e o
+//      nome do responsável já aparece na lista de clientes. Esta fase
+//      segue o precedente do domínio em vez de inventar outro.
+//   2. Os quatro caminhos de criação partem de alguém logado agindo
+//      sobre um cliente dentro do CRM — não há criação automática nem
+//      criação por visitante do site.
+//   3. Silencioso seria invisível e irreversível. Aqui o responsável
+//      aparece no card do Kanban e na ficha do cliente, pode ser trocado
+//      no próprio formulário antes de salvar, e transferido depois com
+//      registro em ActivityLog.
+//
+// `responsavelId` vindo do FormData:
+//   ausente        -> membro atual (os fluxos de 1 clique, que não têm
+//                     formulário: as duas telas de recomendação e
+//                     "Criar oportunidade" a partir de um contato)
+//   string vazia   -> explicitamente SEM responsável
+//   id de membro   -> valida tenant + status antes de aceitar
+//
+// SEM membro na sessão (sessão sem vínculo de organização) -> null, o
+// mesmo estado seguro do precedente de Person.
+type ResolucaoResponsavel =
+  | { ok: true; responsibleMemberId: string | null }
+  | { ok: false; erro: string };
+
+async function resolverResponsavelInicial(
+  organizationId: string,
+  memberIdDaSessao: string | undefined,
+  bruto: FormDataEntryValue | null
+): Promise<ResolucaoResponsavel> {
+  if (bruto === null) {
+    return { ok: true, responsibleMemberId: memberIdDaSessao ?? null };
+  }
+  const escolhido = String(bruto).trim();
+  if (!escolhido) return { ok: true, responsibleMemberId: null };
+  return validarMembroAtribuivel(organizationId, escolhido);
+}
+
+// FRONTEIRA DE TENANT DO OWNERSHIP. O id do membro chega do navegador
+// como qualquer outro campo: um <select> adulterado poderia mandar o id
+// de um membro de OUTRA organização. O findFirst abaixo é a única coisa
+// entre isso e uma negociação da Org A pertencendo a um corretor da Org
+// B — por isso ele filtra por organizationId explicitamente e a mensagem
+// de erro é genérica, sem revelar que o membro existe em outro tenant.
+async function validarMembroAtribuivel(
+  organizationId: string,
+  membershipId: string
+): Promise<ResolucaoResponsavel> {
+  const membro = await prisma.organizationMember.findFirst({
+    where: { id: membershipId, organizationId },
+    select: { id: true, status: true },
+  });
+  if (!membro) return { ok: false, erro: "Responsável não encontrado nesta organização." };
+  // Membro inativo continua sendo responsável HISTÓRICO de negociações
+  // antigas, mas não recebe atribuição nova.
+  if (!membroPodeReceberNegociacao(membro.status)) {
+    return { ok: false, erro: "Este usuário está inativo e não pode receber negociações." };
+  }
+  return { ok: true, responsibleMemberId: membro.id };
+}
+
 // ---------------------------------------------------------------------
 // PropertyInterest (Fase D do CRM) — estado ATUAL do relacionamento
 // Person↔Property. Nunca cria Interaction automaticamente (decisão
@@ -441,12 +513,28 @@ export async function criarInteressePessoa(
     // commit da outra — a segunda estoura P2002 mesmo sem ninguém ter
     // "errado" nada. Mesmo padrão de retry único de person-dedup.ts (Fase
     // B): uma única re-consulta pós-catch, nunca um loop.
+    // Fase 11 — responsável resolvido ANTES de abrir a transação: uma
+    // atribuição inválida (membro de outro tenant, membro inativo) não
+    // pode nem chegar a criar a negociação.
+    const responsavel = await resolverResponsavelInicial(
+      organizationId,
+      session.user.organizationMemberId,
+      formData.get("responsavelId")
+    );
+    if (!responsavel.ok) return erroGenerico(responsavel.erro);
+
     let interesse;
     let foiCriadoAgora = false;
     try {
       interesse = await prisma.$transaction(async (tx) => {
         const criado = await tx.propertyInterest.create({
-          data: { organizationId, personId: pessoaId, propertyId, notes: notes || null },
+          data: {
+            organizationId,
+            personId: pessoaId,
+            propertyId,
+            notes: notes || null,
+            responsibleMemberId: responsavel.responsibleMemberId,
+          },
         });
 
         // PropertyInterestStageHistory inicial (Fase P.6 — correção
@@ -580,6 +668,20 @@ export async function criarOportunidadeDoContato(
     // ou uma oportunidade já criada por outro caminho colide em P2002.
     // Reenvio idempotente não é evento novo — não loga nem sobrescreve a
     // origem de um relacionamento que já existia.
+    // Fase 11 — este fluxo é um botão de 1 clique, sem formulário onde
+    // escolher: o responsável é quem está pegando o contato. Nenhum
+    // FormData é lido (o `_formData` desta action é ignorado por
+    // contrato), então resolverResponsavelInicial recebe `null` e cai no
+    // membro da sessão. Origem de aquisição e ownership são
+    // independentes: sourceInteraction diz de ONDE veio o negócio,
+    // responsibleMember diz QUEM o conduz.
+    const responsavel = await resolverResponsavelInicial(
+      organizationId,
+      session.user.organizationMemberId,
+      null
+    );
+    if (!responsavel.ok) return erroGenerico(responsavel.erro);
+
     let foiCriadaAgora = false;
     let interesseId: string;
     try {
@@ -590,6 +692,7 @@ export async function criarOportunidadeDoContato(
             personId: interacao.personId,
             propertyId,
             sourceInteractionId: interacao.id,
+            responsibleMemberId: responsavel.responsibleMemberId,
           },
         });
 
@@ -1147,6 +1250,125 @@ export async function corrigirDadosFechamento(
     revalidatePath(`/app/imoveis/${resultado.propertyId}`);
     revalidatePath("/app/pipeline");
     return sucesso("Valores do fechamento atualizados.");
+  });
+}
+
+// =====================================================================
+// Fase 11 — TRANSFERIR a negociação para outro responsável
+// =====================================================================
+// Necessidade auditada, não presumida: sem transferência, um responsável
+// errado só seria corrigível direto no banco — exatamente a dívida que a
+// Fase 9 deixou para closedValue e que a Fase 10 teve de pagar. E a
+// própria barra de filtros do Pipeline já carregava a nota de que
+// "Corretor" não existia como filtro server-side.
+//
+// BLOQUEADA EM NEGOCIAÇÃO FECHADA (WON/REJECTED). Este campo guarda o
+// responsável ATUAL, e o Analytics atribui o resultado do período a ele.
+// Permitir transferir depois do fechamento deixaria qualquer pessoa
+// reescrever a performance de um período já encerrado — um ganho de
+// março mudaria de dono em setembro. Como consequência direta disso, o
+// valor é imutável após o fechamento e NÃO existe
+// closedByResponsibleMemberId: um snapshot seria cópia do mesmo dado.
+// Limitação assumida: corrigir o responsável de um negócio já fechado
+// exige um fluxo administrativo auditável que esta fase não cria.
+//
+// Não é alteração silenciosa: grava ActivityLog com de/para.
+export async function transferirResponsavelNegociacao(
+  interesseId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  // AUTORIZAÇÃO: o produto não tem papel gerencial de carteira comercial
+  // (OrganizationRole cobre gestão de usuários/plataforma, não "gerente
+  // de vendas"), então quem tem CRM pode transferir. Inventar um papel
+  // novo aqui seria criar domínio sem evidência. Limitação documentada;
+  // o rastro fica no ActivityLog, com o ator.
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  const bruto = formData.get("responsavelId");
+  const escolhido = String(bruto ?? "").trim();
+  // String vazia = "deixar sem responsável", um destino legítimo (o
+  // corretor saiu e ninguém assumiu ainda). Só um id de fato informado
+  // passa pela validação de tenant/status.
+  let destino: string | null = null;
+  if (escolhido) {
+    const validado = await validarMembroAtribuivel(organizationId, escolhido);
+    if (!validado.ok) return erroGenerico(validado.erro);
+    destino = validado.responsibleMemberId;
+  }
+
+  return withOrganization(organizationId, async () => {
+    const resultado = await prisma.$transaction(async (tx) => {
+      const atual = await tx.propertyInterest.findUnique({
+        where: { id: interesseId, organizationId },
+        select: {
+          id: true,
+          personId: true,
+          propertyId: true,
+          stage: true,
+          responsibleMemberId: true,
+        },
+      });
+      if (!atual) return { tipo: "nao_encontrado" as const };
+      if (estagioInteresseEncerrado(atual.stage)) return { tipo: "encerrado" as const };
+      if (atual.responsibleMemberId === destino) return { tipo: "sem_mudanca" as const };
+
+      // O WHERE repete os stages abertos: se outra transação fechar a
+      // negociação no meio do caminho, a transferência não acontece às
+      // cegas depois do fechamento.
+      const atualizado = await tx.propertyInterest.updateMany({
+        where: { id: interesseId, organizationId, stage: { in: [...ESTAGIOS_INTERESSE] } },
+        data: { responsibleMemberId: destino },
+      });
+      if (atualizado.count === 0) return { tipo: "corrida" as const };
+
+      // Um evento só, com de/para — `de: null` é a PRIMEIRA atribuição
+      // (negociação legada assumida por alguém), e não um caso à parte.
+      // A criação já é registrada por property_interest_created, então um
+      // evento separado de "assigned" duplicaria o mesmo fato.
+      // Só ids: nome de membro é PII desnecessária no log, e o id
+      // resolve o nome atual na leitura.
+      await tx.activityLog.create({
+        data: {
+          organizationId,
+          userId: session.user.id,
+          entity: "PropertyInterest",
+          entityId: interesseId,
+          action: "property_interest_reassigned",
+          payload: { deMemberId: atual.responsibleMemberId, paraMemberId: destino },
+        },
+      });
+
+      return { tipo: "transferido" as const, personId: atual.personId, propertyId: atual.propertyId };
+    });
+
+    if (resultado.tipo === "nao_encontrado") {
+      return erroAcessoNegado("Negociação não encontrada.");
+    }
+    if (resultado.tipo === "encerrado") {
+      return erroGenerico(
+        "Não é possível trocar o responsável de uma negociação já encerrada."
+      );
+    }
+    if (resultado.tipo === "sem_mudanca") {
+      return sucesso("Responsável mantido.");
+    }
+    if (resultado.tipo === "corrida") {
+      return erroGenerico(
+        "Não foi possível concluir agora devido a uma alteração concorrente — tente novamente."
+      );
+    }
+
+    revalidatePath(`/app/clientes/${resultado.personId}`);
+    revalidatePath(`/app/imoveis/${resultado.propertyId}`);
+    revalidatePath("/app/pipeline");
+    return sucesso("Responsável atualizado.");
   });
 }
 

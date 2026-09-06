@@ -41,7 +41,17 @@ export function MoverEstagioPipeline({
     // overflow horizontal da PÁGINA inteira (achado do smoke local); se
     // mesmo assim não couber ao lado do botão, quebra pra próxima linha
     // DENTRO do card, nunca empurra a página.
-    <form action={formAction} className="flex flex-wrap items-center gap-1.5">
+    // `relative` NÃO é decorativo: o <Label> abaixo é `sr-only`, e o
+    // sr-only do Tailwind é `position:absolute` SEM left/top — o elemento
+    // fica na sua posição estática. Sem um ancestral posicionado, o bloco
+    // contêiner dele passa a ser o bloco contêiner inicial (o documento),
+    // e como este card vive dentro do board do Kanban com scroll
+    // horizontal, a posição estática cai FORA da viewport: o label
+    // escapava do `overflow-x:auto` do board e esticava a rolagem
+    // horizontal do DOCUMENTO em ~100px a partir de 768px (medido:
+    // window.scrollX chegava a 100). Com `relative`, o contêiner passa a
+    // ser este form, dentro do card `overflow-hidden`, e nada vaza.
+    <form action={formAction} className="relative flex flex-wrap items-center gap-1.5">
       <Label htmlFor={selectId} className="sr-only">
         Mover para outra etapa
       </Label>

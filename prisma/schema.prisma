@@ -372,7 +372,7 @@ model Interaction {
   // corretor no painel não tem origem de site, e as que já existiam
   // continuam null — nenhuma delas ganha uma origem inventada
   // retroativamente.
-  origin     String?
+  origin String?
 
   // Atribuição de tráfego da jornada (Fase 7) — TODAS nullable, aditivas.
   // Evento anterior a esta fase permanece sem atribuição, e isso é lido
@@ -483,7 +483,6 @@ model PropertyAnalyticsEvent {
   utmContent   String?
   utmTerm      String?
   referrerHost String?
-
 
   // Índices derivados das DUAS queries reais que existem, não
   // especulativos:
@@ -612,6 +611,61 @@ model PropertyInterest {
   // ZERO BACKFILL: nenhum WON histórico recebeu comissão estimada.
   commissionValue Decimal? @db.Decimal(14, 2)
 
+  // Fase 11 — RESPONSÁVEL PELA NEGOCIAÇÃO.
+  //
+  // Ownership comercial da OPORTUNIDADE, e de mais nada. Auditoria da
+  // fase: o produto tinha atores espalhados (Property.responsibleMember =
+  // responsável pelo IMÓVEL; Person.assignedMember = responsável pelo
+  // CLIENTE; Interaction.member = quem REGISTROU o contato;
+  // ScheduledActivity.createdByMember = quem CRIOU a visita;
+  // ActivityLog.userId = quem EXECUTOU cada ação) e nenhum deles
+  // respondia "quem conduz esta negociação". Nenhum foi reaproveitado:
+  // captar o imóvel, atender o cliente e conduzir a negociação são
+  // funções que podem pertencer a pessoas diferentes.
+  //
+  // IDENTIDADE TENANT-SPECIFIC: aponta para OrganizationMember, nunca
+  // para User. User é identidade global e atravessa organizações; a
+  // responsabilidade comercial é com ESTA imobiliária. Mesmo alvo de
+  // Property.responsibleMember e Person.assignedMember.
+  //
+  // NULLABLE, sem backfill: toda negociação anterior a esta fase fica
+  // null = "Sem responsável", declarado como tal na tela. Nenhuma
+  // heurística de criador, último ActivityLog, quem marcou WON,
+  // responsável pelo imóvel, responsável pela visita ou proximidade
+  // temporal — nada disso é o responsável pela negociação, e adivinhar
+  // seria fabricar accountability.
+  //
+  // FK ON DELETE SET NULL — não por default acidental, mas porque é a
+  // política que TODAS as FKs de ownership deste produto já usam,
+  // verificado no banco (pg_constraint): people.assignedMemberId,
+  // properties.responsibleMemberId, interactions.memberId e
+  // scheduled_activities.createdByMemberId são as quatro SET NULL. Um
+  // RESTRICT aqui seria a anomalia do schema.
+  //
+  // O histórico não depende da FK para sobreviver, e sim do LIFECYCLE
+  // real, auditado nesta fase: membro NUNCA é apagado no ciclo de vida do
+  // tenant — /app/usuarios só alterna status ACTIVE <-> SUSPENDED e não
+  // existe nenhuma ação de exclusão de membro. O único delete real é o da
+  // organização inteira (operador de plataforma), que já apaga
+  // propertyInterest ANTES de organization_members. Ou seja: no uso real
+  // este SET NULL nunca dispara, e uma negociação histórica nunca perde
+  // silenciosamente o seu responsável.
+  //
+  // Membro SUSPENSO continua sendo o responsável histórico e continua
+  // aparecendo com nome + marca de inativo — desativar não é apagar.
+  //
+  // IMUTÁVEL DEPOIS DE FECHADO: a transferência é bloqueada em
+  // WON/REJECTED (ver transferirResponsavelNegociacao), justamente para
+  // que o Analytics do período não possa ser reescrito depois. É por
+  // isso que NÃO existe um closedByResponsibleMemberId: sem mutação
+  // pós-fechamento, o snapshot seria uma cópia do mesmo dado.
+  //
+  // NÃO É BENEFICIÁRIO FINANCEIRO: responsável pela negociação não
+  // significa quem recebe a comissão. Sem split/co-broker/percentual no
+  // domínio, commissionValue continua sendo "comissão do negócio".
+  responsibleMemberId String?
+  responsibleMember   OrganizationMember? @relation("PropertyInterestResponsibleMember", fields: [responsibleMemberId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -626,6 +680,16 @@ model PropertyInterest {
   // sendo o único jeito de servir a ficha do imóvel eficientemente.
   @@unique([organizationId, personId, propertyId])
   @@index([organizationId, propertyId])
+  // Fase 11 — serve o filtro por responsável do Kanban ("Meus negócios" /
+  // corretor X) e o agrupamento do Analytics. Adicionado por MEDIÇÃO, não
+  // por reflexo: EXPLAIN (ANALYZE, BUFFERS) em banco descartável com
+  // 200.000 negociações e 40 organizações, na query real
+  // (organizationId + responsibleMemberId):
+  //   sem índice -> Parallel Seq Scan, 2079 buffers, 10,19 ms
+  //   com índice -> Bitmap Index Scan,    4 buffers,  0,84 ms
+  // Sem ele, filtrar o Kanban de uma organização varre a tabela inteira,
+  // incluindo as linhas de todos os outros tenants.
+  @@index([organizationId, responsibleMemberId])
   @@map("property_interests")
 }
 
@@ -861,6 +925,10 @@ model OrganizationMember {
 
   notificationPreferences    NotificationPreference[]
   responsibleProperties      Property[]               @relation("PropertyResponsibleMember")
+  // Fase 11 — negociações sob responsabilidade deste membro. Relação
+  // SEPARADA de responsibleProperties de propósito: ser responsável pelo
+  // imóvel não torna ninguém responsável pela negociação daquele imóvel.
+  responsibleInterests       PropertyInterest[]       @relation("PropertyInterestResponsibleMember")
   assignedPeople             Person[]                 @relation("PersonAssignedMember")
   interactions               Interaction[]            @relation("InteractionMember")
   deals                      Deal[]                   @relation("DealMember")

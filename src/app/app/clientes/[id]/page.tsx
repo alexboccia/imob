@@ -24,6 +24,9 @@ import { oportunidadeElegivel } from "@/lib/oportunidade";
 import { decimalParaValor } from "@/lib/valor-fechamento";
 import { RecomendacaoImovelItem } from "@/components/admin/RecomendacaoImovelItem";
 import { buscarImoveisCompativeis } from "@/lib/property-matching";
+import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
+import { paraResponsavel } from "@/lib/responsavel-negociacao";
+import { auth } from "@/lib/auth";
 import {
   Select,
   SelectContent,
@@ -45,6 +48,7 @@ export default async function DetalheClientePage({
 }) {
   const { id } = await params;
   const organizationId = await requireOrganizationId();
+  const session = await auth();
 
   if (!(await hasModule(organizationId, "crm"))) {
     return (
@@ -59,6 +63,7 @@ export default async function DetalheClientePage({
 
   const [
     [pessoa, { opcoesImovel, opcoesCondominio }, { opcoesResidencial, opcoesComercial }, sugestoesLocalizacao, imoveisDisponiveis],
+    membrosAtribuiveis,
     recomendacoes,
   ] = await Promise.all([
     withOrganization(organizationId, () =>
@@ -87,6 +92,16 @@ export default async function DetalheClientePage({
                 take: 1,
                 select: { id: true, scheduledAt: true, notes: true },
               },
+              // Fase 11 — responsável pela negociação, no mesmo select
+              // batched das demais relações. Nunca uma query por card.
+              responsibleMember: {
+                select: {
+                  id: true,
+                  status: true,
+                  organizationId: true,
+                  user: { select: { name: true } },
+                },
+              },
             },
           },
         },
@@ -111,6 +126,10 @@ export default async function DetalheClientePage({
       }),
     ])
     ),
+    // Fase 11 — uma query só para a tela inteira: alimenta o seletor do
+    // formulário de relacionar imóvel E o diálogo de transferência de
+    // cada negociação já existente.
+    buscarMembrosAtribuiveis(organizationId),
     // buscarImoveisCompativeis gerencia seu próprio withOrganization/
     // hasModule/validação de Person internamente — chamada como irmã do
     // bloco acima em vez de aninhada, evita withOrganization dentro de
@@ -234,6 +253,7 @@ export default async function DetalheClientePage({
               {pessoa.propertyInterests.map((interesse) => (
                 <InteresseImovelItem
                   key={interesse.id}
+                  membros={membrosAtribuiveis}
                   interesse={{
                     id: interesse.id,
                     stage: interesse.stage,
@@ -256,6 +276,9 @@ export default async function DetalheClientePage({
                           notes: interesse.scheduledActivities[0].notes,
                         }
                       : null,
+                    // Membro de outro tenant é redigido para null dentro
+                    // de paraResponsavel — o nome jamais chega à tela.
+                    responsavel: paraResponsavel(interesse.responsibleMember, organizationId),
                   }}
                 />
               ))}
@@ -264,7 +287,12 @@ export default async function DetalheClientePage({
 
           <div className="border-t pt-4">
             <p className="text-sm font-medium mb-2">Relacionar imóvel</p>
-            <RelacionarImovelForm pessoaId={pessoa.id} imoveisDisponiveis={imoveisDisponiveis} />
+            <RelacionarImovelForm
+              pessoaId={pessoa.id}
+              imoveisDisponiveis={imoveisDisponiveis}
+              membros={membrosAtribuiveis}
+              membroAtualId={session?.user.organizationMemberId ?? null}
+            />
           </div>
         </CardContent>
       </Card>

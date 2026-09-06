@@ -5,6 +5,8 @@ import type { ItemPipeline, PrioridadePipeline } from "@/lib/pipeline";
 import { estagioInteresseEncerrado } from "@/lib/property-interest-schema";
 import { acaoOperacionalDaVisita, formatarDataHora } from "@/lib/scheduled-activity-date";
 import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
+import { ResponsavelNegociacao } from "@/components/admin/ResponsavelNegociacao";
+import type { OpcaoResponsavel } from "@/lib/responsavel-negociacao";
 import { MoverEstagioPipeline } from "@/components/admin/MoverEstagioPipeline";
 import { NegociacaoDrawer } from "@/components/admin/pipeline/NegociacaoDrawer";
 import { PRIORIDADE_BADGE_CLASSE, PRIORIDADE_LABEL_CURTO } from "@/components/admin/pipeline/prioridade-visual";
@@ -23,7 +25,17 @@ import { Button } from "@/components/ui/button";
 // (diferente do padrão de ClientesTabelaComDrawer, que precisa de um
 // drawer único e compartilhado por uma tabela paginada; aqui não há
 // tabela, cada card já é uma unidade independente).
-export function CardPipeline({ item, prioridade }: { item: ItemPipeline; prioridade?: PrioridadePipeline }) {
+export function CardPipeline({
+  item,
+  prioridade,
+  membros,
+}: {
+  item: ItemPipeline;
+  prioridade?: PrioridadePipeline;
+  // Fase 11 — membros ativos, carregados UMA vez pela página do Pipeline
+  // e repassados a todos os cards. Nunca uma query por card.
+  membros: OpcaoResponsavel[];
+}) {
   const [drawerAberto, setDrawerAberto] = useState(false);
   const encerrado = estagioInteresseEncerrado(item.stage);
   const pendente =
@@ -80,6 +92,19 @@ export function CardPipeline({ item, prioridade }: { item: ItemPipeline; priorid
               )}
             </div>
           )}
+
+          {/* Fase 11 — ownership visível no card, em TEXTO. O card já é
+              denso, então é uma linha discreta acima do bloco de ações,
+              nunca um avatar solto que só faria sentido para quem
+              reconhece a foto. */}
+          <div className="border-t pt-2">
+            <ResponsavelNegociacao
+              interesseId={item.id}
+              responsavel={item.responsavel}
+              membros={membros}
+              encerrada={encerrado}
+            />
+          </div>
 
           {encerrado ? (
             <div className="border-t pt-2">

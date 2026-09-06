@@ -411,6 +411,11 @@ async function main() {
       where: { createdByMemberId: { in: idsMembros } },
       data: { createdByMemberId: null },
     });
+    // Fase 11 — mesma limpeza explícita das demais FKs de ownership.
+    await prisma.propertyInterest.updateMany({
+      where: { responsibleMemberId: { in: idsMembros } },
+      data: { responsibleMemberId: null },
+    });
     await prisma.notificationPreference.deleteMany({
       where: { organizationMemberId: { in: idsMembros } },
     });
@@ -786,6 +791,9 @@ async function main() {
         // número real a "Comissão registrada", "Comissão média" e
         // "Comissão efetiva" na tela de Analytics.
         commissionValue: 42500,
+        // Fase 11 — negociação COM responsável: dá à tabela "Performance
+        // por responsável" uma linha com nome, ganho, valor e comissão.
+        responsibleMemberId: orgAnalytics.membro.id,
       },
     });
     await prisma.propertyInterestStageHistory.create({
@@ -816,6 +824,10 @@ async function main() {
         // distinção entre "R$ 0" e "não registrado" nos dois campos.
         closedValue: null,
         commissionValue: null,
+        // Fase 11 — e SEM responsável, pelo mesmo motivo: é o que prova
+        // na tela que a linha "Sem responsável" existe como balde próprio
+        // e que nada foi atribuído retroativamente.
+        responsibleMemberId: null,
       },
     });
     await prisma.propertyInterestStageHistory.create({

@@ -17,6 +17,8 @@ import {
 } from "@/lib/pipeline";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { CardPipeline } from "@/components/admin/CardPipeline";
+import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
+import { auth } from "@/lib/auth";
 import { PipelineKpiCards } from "@/components/admin/pipeline/PipelineKpiCards";
 import { PipelineTabs } from "@/components/admin/pipeline/PipelineTabs";
 import { PipelineFiltrosBar } from "@/components/admin/pipeline/PipelineFiltrosBar";
@@ -47,6 +49,9 @@ type SearchParams = {
   page?: string;
   periodo?: string;
   prioridade?: string;
+  // Fase 11 — id de OrganizationMember, "SEM" (sem responsável) ou
+  // ausente (todos).
+  responsavel?: string;
 };
 
 // Mesmo racional de construirHref em agenda/page.tsx — preserva os
@@ -100,6 +105,13 @@ export default async function PipelinePage({
   // Leitura independente, própria (nunca reaproveita os itens de
   // buscarPipelineAberto/Encerrado, que têm teto de exibição).
   const analyticsHistorico = await buscarAnalyticsHistoricoPipeline(organizationId, { periodo });
+  // Fase 11 — uma query só para a página inteira: alimenta o filtro da
+  // barra E o diálogo de troca de responsável de todos os cards.
+  const [membrosAtribuiveis, session] = await Promise.all([
+    buscarMembrosAtribuiveis(organizationId),
+    auth(),
+  ]);
+  const membroAtualId = session?.user.organizationMemberId ?? null;
 
   const Cabecalho = (
     <div>
@@ -130,13 +142,18 @@ export default async function PipelinePage({
       periodo={periodo}
       visao={filtros.visao}
       construirHref={construirHref}
+      membros={membrosAtribuiveis}
+      membroAtualId={membroAtualId}
     />
   );
 
   const Insights = <PipelineInsights analytics={analyticsHistorico} />;
 
   if (filtros.visao === "ABERTA") {
-    const colunas = await buscarPipelineAberto(organizationId, { busca: filtros.busca });
+    const colunas = await buscarPipelineAberto(organizationId, {
+      busca: filtros.busca,
+      responsavel: filtros.responsavel,
+    });
 
     // Classificação pura, in-memory, zero I/O adicional — reusa os itens
     // já carregados por buscarPipelineAberto e a média por etapa já
@@ -172,7 +189,9 @@ export default async function PipelinePage({
           ) as Record<ColunaAberta, (typeof colunas)[ColunaAberta]>);
 
     const totalAberto = COLUNAS_ABERTAS.reduce((soma, coluna) => soma + colunasExibidas[coluna].length, 0);
-    const semResultadoPorFiltro = totalAberto === 0 && (filtros.busca !== "" || filtroPrioridade !== "TODAS");
+    const semResultadoPorFiltro =
+      totalAberto === 0 &&
+      (filtros.busca !== "" || filtroPrioridade !== "TODAS" || filtros.responsavel !== "");
 
     return (
       <div className="space-y-5">
@@ -221,7 +240,12 @@ export default async function PipelinePage({
                 ) : (
                   <div className="space-y-2">
                     {colunasExibidas[coluna].map((item) => (
-                      <CardPipeline key={item.id} item={item} prioridade={prioridadesPorItem.get(item.id)} />
+                      <CardPipeline
+                        key={item.id}
+                        item={item}
+                        prioridade={prioridadesPorItem.get(item.id)}
+                        membros={membrosAtribuiveis}
+                      />
                     ))}
                   </div>
                 )}
@@ -242,10 +266,12 @@ export default async function PipelinePage({
   const { itens, total } = await buscarPipelineEncerrado(organizationId, {
     busca: filtros.busca,
     resultado: filtros.resultado,
+    responsavel: filtros.responsavel,
     skip,
     take,
   });
-  const temFiltroAtivo = filtros.busca !== "" || filtros.resultado !== "TODOS";
+  const temFiltroAtivo =
+    filtros.busca !== "" || filtros.resultado !== "TODOS" || filtros.responsavel !== "";
   const temProximaPagina = skip + itens.length < total;
 
   return (
@@ -264,7 +290,7 @@ export default async function PipelinePage({
       ) : (
         <div className="grid max-w-2xl grid-cols-1 gap-2">
           {itens.map((item) => (
-            <CardPipeline key={item.id} item={item} />
+            <CardPipeline key={item.id} item={item} membros={membrosAtribuiveis} />
           ))}
         </div>
       )}

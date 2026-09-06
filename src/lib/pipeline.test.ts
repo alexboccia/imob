@@ -31,7 +31,7 @@ import {
   type EpisodioEtapa,
   type MotivoPrioridadePipeline,
 } from "@/lib/pipeline";
-import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
+import type { MemberStatus, PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 
 // Fase P.4 — cobertura dos helpers puros (sem Prisma/banco), mesmo
 // espírito de agenda.test.ts/scheduled-activity-date.test.ts.
@@ -50,6 +50,12 @@ function linhaFake(overrides: {
   propertyStatus?: PropertyStatus;
   scheduledActivities?: { id: string; scheduledAt: Date }[];
   stageHistory?: { newStage: PropertyInterestStage; changedAt: Date }[];
+  responsibleMember?: {
+    id: string;
+    status: MemberStatus;
+    organizationId: string;
+    user: { name: string | null };
+  } | null;
 }) {
   return {
     id: overrides.id ?? "interesse-1",
@@ -68,6 +74,9 @@ function linhaFake(overrides: {
     },
     scheduledActivities: overrides.scheduledActivities ?? [],
     stageHistory: overrides.stageHistory ?? [],
+    // Fase 11 — sem responsável por padrão: é o estado de toda
+    // negociação legada, e o caso que mais precisa continuar correto.
+    responsibleMember: overrides.responsibleMember ?? null,
   };
 }
 
@@ -167,6 +176,7 @@ function itemFake(overrides: Partial<ItemPipeline> & { stage: PropertyInterestSt
     closedAtISO: overrides.closedAtISO ?? null,
     closedValue: overrides.closedValue ?? null,
     commissionValue: overrides.commissionValue ?? null,
+    responsavel: overrides.responsavel ?? null,
     updatedAtISO: overrides.updatedAtISO ?? "2026-01-01T00:00:00.000Z",
     person: overrides.person ?? { id: "p1", name: "Fulano" },
     property: overrides.property ?? { id: "im1", title: "Imóvel", status: "AVAILABLE", neighborhood: "Centro" },
@@ -269,7 +279,21 @@ describe("ordenarColuna", () => {
 
 describe("interpretarFiltrosPipeline", () => {
   test("H) defaults seguros sem nenhum param", () => {
-    expect(interpretarFiltrosPipeline({})).toEqual({ busca: "", visao: "ABERTA", resultado: "TODOS" });
+    expect(interpretarFiltrosPipeline({})).toEqual({
+      busca: "",
+      visao: "ABERTA",
+      resultado: "TODOS",
+      // Fase 11 — "" = todos os responsáveis, o default que não filtra
+      // nada. Nunca "SEM", que esconderia as negociações com dono.
+      responsavel: "",
+    });
+  });
+
+  test("responsável: aceita id, aceita SEM e apara entrada absurda", () => {
+    expect(interpretarFiltrosPipeline({ responsavel: "  membro-1  " }).responsavel).toBe("membro-1");
+    expect(interpretarFiltrosPipeline({ responsavel: "SEM" }).responsavel).toBe("SEM");
+    // Teto de tamanho: nada além de um cuid entra na query.
+    expect(interpretarFiltrosPipeline({ responsavel: "x".repeat(200) }).responsavel).toHaveLength(40);
   });
 
   test("aceita visao=encerrada (case-insensitive)", () => {

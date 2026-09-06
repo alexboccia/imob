@@ -168,4 +168,26 @@ test.describe("Pipeline", () => {
     );
     expect(semOverflowEncerradas).toBe(true);
   });
+
+  // Fase 11 — a cobertura parava em 375px, e o bug real morava JUSTO no
+  // breakpoint `md`, onde o Kanban vira colunas lado a lado com scroll
+  // horizontal próprio: um <Label> sr-only (position:absolute sem
+  // left/top, portanto na posição estática) não tinha ancestral
+  // posicionado, então o bloco contêiner dele era o documento — escapava
+  // do overflow-x:auto do board e esticava a rolagem horizontal da PÁGINA
+  // em ~100px. Aqui não basta comparar scrollWidth: o teste tenta ROLAR
+  // de verdade, que é o sintoma que o corretor sente.
+  for (const largura of [768, 1024, 1280, 1440]) {
+    test(`${largura}px: a página não rola horizontalmente`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.goto("/app/pipeline");
+      const scrollX = await page.evaluate(() => {
+        window.scrollTo(9999, 0);
+        const x = window.scrollX;
+        window.scrollTo(0, 0);
+        return x;
+      });
+      expect(scrollX, `documento rolou ${scrollX}px em ${largura}px`).toBe(0);
+    });
+  }
 });

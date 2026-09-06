@@ -12,6 +12,8 @@ import { formatarPreco } from "@/lib/format";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
 import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
+import { ResponsavelNegociacao } from "@/components/admin/ResponsavelNegociacao";
+import type { OpcaoResponsavel, ResponsavelNegociacao as Responsavel } from "@/lib/responsavel-negociacao";
 import {
   ESTAGIOS_INTERESSE,
   ESTAGIO_INTERESSE_LABEL,
@@ -33,7 +35,11 @@ import {
 
 export function InteresseImovelItem({
   interesse,
+  membros,
 }: {
+  // Fase 11 — membros ativos, carregados UMA vez pela página e passados
+  // a cada item. Nunca uma query por card.
+  membros: OpcaoResponsavel[];
   interesse: {
     id: string;
     stage: PropertyInterestStage;
@@ -50,6 +56,9 @@ export function InteresseImovelItem({
     // vem pronta da query da página (batch, sem N+1 por card). scheduledAt
     // trafega como string ISO, nunca Date (ver AgendamentoVisita.tsx).
     proximaVisita: { id: string; scheduledAtISO: string; notes: string | null } | null;
+    // Fase 11 — null = "Sem responsável" (negociação anterior a esta
+    // fase, sem backfill, ou deixada sem dono de propósito).
+    responsavel: Responsavel | null;
   };
 }) {
   const proximaAcao = obterProximaAcaoComercial(interesse.stage, interesse.property.status);
@@ -167,6 +176,13 @@ export function InteresseImovelItem({
             )}
           </form>
         )}
+
+        <ResponsavelNegociacao
+          interesseId={interesse.id}
+          responsavel={interesse.responsavel}
+          membros={membros}
+          encerrada={estagioInteresseEncerrado(interesse.stage)}
+        />
 
         <FechamentoInteresse
           interesseId={interesse.id}
