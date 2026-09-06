@@ -20,6 +20,21 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
+  // TETO DURO DA SUÍTE NO CI (Fase 11). Não é aumento de timeout nem
+  // máscara de falha — é o contrário: sem ele, um travamento no runner
+  // não vira falha, vira um job pendurado. Aconteceu de verdade nesta
+  // fase (job E2E preso por mais de 1h30 num commit cuja suíte roda em
+  // 7,3 min localmente e passa 348/348), e como o token de CI recebe 403
+  // ao cancelar, a única saída era um push corretivo.
+  //
+  // 15 minutos é exatamente o orçamento disponível: a regra operacional é
+  // o RUN inteiro em até 18 min, e o preparo do job (checkout, npm ci,
+  // browser, banco, seed) consome ~1,5 min antes do primeiro teste.
+  // Estourar isso passa a ser uma falha rápida e diagnosticável, com
+  // relatório do Playwright anexado, em vez de um runner ocupado por
+  // horas. Local fica sem teto: lá a regra de 18 min é cronometrada à mão
+  // e um teto rígido só atrapalharia a depuração.
+  globalTimeout: process.env.CI ? 15 * 60 * 1000 : undefined,
   // HTML sempre gerado (não só em CI) — é o que o workflow anexa como
   // artefato quando um spec falha (ver .github/workflows/ci.yml).
   reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
