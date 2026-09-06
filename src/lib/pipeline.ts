@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { decimalParaValor } from "@/lib/valor-fechamento";
 import { withOrganization } from "@/lib/tenant-context";
 import { normalizarBusca, PAGE_SIZE_PADRAO } from "@/lib/pagination";
 import { ESTAGIOS_INTERESSE, estagioInteresseEncerrado } from "@/lib/property-interest-schema";
@@ -20,6 +21,9 @@ export type ItemPipeline = {
   id: string;
   stage: PropertyInterestStage;
   closedAtISO: string | null;
+  // Fase 9 — valor negociado do fechamento. null = não registrado
+  // (ganho anterior a esta fase), nunca R$ 0.
+  closedValue: number | null;
   // Só usado como critério de DESEMPATE interno de ordenação (grupo "sem
   // visita" de ordenarColuna) — NUNCA exibido como "há X dias nesta
   // etapa". O schema atual não registra quando o stage mudou pela última
@@ -57,6 +61,7 @@ function selectItemPipeline(organizationId: string) {
     id: true,
     stage: true,
     closedAt: true,
+    closedValue: true,
     updatedAt: true,
     person: { select: { id: true, name: true, organizationId: true } },
     property: { select: { id: true, title: true, status: true, neighborhood: true, organizationId: true } },
@@ -91,6 +96,9 @@ type LinhaBrutaPipeline = {
   id: string;
   stage: PropertyInterestStage;
   closedAt: Date | null;
+  // Decimal do Prisma chega como objeto; decimalParaValor converte sem
+  // transformar null em 0.
+  closedValue: unknown;
   updatedAt: Date;
   person: { id: string; name: string; organizationId: string };
   property: { id: string; title: string; status: PropertyStatus; neighborhood: string; organizationId: string };
@@ -185,6 +193,7 @@ export function paraItemPipeline(
     id: linha.id,
     stage: linha.stage,
     closedAtISO: linha.closedAt ? linha.closedAt.toISOString() : null,
+    closedValue: decimalParaValor(linha.closedValue),
     updatedAtISO: linha.updatedAt.toISOString(),
     person,
     property,

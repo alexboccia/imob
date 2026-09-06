@@ -288,7 +288,10 @@ describe("resultado comercial no dashboard", () => {
   test("ganho conta como fechamento no canal de origem", async () => {
     const { organizationId, interesse } = await cenarioComOportunidade();
 
-    await marcarInteresseComoGanho(interesse.id, ESTADO_INICIAL_ACAO, new FormData());
+    // Fase 9 — ganho exige valor de fechamento.
+    const fdGanho = new FormData();
+    fdGanho.set("valorFechamento", "500000");
+    await marcarInteresseComoGanho(interesse.id, ESTADO_INICIAL_ACAO, fdGanho);
 
     const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
     expect(a.resultado.fechamentosGanhos).toBe(1);

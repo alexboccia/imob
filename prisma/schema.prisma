@@ -563,6 +563,29 @@ model PropertyInterest {
   // preenche atomicamente junto da mudança de stage).
   closedAt DateTime?
 
+  // Fase 9 — valor NEGOCIADO pelo qual a oportunidade foi fechada,
+  // informado pelo corretor ao marcar como ganha. Decimal(14,2) igual a
+  // todo campo monetário do schema (Property.price/rentPrice/condoFee/
+  // propertyTax, PersonPreference.min/maxPrice) — nunca Float.
+  //
+  // Nullable, e isso é semântico, não só compatibilidade:
+  //   null = valor NÃO REGISTRADO (ganho anterior a esta fase, ou
+  //          fechamento por um caminho que não pede valor)
+  //   0    = impossível — a validação recusa zero e negativo, porque
+  //          "ganho por R$ 0" é campo em branco, não negócio fechado.
+  // Somar null como zero puxaria ticket médio e total para baixo; os
+  // relatórios tratam os dois casos separadamente (ver
+  // agregarValorFechado em src/lib/valor-fechamento.ts).
+  //
+  // NÃO é receita nem comissão: seria a comissão sobre este valor, e o
+  // produto não registra isso. NÃO é Property.price (preço anunciado).
+  // ZERO BACKFILL: nenhum WON histórico recebeu valor inferido do imóvel.
+  //
+  // Só é escrito na transação de fechamento como GANHO. REJECTED nunca
+  // grava valor. Não há fluxo de edição depois do fechamento (ver
+  // fecharInteresse).
+  closedValue Decimal? @db.Decimal(14, 2)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

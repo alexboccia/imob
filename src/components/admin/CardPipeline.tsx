@@ -83,7 +83,14 @@ export function CardPipeline({ item, prioridade }: { item: ItemPipeline; priorid
 
           {encerrado ? (
             <div className="border-t pt-2">
-              <FechamentoInteresse interesseId={item.id} stage={item.stage} closedAtISO={item.closedAtISO} />
+              <FechamentoInteresse
+                interesseId={item.id}
+                stage={item.stage}
+                closedAtISO={item.closedAtISO}
+                closedValue={item.closedValue}
+                imovelTitulo={item.property?.title}
+                clienteNome={item.person?.name}
+              />
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-1.5 border-t pt-2">

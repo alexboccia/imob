@@ -13,6 +13,7 @@ import { withOrganization } from "@/lib/tenant-context";
 import { hasModule, getLimit, limiteExcedido, LimiteDoPlanoError, FEATURE_CRM_CLIENTS } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
 import { oportunidadeElegivel } from "@/lib/oportunidade";
+import { interpretarValorFechamento } from "@/lib/valor-fechamento";
 import {
   erroAcessoNegado,
   erroGenerico,
@@ -828,7 +829,10 @@ const MAX_TENTATIVAS_FECHAMENTO = 3;
 
 async function fecharInteresse(
   interesseId: string,
-  destino: "WON" | "REJECTED"
+  destino: "WON" | "REJECTED",
+  // Fase 9 — valor negociado. Só existe para GANHO; em REJECTED o
+  // parâmetro nunca é passado e a coluna permanece null.
+  valorBruto?: unknown
 ): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
@@ -836,6 +840,20 @@ async function fecharInteresse(
   const organizationId = await requireOrganizationId();
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  // Validação ANTES de qualquer escrita: marcar como ganho exige valor
+  // real. Um ganho sem valor deixaria o relatório financeiro
+  // permanentemente incompleto justo no registro que mais importa, e não
+  // existe fluxo de edição depois do fechamento para corrigir.
+  //
+  // REJECTED nunca carrega valor: negócio perdido não tem valor fechado,
+  // e gravar 0 ali seria confundir "não houve" com "valeu zero".
+  let closedValue: number | null = null;
+  if (destino === "WON") {
+    const interpretado = interpretarValorFechamento(valorBruto);
+    if (!interpretado.ok) return erroGenerico(interpretado.erro);
+    closedValue = interpretado.valor;
   }
 
   return withOrganization(organizationId, async () => {
@@ -914,7 +932,11 @@ async function fecharInteresse(
         const agora = new Date();
         const atualizado = await tx.propertyInterest.updateMany({
           where: { id: interesse.id, organizationId, stage: atual.stage },
-          data: { stage: destino, closedAt: agora },
+          // stage, closedAt e closedValue no MESMO update da MESMA
+          // transação do histórico: nunca existe WON sem valor nem valor
+          // sem WON. Em REJECTED, closedValue é null explicitamente — não
+          // herda nada de uma tentativa anterior.
+          data: { stage: destino, closedAt: agora, closedValue },
         });
 
         if (atualizado.count === 0) {
@@ -1014,17 +1036,16 @@ async function fecharInteresse(
   });
 }
 
-// Marca o relacionamento como ganho (stage=WON, closedAt=agora). Input
-// único: propertyInterestId (bindado) — nenhum outro dado vem do
-// FormData/cliente, stage e closedAt são sempre decididos aqui.
+// Marca o relacionamento como ganho (stage=WON, closedAt=agora,
+// closedValue=valor informado). O único dado que vem do FormData é o
+// VALOR — stage, closedAt e o tenant continuam sendo decididos aqui, e o
+// valor é validado no servidor antes de qualquer escrita.
 export async function marcarInteresseComoGanho(
   interesseId: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _prevState: ActionState,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _formData: FormData
+  formData: FormData
 ): Promise<ActionState> {
-  return fecharInteresse(interesseId, "WON");
+  return fecharInteresse(interesseId, "WON", formData.get("valorFechamento"));
 }
 
 // Marca o relacionamento como perdido (stage=REJECTED, closedAt=agora).

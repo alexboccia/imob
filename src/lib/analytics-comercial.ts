@@ -15,6 +15,7 @@ import {
 import { inicioDoDiaUTC, fimDoDiaUTC } from "@/lib/scheduled-activity-date";
 import { TIPOS_EVENTO_ANALYTICS } from "@/lib/analytics-eventos";
 import { oportunidadeElegivel } from "@/lib/oportunidade";
+import { agregarValorFechado, decimalParaValor } from "@/lib/valor-fechamento";
 import {
   classificarCanal,
   rotuloCanal,
@@ -580,6 +581,10 @@ export type LinhaCanal = {
   // verdade, não uma lacuna.
   oportunidades: number;
   fechamentos: number;
+  // Fase 9 — soma dos ganhos DESTE canal que têm valor registrado.
+  // Ganho sem valor entra em `fechamentos` mas não aqui: contá-lo como 0
+  // afirmaria que o negócio valeu zero.
+  valorFechado: number;
 };
 
 // Agrupa qualquer coleção com atribuição por canal. Uma passada, em
@@ -591,13 +596,26 @@ export function agruparPorCanal(
   // Fase 8 — cada oportunidade traz a atribuição da interação que a
   // originou (via sourceInteraction), ou null quando foi criada
   // manualmente pelo corretor.
-  oportunidades: readonly { atribuicao: Atribuicao | null; fechada: boolean }[] = []
+  oportunidades: readonly {
+    atribuicao: Atribuicao | null;
+    fechada: boolean;
+    closedValue?: number | null;
+  }[] = []
 ): LinhaCanal[] {
   const porCanal = new Map<
     Canal,
-    { visualizacoes: number; contatos: number; oportunidades: number; fechamentos: number }
+    {
+      visualizacoes: number;
+      contatos: number;
+      oportunidades: number;
+      fechamentos: number;
+      valorFechado: number;
+    }
   >(
-    ORDEM_CANAIS.map((c) => [c, { visualizacoes: 0, contatos: 0, oportunidades: 0, fechamentos: 0 }])
+    ORDEM_CANAIS.map((c) => [
+      c,
+      { visualizacoes: 0, contatos: 0, oportunidades: 0, fechamentos: 0, valorFechado: 0 },
+    ])
   );
 
   let totalVisualizacoes = 0;
@@ -613,7 +631,10 @@ export function agruparPorCanal(
   for (const oportunidade of oportunidades) {
     const linha = porCanal.get(classificarCanal(oportunidade.atribuicao))!;
     linha.oportunidades += 1;
-    if (oportunidade.fechada) linha.fechamentos += 1;
+    if (oportunidade.fechada) {
+      linha.fechamentos += 1;
+      if (oportunidade.closedValue != null) linha.valorFechado += oportunidade.closedValue;
+    }
   }
 
   return ORDEM_CANAIS.map((canal) => {
@@ -625,6 +646,9 @@ export function agruparPorCanal(
       contatos: dados.contatos,
       oportunidades: dados.oportunidades,
       fechamentos: dados.fechamentos,
+      // Centavos arredondados: somar floats de 2 casas acumula erro
+      // binário e o total exibido precisa bater com a soma das linhas.
+      valorFechado: Math.round(dados.valorFechado * 100) / 100,
       // 0 quando não há visualização nenhuma — nunca NaN (0/0).
       percentualVisualizacoes:
         totalVisualizacoes === 0 ? 0 : (dados.visualizacoes / totalVisualizacoes) * 100,
@@ -638,7 +662,8 @@ export function agruparPorCanal(
         linha.visualizacoes > 0 ||
         linha.contatos > 0 ||
         linha.oportunidades > 0 ||
-        linha.fechamentos > 0
+        linha.fechamentos > 0 ||
+        linha.valorFechado > 0
     );
 }
 
@@ -646,6 +671,9 @@ export type LinhaCampanha = {
   campanha: string;
   visualizacoes: number;
   contatos: number;
+  // Fase 9 — valor fechado atribuído a esta campanha. Só existe quando a
+  // oportunidade nasceu de um contato que carregava a campanha.
+  valorFechado: number;
 };
 
 const TETO_CAMPANHAS = 5;
@@ -656,11 +684,17 @@ const TETO_CAMPANHAS = 5;
 // nome mantém a ordem estável entre refreshes.
 export function agruparPorCampanha(
   eventos: readonly (Atribuicao & { type: string })[],
-  interacoes: readonly Atribuicao[]
+  interacoes: readonly Atribuicao[],
+  // Fase 9 — ganhos com a atribuição da interação de origem e o valor
+  // fechado, quando houver.
+  ganhos: readonly { atribuicao: Atribuicao | null; closedValue: number | null }[] = []
 ): LinhaCampanha[] {
-  const porCampanha = new Map<string, { visualizacoes: number; contatos: number }>();
+  const porCampanha = new Map<
+    string,
+    { visualizacoes: number; contatos: number; valorFechado: number }
+  >();
   const garantir = (nome: string) => {
-    const atual = porCampanha.get(nome) ?? { visualizacoes: 0, contatos: 0 };
+    const atual = porCampanha.get(nome) ?? { visualizacoes: 0, contatos: 0, valorFechado: 0 };
     porCampanha.set(nome, atual);
     return atual;
   };
@@ -674,9 +708,18 @@ export function agruparPorCampanha(
     if (!interacao.utmCampaign) continue;
     garantir(interacao.utmCampaign).contatos += 1;
   }
+  for (const ganho of ganhos) {
+    const campanha = ganho.atribuicao?.utmCampaign;
+    if (!campanha || ganho.closedValue == null) continue;
+    garantir(campanha).valorFechado += ganho.closedValue;
+  }
 
   return [...porCampanha.entries()]
-    .map(([campanha, dados]) => ({ campanha, ...dados }))
+    .map(([campanha, dados]) => ({
+      campanha,
+      ...dados,
+      valorFechado: Math.round(dados.valorFechado * 100) / 100,
+    }))
     .sort(
       (a, b) =>
         b.visualizacoes - a.visualizacoes ||
@@ -739,6 +782,18 @@ export type ResultadoComercial = {
   contatosQueViraramOportunidade: number;
   taxaContatoParaOportunidade: number | null;
   taxaOportunidadeParaGanho: number | null;
+  // Fase 9 — resultado financeiro dos ganhos do período.
+  //   valorFechado    soma dos ganhos COM valor registrado
+  //   ticketMedio     valorFechado / ganhos COM valor (nunca / todos os
+  //                   ganhos, nem / todas as oportunidades); null quando
+  //                   não há nenhum ganho com valor — jamais R$ 0
+  //   ganhosSemValor  ganhos anteriores a esta fase, ou fechados sem
+  //                   valor. Contados como ganho, excluídos do dinheiro,
+  //                   e declarados na tela.
+  valorFechado: number;
+  ticketMedio: number | null;
+  ganhosComValor: number;
+  ganhosSemValor: number;
   // true enquanto NENHUMA oportunidade da organização tiver origem —
   // estado normal logo após o deploy, já que o vínculo passa a existir
   // daqui pra frente e não houve backfill. A tela usa isso para explicar
@@ -933,6 +988,7 @@ export async function buscarAnalyticsComercial(
         },
         select: {
           stage: true,
+          closedValue: true,
           sourceInteraction: {
             select: {
               utmSource: true,
@@ -1052,6 +1108,13 @@ export async function buscarAnalyticsComercial(
     );
 
     const ganhos = fechamentosDoPeriodo.filter((f) => f.stage === "WON");
+    // Decimal -> número, preservando null (nunca 0) para não confundir
+    // "sem valor registrado" com "valeu zero".
+    const ganhosComValorNumerico = ganhos.map((g) => ({
+      atribuicao: g.sourceInteraction,
+      closedValue: decimalParaValor(g.closedValue),
+    }));
+    const agregadoFinanceiro = agregarValorFechado(ganhosComValorNumerico);
     const oportunidadesComOrigem = oportunidadesCriadas.filter(
       (o) => o.sourceInteractionId !== null
     ).length;
@@ -1068,6 +1131,10 @@ export async function buscarAnalyticsComercial(
         idsContatosElegiveis.size
       ),
       taxaOportunidadeParaGanho: calcularTaxa(ganhos.length, oportunidadesCriadas.length),
+      valorFechado: agregadoFinanceiro.total,
+      ticketMedio: agregadoFinanceiro.ticketMedio,
+      ganhosComValor: agregadoFinanceiro.ganhosComValor,
+      ganhosSemValor: agregadoFinanceiro.ganhosSemValor,
       semVinculoDeOrigem: algumaOportunidadeComOrigem === null,
     };
 
@@ -1079,10 +1146,14 @@ export async function buscarAnalyticsComercial(
       // closedAt: uma oportunidade criada no mês passado e ganha agora
       // conta como fechamento DESTE período, mesmo não sendo criação
       // deste período.
-      ...ganhos.map((f) => ({ atribuicao: f.sourceInteraction, fechada: true })),
+      ...ganhosComValorNumerico.map((f) => ({
+        atribuicao: f.atribuicao,
+        fechada: true,
+        closedValue: f.closedValue,
+      })),
     ];
     const canais = agruparPorCanal(eventosDigitais, interacoes, oportunidadesPorCanal);
-    const campanhas = agruparPorCampanha(eventosDigitais, interacoes);
+    const campanhas = agruparPorCampanha(eventosDigitais, interacoes, ganhosComValorNumerico);
     const aquisicao: Aquisicao = {
       canais,
       campanhas,

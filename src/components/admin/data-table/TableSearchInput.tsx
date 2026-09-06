@@ -16,10 +16,25 @@ export function TableSearchInput({
   id,
   placeholder = "Buscar...",
   className,
+  resetToken,
 }: {
   id?: string;
   placeholder?: string;
   className?: string;
+  /**
+   * Incrementado por quem limpa os filtros. Existe por causa de um bug
+   * real e reproduzido: entre a digitação e o disparo do debounce (400ms)
+   * há uma janela em que a busca ainda NÃO está na URL. Se "Limpar
+   * filtros" for clicado nessa janela, `searchNaUrl` continua "" (nunca
+   * chegou a mudar), o reset por comparação abaixo não dispara, o texto
+   * permanece no campo — e pior: o timer pendente ainda vai disparar e
+   * REAPLICAR a busca que o usuário acabou de limpar.
+   *
+   * Comparar a query string inteira resolveria isso, mas quebraria a
+   * digitação: um push atrasado de "a" clobbaria o "ab" já digitado. Por
+   * isso o sinal é explícito, e não inferido da URL.
+   */
+  resetToken?: number;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -35,6 +50,16 @@ export function TableSearchInput({
   const [ultimoSearchNaUrl, setUltimoSearchNaUrl] = useState(searchNaUrl);
   if (searchNaUrl !== ultimoSearchNaUrl) {
     setUltimoSearchNaUrl(searchNaUrl);
+    setBuscaLocal(searchNaUrl);
+  }
+
+  // Mesmo padrão de ajuste-durante-o-render: um reset explícito vindo de
+  // fora. Zerar `buscaLocal` aqui também CANCELA o timer pendente — o
+  // efeito abaixo tem [buscaLocal] nas deps, então a limpeza roda e o
+  // novo passe encontra buscaLocal === atual e não agenda nada.
+  const [ultimoResetToken, setUltimoResetToken] = useState(resetToken);
+  if (resetToken !== ultimoResetToken) {
+    setUltimoResetToken(resetToken);
     setBuscaLocal(searchNaUrl);
   }
 

@@ -42,6 +42,7 @@ function linhaFake(overrides: {
   id?: string;
   stage?: PropertyInterestStage;
   closedAt?: Date | null;
+  closedValue?: number | null;
   updatedAt?: Date;
   personOrganizationId?: string;
   propertyOrganizationId?: string;
@@ -53,6 +54,7 @@ function linhaFake(overrides: {
     id: overrides.id ?? "interesse-1",
     stage: overrides.stage ?? "INTERESTED",
     closedAt: overrides.closedAt ?? null,
+    closedValue: overrides.closedValue ?? null,
     updatedAt: overrides.updatedAt ?? new Date("2026-01-01T00:00:00.000Z"),
     person: { id: "pessoa-1", name: "Fulano", organizationId: overrides.personOrganizationId ?? ORG },
     property: {
@@ -161,6 +163,7 @@ function itemFake(overrides: Partial<ItemPipeline> & { stage: PropertyInterestSt
     id: overrides.id ?? `item-${Math.random()}`,
     stage: overrides.stage,
     closedAtISO: overrides.closedAtISO ?? null,
+    closedValue: overrides.closedValue ?? null,
     updatedAtISO: overrides.updatedAtISO ?? "2026-01-01T00:00:00.000Z",
     person: overrides.person ?? { id: "p1", name: "Fulano" },
     property: overrides.property ?? { id: "im1", title: "Imóvel", status: "AVAILABLE", neighborhood: "Centro" },

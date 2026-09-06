@@ -74,7 +74,12 @@ async function atualizarObservacao(scheduledActivityId: string, notes: string) {
   );
 }
 async function marcarGanho(interesseId: string) {
-  return marcarInteresseComoGanho(interesseId, ESTADO_INICIAL_ACAO, new FormData());
+  // Fase 9: ganho exige valor de fechamento (validado no servidor). O
+  // valor aqui só destrava o fluxo — o que estes testes exercitam é a
+  // interação entre agenda e fechamento, não a regra do valor.
+  const fd = new FormData();
+  fd.set("valorFechamento", "500000");
+  return marcarInteresseComoGanho(interesseId, ESTADO_INICIAL_ACAO, fd);
 }
 async function marcarPerdido(interesseId: string) {
   return marcarInteresseComoPerdido(interesseId, ESTADO_INICIAL_ACAO, new FormData());

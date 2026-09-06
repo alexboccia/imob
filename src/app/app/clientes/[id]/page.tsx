@@ -21,6 +21,7 @@ import { InteresseImovelItem } from "@/components/admin/InteresseImovelItem";
 import { RelacionarImovelForm } from "@/components/admin/RelacionarImovelForm";
 import { BotaoCriarOportunidade } from "@/components/admin/BotaoCriarOportunidade";
 import { oportunidadeElegivel } from "@/lib/oportunidade";
+import { decimalParaValor } from "@/lib/valor-fechamento";
 import { RecomendacaoImovelItem } from "@/components/admin/RecomendacaoImovelItem";
 import { buscarImoveisCompativeis } from "@/lib/property-matching";
 import {
@@ -239,6 +240,7 @@ export default async function DetalheClientePage({
                     favorited: interesse.favorited,
                     notes: interesse.notes,
                     closedAtISO: interesse.closedAt ? interesse.closedAt.toISOString() : null,
+                    closedValue: decimalParaValor(interesse.closedValue),
                     property: {
                       id: interesse.property.id,
                       title: interesse.property.title,

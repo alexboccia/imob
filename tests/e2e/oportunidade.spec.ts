@@ -21,7 +21,7 @@ test.describe("Resultado comercial — Analytics", () => {
     await page.goto("/app/analytics");
   });
 
-  test("mostra oportunidades, ganhos e as duas taxas, sem nenhum valor em dinheiro", async ({
+  test("mostra oportunidades, ganhos e as duas taxas", async ({
     page,
   }) => {
     const resultado = page.getByRole("region", { name: "Resultado comercial" });
@@ -35,10 +35,12 @@ test.describe("Resultado comercial — Analytics", () => {
     await expect(resultado.getByText("Contato vira oportunidade", { exact: true })).toBeVisible();
     await expect(resultado.getByText("Oportunidade vira ganho", { exact: true })).toBeVisible();
 
-    // A recusa explícita da fase: nenhuma métrica de dinheiro.
-    await expect(resultado).toContainText("não registra valor fechado nem comissão");
-    await expect(resultado).not.toContainText("Receita");
-    await expect(resultado).not.toContainText("R$");
+    // A Fase 9 trouxe o VALOR FECHADO real — o que continua recusado é
+    // chamá-lo de receita/comissão, e qualquer ROI (faltaria o custo).
+    await expect(resultado).toContainText("não a receita da imobiliária");
+    await expect(resultado).not.toContainText("Receita total");
+    await expect(resultado).not.toContainText("Comissão");
+    await expect(resultado).not.toContainText("ROI");
   });
 
   test("canal de aquisição atribui oportunidade e ganho ao canal de origem", async ({ page }) => {

@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatarNumero } from "@/lib/format";
+import { formatarNumero, formatarPreco } from "@/lib/format";
 import type { Aquisicao } from "@/lib/analytics-comercial";
 
 // Canal de aquisição (Fase 7) — de ONDE veio o tráfego.
@@ -74,6 +74,9 @@ export function AnalyticsAquisicao({
                 <TableHead scope="col" className="w-0 text-right">
                   Ganhos
                 </TableHead>
+                <TableHead scope="col" className="w-0 text-right whitespace-nowrap">
+                  Valor fechado
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -103,6 +106,16 @@ export function AnalyticsAquisicao({
                       formatarNumero(linha.fechamentos)
                     )}
                   </TableCell>
+                  <TableCell className="text-right font-medium tabular-nums whitespace-nowrap">
+                    {/* Sem vínculo de origem -> não medido. Com vínculo mas
+                        sem valor registrado -> "—" também: somar 0 aqui
+                        afirmaria que os negócios do canal valeram nada. */}
+                    {semVinculoDeOrigem || linha.valorFechado === 0 ? (
+                      <span title="Sem valor registrado">—</span>
+                    ) : (
+                      formatarPreco(linha.valorFechado)
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -125,6 +138,9 @@ export function AnalyticsAquisicao({
                   <TableHead scope="col" className="w-0 text-right">
                     Contatos
                   </TableHead>
+                  <TableHead scope="col" className="w-0 text-right whitespace-nowrap">
+                    Valor fechado
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -137,6 +153,13 @@ export function AnalyticsAquisicao({
                     <TableCell className="text-right font-medium tabular-nums">
                       {formatarNumero(linha.contatos)}
                     </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums whitespace-nowrap">
+                      {linha.valorFechado === 0 ? (
+                        <span title="Sem valor registrado">—</span>
+                      ) : (
+                        formatarPreco(linha.valorFechado)
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -148,8 +171,9 @@ export function AnalyticsAquisicao({
           Atribuição da <strong>visita atual</strong>, não do histórico da pessoa: vale enquanto
           dura a navegação e é substituída se ela voltar por outra campanha. “Sem atribuição” são
           visitas e contatos anteriores a esta medição, ou em que o navegador não informou origem —
-          nada foi estimado. Oportunidades e ganhos só entram num canal quando nasceram de um
-          contato do site; as criadas manualmente ficam em “Sem atribuição”.
+          nada foi estimado. Oportunidades, ganhos e valor fechado só entram num canal quando
+          nasceram de um contato do site; os criados manualmente ficam em “Sem atribuição”.
+          “Valor fechado” é o valor do negócio, não a receita da imobiliária.
         </p>
       </CardContent>
     </Card>

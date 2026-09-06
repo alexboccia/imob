@@ -121,7 +121,14 @@ export function NegociacaoDrawer({
           <div className="space-y-3 border-t pt-4">
             <h3 className="text-sm font-medium">Ações</h3>
             {!encerrado && <MoverEstagioPipeline interesseId={item.id} stageAtual={item.stage} />}
-            <FechamentoInteresse interesseId={item.id} stage={item.stage} closedAtISO={item.closedAtISO} />
+            <FechamentoInteresse
+              interesseId={item.id}
+              stage={item.stage}
+              closedAtISO={item.closedAtISO}
+              closedValue={item.closedValue}
+              imovelTitulo={item.property?.title}
+              clienteNome={item.person?.name}
+            />
           </div>
         </div>
 

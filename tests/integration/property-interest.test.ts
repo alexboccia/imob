@@ -56,8 +56,19 @@ async function favoritar(interesseId: string) {
 async function remover(interesseId: string) {
   return removerInteresse(interesseId, ESTADO_INICIAL_ACAO, new FormData());
 }
+// Fase 9: marcar como ganho passou a EXIGIR o valor de fechamento
+// (validado no servidor). O helper informa um valor válido para que estes
+// testes continuem exercitando o que sempre exercitaram — stage, closedAt,
+// histórico, ActivityLog e concorrência — em vez de esbarrarem na
+// validação nova. A regra em si é coberta em valor-fechamento.test.ts.
+function formDataGanho(valor = "500000") {
+  const fd = new FormData();
+  fd.set("valorFechamento", valor);
+  return fd;
+}
+
 async function marcarGanho(interesseId: string) {
-  return marcarInteresseComoGanho(interesseId, ESTADO_INICIAL_ACAO, new FormData());
+  return marcarInteresseComoGanho(interesseId, ESTADO_INICIAL_ACAO, formDataGanho());
 }
 async function marcarPerdido(interesseId: string) {
   return marcarInteresseComoPerdido(interesseId, ESTADO_INICIAL_ACAO, new FormData());
@@ -1420,6 +1431,9 @@ describe("PropertyInterest — relacionamento Person↔Property (Fase D do CRM)"
     fd.set("closedAt", dataForjada.toISOString());
     fd.set("stage", "REJECTED");
     fd.set("organizationId", cenarioB.organization.id);
+    // Único campo do FormData que a action de fato lê (Fase 9) — todos os
+    // demais acima continuam sendo ignorados, que é o que este teste prova.
+    fd.set("valorFechamento", "500000");
     const resultado = await marcarInteresseComoGanho(interesseId, ESTADO_INICIAL_ACAO, fd);
 
     expect(resultado.success).toBe(true);

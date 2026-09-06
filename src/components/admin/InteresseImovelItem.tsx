@@ -42,6 +42,8 @@ export function InteresseImovelItem({
     // Igual a scheduledAt: string ISO ou null, nunca Date (Fase P.3) — só
     // preenchido depois de marcarInteresseComoGanho/Perdido.
     closedAtISO: string | null;
+    // Fase 9 — valor negociado do fechamento; null = não registrado.
+    closedValue: number | null;
     property: { id: string; title: string; price: unknown; rentPrice: unknown; status: PropertyStatus };
     // Visita SCHEDULED mais próxima deste relacionamento, se houver — já
     // vem pronta da query da página (batch, sem N+1 por card). scheduledAt
@@ -169,6 +171,8 @@ export function InteresseImovelItem({
           interesseId={interesse.id}
           stage={interesse.stage}
           closedAtISO={interesse.closedAtISO}
+          closedValue={interesse.closedValue}
+          imovelTitulo={interesse.property.title}
         />
 
         <div className="flex items-center justify-between">

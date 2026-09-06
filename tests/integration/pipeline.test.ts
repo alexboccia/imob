@@ -49,8 +49,19 @@ function formData(campos: Record<string, string>) {
 async function mudarEstagio(interesseId: string, stage: string) {
   return atualizarEstagioInteresse(interesseId, ESTADO_INICIAL_ACAO, formData({ stage }));
 }
+// Fase 9: marcar como ganho passou a EXIGIR o valor de fechamento
+// (validado no servidor). O helper informa um valor válido para que estes
+// testes continuem exercitando o que sempre exercitaram — stage, closedAt,
+// histórico, ActivityLog e concorrência — em vez de esbarrarem na
+// validação nova. A regra em si é coberta em valor-fechamento.test.ts.
+function formDataGanho(valor = "500000") {
+  const fd = new FormData();
+  fd.set("valorFechamento", valor);
+  return fd;
+}
+
 async function marcarGanho(interesseId: string) {
-  return marcarInteresseComoGanho(interesseId, ESTADO_INICIAL_ACAO, new FormData());
+  return marcarInteresseComoGanho(interesseId, ESTADO_INICIAL_ACAO, formDataGanho());
 }
 async function marcarPerdido(interesseId: string) {
   return marcarInteresseComoPerdido(interesseId, ESTADO_INICIAL_ACAO, new FormData());
@@ -970,7 +981,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       changedAt: genesisEm,
     });
 
-    await marcarInteresseComoGanho(interesse.id, ESTADO_INICIAL_ACAO, new FormData());
+    await marcarInteresseComoGanho(interesse.id, ESTADO_INICIAL_ACAO, formDataGanho());
 
     const atualizado = await prisma.propertyInterest.findUnique({
       where: { id: interesse.id, organizationId: cenario.organization.id },

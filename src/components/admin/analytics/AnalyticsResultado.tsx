@@ -1,5 +1,5 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { formatarNumero } from "@/lib/format";
+import { formatarNumero, formatarPreco } from "@/lib/format";
 import { formatarTaxa, type ResultadoComercial } from "@/lib/analytics-comercial";
 
 // Resultado comercial (Fase 8) — CONTATO -> OPORTUNIDADE -> FECHAMENTO.
@@ -25,6 +25,9 @@ export function AnalyticsResultado({
     contatosQueViraramOportunidade,
     taxaContatoParaOportunidade,
     taxaOportunidadeParaGanho,
+    valorFechado,
+    ticketMedio,
+    ganhosSemValor,
     semVinculoDeOrigem,
   } = resultado;
 
@@ -78,6 +81,42 @@ export function AnalyticsResultado({
 
             <dl className="grid grid-cols-1 gap-3 border-t pt-3 sm:grid-cols-2">
               <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Valor fechado</dt>
+                <dd className="text-2xl font-semibold tabular-nums">
+                  {formatarPreco(valorFechado)}
+                </dd>
+                <p className="text-xs text-muted-foreground">
+                  soma dos negócios ganhos com valor registrado
+                </p>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Ticket médio</dt>
+                <dd className="text-2xl font-semibold tabular-nums">
+                  {/* null (nenhum ganho com valor) -> "—", nunca R$ 0. */}
+                  {ticketMedio === null ? "—" : formatarPreco(ticketMedio)}
+                </dd>
+                <p className="text-xs text-muted-foreground">
+                  valor fechado ÷ ganhos com valor registrado
+                </p>
+              </div>
+            </dl>
+
+            {ganhosSemValor > 0 && (
+              // ZERO ≠ DESCONHECIDO: estes ganhos existem, contam como
+              // ganhos, e ficam de fora do dinheiro porque ninguém
+              // registrou o valor — não porque valeram nada.
+              <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                {formatarNumero(ganhosSemValor)}{" "}
+                {ganhosSemValor === 1
+                  ? "negociação ganha não tem valor registrado"
+                  : "negociações ganhas não têm valor registrado"}{" "}
+                (fechadas antes desta medição) e por isso não entram no valor fechado nem no ticket
+                médio. Nenhum valor foi estimado a partir do preço do imóvel.
+              </p>
+            )}
+
+            <dl className="grid grid-cols-1 gap-3 border-t pt-3 sm:grid-cols-2">
+              <div className="min-w-0">
                 <dt className="text-xs text-muted-foreground">Contato vira oportunidade</dt>
                 <dd className="text-lg font-semibold tabular-nums">
                   {formatarTaxa(taxaContatoParaOportunidade)}
@@ -113,8 +152,9 @@ export function AnalyticsResultado({
         )}
 
         <p className="text-xs text-muted-foreground">
-          Sem valores em dinheiro: o sistema não registra valor fechado nem comissão, e o preço
-          anunciado do imóvel não é receita.
+          “Valor fechado” é o valor do negócio, não a receita da imobiliária: a comissão sobre ele
+          não é registrada pelo sistema. O preço anunciado do imóvel nunca é usado como valor
+          fechado.
         </p>
       </CardContent>
     </Card>

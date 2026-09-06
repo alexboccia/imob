@@ -14,6 +14,7 @@ import {
   formatarTaxa,
   agruparEventosPorImovel,
   agruparPorCanal,
+  agruparPorCampanha,
   contarPorTipo,
   ranquearImoveisPorMovimento,
   eOrigemComercial,
@@ -512,5 +513,83 @@ describe("resultado comercial — canais (Fase 8)", () => {
     expect(agruparPorCanal([], [], [])).toEqual([]);
     const comView = agruparPorCanal([view({ utmSource: "google" })], [], []);
     expect(comView[0]).toMatchObject({ oportunidades: 0, fechamentos: 0 });
+  });
+});
+
+describe("valor fechado por canal e campanha (Fase 9)", () => {
+  const atrib = (a: Partial<Record<string, string | null>> = {}) => ({
+    utmSource: null,
+    utmMedium: null,
+    utmCampaign: null,
+    utmContent: null,
+    utmTerm: null,
+    referrerHost: null,
+    ...a,
+  });
+  const GOOGLE = atrib({ utmSource: "google", utmMedium: "cpc", utmCampaign: "verao" });
+
+  test("valor do ganho entra no canal da interação de origem", () => {
+    const canais = agruparPorCanal(
+      [],
+      [],
+      [
+        { atribuicao: GOOGLE, fechada: true, closedValue: 500000 },
+        { atribuicao: GOOGLE, fechada: true, closedValue: 300000 },
+      ]
+    );
+    const anuncios = canais.find((c) => c.canal === "ANUNCIOS")!;
+    expect(anuncios.fechamentos).toBe(2);
+    expect(anuncios.valorFechado).toBe(800000);
+  });
+
+  test("ganho SEM valor conta como ganho mas não soma dinheiro", () => {
+    const canais = agruparPorCanal(
+      [],
+      [],
+      [{ atribuicao: GOOGLE, fechada: true, closedValue: null }]
+    );
+    const anuncios = canais.find((c) => c.canal === "ANUNCIOS")!;
+    expect(anuncios.fechamentos).toBe(1);
+    // Somar 0 aqui afirmaria que o negócio do canal valeu nada.
+    expect(anuncios.valorFechado).toBe(0);
+  });
+
+  test("oportunidade ainda aberta não soma valor", () => {
+    const canais = agruparPorCanal(
+      [],
+      [],
+      [{ atribuicao: GOOGLE, fechada: false, closedValue: 900000 }]
+    );
+    expect(canais.find((c) => c.canal === "ANUNCIOS")!.valorFechado).toBe(0);
+  });
+
+  test("ganho manual (sem origem) leva o valor para Sem atribuição", () => {
+    const canais = agruparPorCanal(
+      [],
+      [],
+      [{ atribuicao: null, fechada: true, closedValue: 250000 }]
+    );
+    const sem = canais.find((c) => c.canal === "SEM_ATRIBUICAO")!;
+    expect(sem.valorFechado).toBe(250000);
+    expect(canais.filter((c) => c.canal !== "SEM_ATRIBUICAO")).toEqual([]);
+  });
+
+  test("campanha acumula o valor fechado dos seus ganhos", () => {
+    const campanhas = agruparPorCampanha(
+      [],
+      [],
+      [
+        { atribuicao: GOOGLE, closedValue: 500000 },
+        { atribuicao: GOOGLE, closedValue: null },
+        { atribuicao: atrib({ utmCampaign: "outra" }), closedValue: 100000 },
+      ]
+    );
+    const verao = campanhas.find((c) => c.campanha === "verao")!;
+    expect(verao.valorFechado).toBe(500000);
+    expect(campanhas.find((c) => c.campanha === "outra")!.valorFechado).toBe(100000);
+  });
+
+  test("ganho sem campanha não cria linha de campanha fantasma", () => {
+    expect(agruparPorCampanha([], [], [{ atribuicao: null, closedValue: 999 }])).toEqual([]);
   });
 });

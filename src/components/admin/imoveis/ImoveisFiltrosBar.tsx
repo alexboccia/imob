@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Search } from "lucide-react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,6 +49,9 @@ export function ImoveisFiltrosBar({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  // Contador de reset da busca — ver comentário em `limpar` e a prop
+  // `resetToken` de TableSearchInput.
+  const [resetBusca, setResetBusca] = useState(0);
 
   const statusValidos = new Set(statusOpcoes.map((o) => o.value));
   const tipoValidos = new Set(tipoOpcoes);
@@ -90,6 +94,10 @@ export function ImoveisFiltrosBar({
   }
 
   function limpar() {
+    // Sinaliza o reset ao campo de busca ANTES de navegar: sem isto, uma
+    // busca digitada há menos de 400ms continuaria no campo e o debounce
+    // pendente a reaplicaria logo depois de limpar (bug reproduzido).
+    setResetBusca((n) => n + 1);
     const novo = new URLSearchParams(searchParams.toString());
     novo.delete("filters");
     novo.delete("search");
@@ -177,6 +185,7 @@ export function ImoveisFiltrosBar({
             <div className="relative min-w-0">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <TableSearchInput
+                resetToken={resetBusca}
                 id="imoveis-busca"
                 placeholder="Buscar por código, título, tipo, cidade ou bairro..."
                 className="h-8 w-full pl-8"

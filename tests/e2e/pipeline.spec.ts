@@ -113,7 +113,16 @@ test.describe("Pipeline", () => {
     await page.getByRole("button", { name: "Abrir negociação" }).click();
     const drawerGanho = page.locator('[data-slot="sheet-content"]').filter({ hasText: nomeUnico });
     await drawerGanho.getByRole("button", { name: "Marcar como ganho" }).click();
-    await expect(drawerGanho.getByText("Salvando...")).not.toBeVisible({ timeout: 10000 });
+
+    // Fase 9: fechar como ganho passou a exigir o VALOR NEGOCIADO, pedido
+    // num diálogo — o corretor não registra mais um ganho sem perceber
+    // que há dinheiro envolvido. CampoMoeda mascara centavos, então
+    // "85000000" vira R$ 850.000,00.
+    const dialogoGanho = page.getByRole("dialog");
+    await expect(dialogoGanho).toBeVisible();
+    await dialogoGanho.getByLabel("Valor de fechamento").fill("85000000");
+    await dialogoGanho.getByRole("button", { name: "Confirmar ganho" }).click();
+    await expect(dialogoGanho).not.toBeVisible({ timeout: 10000 });
     await page.keyboard.press("Escape");
 
     await expect(page.getByText(nomeUnico)).not.toBeVisible();
@@ -122,7 +131,8 @@ test.describe("Pipeline", () => {
     // sempre) — "Encerradas" já chega filtrada só pra este cliente.
     await page.getByRole("link", { name: /^Encerradas$/ }).click();
     await expect(page.getByText(nomeUnico)).toBeVisible();
-    await expect(page.getByText(/^Ganho — Fechado em/)).toBeVisible();
+    // O valor fechado passa a acompanhar o resultado na listagem.
+    await expect(page.getByText(/^Ganho — R\$/)).toBeVisible();
   });
 
   // Estados vazios — filtro/busca sem nenhum resultado, independente de

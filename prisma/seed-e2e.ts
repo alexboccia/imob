@@ -366,8 +366,30 @@ async function main() {
   // organizações (owner-*@e2e.test) nunca entram neste filtro. As FKs
   // opcionais que apontam para OrganizationMember são zeradas antes, para
   // o delete não esbarrar em RESTRICT.
+  // Donos fixos recriados deterministicamente pelo próprio seed — nunca
+  // podem ser apagados pela limpeza abaixo.
+  const emailsDonosFixos = [
+    emailA,
+    "owner-b@e2e.test",
+    "owner-agenda@e2e.test",
+    "owner-analytics@e2e.test",
+  ];
+
+  // Correção completa do acúmulo (a da Fase 8 cobria só o prefixo
+  // "usuario.e2e."): usuarios.spec.ts cria TAMBÉM "aaa.primeiro.*" e
+  // "zzz.ultimo.*" para os testes de ordenação, e esses continuavam
+  // acumulando a cada rodada até empurrar o usuário recém-criado para a
+  // segunda página da listagem (que pagina em 20).
+  //
+  // A regra agora é por exclusão, não por prefixo: sobrevive quem é dono
+  // fixo de alguma organização do seed; todo o resto é descarte de
+  // execução anterior. Assim nenhum padrão de e-mail novo inventado por
+  // um spec futuro volta a escapar da limpeza.
   const membrosDescartaveis = await prisma.organizationMember.findMany({
-    where: { organizationId: { in: idsOrgs }, user: { email: { startsWith: "usuario.e2e." } } },
+    where: {
+      organizationId: { in: idsOrgs },
+      user: { email: { notIn: emailsDonosFixos } },
+    },
     select: { id: true, userId: true },
   });
   if (membrosDescartaveis.length > 0) {
@@ -756,6 +778,10 @@ async function main() {
         sourceInteractionId: contatoComOrigem.id,
         stage: "WON",
         closedAt: diasAtras(1),
+        // Fase 9 — valor fechado determinístico. É o que faz "Valor
+        // fechado" e "Ticket médio" terem número real na tela de
+        // Analytics, e o que liga a campanha verao-2026 a dinheiro.
+        closedValue: 850000,
       },
     });
     await prisma.propertyInterestStageHistory.create({
@@ -771,12 +797,27 @@ async function main() {
     // TERCEIRO imóvel (o que nunca recebeu contato) para não colidir com
     // o contato de imóvel do lead ocasional — que precisa continuar
     // convertível, e é o caso positivo do E2E.
-    await prisma.propertyInterest.create({
+    //
+    // Fase 9: fechada como GANHA e SEM valor, representando o ganho
+    // LEGADO (anterior a esta medição). É o que a tela precisa para
+    // provar a distinção entre "R$ 0" e "valor não registrado".
+    const manualLegada = await prisma.propertyInterest.create({
       data: {
         organizationId: orgAnalytics.organization.id,
         personId: leadOcasional.id,
         propertyId: IDS_E2E.imovelSemContatoOrgAnalytics,
-        stage: "INTERESTED",
+        stage: "WON",
+        closedAt: diasAtras(2),
+        closedValue: null,
+      },
+    });
+    await prisma.propertyInterestStageHistory.create({
+      data: {
+        organizationId: orgAnalytics.organization.id,
+        propertyInterestId: manualLegada.id,
+        previousStage: null,
+        newStage: "WON",
+        changedAt: diasAtras(2),
       },
     });
   }

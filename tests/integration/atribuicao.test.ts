@@ -319,7 +319,10 @@ describe("agregação por canal no dashboard", () => {
     await enviarContato(cenario.organization.slug, null, formContato({ imovelId: imovel.id }, GOOGLE_ADS));
 
     const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
-    expect(a.aquisicao.campanhas).toEqual([{ campanha: "verao-2026", visualizacoes: 1, contatos: 1 }]);
+    // valorFechado (Fase 9) fica em 0: não houve ganho nesta campanha.
+    expect(a.aquisicao.campanhas).toEqual([
+      { campanha: "verao-2026", visualizacoes: 1, contatos: 1, valorFechado: 0 },
+    ]);
   });
 
   test("dados sem atribuição (legado) caem em SEM_ATRIBUICAO, nunca inventam canal", async () => {

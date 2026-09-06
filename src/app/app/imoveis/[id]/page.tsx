@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { decimalParaValor } from "@/lib/valor-fechamento";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -217,6 +218,9 @@ export default async function EditarImovelPage({
                       interesseId={interesse.id}
                       stage={interesse.stage}
                       closedAtISO={interesse.closedAt ? interesse.closedAt.toISOString() : null}
+                      closedValue={decimalParaValor(interesse.closedValue)}
+                      imovelTitulo={imovel.title}
+                      clienteNome={interesse.person.name}
                     />
                   </li>
                 );
