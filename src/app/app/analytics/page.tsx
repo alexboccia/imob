@@ -14,6 +14,7 @@ import { AnalyticsOrigens } from "@/components/admin/analytics/AnalyticsOrigens"
 import { AnalyticsTopImoveis } from "@/components/admin/analytics/AnalyticsTopImoveis";
 import { AnalyticsFunilDigital } from "@/components/admin/analytics/AnalyticsFunilDigital";
 import { AnalyticsAquisicao } from "@/components/admin/analytics/AnalyticsAquisicao";
+import { AnalyticsResultado } from "@/components/admin/analytics/AnalyticsResultado";
 
 // Analytics comercial (Fase 5).
 //
@@ -102,7 +103,13 @@ export default async function AnalyticsPage({
         <AnalyticsOrigens origens={analytics.origens} total={analytics.contatos.atual} />
       </div>
 
-      <AnalyticsAquisicao aquisicao={analytics.aquisicao} periodoLabel={periodoLabel} />
+      <AnalyticsResultado resultado={analytics.resultado} periodoLabel={periodoLabel} />
+
+      <AnalyticsAquisicao
+        aquisicao={analytics.aquisicao}
+        periodoLabel={periodoLabel}
+        semVinculoDeOrigem={analytics.resultado.semVinculoDeOrigem}
+      />
 
       <AnalyticsTopImoveis imoveis={analytics.topImoveis} />
 
@@ -138,6 +145,12 @@ export default async function AnalyticsPage({
           <li>
             Visualizações e cliques passaram a ser medidos a partir da publicação desta versão —
             não existe histórico anterior, e nada foi estimado para trás.
+          </li>
+          <li>
+            Oportunidade é um imóvel relacionado a um cliente; negociação ganha é uma oportunidade
+            encerrada como ganha pela equipe. Só aparecem com canal de origem as que foram criadas
+            a partir de um contato do site — nenhuma origem foi deduzida para as demais. Não há
+            valores em dinheiro: o sistema não registra valor fechado nem comissão.
           </li>
           <li>
             O canal de aquisição descreve <strong>a visita</strong> (de onde a pessoa chegou desta

@@ -19,6 +19,8 @@ import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { PreferenciaImovelForm } from "@/components/admin/PreferenciaImovelForm";
 import { InteresseImovelItem } from "@/components/admin/InteresseImovelItem";
 import { RelacionarImovelForm } from "@/components/admin/RelacionarImovelForm";
+import { BotaoCriarOportunidade } from "@/components/admin/BotaoCriarOportunidade";
+import { oportunidadeElegivel } from "@/lib/oportunidade";
 import { RecomendacaoImovelItem } from "@/components/admin/RecomendacaoImovelItem";
 import { buscarImoveisCompativeis } from "@/lib/property-matching";
 import {
@@ -120,6 +122,12 @@ export default async function DetalheClientePage({
   const atualizarEstagioComId = atualizarEstagioFunil.bind(null, pessoa.id);
   const registrarInteracaoComId = registrarInteracao.bind(null, pessoa.id);
   const preferencia = pessoa.preference;
+  // Fase 8 — quais imóveis JÁ são oportunidade deste cliente. Derivado em
+  // memória dos propertyInterests que a página já carregou: nenhuma query
+  // nova, nenhum N+1 no histórico de interações.
+  const idsImoveisComOportunidade = new Set(
+    pessoa.propertyInterests.map((interesse) => interesse.propertyId)
+  );
 
   return (
     <div className="max-w-3xl">
@@ -349,6 +357,16 @@ export default async function DetalheClientePage({
                     {interacao.notes && (
                       <p className="text-foreground mt-1">{interacao.notes}</p>
                     )}
+                    {/* Fase 8 — só para contato de captação sobre um
+                        imóvel específico (ver oportunidadeElegivel). O
+                        botão some quando o imóvel já virou oportunidade
+                        deste cliente: o par (pessoa, imóvel) é único, e
+                        oferecer a ação de novo só levaria a uma mensagem
+                        de "já existe". */}
+                    {oportunidadeElegivel(interacao) &&
+                      !idsImoveisComOportunidade.has(interacao.propertyId!) && (
+                        <BotaoCriarOportunidade interactionId={interacao.id} />
+                      )}
                   </CardContent>
                 </Card>
               </li>

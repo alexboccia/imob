@@ -14,6 +14,7 @@ import {
 } from "@/lib/captacao";
 import { inicioDoDiaUTC, fimDoDiaUTC } from "@/lib/scheduled-activity-date";
 import { TIPOS_EVENTO_ANALYTICS } from "@/lib/analytics-eventos";
+import { oportunidadeElegivel } from "@/lib/oportunidade";
 import {
   classificarCanal,
   rotuloCanal,
@@ -573,6 +574,12 @@ export type LinhaCanal = {
   visualizacoes: number;
   contatos: number;
   percentualVisualizacoes: number;
+  // Fase 8 — resultado comercial atribuível. Contadas SÓ as oportunidades
+  // com sourceInteractionId (criadas explicitamente a partir de um
+  // contato); as manuais não têm origem e caem em SEM_ATRIBUICAO, que é a
+  // verdade, não uma lacuna.
+  oportunidades: number;
+  fechamentos: number;
 };
 
 // Agrupa qualquer coleção com atribuição por canal. Uma passada, em
@@ -580,10 +587,17 @@ export type LinhaCanal = {
 // query adicional, nenhum N+1.
 export function agruparPorCanal(
   eventos: readonly (Atribuicao & { type: string })[],
-  interacoes: readonly Atribuicao[]
+  interacoes: readonly Atribuicao[],
+  // Fase 8 — cada oportunidade traz a atribuição da interação que a
+  // originou (via sourceInteraction), ou null quando foi criada
+  // manualmente pelo corretor.
+  oportunidades: readonly { atribuicao: Atribuicao | null; fechada: boolean }[] = []
 ): LinhaCanal[] {
-  const porCanal = new Map<Canal, { visualizacoes: number; contatos: number }>(
-    ORDEM_CANAIS.map((c) => [c, { visualizacoes: 0, contatos: 0 }])
+  const porCanal = new Map<
+    Canal,
+    { visualizacoes: number; contatos: number; oportunidades: number; fechamentos: number }
+  >(
+    ORDEM_CANAIS.map((c) => [c, { visualizacoes: 0, contatos: 0, oportunidades: 0, fechamentos: 0 }])
   );
 
   let totalVisualizacoes = 0;
@@ -596,6 +610,11 @@ export function agruparPorCanal(
   for (const interacao of interacoes) {
     porCanal.get(classificarCanal(interacao))!.contatos += 1;
   }
+  for (const oportunidade of oportunidades) {
+    const linha = porCanal.get(classificarCanal(oportunidade.atribuicao))!;
+    linha.oportunidades += 1;
+    if (oportunidade.fechada) linha.fechamentos += 1;
+  }
 
   return ORDEM_CANAIS.map((canal) => {
     const dados = porCanal.get(canal)!;
@@ -604,6 +623,8 @@ export function agruparPorCanal(
       rotulo: rotuloCanal(canal),
       visualizacoes: dados.visualizacoes,
       contatos: dados.contatos,
+      oportunidades: dados.oportunidades,
+      fechamentos: dados.fechamentos,
       // 0 quando não há visualização nenhuma — nunca NaN (0/0).
       percentualVisualizacoes:
         totalVisualizacoes === 0 ? 0 : (dados.visualizacoes / totalVisualizacoes) * 100,
@@ -612,7 +633,13 @@ export function agruparPorCanal(
     // Some as linhas totalmente vazias: mostrar seis canais em zero num
     // tenant novo é ruído, não diagnóstico. (Diferente da decomposição
     // por origem comercial, onde as 3 categorias são fixas e conhecidas.)
-    .filter((linha) => linha.visualizacoes > 0 || linha.contatos > 0);
+    .filter(
+      (linha) =>
+        linha.visualizacoes > 0 ||
+        linha.contatos > 0 ||
+        linha.oportunidades > 0 ||
+        linha.fechamentos > 0
+    );
 }
 
 export type LinhaCampanha = {
@@ -668,6 +695,57 @@ export type Aquisicao = {
   semAtribuicao: boolean;
 };
 
+
+// =======================================================================
+// RESULTADO COMERCIAL (Fase 8) — CONTATO -> OPORTUNIDADE -> FECHAMENTO
+// =======================================================================
+// Fontes de verdade, cada etapa com a sua e nenhuma inventada:
+//
+//   Oportunidade   PropertyInterest (criado pelo corretor)
+//   Fechamento     PropertyInterest.stage = WON com closedAt preenchido
+//                  — evento atômico, com PropertyInterestStageHistory
+//   Origem         PropertyInterest.sourceInteractionId -> Interaction
+//                  (só quando a oportunidade nasceu de um contato)
+//
+// O QUE ESTA FASE SE RECUSOU A MEDIR, e por quê:
+//
+//   RECEITA e COMISSÃO. O model `Deal` existe no schema com finalValue e
+//   commission, mas é CÓDIGO MORTO: nenhum fluxo do produto jamais cria
+//   um Deal (auditado — zero `.deal.create` em src/, nem nas fixtures).
+//   PropertyInterest não tem campo de valor. Property.price é PREÇO
+//   ANUNCIADO, que não é valor fechado nem receita da imobiliária.
+//   Chamar preço de receita seria inventar dinheiro que o sistema nunca
+//   observou, então nenhuma métrica de receita existe aqui.
+//
+//   Property.status = SOLD também NÃO é usado como fechamento: ele diz
+//   que o imóvel saiu do mercado, não qual cliente comprou, qual
+//   negociação venceu, nem por qual canal — atribuir venda a partir dele
+//   seria adivinhação.
+// =======================================================================
+
+export type ResultadoComercial = {
+  // Oportunidades criadas no período (todas, com origem ou sem).
+  oportunidadesCriadas: number;
+  // Delas, quantas nasceram explicitamente de um contato do site.
+  oportunidadesComOrigem: number;
+  // Fechadas como GANHAS no período (closedAt na janela).
+  fechamentosGanhos: number;
+  // Encerradas como perdidas no período — contexto honesto para o número
+  // acima; sem isso, "3 ganhos" não diz se foram 3 de 4 ou 3 de 40.
+  fechamentosPerdidos: number;
+  // Dos contatos ELEGÍVEIS deste período (origin=IMOVEL com imóvel),
+  // quantos viraram oportunidade — coorte, não mistura de janelas.
+  contatosElegiveis: number;
+  contatosQueViraramOportunidade: number;
+  taxaContatoParaOportunidade: number | null;
+  taxaOportunidadeParaGanho: number | null;
+  // true enquanto NENHUMA oportunidade da organização tiver origem —
+  // estado normal logo após o deploy, já que o vínculo passa a existir
+  // daqui pra frente e não houve backfill. A tela usa isso para explicar
+  // que a coluna está vazia por ausência de medição, não por desempenho.
+  semVinculoDeOrigem: boolean;
+};
+
 const TETO_TOP_IMOVEIS = 5;
 
 export type ImovelMaisProcurado = {
@@ -701,6 +779,7 @@ export type AnalyticsComercial = {
   topImoveis: ImovelMaisProcurado[];
   funil: FunilDigital;
   aquisicao: Aquisicao;
+  resultado: ResultadoComercial;
 };
 
 // -----------------------------------------------------------------------
@@ -742,6 +821,9 @@ export async function buscarAnalyticsComercial(
       eventosDigitais,
       eventosDigitaisAnteriores,
       totalEventosDigitaisOrg,
+      oportunidadesCriadas,
+      fechamentosDoPeriodo,
+      algumaOportunidadeComOrigem,
       configContato,
     ] = await Promise.all([
       prisma.interaction.findMany({
@@ -751,6 +833,9 @@ export async function buscarAnalyticsComercial(
           occurredAt: { gte: janelas.atual.inicio, lte: janelas.atual.fim },
         },
         select: {
+          // id: usado pela coorte da Fase 8 (quais destes contatos
+          // viraram oportunidade) — nunca exposto na tela.
+          id: true,
           occurredAt: true,
           origin: true,
           personId: true,
@@ -814,6 +899,57 @@ export async function buscarAnalyticsComercial(
       // `take: 1` + select do id: nunca conta a tabela inteira.
       prisma.propertyAnalyticsEvent.findFirst({
         where: { organizationId },
+        select: { id: true },
+      }),
+      // Fase 8 — oportunidades CRIADAS no período, com a atribuição da
+      // interação de origem quando ela existir. `include` aninhado: uma
+      // query só, nunca uma por oportunidade (zero N+1).
+      prisma.propertyInterest.findMany({
+        where: {
+          organizationId,
+          createdAt: { gte: janelas.atual.inicio, lte: janelas.atual.fim },
+        },
+        select: {
+          sourceInteractionId: true,
+          sourceInteraction: {
+            select: {
+              utmSource: true,
+              utmMedium: true,
+              utmCampaign: true,
+              utmContent: true,
+              utmTerm: true,
+              referrerHost: true,
+            },
+          },
+        },
+      }),
+      // Fechamentos do período — janela sobre closedAt (o instante real do
+      // encerramento), nunca updatedAt, que muda em qualquer escrita.
+      prisma.propertyInterest.findMany({
+        where: {
+          organizationId,
+          closedAt: { gte: janelas.atual.inicio, lte: janelas.atual.fim },
+          stage: { in: ["WON", "REJECTED"] },
+        },
+        select: {
+          stage: true,
+          sourceInteraction: {
+            select: {
+              utmSource: true,
+              utmMedium: true,
+              utmCampaign: true,
+              utmContent: true,
+              utmTerm: true,
+              referrerHost: true,
+            },
+          },
+        },
+      }),
+      // "Esta organização já tem ALGUMA oportunidade com origem?" —
+      // distingue "medimos e deu zero" de "o vínculo ainda não existe
+      // para nenhuma oportunidade". take implícito de findFirst.
+      prisma.propertyInterest.findFirst({
+        where: { organizationId, sourceInteractionId: { not: null } },
         select: { id: true },
       }),
       buscarConfiguracaoContato(organizationId),
@@ -900,9 +1036,52 @@ export async function buscarAnalyticsComercial(
       semHistoricoDigital: totalEventosDigitaisOrg === null,
     };
 
-    // ---- Aquisição (Fase 7) ------------------------------------------
+    // ---- Resultado comercial (Fase 8) --------------------------------
+    // Coorte: dos contatos ELEGÍVEIS deste período (origin=IMOVEL com
+    // imóvel — os únicos que podem virar oportunidade), quantos de fato
+    // viraram. Numerador e denominador falam do MESMO conjunto de
+    // contatos, em vez de cruzar duas janelas diferentes.
+    const idsContatosElegiveis = new Set(
+      interacoes.filter((i) => oportunidadeElegivel(i)).map((i) => i.id)
+    );
+    const contatosQueViraramOportunidade = contarDistintos(
+      oportunidadesCriadas.filter(
+        (o) => o.sourceInteractionId !== null && idsContatosElegiveis.has(o.sourceInteractionId)
+      ),
+      (o) => o.sourceInteractionId
+    );
+
+    const ganhos = fechamentosDoPeriodo.filter((f) => f.stage === "WON");
+    const oportunidadesComOrigem = oportunidadesCriadas.filter(
+      (o) => o.sourceInteractionId !== null
+    ).length;
+
+    const resultado: ResultadoComercial = {
+      oportunidadesCriadas: oportunidadesCriadas.length,
+      oportunidadesComOrigem,
+      fechamentosGanhos: ganhos.length,
+      fechamentosPerdidos: fechamentosDoPeriodo.length - ganhos.length,
+      contatosElegiveis: idsContatosElegiveis.size,
+      contatosQueViraramOportunidade,
+      taxaContatoParaOportunidade: calcularTaxa(
+        contatosQueViraramOportunidade,
+        idsContatosElegiveis.size
+      ),
+      taxaOportunidadeParaGanho: calcularTaxa(ganhos.length, oportunidadesCriadas.length),
+      semVinculoDeOrigem: algumaOportunidadeComOrigem === null,
+    };
+
+    // ---- Aquisição (Fase 7 + resultado da Fase 8) --------------------
     // Reaproveita as MESMAS linhas já lidas acima — zero query nova.
-    const canais = agruparPorCanal(eventosDigitais, interacoes);
+    const oportunidadesPorCanal = [
+      ...oportunidadesCriadas.map((o) => ({ atribuicao: o.sourceInteraction, fechada: false })),
+      // Fechamento entra como linha própria porque a janela dele é
+      // closedAt: uma oportunidade criada no mês passado e ganha agora
+      // conta como fechamento DESTE período, mesmo não sendo criação
+      // deste período.
+      ...ganhos.map((f) => ({ atribuicao: f.sourceInteraction, fechada: true })),
+    ];
+    const canais = agruparPorCanal(eventosDigitais, interacoes, oportunidadesPorCanal);
     const campanhas = agruparPorCampanha(eventosDigitais, interacoes);
     const aquisicao: Aquisicao = {
       canais,
@@ -956,6 +1135,7 @@ export async function buscarAnalyticsComercial(
       topImoveis,
       funil,
       aquisicao,
+      resultado,
     };
   });
 }

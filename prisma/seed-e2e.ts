@@ -355,10 +355,54 @@ async function main() {
     orgAgenda.organization.id,
     orgAnalytics.organization.id,
   ];
+  // Usuários criados por usuarios.spec.ts a cada rodada (Fase 8 — correção
+  // de causa raiz de um flake real): o seed nunca os limpava, e a
+  // listagem pagina em 20. Depois de algumas execuções o usuário recém
+  // criado caía para a segunda página e a asserção "aparece na lista"
+  // falhava — na suíte completa, nunca isolado. Não é aumento de timeout
+  // nem retry: é remover o acúmulo que causava o problema.
+  //
+  // Só os gerados pelo padrão do spec são apagados; os donos fixos das
+  // organizações (owner-*@e2e.test) nunca entram neste filtro. As FKs
+  // opcionais que apontam para OrganizationMember são zeradas antes, para
+  // o delete não esbarrar em RESTRICT.
+  const membrosDescartaveis = await prisma.organizationMember.findMany({
+    where: { organizationId: { in: idsOrgs }, user: { email: { startsWith: "usuario.e2e." } } },
+    select: { id: true, userId: true },
+  });
+  if (membrosDescartaveis.length > 0) {
+    const idsMembros = membrosDescartaveis.map((m) => m.id);
+    const idsUsuarios = membrosDescartaveis.map((m) => m.userId);
+    await prisma.person.updateMany({
+      where: { assignedMemberId: { in: idsMembros } },
+      data: { assignedMemberId: null },
+    });
+    await prisma.property.updateMany({
+      where: { responsibleMemberId: { in: idsMembros } },
+      data: { responsibleMemberId: null },
+    });
+    await prisma.interaction.updateMany({
+      where: { memberId: { in: idsMembros } },
+      data: { memberId: null },
+    });
+    await prisma.scheduledActivity.updateMany({
+      where: { createdByMemberId: { in: idsMembros } },
+      data: { createdByMemberId: null },
+    });
+    await prisma.notificationPreference.deleteMany({
+      where: { organizationMemberId: { in: idsMembros } },
+    });
+    await prisma.organizationMember.deleteMany({ where: { id: { in: idsMembros } } });
+    await prisma.user.deleteMany({ where: { id: { in: idsUsuarios } } });
+  }
+
   // Eventos digitais (Fase 6) — apagados explicitamente: os imóveis de id
   // fixo sobrevivem ao deleteMany abaixo, então o cascade deles não
   // limparia nada e as contagens do funil cresceriam a cada rodada.
   await prisma.propertyAnalyticsEvent.deleteMany({ where: { organizationId: { in: idsOrgs } } });
+  // Fase 8 — o Person.deleteMany abaixo já cascateia PropertyInterest,
+  // mas o history tem FK própria e precisa sair antes.
+  await prisma.propertyInterestStageHistory.deleteMany({ where: { organizationId: { in: idsOrgs } } });
   await prisma.person.deleteMany({ where: { organizationId: { in: idsOrgs } } });
   await prisma.property.deleteMany({
     where: {
@@ -684,6 +728,58 @@ async function main() {
   empilharEventos(IDS_E2E.imovelSecundarioOrgAnalytics, "PROPERTY_VIEW", null, 4, 40, ATRIBUICOES[2]);
   empilharEventos(IDS_E2E.imovelSemContatoOrgAnalytics, "PROPERTY_VIEW", null, 6, 50, ATRIBUICOES[1]);
   await prisma.propertyAnalyticsEvent.createMany({ data: eventosDigitais });
+
+  // Fase 8 — uma oportunidade determinística ORIGINADA de contato, e uma
+  // criada manualmente (sem origem). Juntas provam na tela a distinção
+  // que a fase inteira existe pra sustentar: canal atribuído vs. "Sem
+  // atribuição".
+  //
+  // A oportunidade com origem aponta para o PRIMEIRO contato de imóvel do
+  // lead recorrente (o de utm google/cpc, campanha verao-2026), então o
+  // canal "Anúncios pagos" passa a ter 1 oportunidade e 1 ganho.
+  const contatoComOrigem = await prisma.interaction.findFirst({
+    where: {
+      organizationId: orgAnalytics.organization.id,
+      origin: "IMOVEL",
+      propertyId: IDS_E2E.imovelTopOrgAnalytics,
+      utmCampaign: "verao-2026",
+    },
+    orderBy: { occurredAt: "desc" },
+    select: { id: true, personId: true },
+  });
+  if (contatoComOrigem) {
+    const oportunidade = await prisma.propertyInterest.create({
+      data: {
+        organizationId: orgAnalytics.organization.id,
+        personId: contatoComOrigem.personId,
+        propertyId: IDS_E2E.imovelTopOrgAnalytics,
+        sourceInteractionId: contatoComOrigem.id,
+        stage: "WON",
+        closedAt: diasAtras(1),
+      },
+    });
+    await prisma.propertyInterestStageHistory.create({
+      data: {
+        organizationId: orgAnalytics.organization.id,
+        propertyInterestId: oportunidade.id,
+        previousStage: null,
+        newStage: "WON",
+        changedAt: diasAtras(1),
+      },
+    });
+    // Oportunidade MANUAL: sem sourceInteractionId, de propósito. Fica no
+    // TERCEIRO imóvel (o que nunca recebeu contato) para não colidir com
+    // o contato de imóvel do lead ocasional — que precisa continuar
+    // convertível, e é o caso positivo do E2E.
+    await prisma.propertyInterest.create({
+      data: {
+        organizationId: orgAnalytics.organization.id,
+        personId: leadOcasional.id,
+        propertyId: IDS_E2E.imovelSemContatoOrgAnalytics,
+        stage: "INTERESTED",
+      },
+    });
+  }
 
   // Fase P.10 — custom domain fixo e ATIVO da Organização B (ver
   // HOSTNAME_E2E_ORG_B acima).

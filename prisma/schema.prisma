@@ -397,6 +397,9 @@ model Interaction {
   utmTerm      String?
   referrerHost String?
 
+  // Fase 8 — oportunidades criadas explicitamente a partir deste contato.
+  originatedInterests PropertyInterest[] @relation("PropertyInterestSourceInteraction")
+
   @@index([personId])
   @@map("interactions")
 }
@@ -516,6 +519,32 @@ model PropertyInterest {
   // do imóvel, não uma relação de negócio).
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id])
+
+  // Fase 8 — a Interaction de captação que ORIGINOU esta oportunidade.
+  //
+  // Nullable e sem default de propósito: até aqui, PropertyInterest só
+  // nascia de três ações manuais do corretor (relacionar imóvel na ficha
+  // do cliente, recomendação na ficha do cliente, recomendação na ficha
+  // do imóvel), nenhuma delas partindo de um contato. Essas três
+  // continuam existindo e continuam criando oportunidade SEM origem — o
+  // que é a verdade, não uma lacuna a ser preenchida.
+  //
+  // Só a ação nova "Criar oportunidade" (a partir de um contato do site,
+  // no histórico de interações) preenche este campo, e ela o faz com o id
+  // da interação em que o corretor clicou — um fato, nunca um palpite.
+  // NÃO existe backfill: nenhuma oportunidade histórica recebe origem
+  // por proximidade de data, mesma Person ou mesmo imóvel.
+  //
+  // SetNull (não Cascade): apagar uma interação não pode destruir a
+  // negociação que nasceu dela — a oportunidade continua válida, só
+  // perde a atribuição.
+  //
+  // Sem snapshot dos campos de atribuição: a atribuição da Interaction é
+  // escrita uma única vez, na criação, e nenhum fluxo a edita depois
+  // (auditado na Fase 7), então a referência basta e evita duplicar seis
+  // colunas que poderiam divergir.
+  sourceInteractionId String?
+  sourceInteraction   Interaction? @relation("PropertyInterestSourceInteraction", fields: [sourceInteractionId], references: [id], onDelete: SetNull)
 
   stage     PropertyInterestStage @default(INTERESTED)
   // Dimensão independente do stage — um cliente pode favoritar em qualquer

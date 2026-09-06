@@ -27,9 +27,15 @@ import type { Aquisicao } from "@/lib/analytics-comercial";
 export function AnalyticsAquisicao({
   aquisicao,
   periodoLabel,
+  // Fase 8 — quando NENHUMA oportunidade da organização tem contato de
+  // origem, as duas colunas de resultado mostram "—" (não medido) em vez
+  // de "0" (medido e deu zero). A diferença importa: "0" afirmaria que o
+  // canal não converteu, quando na verdade o vínculo ainda não existe.
+  semVinculoDeOrigem,
 }: {
   aquisicao: Aquisicao;
   periodoLabel: string;
+  semVinculoDeOrigem: boolean;
 }) {
   const { canais, campanhas } = aquisicao;
 
@@ -62,6 +68,12 @@ export function AnalyticsAquisicao({
                 <TableHead scope="col" className="w-0 text-right">
                   Contatos
                 </TableHead>
+                <TableHead scope="col" className="w-0 text-right whitespace-nowrap">
+                  Oport.
+                </TableHead>
+                <TableHead scope="col" className="w-0 text-right">
+                  Ganhos
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -76,6 +88,20 @@ export function AnalyticsAquisicao({
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
                     {formatarNumero(linha.contatos)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {semVinculoDeOrigem ? (
+                      <span title="Ainda não medido">—</span>
+                    ) : (
+                      formatarNumero(linha.oportunidades)
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">
+                    {semVinculoDeOrigem ? (
+                      <span title="Ainda não medido">—</span>
+                    ) : (
+                      formatarNumero(linha.fechamentos)
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -122,7 +148,8 @@ export function AnalyticsAquisicao({
           Atribuição da <strong>visita atual</strong>, não do histórico da pessoa: vale enquanto
           dura a navegação e é substituída se ela voltar por outra campanha. “Sem atribuição” são
           visitas e contatos anteriores a esta medição, ou em que o navegador não informou origem —
-          nada foi estimado.
+          nada foi estimado. Oportunidades e ganhos só entram num canal quando nasceram de um
+          contato do site; as criadas manualmente ficam em “Sem atribuição”.
         </p>
       </CardContent>
     </Card>

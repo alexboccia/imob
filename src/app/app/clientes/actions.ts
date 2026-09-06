@@ -12,6 +12,7 @@ import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule, getLimit, limiteExcedido, LimiteDoPlanoError, FEATURE_CRM_CLIENTS } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
+import { oportunidadeElegivel } from "@/lib/oportunidade";
 import {
   erroAcessoNegado,
   erroGenerico,
@@ -501,6 +502,146 @@ export async function criarInteressePessoa(
     revalidatePath(`/app/clientes/${pessoaId}`);
     revalidatePath(`/app/imoveis/${propertyId}`);
     return sucesso("Imóvel relacionado.");
+  });
+}
+
+// =====================================================================
+// Fase 8 — converter um CONTATO em OPORTUNIDADE, preservando a origem
+// =====================================================================
+// Antes desta ação, PropertyInterest só nascia de três fluxos manuais
+// (relacionar imóvel na ficha do cliente, e as duas telas de
+// recomendação), nenhum deles partindo de um contato. O resultado é que a
+// origem comercial do negócio se perdia: dava pra saber que o Google
+// trouxe o contato, e nunca se aquele contato virou negociação.
+//
+// Esta ação existe exatamente para fechar esse elo — e o faz com um FATO,
+// não com uma heurística: o corretor está olhando UMA interação específica
+// no histórico e clica em "Criar oportunidade" NELA. O
+// sourceInteractionId gravado é o id daquele registro, não "a interação
+// mais próxima no tempo".
+//
+// ELEGIBILIDADE (validada no servidor, nunca só escondendo o botão):
+// só contato de captação com origin=IMOVEL e propertyId preenchido.
+//   - CONTATO é conversa geral, pode não ser sobre imóvel nenhum;
+//   - ANUNCIE é proprietário querendo anunciar, o oposto comercial do
+//     funil de comprador — forçá-lo aqui criaria uma oportunidade de
+//     compra que nunca existiu;
+//   - interação registrada à mão pelo corretor (origin=null) não é
+//     captação, e nunca teve origem de tráfego pra preservar.
+export async function criarOportunidadeDoContato(
+  interactionId: string,
+  // Assinatura exigida por useActionState; nenhum dos dois é lido — o
+  // único input desta ação é o interactionId bindado. Mesmo padrão (e
+  // mesmo disable explícito) já usado em agendamentos/actions.ts.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  return withOrganization(organizationId, async () => {
+    // Fronteira de tenant: a interação precisa existir NESTA organização.
+    // interactionId chega bindado de um Server Action — input do
+    // navegador como qualquer outro. Mensagem genérica de propósito: não
+    // revela se o registro existe em outra organização.
+    const interacao = await prisma.interaction.findUnique({
+      where: { id: interactionId, organizationId },
+      select: { id: true, personId: true, propertyId: true, origin: true },
+    });
+    if (!interacao) return erroGenerico("Contato não encontrado.");
+
+    if (!oportunidadeElegivel(interacao)) {
+      return erroGenerico("Este contato não pode virar oportunidade.");
+    }
+    // Estreitamento para o TypeScript — oportunidadeElegivel já garantiu.
+    const propertyId = interacao.propertyId!;
+
+    // O imóvel é lido do PRÓPRIO registro da interação (já validado
+    // contra a organização quando o contato foi criado), nunca de um
+    // campo do formulário: não há como o navegador escolher qual imóvel
+    // vira oportunidade.
+    const imovel = await prisma.property.findUnique({
+      where: { id: propertyId, organizationId },
+      select: { id: true },
+    });
+    if (!imovel) return erroGenerico("Imóvel não encontrado.");
+
+    // Mesma corrida (e mesmo tratamento) de criarInteressePessoa: o par
+    // (person, property) é único por organização, então um duplo clique
+    // ou uma oportunidade já criada por outro caminho colide em P2002.
+    // Reenvio idempotente não é evento novo — não loga nem sobrescreve a
+    // origem de um relacionamento que já existia.
+    let foiCriadaAgora = false;
+    let interesseId: string;
+    try {
+      const criado = await prisma.$transaction(async (tx) => {
+        const novo = await tx.propertyInterest.create({
+          data: {
+            organizationId,
+            personId: interacao.personId,
+            propertyId,
+            sourceInteractionId: interacao.id,
+          },
+        });
+
+        // Mesmo histórico inicial de criarInteressePessoa: a criação É a
+        // entrada real em INTERESTED, com changedAt = createdAt do
+        // próprio registro (nunca um new Date() separado).
+        await tx.propertyInterestStageHistory.create({
+          data: {
+            organizationId,
+            propertyInterestId: novo.id,
+            previousStage: null,
+            newStage: "INTERESTED",
+            changedAt: novo.createdAt,
+          },
+        });
+
+        return novo;
+      });
+      interesseId = criado.id;
+      foiCriadaAgora = true;
+    } catch (erro) {
+      if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
+        const existente = await prisma.propertyInterest.findUniqueOrThrow({
+          where: {
+            organizationId_personId_propertyId: {
+              organizationId,
+              personId: interacao.personId,
+              propertyId,
+            },
+            organizationId,
+          },
+          select: { id: true },
+        });
+        interesseId = existente.id;
+      } else {
+        throw erro;
+      }
+    }
+
+    if (foiCriadaAgora) {
+      await logActivity({
+        organizationId,
+        userId: session.user.id,
+        entity: "PropertyInterest",
+        entityId: interesseId,
+        action: "property_interest_created_from_interaction",
+      });
+    }
+
+    revalidatePath(`/app/clientes/${interacao.personId}`);
+    revalidatePath(`/app/imoveis/${propertyId}`);
+    return sucesso(
+      foiCriadaAgora ? "Oportunidade criada a partir deste contato." : "Este imóvel já era uma oportunidade deste cliente."
+    );
   });
 }
 

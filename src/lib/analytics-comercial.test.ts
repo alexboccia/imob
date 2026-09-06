@@ -13,6 +13,7 @@ import {
   calcularTaxa,
   formatarTaxa,
   agruparEventosPorImovel,
+  agruparPorCanal,
   contarPorTipo,
   ranquearImoveisPorMovimento,
   eOrigemComercial,
@@ -450,5 +451,66 @@ describe("funil digital — agregação de eventos", () => {
   test("sem eventos: mapa vazio e contagens zero, nunca NaN", () => {
     expect(agruparEventosPorImovel([]).size).toBe(0);
     expect(contarPorTipo([], "PROPERTY_VIEW")).toBe(0);
+  });
+});
+
+describe("resultado comercial — canais (Fase 8)", () => {
+  const view = (a: Partial<Record<string, string | null>> = {}) => ({
+    type: "PROPERTY_VIEW",
+    utmSource: null,
+    utmMedium: null,
+    utmCampaign: null,
+    utmContent: null,
+    utmTerm: null,
+    referrerHost: null,
+    ...a,
+  });
+  const atrib = (a: Partial<Record<string, string | null>> = {}) => ({
+    utmSource: null,
+    utmMedium: null,
+    utmCampaign: null,
+    utmContent: null,
+    utmTerm: null,
+    referrerHost: null,
+    ...a,
+  });
+
+  test("oportunidade e ganho entram no canal da interação de ORIGEM", () => {
+    const canais = agruparPorCanal(
+      [view({ utmSource: "google", utmMedium: "cpc" })],
+      [],
+      [
+        { atribuicao: atrib({ utmSource: "google", utmMedium: "cpc" }), fechada: false },
+        { atribuicao: atrib({ utmSource: "google", utmMedium: "cpc" }), fechada: true },
+      ]
+    );
+    const anuncios = canais.find((c) => c.canal === "ANUNCIOS")!;
+    expect(anuncios.oportunidades).toBe(2);
+    expect(anuncios.fechamentos).toBe(1);
+  });
+
+  test("oportunidade MANUAL (sem origem) cai em Sem atribuição, nunca num canal", () => {
+    const canais = agruparPorCanal([], [], [{ atribuicao: null, fechada: false }]);
+    const sem = canais.find((c) => c.canal === "SEM_ATRIBUICAO")!;
+    expect(sem.oportunidades).toBe(1);
+    expect(canais.filter((c) => c.canal !== "SEM_ATRIBUICAO")).toEqual([]);
+  });
+
+  test("canal com oportunidade mas sem view nenhuma continua aparecendo", () => {
+    // Contato do mês passado, oportunidade criada agora: a linha não pode
+    // sumir só porque não houve visualização na janela.
+    const canais = agruparPorCanal(
+      [],
+      [],
+      [{ atribuicao: atrib({ utmSource: "instagram" }), fechada: true }]
+    );
+    expect(canais.map((c) => c.canal)).toEqual(["SOCIAL"]);
+    expect(canais[0]).toMatchObject({ visualizacoes: 0, oportunidades: 1, fechamentos: 1 });
+  });
+
+  test("sem oportunidade nenhuma, as colunas ficam em zero (e a linha some se nada houver)", () => {
+    expect(agruparPorCanal([], [], [])).toEqual([]);
+    const comView = agruparPorCanal([view({ utmSource: "google" })], [], []);
+    expect(comView[0]).toMatchObject({ oportunidades: 0, fechamentos: 0 });
   });
 });
