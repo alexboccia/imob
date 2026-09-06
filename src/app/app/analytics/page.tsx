@@ -13,6 +13,7 @@ import { AnalyticsSerieContatos } from "@/components/admin/analytics/AnalyticsSe
 import { AnalyticsOrigens } from "@/components/admin/analytics/AnalyticsOrigens";
 import { AnalyticsTopImoveis } from "@/components/admin/analytics/AnalyticsTopImoveis";
 import { AnalyticsFunilDigital } from "@/components/admin/analytics/AnalyticsFunilDigital";
+import { AnalyticsAquisicao } from "@/components/admin/analytics/AnalyticsAquisicao";
 
 // Analytics comercial (Fase 5).
 //
@@ -101,6 +102,8 @@ export default async function AnalyticsPage({
         <AnalyticsOrigens origens={analytics.origens} total={analytics.contatos.atual} />
       </div>
 
+      <AnalyticsAquisicao aquisicao={analytics.aquisicao} periodoLabel={periodoLabel} />
+
       <AnalyticsTopImoveis imoveis={analytics.topImoveis} />
 
       {/* Nota de método — a tela declara em texto o que ela conta e o que
@@ -135,6 +138,11 @@ export default async function AnalyticsPage({
           <li>
             Visualizações e cliques passaram a ser medidos a partir da publicação desta versão —
             não existe histórico anterior, e nada foi estimado para trás.
+          </li>
+          <li>
+            O canal de aquisição descreve <strong>a visita</strong> (de onde a pessoa chegou desta
+            vez), não o cadastro do cliente. A origem cadastral continua sendo o campo “Origem” da
+            ficha, preenchido pela equipe, e não é alterada por esta medição.
           </li>
           <li>
             O período anterior usado na comparação tem exatamente o mesmo número de dias, colado

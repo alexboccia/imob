@@ -40,6 +40,21 @@ describe("rotuloSelecionado", () => {
     }
   });
 
+  // Fase 7 — mesmas sentinelas, agora nas telas administrativas
+  // (ClientesFiltrosAvancados e FiltroDropdown do DataTable).
+  test("REGRESSÃO admin: sentinela dos filtros de Clientes não vaza", () => {
+    const origem = { __todos__: "Todas", WEBSITE: "Site", REFERRAL: "Indicação" };
+    expect(rotuloSelecionado("__todos__", origem, "Todas")).toBe("Todas");
+    expect(rotuloSelecionado("WEBSITE", origem, "Todas")).toBe("Site");
+    expect(rotuloSelecionado("__todos__", origem, "Todas")).not.toContain("__");
+  });
+
+  test("REGRESSÃO admin: FiltroDropdown genérico usa o rótulo composto", () => {
+    const rotulos = { __todos__: "Papel: todos", OWNER: "Proprietário" };
+    expect(rotuloSelecionado("__todos__", rotulos, "Papel: todos")).toBe("Papel: todos");
+    expect(rotuloSelecionado("OWNER", rotulos, "Papel: todos")).toBe("Proprietário");
+  });
+
   test("chave herdada do prototype nunca vira rótulo", () => {
     // Sem Object.hasOwn, "toString"/"constructor" achariam uma função na
     // cadeia de protótipos e o código-fonte dela iria pra tela.

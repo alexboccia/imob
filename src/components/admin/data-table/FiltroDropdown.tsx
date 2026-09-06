@@ -8,8 +8,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { rotuloSelecionado } from "@/lib/select-rotulo";
 
 const TODOS = "__todos__";
+
+// Mesma correção de select-rotulo.ts aplicada nas telas públicas (Fase 6):
+// sem `children` como função, o Select controlado do Base UI renderiza
+// "__todos__" cru no lugar do rótulo. Apenas apresentação — sentinela,
+// filtros e query params intactos.
 
 // Dropdown de filtro genérico, escrito no parâmetro `filters` (JSON) da
 // URL — mantém o padrão único de searchParams (page/pageSize/search/sort/
@@ -53,7 +59,15 @@ export function FiltroDropdown({
   return (
     <Select value={valorAtual} onValueChange={aplicar}>
       <SelectTrigger size="sm" className="w-[170px]">
-        <SelectValue />
+        <SelectValue>
+          {(valor) =>
+            rotuloSelecionado(
+              valor,
+              { [TODOS]: `${label}: todos`, ...Object.fromEntries(opcoes.map((o) => [o.value, o.label])) },
+              `${label}: todos`
+            )
+          }
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={TODOS}>{label}: todos</SelectItem>

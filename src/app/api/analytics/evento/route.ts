@@ -62,7 +62,10 @@ export async function POST(request: NextRequest) {
   }
   if (typeof corpo !== "object" || corpo === null) return aceito();
 
-  const { orgSlug, propertyId, type, placement, visitorId } = corpo as Record<string, unknown>;
+  const { orgSlug, propertyId, type, placement, visitorId, atribuicao } = corpo as Record<
+    string,
+    unknown
+  >;
   if (typeof orgSlug !== "string" || orgSlug === "") return aceito();
 
   const organization = await getOrganizationBySlug(orgSlug);
@@ -91,6 +94,7 @@ export async function POST(request: NextRequest) {
       type,
       placement,
       visitorId,
+      atribuicao,
     });
   } catch (erro) {
     // FAIL-OPEN, o princípio inegociável desta fase: se o banco cair, o

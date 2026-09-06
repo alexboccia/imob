@@ -12,9 +12,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ORIGEM_LABEL, PAPEL_LABEL } from "@/lib/crm-labels";
+import { rotuloSelecionado } from "@/lib/select-rotulo";
 import { SlidersHorizontal } from "lucide-react";
 
 const TODOS = "__todos__";
+
+// Mesmo bug de Select controlado do Base UI já corrigido nas telas
+// públicas na Fase 6 (ver src/lib/select-rotulo.ts): sem `children` como
+// função, o SelectValue mostra "__todos__" no lugar de "Todas"/"Todos".
+// Aqui é interno (só o corretor vê), mas é o mesmo defeito e a mesma
+// correção de uma linha. Só a APRESENTAÇÃO muda: o sentinela, os
+// filtros, os query params e o estado continuam idênticos.
+const ROTULOS_ORIGEM: Record<string, string> = { [TODOS]: "Todas", ...ORIGEM_LABEL };
+const ROTULOS_PAPEL: Record<string, string> = { [TODOS]: "Todos", ...PAPEL_LABEL };
 
 // Redesenho da tela de Clientes — filtros por origem/papel. Os dois já
 // existem como colunas reais (Person.source/Person.roles), só não eram
@@ -70,7 +80,9 @@ export function ClientesFiltrosAvancados() {
             <label className="text-xs font-medium text-muted-foreground">Origem</label>
             <Select value={origemAtual} onValueChange={(v) => aplicar("origem", v)}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue>
+                  {(valor) => rotuloSelecionado(valor, ROTULOS_ORIGEM, "Todas")}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={TODOS}>Todas</SelectItem>
@@ -86,7 +98,9 @@ export function ClientesFiltrosAvancados() {
             <label className="text-xs font-medium text-muted-foreground">Papel</label>
             <Select value={papelAtual} onValueChange={(v) => aplicar("papel", v)}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue>
+                  {(valor) => rotuloSelecionado(valor, ROTULOS_PAPEL, "Todos")}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={TODOS}>Todos</SelectItem>

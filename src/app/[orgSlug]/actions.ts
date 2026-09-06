@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { sanearAtribuicaoRecebida } from "@/lib/atribuicao";
 import { prisma } from "@/lib/prisma";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { enviarEmailContato } from "@/lib/email";
@@ -88,6 +89,28 @@ async function protecoesAntiSpam(params: {
   return { bloqueado: false };
 }
 
+// Atribuição de tráfego vinda do formulário (Fase 7). É observação do
+// NAVEGADOR — só ele enxerga UTM e referrer — então chega como input não
+// confiável e passa pelo mesmo saneamento do endpoint de tracking.
+//
+// Fronteira explícita: estes campos são PURAMENTE DESCRITIVOS. Nunca
+// tocam organizationId, propertyId, Interaction.origin, Person.source
+// nem autorização — tudo isso continua sendo derivado no servidor, como
+// antes. Um payload adulterado só consegue mentir sobre de onde a pessoa
+// diz que veio, jamais sobre em qual tenant ou imóvel o contato cai.
+function atribuicaoDoFormulario(formData: FormData) {
+  const bruto = formData.get("atribuicao");
+  if (typeof bruto !== "string" || !bruto) return sanearAtribuicaoRecebida(null);
+  try {
+    // JSON.parse de input do navegador: sempre em try/catch. Um payload
+    // quebrado vira "sem atribuição", nunca uma exceção que derrubaria o
+    // contato inteiro.
+    return sanearAtribuicaoRecebida(JSON.parse(bruto));
+  } catch {
+    return sanearAtribuicaoRecebida(null);
+  }
+}
+
 export async function enviarContato(
   orgSlug: string,
   _prevState: unknown,
@@ -163,6 +186,9 @@ export async function enviarContato(
           propertyId: imovelIdValidado,
           type: "MESSAGE",
           notes: mensagem,
+          // Contexto de aquisição — não altera `origin`, que continua
+          // derivado do imóvel validado logo acima.
+          ...atribuicaoDoFormulario(formData),
           // Derivada do imóvel JÁ validado contra esta organização, não
           // de um campo do formulário: um imovelId de outro tenant é
           // anulado acima e o contato cai como "página de contato", em
@@ -259,6 +285,11 @@ export async function enviarAnuncioProprietario(
           type: "MESSAGE",
           notes: `Quer anunciar imóvel: ${descricaoImovel}`,
           origin: ORIGENS_CAPTACAO.ANUNCIE,
+          // /anuncie não tem imóvel, mas tem origem de tráfego: um
+          // proprietário que veio de um anúncio no Instagram é
+          // exatamente o tipo de informação que esta fase existe pra
+          // registrar.
+          ...atribuicaoDoFormulario(formData),
         },
       });
     }

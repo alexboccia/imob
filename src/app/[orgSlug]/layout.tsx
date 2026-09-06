@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { CapturaAtribuicao } from "@/components/analytics/CapturaAtribuicao";
 import type { Metadata } from "next";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { buscarBranding } from "@/lib/branding";
@@ -147,6 +148,11 @@ export default async function PublicLayout({
         } as React.CSSProperties
       }
     >
+      {/* Atribuição da jornada (Fase 7) — no LAYOUT, não em cada página:
+          o visitante pode chegar por qualquer rota pública, e a origem
+          precisa ser capturada na primeira que ele abrir. Não renderiza
+          nada e é fail-open. */}
+      <CapturaAtribuicao />
       <SiteHeader
         nome={nomePublico}
         logo={config.logo}

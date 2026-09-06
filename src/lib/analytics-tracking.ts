@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { withOrganization } from "@/lib/tenant-context";
+import { sanearAtribuicaoRecebida } from "@/lib/atribuicao";
 import {
   tipoEventoValido,
   placementValido,
@@ -50,6 +51,10 @@ export type EntradaEvento = {
   type: unknown;
   placement?: unknown;
   visitorId: unknown;
+  // Observada pelo navegador (só ele enxerga UTM e referrer). Saneada
+  // aqui antes de tocar o banco. NUNCA influencia tenant, imóvel ou
+  // origin — é uma dimensão puramente descritiva.
+  atribuicao?: unknown;
   agora?: Date;
 };
 
@@ -130,6 +135,9 @@ export async function registrarEventoAnalytics(
         placement,
         visitorHash,
         occurredAt: agora,
+        // Saneada no servidor (trim, limite, minúsculas, sem caractere de
+        // controle) — o que o cliente mandou nunca vai cru pro banco.
+        ...sanearAtribuicaoRecebida(entrada.atribuicao),
       },
     });
 

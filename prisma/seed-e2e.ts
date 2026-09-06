@@ -578,8 +578,10 @@ async function main() {
       // 4 contatos de UMA única pessoa — é o que prova, na tela, que
       // "contatos recebidos" (7) e "pessoas que procuraram" (3) são
       // métricas diferentes e não podem ser lidas como a mesma coisa.
-      { organizationId: orgAnalytics.organization.id, personId: leadRecorrente.id, propertyId: IDS_E2E.imovelTopOrgAnalytics, type: "MESSAGE", origin: "IMOVEL", occurredAt: diasAtras(1) },
-      { organizationId: orgAnalytics.organization.id, personId: leadRecorrente.id, propertyId: IDS_E2E.imovelTopOrgAnalytics, type: "MESSAGE", origin: "IMOVEL", occurredAt: diasAtras(2) },
+      // Dois contatos atribuídos à campanha de anúncios — é o que liga
+      // "verao-2026" a contato real na tela de Analytics.
+      { organizationId: orgAnalytics.organization.id, personId: leadRecorrente.id, propertyId: IDS_E2E.imovelTopOrgAnalytics, type: "MESSAGE", origin: "IMOVEL", occurredAt: diasAtras(1), utmSource: "google", utmMedium: "cpc", utmCampaign: "verao-2026", referrerHost: "google.com" },
+      { organizationId: orgAnalytics.organization.id, personId: leadRecorrente.id, propertyId: IDS_E2E.imovelTopOrgAnalytics, type: "MESSAGE", origin: "IMOVEL", occurredAt: diasAtras(2), utmSource: "google", utmMedium: "cpc", utmCampaign: "verao-2026", referrerHost: "google.com" },
       { organizationId: orgAnalytics.organization.id, personId: leadRecorrente.id, propertyId: IDS_E2E.imovelTopOrgAnalytics, type: "MESSAGE", origin: "IMOVEL", occurredAt: diasAtras(3) },
       { organizationId: orgAnalytics.organization.id, personId: leadRecorrente.id, type: "MESSAGE", origin: "CONTATO", occurredAt: diasAtras(2) },
       // Segundo imóvel do ranking.
@@ -640,8 +642,29 @@ async function main() {
     placement: string | null;
     visitorHash: string;
     occurredAt: Date;
+    utmSource?: string | null;
+    utmMedium?: string | null;
+    utmCampaign?: string | null;
+    referrerHost?: string | null;
   }[] = [];
-  const empilharEventos = (propertyId: string, tipo: string, placement: string | null, quantidade: number, inicio: number) => {
+  // Fase 7 — atribuição determinística. Distribuição escolhida pra
+  // exercitar os três canais que a classificação separa:
+  //   ANUNCIOS (google/cpc), SOCIAL (instagram orgânico) e
+  //   SEM_ATRIBUICAO (o que não tem origem, como todo dado legado).
+  const ATRIBUICOES = [
+    { utmSource: "google", utmMedium: "cpc", utmCampaign: "verao-2026", referrerHost: "google.com" },
+    { utmSource: "instagram", utmMedium: null, utmCampaign: "lancamento", referrerHost: "instagram.com" },
+    { utmSource: null, utmMedium: null, utmCampaign: null, referrerHost: null },
+  ] as const;
+
+  const empilharEventos = (
+    propertyId: string,
+    tipo: string,
+    placement: string | null,
+    quantidade: number,
+    inicio: number,
+    atribuicao: (typeof ATRIBUICOES)[number]
+  ) => {
     for (let i = 0; i < quantidade; i++) {
       eventosDigitais.push({
         organizationId: orgAnalytics.organization.id,
@@ -650,13 +673,16 @@ async function main() {
         placement,
         visitorHash: hashVisitante(inicio + i),
         occurredAt: diasAtras((i % 5) + 1),
+        ...atribuicao,
       });
     }
   };
-  empilharEventos(IDS_E2E.imovelTopOrgAnalytics, "PROPERTY_VIEW", null, 10, 10);
-  empilharEventos(IDS_E2E.imovelTopOrgAnalytics, "WHATSAPP_CLICK", "SIDEBAR", 3, 30);
-  empilharEventos(IDS_E2E.imovelSecundarioOrgAnalytics, "PROPERTY_VIEW", null, 4, 40);
-  empilharEventos(IDS_E2E.imovelSemContatoOrgAnalytics, "PROPERTY_VIEW", null, 6, 50);
+  empilharEventos(IDS_E2E.imovelTopOrgAnalytics, "PROPERTY_VIEW", null, 6, 10, ATRIBUICOES[0]);
+  empilharEventos(IDS_E2E.imovelTopOrgAnalytics, "PROPERTY_VIEW", null, 4, 16, ATRIBUICOES[1]);
+  empilharEventos(IDS_E2E.imovelTopOrgAnalytics, "WHATSAPP_CLICK", "SIDEBAR", 3, 30, ATRIBUICOES[0]);
+  // Sem atribuição de propósito: representa o dado anterior a esta fase.
+  empilharEventos(IDS_E2E.imovelSecundarioOrgAnalytics, "PROPERTY_VIEW", null, 4, 40, ATRIBUICOES[2]);
+  empilharEventos(IDS_E2E.imovelSemContatoOrgAnalytics, "PROPERTY_VIEW", null, 6, 50, ATRIBUICOES[1]);
   await prisma.propertyAnalyticsEvent.createMany({ data: eventosDigitais });
 
   // Fase P.10 — custom domain fixo e ATIVO da Organização B (ver

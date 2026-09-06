@@ -374,6 +374,29 @@ model Interaction {
   // retroativamente.
   origin     String?
 
+  // Atribuição de tráfego da jornada (Fase 7) — TODAS nullable, aditivas.
+  // Evento anterior a esta fase permanece sem atribuição, e isso é lido
+  // como "Sem atribuição" na tela: nunca houve backfill nem inferência.
+  //
+  // Denormalizado (as mesmas colunas também existem em Interaction) de
+  // propósito: as agregações do dashboard leem estas linhas direto e
+  // agrupam em memória; uma tabela de atribuição à parte obrigaria um
+  // join em toda consulta e uma linha extra por evento, sem nenhum ganho.
+  //
+  // String livre normalizada, nunca enum: utm_* é texto escolhido por
+  // terceiros (agência, plataforma de anúncio) e um enum quebraria na
+  // primeira campanha nova. Normalização e limite ficam em
+  // src/lib/atribuicao.ts, aplicados SEMPRE no servidor.
+  //
+  // referrerHost é só o HOSTNAME, nunca a URL completa — URLs de origem
+  // carregam query string, token e às vezes dado pessoal.
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  utmContent   String?
+  utmTerm      String?
+  referrerHost String?
+
   @@index([personId])
   @@map("interactions")
 }
@@ -434,6 +457,30 @@ model PropertyAnalyticsEvent {
   visitorHash String
 
   occurredAt DateTime @default(now())
+
+  // Atribuição de tráfego da jornada (Fase 7) — TODAS nullable, aditivas.
+  // Evento anterior a esta fase permanece sem atribuição, e isso é lido
+  // como "Sem atribuição" na tela: nunca houve backfill nem inferência.
+  //
+  // Denormalizado (as mesmas colunas também existem em Interaction) de
+  // propósito: as agregações do dashboard leem estas linhas direto e
+  // agrupam em memória; uma tabela de atribuição à parte obrigaria um
+  // join em toda consulta e uma linha extra por evento, sem nenhum ganho.
+  //
+  // String livre normalizada, nunca enum: utm_* é texto escolhido por
+  // terceiros (agência, plataforma de anúncio) e um enum quebraria na
+  // primeira campanha nova. Normalização e limite ficam em
+  // src/lib/atribuicao.ts, aplicados SEMPRE no servidor.
+  //
+  // referrerHost é só o HOSTNAME, nunca a URL completa — URLs de origem
+  // carregam query string, token e às vezes dado pessoal.
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  utmContent   String?
+  utmTerm      String?
+  referrerHost String?
+
 
   // Índices derivados das DUAS queries reais que existem, não
   // especulativos:

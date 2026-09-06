@@ -14,6 +14,13 @@ import {
 } from "@/lib/captacao";
 import { inicioDoDiaUTC, fimDoDiaUTC } from "@/lib/scheduled-activity-date";
 import { TIPOS_EVENTO_ANALYTICS } from "@/lib/analytics-eventos";
+import {
+  classificarCanal,
+  rotuloCanal,
+  ORDEM_CANAIS,
+  type Atribuicao,
+  type Canal,
+} from "@/lib/atribuicao";
 
 // =======================================================================
 // Analytics comercial (Fase 5) — primeira camada de análise de CAPTAÇÃO
@@ -546,6 +553,121 @@ export function contarPorTipo(
   return total;
 }
 
+
+// =======================================================================
+// AQUISIÇÃO (Fase 7) — de ONDE vieram as visitas e os contatos
+// =======================================================================
+// Dimensão diferente de "Origem dos contatos" (que é CONTEXTO comercial:
+// IMOVEL/CONTATO/ANUNCIE). Por isso a tela usa outro título — "Canal de
+// aquisição" — e nunca reaproveita o rótulo antigo: são duas perguntas
+// distintas sobre o mesmo contato, e confundi-las tornaria as duas
+// inúteis.
+//
+// O canal é DERIVADO na leitura (classificarCanal), nunca gravado. Os
+// campos estruturados (utm_* e referrerHost) são a fonte de verdade.
+// =======================================================================
+
+export type LinhaCanal = {
+  canal: Canal;
+  rotulo: string;
+  visualizacoes: number;
+  contatos: number;
+  percentualVisualizacoes: number;
+};
+
+// Agrupa qualquer coleção com atribuição por canal. Uma passada, em
+// memória, sobre linhas que já foram lidas para outros fins — nenhuma
+// query adicional, nenhum N+1.
+export function agruparPorCanal(
+  eventos: readonly (Atribuicao & { type: string })[],
+  interacoes: readonly Atribuicao[]
+): LinhaCanal[] {
+  const porCanal = new Map<Canal, { visualizacoes: number; contatos: number }>(
+    ORDEM_CANAIS.map((c) => [c, { visualizacoes: 0, contatos: 0 }])
+  );
+
+  let totalVisualizacoes = 0;
+  for (const evento of eventos) {
+    if (evento.type !== TIPOS_EVENTO_ANALYTICS.PROPERTY_VIEW) continue;
+    const canal = classificarCanal(evento);
+    porCanal.get(canal)!.visualizacoes += 1;
+    totalVisualizacoes += 1;
+  }
+  for (const interacao of interacoes) {
+    porCanal.get(classificarCanal(interacao))!.contatos += 1;
+  }
+
+  return ORDEM_CANAIS.map((canal) => {
+    const dados = porCanal.get(canal)!;
+    return {
+      canal,
+      rotulo: rotuloCanal(canal),
+      visualizacoes: dados.visualizacoes,
+      contatos: dados.contatos,
+      // 0 quando não há visualização nenhuma — nunca NaN (0/0).
+      percentualVisualizacoes:
+        totalVisualizacoes === 0 ? 0 : (dados.visualizacoes / totalVisualizacoes) * 100,
+    };
+  })
+    // Some as linhas totalmente vazias: mostrar seis canais em zero num
+    // tenant novo é ruído, não diagnóstico. (Diferente da decomposição
+    // por origem comercial, onde as 3 categorias são fixas e conhecidas.)
+    .filter((linha) => linha.visualizacoes > 0 || linha.contatos > 0);
+}
+
+export type LinhaCampanha = {
+  campanha: string;
+  visualizacoes: number;
+  contatos: number;
+};
+
+const TETO_CAMPANHAS = 5;
+
+// Campanhas com mais movimento. Somente LEITURA e agregação — esta fase
+// não cria cadastro de campanha, CRUD nem integração com plataforma de
+// anúncio. Ordena por visualização e depois por contato; desempate pelo
+// nome mantém a ordem estável entre refreshes.
+export function agruparPorCampanha(
+  eventos: readonly (Atribuicao & { type: string })[],
+  interacoes: readonly Atribuicao[]
+): LinhaCampanha[] {
+  const porCampanha = new Map<string, { visualizacoes: number; contatos: number }>();
+  const garantir = (nome: string) => {
+    const atual = porCampanha.get(nome) ?? { visualizacoes: 0, contatos: 0 };
+    porCampanha.set(nome, atual);
+    return atual;
+  };
+
+  for (const evento of eventos) {
+    if (!evento.utmCampaign) continue;
+    if (evento.type !== TIPOS_EVENTO_ANALYTICS.PROPERTY_VIEW) continue;
+    garantir(evento.utmCampaign).visualizacoes += 1;
+  }
+  for (const interacao of interacoes) {
+    if (!interacao.utmCampaign) continue;
+    garantir(interacao.utmCampaign).contatos += 1;
+  }
+
+  return [...porCampanha.entries()]
+    .map(([campanha, dados]) => ({ campanha, ...dados }))
+    .sort(
+      (a, b) =>
+        b.visualizacoes - a.visualizacoes ||
+        b.contatos - a.contatos ||
+        a.campanha.localeCompare(b.campanha)
+    )
+    .slice(0, TETO_CAMPANHAS);
+}
+
+export type Aquisicao = {
+  canais: LinhaCanal[];
+  campanhas: LinhaCampanha[];
+  // true quando NENHUM evento nem contato do período tem atribuição —
+  // estado normal logo após o deploy desta fase, e para todo dado
+  // histórico. A tela explica isso em vez de mostrar tudo zerado.
+  semAtribuicao: boolean;
+};
+
 const TETO_TOP_IMOVEIS = 5;
 
 export type ImovelMaisProcurado = {
@@ -578,6 +700,7 @@ export type AnalyticsComercial = {
   origens: ItemOrigem[];
   topImoveis: ImovelMaisProcurado[];
   funil: FunilDigital;
+  aquisicao: Aquisicao;
 };
 
 // -----------------------------------------------------------------------
@@ -627,7 +750,20 @@ export async function buscarAnalyticsComercial(
           ...whereContatoComercial(),
           occurredAt: { gte: janelas.atual.inicio, lte: janelas.atual.fim },
         },
-        select: { occurredAt: true, origin: true, personId: true, propertyId: true },
+        select: {
+          occurredAt: true,
+          origin: true,
+          personId: true,
+          propertyId: true,
+          // Fase 7 — atribuição já vem nesta mesma leitura; nenhuma
+          // query nova foi adicionada para o canal de aquisição.
+          utmSource: true,
+          utmMedium: true,
+          utmCampaign: true,
+          utmContent: true,
+          utmTerm: true,
+          referrerHost: true,
+        },
       }),
       prisma.interaction.count({
         where: {
@@ -652,7 +788,16 @@ export async function buscarAnalyticsComercial(
           organizationId,
           occurredAt: { gte: janelas.atual.inicio, lte: janelas.atual.fim },
         },
-        select: { propertyId: true, type: true },
+        select: {
+          propertyId: true,
+          type: true,
+          utmSource: true,
+          utmMedium: true,
+          utmCampaign: true,
+          utmContent: true,
+          utmTerm: true,
+          referrerHost: true,
+        },
       }),
       // Período anterior: só as contagens por tipo, nunca as linhas.
       prisma.propertyAnalyticsEvent.groupBy({
@@ -755,6 +900,16 @@ export async function buscarAnalyticsComercial(
       semHistoricoDigital: totalEventosDigitaisOrg === null,
     };
 
+    // ---- Aquisição (Fase 7) ------------------------------------------
+    // Reaproveita as MESMAS linhas já lidas acima — zero query nova.
+    const canais = agruparPorCanal(eventosDigitais, interacoes);
+    const campanhas = agruparPorCampanha(eventosDigitais, interacoes);
+    const aquisicao: Aquisicao = {
+      canais,
+      campanhas,
+      semAtribuicao: canais.every((c) => c.canal === "SEM_ATRIBUICAO"),
+    };
+
     const topImoveis: ImovelMaisProcurado[] = ranking.flatMap((linha) => {
       const detalhe = detalhePorId.get(linha.propertyId);
       // Imóvel apagado entre a interação e agora (Interaction.propertyId é
@@ -800,6 +955,7 @@ export async function buscarAnalyticsComercial(
       origens: distribuirPorOrigem(interacoes),
       topImoveis,
       funil,
+      aquisicao,
     };
   });
 }

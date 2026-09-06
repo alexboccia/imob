@@ -1,6 +1,7 @@
 "use client";
 
 import type { PlacementAnalytics, TipoEventoAnalytics } from "@/lib/analytics-eventos";
+import { atribuicaoAtual } from "@/lib/atribuicao-client";
 
 // Cliente de tracking (Fase 6) — pequeno de propósito: nenhuma
 // dependência, nenhuma biblioteca de analytics, nada que pese no bundle
@@ -70,7 +71,10 @@ export function enviarEventoAnalytics(evento: EventoParaEnviar): void {
 
     jaEnviadosNestaPagina.add(chave);
 
-    const corpo = JSON.stringify({ ...evento, visitorId });
+    // atribuicaoAtual() é síncrona e nunca lança — se o sessionStorage
+    // estiver bloqueado devolve vazio, e o evento sai mesmo assim, só
+    // sem atribuição. Nada aqui pode atrasar o clique.
+    const corpo = JSON.stringify({ ...evento, visitorId, atribuicao: atribuicaoAtual() });
 
     // sendBeacon: entregue pelo browser em background, sobrevive à
     // navegação que o próprio clique dispara (é exatamente o caso do

@@ -16,6 +16,9 @@ import { ORG_ANALYTICS, ORG_AGENDA, ORG_B, login } from "./helpers";
 //   interações sem origem ........... 1   -> só na nota de método
 //   (Fase 6) visualizações .......... 20
 //   (Fase 6) cliques no WhatsApp .....3
+//   (Fase 7) canais: anúncios 6 views/2 contatos · social 10 views/0
+//            · sem atribuição 4 views/5 contatos
+//   (Fase 7) campanhas: lancamento 10/0 · verao-2026 6/2
 
 // Lê o valor de um card de KPI pelo título — o número é o <p> irmão
 // dentro do mesmo card, nunca um texto solto da página.
@@ -99,6 +102,33 @@ test.describe("Analytics comercial — tenant com dados", () => {
     // Honestidade semântica: clique é intenção, nunca "lead".
     await expect(funil).toContainText("não confirma que a mensagem foi enviada");
     await expect(funil).not.toContainText("Leads pelo WhatsApp");
+  });
+
+  test("canal de aquisição separa tráfego de contexto comercial", async ({ page }) => {
+    const aquisicao = page.getByRole("region", { name: "Canal de aquisição" });
+    await expect(aquisicao).toBeVisible();
+
+    // Título DIFERENTE de "Origem dos contatos" (contexto comercial):
+    // são duas perguntas distintas sobre o mesmo contato.
+    await expect(page.getByText("Origem dos contatos", { exact: true })).toBeVisible();
+
+    await expect(aquisicao.getByText("Anúncios pagos", { exact: true })).toBeVisible();
+    await expect(aquisicao.getByText("Redes sociais", { exact: true })).toBeVisible();
+    // Dado sem origem aparece como tal — nunca é redistribuído nos outros.
+    await expect(aquisicao.getByText("Sem atribuição", { exact: true })).toBeVisible();
+
+    // Anúncios: 6 de 20 views = 30%.
+    await expect(aquisicao.getByText("30%", { exact: true })).toBeVisible();
+    // Redes sociais: 10 de 20 = 50%.
+    await expect(aquisicao.getByText("50%", { exact: true })).toBeVisible();
+
+    // Campanhas, só leitura.
+    await expect(aquisicao.getByText("verao-2026", { exact: true })).toBeVisible();
+    await expect(aquisicao.getByText("lancamento", { exact: true })).toBeVisible();
+
+    // Precisão semântica: é atribuição da VISITA, nunca "origem original".
+    await expect(aquisicao).toContainText("visita atual");
+    await expect(aquisicao).not.toContainText("origem original");
   });
 
   test("gráfico monta e a mesma série existe como tabela acessível", async ({ page }) => {
