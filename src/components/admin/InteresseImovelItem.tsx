@@ -44,6 +44,7 @@ export function InteresseImovelItem({
     closedAtISO: string | null;
     // Fase 9 — valor negociado do fechamento; null = não registrado.
     closedValue: number | null;
+    commissionValue: number | null;
     property: { id: string; title: string; price: unknown; rentPrice: unknown; status: PropertyStatus };
     // Visita SCHEDULED mais próxima deste relacionamento, se houver — já
     // vem pronta da query da página (batch, sem N+1 por card). scheduledAt
@@ -172,6 +173,7 @@ export function InteresseImovelItem({
           stage={interesse.stage}
           closedAtISO={interesse.closedAtISO}
           closedValue={interesse.closedValue}
+          commissionValue={interesse.commissionValue}
           imovelTitulo={interesse.property.title}
         />
 

@@ -33,9 +33,12 @@ test.describe("Analytics — resultado financeiro", () => {
     await expect(resultado).toContainText("Nenhum valor foi estimado");
 
     // Nomenclatura honesta: valor do negócio, nunca receita/comissão.
-    await expect(resultado).toContainText("não a receita da imobiliária");
+    await expect(resultado).toContainText("nenhum dos dois é receita da imobiliária");
     await expect(resultado).not.toContainText("Receita total");
-    await expect(resultado).not.toContainText("Comissão");
+    // A Fase 10 passou a registrar COMISSÃO de verdade — o card contém
+    // "Comissão registrada". O que continua recusado é chamá-la de
+    // receita (falta o split que diria quanto fica com a operação) e
+    // qualquer ROI (faltaria o custo da campanha).
     await expect(resultado).not.toContainText("ROI");
   });
 

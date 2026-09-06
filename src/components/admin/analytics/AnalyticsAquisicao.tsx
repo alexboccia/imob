@@ -77,6 +77,9 @@ export function AnalyticsAquisicao({
                 <TableHead scope="col" className="w-0 text-right whitespace-nowrap">
                   Valor fechado
                 </TableHead>
+                <TableHead scope="col" className="w-0 text-right">
+                  Comissão
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -116,6 +119,13 @@ export function AnalyticsAquisicao({
                       formatarPreco(linha.valorFechado)
                     )}
                   </TableCell>
+                  <TableCell className="text-right font-medium tabular-nums whitespace-nowrap">
+                    {semVinculoDeOrigem || linha.comissao === 0 ? (
+                      <span title="Sem comissão registrada">—</span>
+                    ) : (
+                      formatarPreco(linha.comissao)
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -141,6 +151,9 @@ export function AnalyticsAquisicao({
                   <TableHead scope="col" className="w-0 text-right whitespace-nowrap">
                     Valor fechado
                   </TableHead>
+                  <TableHead scope="col" className="w-0 text-right">
+                    Comissão
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -160,6 +173,13 @@ export function AnalyticsAquisicao({
                         formatarPreco(linha.valorFechado)
                       )}
                     </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums whitespace-nowrap">
+                      {linha.comissao === 0 ? (
+                        <span title="Sem comissão registrada">—</span>
+                      ) : (
+                        formatarPreco(linha.comissao)
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -173,7 +193,8 @@ export function AnalyticsAquisicao({
           visitas e contatos anteriores a esta medição, ou em que o navegador não informou origem —
           nada foi estimado. Oportunidades, ganhos e valor fechado só entram num canal quando
           nasceram de um contato do site; os criados manualmente ficam em “Sem atribuição”.
-          “Valor fechado” é o valor do negócio, não a receita da imobiliária.
+          “Valor fechado” é o valor do negócio e “comissão” é o que a equipe informou sobre ele —
+          nenhum dos dois é receita da imobiliária.
         </p>
       </CardContent>
     </Card>

@@ -4,13 +4,13 @@ import { useActionState, useState } from "react";
 import {
   marcarInteresseComoGanho,
   marcarInteresseComoPerdido,
+  corrigirDadosFechamento,
 } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { formatarDataHora } from "@/lib/scheduled-activity-date";
 import { formatarPreco } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { CampoMoeda } from "@/components/admin/CampoMoeda";
+import { CamposFinanceirosFechamento } from "@/components/admin/CamposFinanceirosFechamento";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +46,7 @@ export function FechamentoInteresse({
   stage,
   closedAtISO,
   closedValue,
+  commissionValue,
   // Contexto exibido no diálogo. Opcionais: nem toda tela que reaproveita
   // este componente tem os dois à mão, e o fechamento nunca depende deles.
   imovelTitulo,
@@ -55,10 +56,18 @@ export function FechamentoInteresse({
   stage: PropertyInterestStage;
   closedAtISO: string | null;
   closedValue?: number | null;
+  commissionValue?: number | null;
   imovelTitulo?: string;
   clienteNome?: string;
 }) {
   const [aberto, setAberto] = useState(false);
+  const [corrigindo, setCorrigindo] = useState(false);
+
+  const correcaoAcao = corrigirDadosFechamento.bind(null, interesseId);
+  const [estadoCorrecao, formActionCorrecao, pendenteCorrecao] = useActionState(
+    correcaoAcao,
+    ESTADO_INICIAL_ACAO
+  );
 
   const ganhoAcao = marcarInteresseComoGanho.bind(null, interesseId);
   const [estadoGanho, formActionGanho, pendenteGanho] = useActionState(
@@ -74,18 +83,86 @@ export function FechamentoInteresse({
 
   if (stage === "WON") {
     return (
-      <p className="text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">Ganho</span>
-        {/* closedValue null = valor NÃO REGISTRADO (ganho anterior a esta
-            fase). Nunca mostrar "R$ 0", que afirmaria que o negócio
-            valeu zero. */}
-        {closedValue != null ? (
-          <> — {formatarPreco(closedValue)}</>
-        ) : (
-          <> — Valor não registrado</>
+      <div className="space-y-1">
+        <p className="text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Ganho</span>
+          {/* null = NÃO REGISTRADO (fechamento anterior a cada fase).
+              Nunca mostrar "R$ 0", que afirmaria valor/comissão zero. */}
+          {closedValue != null ? (
+            <> — {formatarPreco(closedValue)}</>
+          ) : (
+            <> — Valor não registrado</>
+          )}
+          {commissionValue != null ? (
+            <> · Comissão {formatarPreco(commissionValue)}</>
+          ) : (
+            <> · Comissão não registrada</>
+          )}
+          {closedAtISO && <> · Fechado em {formatarDataHora(closedAtISO)}</>}
+        </p>
+
+        <button
+          type="button"
+          onClick={() => setCorrigindo(true)}
+          className="rounded-md text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          Corrigir valores
+        </button>
+
+        {/* MONTA SÓ QUANDO ABERTO. O Kanban do Pipeline renderiza um
+            FechamentoInteresse por card, e manter um Dialog ocioso por
+            card empilhava N camadas de overlay/portal na mesma página —
+            além do custo, camadas dismissíveis ociosas competem com o
+            Sheet da negociação (achado real: o drawer não abria de forma
+            confiável na suíte completa, só com poucos cards). */}
+        {corrigindo && !estadoCorrecao.success && (
+        <Dialog open onOpenChange={setCorrigindo}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Corrigir valores do fechamento</DialogTitle>
+              <DialogDescription>
+                {imovelTitulo && clienteNome
+                  ? `${imovelTitulo} — ${clienteNome}`
+                  : "A negociação continua ganha; só os valores são alterados."}
+              </DialogDescription>
+            </DialogHeader>
+
+            <form action={formActionCorrecao} className="space-y-3">
+              <CamposFinanceirosFechamento
+                idPrefixo={`correcao-${interesseId}`}
+                valorInicial={closedValue}
+                comissaoInicial={commissionValue}
+              />
+
+              {estadoCorrecao.message && !estadoCorrecao.success && (
+                <p role="alert" className="text-xs text-destructive">
+                  {estadoCorrecao.message}
+                </p>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                A negociação continua marcada como ganha e a data de fechamento não muda. A
+                alteração fica registrada no histórico da organização.
+              </p>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setCorrigindo(false)}
+                  disabled={pendenteCorrecao}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={pendenteCorrecao}>
+                  {pendenteCorrecao ? "Salvando..." : "Salvar valores"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
         )}
-        {closedAtISO && <> · Fechado em {formatarDataHora(closedAtISO)}</>}
-      </p>
+      </div>
     );
   }
 
@@ -131,8 +208,10 @@ export function FechamentoInteresse({
       {/* Aberto DERIVADO, sem efeito de sincronização: assim que a
           action confirma sucesso o diálogo fecha sozinho. Em erro de
           validação ele permanece aberto com a mensagem, para o corretor
-          corrigir o valor sem redigitar tudo. */}
-      <Dialog open={aberto && !estadoGanho.success} onOpenChange={setAberto}>
+          corrigir o valor sem redigitar tudo.
+          Monta só quando aberto — mesmo motivo do diálogo de correção. */}
+      {aberto && !estadoGanho.success && (
+      <Dialog open onOpenChange={setAberto}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Marcar como ganho</DialogTitle>
@@ -144,21 +223,11 @@ export function FechamentoInteresse({
           </DialogHeader>
 
           <form action={formActionGanho} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor={`valor-fechamento-${interesseId}`}>Valor de fechamento</Label>
-              <CampoMoeda
-                id={`valor-fechamento-${interesseId}`}
-                name="valorFechamento"
-                className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              />
-              {/* Nenhum valor é sugerido a partir do preço anunciado do
-                  imóvel: preço pedido não é valor fechado, e um campo
-                  pré-preenchido seria confirmado no automático,
-                  registrando um número que ninguém negociou. */}
-              <p className="text-xs text-muted-foreground">
-                Valor negociado do imóvel. Não é comissão nem receita da imobiliária.
-              </p>
-            </div>
+            {/* Nenhum valor é sugerido a partir do preço anunciado do
+                imóvel: preço pedido não é valor fechado, e um campo
+                pré-preenchido seria confirmado no automático,
+                registrando um número que ninguém negociou. */}
+            <CamposFinanceirosFechamento idPrefixo={`fechamento-${interesseId}`} />
 
             {estadoGanho.message && !estadoGanho.success && (
               <p role="alert" className="text-xs text-destructive">
@@ -182,6 +251,7 @@ export function FechamentoInteresse({
           </form>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }

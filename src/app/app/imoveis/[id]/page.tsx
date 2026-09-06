@@ -219,6 +219,7 @@ export default async function EditarImovelPage({
                       stage={interesse.stage}
                       closedAtISO={interesse.closedAt ? interesse.closedAt.toISOString() : null}
                       closedValue={decimalParaValor(interesse.closedValue)}
+                      commissionValue={decimalParaValor(interesse.commissionValue)}
                       imovelTitulo={imovel.title}
                       clienteNome={interesse.person.name}
                     />

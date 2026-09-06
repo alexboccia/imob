@@ -150,9 +150,12 @@ export default async function AnalyticsPage({
             Oportunidade é um imóvel relacionado a um cliente; negociação ganha é uma oportunidade
             encerrada como ganha pela equipe. Só aparecem com canal de origem as que foram criadas
             a partir de um contato do site — nenhuma origem foi deduzida para as demais. O valor
-            fechado é informado pela equipe ao marcar a negociação como ganha; ganhos anteriores a
-            esta medição aparecem sem valor, e nenhum foi estimado a partir do preço do imóvel. O
-            sistema não registra comissão, então nada aqui é receita da imobiliária.
+            fechado e a comissão são informados pela equipe ao marcar a negociação como ganha (a
+            comissão é opcional e pode ser preenchida depois). Ganhos anteriores a cada uma dessas
+            medições aparecem sem o valor correspondente, e nada foi estimado a partir do preço do
+            imóvel nem de qualquer percentual — o sistema não tem percentual de comissão
+            configurado. Como não se registra a divisão da comissão, nada aqui é receita da
+            imobiliária.
           </li>
           <li>
             O canal de aquisição descreve <strong>a visita</strong> (de onde a pessoa chegou desta

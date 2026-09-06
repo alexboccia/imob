@@ -586,6 +586,32 @@ model PropertyInterest {
   // fecharInteresse).
   closedValue Decimal? @db.Decimal(14, 2)
 
+  // Fase 10 — COMISSÃO do negócio, em dinheiro, informada pela equipe.
+  // Mesmo Decimal(14,2) de todo campo monetário do schema.
+  //
+  // POR QUE VALOR, E NÃO PERCENTUAL: o produto não tem NENHUMA regra de
+  // comissão (auditado: nenhum campo, nenhuma configuração, nenhum
+  // percentual em Organization/OrganizationSettings/Property, e o model
+  // Deal segue sendo código morto). Sem regra, o único dado inequívoco é
+  // o valor que a equipe confirmou. Guardar um percentual junto criaria
+  // duas fontes de verdade que divergiriam quando o valor fosse
+  // corrigido. A tela oferece um atalho de "%" que apenas CALCULA o
+  // valor no navegador — nada de percentual é persistido.
+  //
+  // OPCIONAL, diferente de closedValue: a comissão frequentemente só é
+  // definida depois do fechamento (contrato, repasse), e um negócio real
+  // não pode deixar de ser registrado como ganho porque a comissão ainda
+  // não saiu.
+  //   null = comissão NÃO REGISTRADA (todo WON anterior a esta fase)
+  //   0    = impossível — a validação recusa zero, para não confundir
+  //          "não registrada" com "foi zero". Limitação documentada.
+  //
+  // NÃO é receita da imobiliária por construção: não existe split,
+  // co-broker nem percentual do corretor no domínio, então este é o
+  // valor da comissão DO NEGÓCIO. Ver src/lib/comissao.ts.
+  // ZERO BACKFILL: nenhum WON histórico recebeu comissão estimada.
+  commissionValue Decimal? @db.Decimal(14, 2)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

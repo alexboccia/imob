@@ -13,7 +13,8 @@ import { withOrganization } from "@/lib/tenant-context";
 import { hasModule, getLimit, limiteExcedido, LimiteDoPlanoError, FEATURE_CRM_CLIENTS } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
 import { oportunidadeElegivel } from "@/lib/oportunidade";
-import { interpretarValorFechamento } from "@/lib/valor-fechamento";
+import { interpretarValorFechamento, decimalParaValor } from "@/lib/valor-fechamento";
+import { interpretarComissao, comissaoExcedeValorFechado } from "@/lib/comissao";
 import {
   erroAcessoNegado,
   erroGenerico,
@@ -832,7 +833,9 @@ async function fecharInteresse(
   destino: "WON" | "REJECTED",
   // Fase 9 — valor negociado. Só existe para GANHO; em REJECTED o
   // parâmetro nunca é passado e a coluna permanece null.
-  valorBruto?: unknown
+  valorBruto?: unknown,
+  // Fase 10 — comissão OPCIONAL. Só existe para GANHO.
+  comissaoBruta?: unknown
 ): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
@@ -850,10 +853,21 @@ async function fecharInteresse(
   // REJECTED nunca carrega valor: negócio perdido não tem valor fechado,
   // e gravar 0 ali seria confundir "não houve" com "valeu zero".
   let closedValue: number | null = null;
+  let commissionValue: number | null = null;
   if (destino === "WON") {
     const interpretado = interpretarValorFechamento(valorBruto);
     if (!interpretado.ok) return erroGenerico(interpretado.erro);
     closedValue = interpretado.valor;
+
+    // Comissão é opcional: em branco vira null (ok:true) e o negócio é
+    // registrado como ganho normalmente. Só um valor MAL FORMADO barra o
+    // fechamento — nunca a ausência.
+    const comissao = interpretarComissao(comissaoBruta);
+    if (!comissao.ok) return erroGenerico(comissao.erro);
+    if (comissaoExcedeValorFechado(comissao.valor, closedValue)) {
+      return erroGenerico("A comissão não pode ser maior que o valor de fechamento.");
+    }
+    commissionValue = comissao.valor;
   }
 
   return withOrganization(organizationId, async () => {
@@ -936,7 +950,10 @@ async function fecharInteresse(
           // transação do histórico: nunca existe WON sem valor nem valor
           // sem WON. Em REJECTED, closedValue é null explicitamente — não
           // herda nada de uma tentativa anterior.
-          data: { stage: destino, closedAt: agora, closedValue },
+          // stage, closedAt, closedValue e commissionValue no MESMO
+          // update da MESMA transação do histórico. Em REJECTED os dois
+          // valores são null explicitamente.
+          data: { stage: destino, closedAt: agora, closedValue, commissionValue },
         });
 
         if (atualizado.count === 0) {
@@ -1036,6 +1053,103 @@ async function fecharInteresse(
   });
 }
 
+// =====================================================================
+// Fase 10 — corrigir os dados FINANCEIROS de um negócio já ganho
+// =====================================================================
+// Fecha a dívida registrada na Fase 9: até aqui, um valor digitado errado
+// no fechamento só podia ser consertado direto no banco.
+//
+// O que esta ação NÃO faz, por decisão:
+//   - não reabre o pipeline: `stage` continua WON e nunca é tocado;
+//   - não recalcula `closedAt`: o negócio foi fechado quando foi fechado,
+//     e a correção é sobre os NÚMEROS, não sobre a data do evento;
+//   - não existe para negócio aberto nem para REJECTED — só WON tem
+//     valores financeiros para corrigir.
+//
+// Não é edição silenciosa: cada correção grava um ActivityLog com o campo
+// alterado e os valores de/para. Valor de negócio não é PII (o payload
+// do ActivityLog já registra transições de estado em todo o projeto), e
+// é justamente esse rastro que torna a correção auditável em vez de
+// perigosa.
+export async function corrigirDadosFechamento(
+  interesseId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  const valorInterpretado = interpretarValorFechamento(formData.get("valorFechamento"));
+  if (!valorInterpretado.ok) return erroGenerico(valorInterpretado.erro);
+  const comissaoInterpretada = interpretarComissao(formData.get("valorComissao"));
+  if (!comissaoInterpretada.ok) return erroGenerico(comissaoInterpretada.erro);
+  if (comissaoExcedeValorFechado(comissaoInterpretada.valor, valorInterpretado.valor)) {
+    return erroGenerico("A comissão não pode ser maior que o valor de fechamento.");
+  }
+
+  return withOrganization(organizationId, async () => {
+    const resultado = await prisma.$transaction(async (tx) => {
+      // Fronteira de tenant + guard de estado numa leitura só. O WHERE do
+      // updateMany repete stage: "WON" para que um fechamento revertido
+      // por outra transação no meio do caminho não seja corrigido às
+      // cegas.
+      const atual = await tx.propertyInterest.findUnique({
+        where: { id: interesseId, organizationId },
+        select: { id: true, personId: true, propertyId: true, stage: true, closedValue: true, commissionValue: true },
+      });
+      if (!atual) return { tipo: "nao_encontrado" as const };
+      if (atual.stage !== "WON") return { tipo: "nao_ganho" as const };
+
+      const atualizado = await tx.propertyInterest.updateMany({
+        where: { id: interesseId, organizationId, stage: "WON" },
+        data: {
+          closedValue: valorInterpretado.valor,
+          commissionValue: comissaoInterpretada.valor,
+        },
+      });
+      if (atualizado.count === 0) return { tipo: "corrida" as const };
+
+      await tx.activityLog.create({
+        data: {
+          organizationId,
+          userId: session.user.id,
+          entity: "PropertyInterest",
+          entityId: interesseId,
+          action: "property_interest_closing_corrected",
+          payload: {
+            closedValueDe: decimalParaValor(atual.closedValue),
+            closedValuePara: valorInterpretado.valor,
+            commissionValueDe: decimalParaValor(atual.commissionValue),
+            commissionValuePara: comissaoInterpretada.valor,
+          },
+        },
+      });
+
+      return { tipo: "corrigido" as const, personId: atual.personId, propertyId: atual.propertyId };
+    });
+
+    if (resultado.tipo === "nao_encontrado") {
+      return erroAcessoNegado("Relacionamento não encontrado.");
+    }
+    if (resultado.tipo === "nao_ganho") {
+      return erroGenerico("Só é possível corrigir os valores de uma negociação ganha.");
+    }
+    if (resultado.tipo === "corrida") {
+      return erroGenerico("Não foi possível concluir agora devido a uma alteração concorrente — tente novamente.");
+    }
+
+    revalidatePath(`/app/clientes/${resultado.personId}`);
+    revalidatePath(`/app/imoveis/${resultado.propertyId}`);
+    revalidatePath("/app/pipeline");
+    return sucesso("Valores do fechamento atualizados.");
+  });
+}
+
 // Marca o relacionamento como ganho (stage=WON, closedAt=agora,
 // closedValue=valor informado). O único dado que vem do FormData é o
 // VALOR — stage, closedAt e o tenant continuam sendo decididos aqui, e o
@@ -1045,7 +1159,12 @@ export async function marcarInteresseComoGanho(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  return fecharInteresse(interesseId, "WON", formData.get("valorFechamento"));
+  return fecharInteresse(
+    interesseId,
+    "WON",
+    formData.get("valorFechamento"),
+    formData.get("valorComissao")
+  );
 }
 
 // Marca o relacionamento como perdido (stage=REJECTED, closedAt=agora).

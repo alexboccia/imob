@@ -241,6 +241,7 @@ export default async function DetalheClientePage({
                     notes: interesse.notes,
                     closedAtISO: interesse.closedAt ? interesse.closedAt.toISOString() : null,
                     closedValue: decimalParaValor(interesse.closedValue),
+                    commissionValue: decimalParaValor(interesse.commissionValue),
                     property: {
                       id: interesse.property.id,
                       title: interesse.property.title,

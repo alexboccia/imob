@@ -28,6 +28,10 @@ export function AnalyticsResultado({
     valorFechado,
     ticketMedio,
     ganhosSemValor,
+    comissaoTotal,
+    comissaoMedia,
+    comissaoEfetiva,
+    ganhosSemComissao,
     semVinculoDeOrigem,
   } = resultado;
 
@@ -101,6 +105,49 @@ export function AnalyticsResultado({
               </div>
             </dl>
 
+            <dl className="grid grid-cols-1 gap-3 border-t pt-3 sm:grid-cols-3">
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Comissão registrada</dt>
+                <dd className="text-2xl font-semibold tabular-nums">
+                  {formatarPreco(comissaoTotal)}
+                </dd>
+                <p className="text-xs text-muted-foreground">
+                  soma das comissões informadas pela equipe
+                </p>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Comissão média</dt>
+                <dd className="text-lg font-semibold tabular-nums">
+                  {/* null (nenhum ganho com comissão) -> "—", nunca R$ 0. */}
+                  {comissaoMedia === null ? "—" : formatarPreco(comissaoMedia)}
+                </dd>
+                <p className="text-xs text-muted-foreground">
+                  ÷ ganhos com comissão registrada
+                </p>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Comissão efetiva</dt>
+                <dd className="text-lg font-semibold tabular-nums">
+                  {formatarTaxa(comissaoEfetiva)}
+                </dd>
+                <p className="text-xs text-muted-foreground">
+                  comissão ÷ valor fechado, só onde os dois são conhecidos
+                </p>
+              </div>
+            </dl>
+
+            {ganhosSemComissao > 0 && (
+              <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                {formatarNumero(ganhosSemComissao)}{" "}
+                {ganhosSemComissao === 1
+                  ? "negociação ganha não tem comissão registrada"
+                  : "negociações ganhas não têm comissão registrada"}{" "}
+                e por isso ficam de fora dos números de comissão. A comissão é opcional no
+                fechamento e pode ser informada depois em “Corrigir valores” — nenhuma foi
+                estimada.
+              </p>
+            )}
+
             {ganhosSemValor > 0 && (
               // ZERO ≠ DESCONHECIDO: estes ganhos existem, contam como
               // ganhos, e ficam de fora do dinheiro porque ninguém
@@ -152,9 +199,10 @@ export function AnalyticsResultado({
         )}
 
         <p className="text-xs text-muted-foreground">
-          “Valor fechado” é o valor do negócio, não a receita da imobiliária: a comissão sobre ele
-          não é registrada pelo sistema. O preço anunciado do imóvel nunca é usado como valor
-          fechado.
+          “Valor fechado” é o valor do negócio e “comissão registrada” é o que a equipe informou
+          sobre ele — nenhum dos dois é receita da imobiliária, porque o sistema não registra como
+          a comissão é dividida. Nada é calculado automaticamente: não existe percentual
+          configurado, e o preço anunciado do imóvel nunca vira valor fechado.
         </p>
       </CardContent>
     </Card>

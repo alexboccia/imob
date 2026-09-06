@@ -319,9 +319,10 @@ describe("agregação por canal no dashboard", () => {
     await enviarContato(cenario.organization.slug, null, formContato({ imovelId: imovel.id }, GOOGLE_ADS));
 
     const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
-    // valorFechado (Fase 9) fica em 0: não houve ganho nesta campanha.
+    // valorFechado (Fase 9) e comissao (Fase 10) ficam em 0: não houve
+    // ganho nesta campanha.
     expect(a.aquisicao.campanhas).toEqual([
-      { campanha: "verao-2026", visualizacoes: 1, contatos: 1, valorFechado: 0 },
+      { campanha: "verao-2026", visualizacoes: 1, contatos: 1, valorFechado: 0, comissao: 0 },
     ]);
   });
 

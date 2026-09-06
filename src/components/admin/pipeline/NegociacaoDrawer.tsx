@@ -126,6 +126,7 @@ export function NegociacaoDrawer({
               stage={item.stage}
               closedAtISO={item.closedAtISO}
               closedValue={item.closedValue}
+              commissionValue={item.commissionValue}
               imovelTitulo={item.property?.title}
               clienteNome={item.person?.name}
             />

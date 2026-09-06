@@ -1,8 +1,24 @@
 name: CI
 
-# Roda em toda PR contra main e em todo push direto a main. O job "e2e"
-# depende de "verify" (needs) — se tipos/lint/testes/build já falharam, o
-# Playwright nem chega a subir, economizando minutos de CI.
+# Roda em toda PR contra main e em todo push direto a main.
+#
+# Os dois jobs rodam EM PARALELO (Fase 10). Antes, "e2e" tinha
+# `needs: verify` para economizar minutos quando tipos/lint/testes/build
+# já haviam falhado — mas isso somava os dois tempos no relógio de parede
+# (3m30 + 14m30 = 18m20), estourando o teto operacional de 18 minutos do
+# run inteiro.
+#
+# A paralelização é segura porque os jobs NÃO compartilham nada: cada um
+# tem o seu próprio container de Postgres (bloco `services` em ambos), o
+# seu próprio checkout, o seu próprio `npm ci`, e roda `prepare-test-db` +
+# `seed-e2e` no próprio banco. "e2e" não consome nenhum artefato de
+# "verify" — a dependência era só de custo, nunca técnica.
+#
+# O que se perde: numa PR que quebra o build, os minutos do Playwright
+# passam a ser gastos mesmo assim. O que se ganha: o run inteiro cabe no
+# teto, que é requisito operacional. A proteção real contra código
+# quebrado em main continua sendo branch protection exigindo os dois
+# checks (ver README, seção CI/CD).
 on:
   pull_request:
     branches: [main]
@@ -108,7 +124,6 @@ jobs:
 
   e2e:
     name: E2E (Playwright)
-    needs: verify
     runs-on: ubuntu-latest
     services:
       postgres:

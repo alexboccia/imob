@@ -782,6 +782,10 @@ async function main() {
         // fechado" e "Ticket médio" terem número real na tela de
         // Analytics, e o que liga a campanha verao-2026 a dinheiro.
         closedValue: 850000,
+        // Fase 10 — comissão determinística: 5% de R$ 850.000. É o que dá
+        // número real a "Comissão registrada", "Comissão média" e
+        // "Comissão efetiva" na tela de Analytics.
+        commissionValue: 42500,
       },
     });
     await prisma.propertyInterestStageHistory.create({
@@ -808,7 +812,10 @@ async function main() {
         propertyId: IDS_E2E.imovelSemContatoOrgAnalytics,
         stage: "WON",
         closedAt: diasAtras(2),
+        // Ganho LEGADO: sem valor E sem comissão — prova na tela a
+        // distinção entre "R$ 0" e "não registrado" nos dois campos.
         closedValue: null,
+        commissionValue: null,
       },
     });
     await prisma.propertyInterestStageHistory.create({

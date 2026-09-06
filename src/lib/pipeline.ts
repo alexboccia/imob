@@ -24,6 +24,8 @@ export type ItemPipeline = {
   // Fase 9 — valor negociado do fechamento. null = não registrado
   // (ganho anterior a esta fase), nunca R$ 0.
   closedValue: number | null;
+  // Fase 10 — comissão do negócio; null = não registrada.
+  commissionValue: number | null;
   // Só usado como critério de DESEMPATE interno de ordenação (grupo "sem
   // visita" de ordenarColuna) — NUNCA exibido como "há X dias nesta
   // etapa". O schema atual não registra quando o stage mudou pela última
@@ -62,6 +64,7 @@ function selectItemPipeline(organizationId: string) {
     stage: true,
     closedAt: true,
     closedValue: true,
+    commissionValue: true,
     updatedAt: true,
     person: { select: { id: true, name: true, organizationId: true } },
     property: { select: { id: true, title: true, status: true, neighborhood: true, organizationId: true } },
@@ -99,6 +102,7 @@ type LinhaBrutaPipeline = {
   // Decimal do Prisma chega como objeto; decimalParaValor converte sem
   // transformar null em 0.
   closedValue: unknown;
+  commissionValue: unknown;
   updatedAt: Date;
   person: { id: string; name: string; organizationId: string };
   property: { id: string; title: string; status: PropertyStatus; neighborhood: string; organizationId: string };
@@ -194,6 +198,7 @@ export function paraItemPipeline(
     stage: linha.stage,
     closedAtISO: linha.closedAt ? linha.closedAt.toISOString() : null,
     closedValue: decimalParaValor(linha.closedValue),
+    commissionValue: decimalParaValor(linha.commissionValue),
     updatedAtISO: linha.updatedAt.toISOString(),
     person,
     property,
