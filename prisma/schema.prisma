@@ -1081,6 +1081,26 @@ model PropertyTypeOption {
 
 // ---------- Tenancy & RBAC ----------
 
+// Modos de visibilidade da carteira comercial (Fase 22).
+//
+// COLLABORATIVE — comportamento histórico: todo membro com o módulo CRM
+//   consulta a carteira da organização. É o padrão, e continua sendo o
+//   modo certo para uma imobiliária pequena que trabalha em conjunto.
+//
+// RESTRICTED — o membro operacional (BROKER/ASSISTANT) enxerga apenas a
+//   carteira comercial com que tem vínculo; a camada gerencial
+//   (PAPEIS_VISAO_EQUIPE: OWNER/ADMIN/MANAGER) mantém a visão da
+//   organização inteira. Ver src/lib/escopo-comercial.ts para o que
+//   "vínculo" significa em cada entidade — Person e PropertyInterest têm
+//   semânticas diferentes e NÃO usam o mesmo predicado.
+//
+// A política muda AUTORIZAÇÃO, nunca dado: trocar de modo não reescreve
+// responsibleMemberId, assignedMemberId nem nada.
+enum CommercialVisibility {
+  COLLABORATIVE
+  RESTRICTED
+}
+
 enum OrganizationRole {
   OWNER
   ADMIN
@@ -1216,6 +1236,23 @@ model Organization {
   // Analytics, exibição). Nenhum instante persistido depende deste campo:
   // mudar o fuso não reescreve scheduledAt/occurredAt/closedAt/paidAt.
   timezone     String?
+
+  // Fase 22 — POLÍTICA DE VISIBILIDADE COMERCIAL.
+  //
+  // Responde "quem pode ver qual parte da carteira?". Até aqui a
+  // resposta era implícita e única: qualquer membro com o módulo CRM
+  // enxergava a organização inteira. Isso nunca foi decisão registrada,
+  // era ausência de decisão.
+  //
+  // ENUM, não boolean: `restrictBrokerVisibility` envelheceria mal no
+  // dia em que surgir um terceiro modo (por equipe, por carteira, por
+  // região), e o domínio aqui é um MODO, não uma chave liga/desliga.
+  //
+  // NOT NULL com @default(COLLABORATIVE) — e isso não é backfill
+  // inventado: COLLABORATIVE é a descrição exata do comportamento que
+  // toda organização existente já tem hoje. Nenhum tenant perde acesso
+  // no deploy; quem quiser restringir escolhe em Configurações.
+  commercialVisibility CommercialVisibility @default(COLLABORATIVE)
 
   // Fase P.9: preço mensal CONTRATADO desta organização, quando diverge do
   // padrão do plano (plan.priceMonthlyCents) — null = usa o padrão do

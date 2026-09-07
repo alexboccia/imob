@@ -405,7 +405,7 @@ describe("timezone da organização", () => {
     const agora = new Date("2026-09-07T23:30:00.000Z");
     const [visao, contadores] = await Promise.all([
       buscarVisaoEquipe(cenario.organization.id, SP, { agora }),
-      contarAgenda(cenario.organization.id, SP, { agora }),
+      contarAgenda(cenario.organization.id, SP, {}, { agora }),
     ]);
     expect(visao.resumo.hoje).toBe(contadores.hoje);
     expect(visao.resumo.atrasadas).toBe(contadores.atrasadas);

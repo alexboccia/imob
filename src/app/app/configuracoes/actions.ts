@@ -107,6 +107,11 @@ const configuracaoSchema = z.object({
   timezone: z
     .string()
     .refine(fusoValido, { message: "Fuso horário inválido." }),
+  // Fase 22 — política de visibilidade comercial. Enum fechado: só os
+  // dois modos do domínio, nunca texto livre.
+  visibilidadeComercial: z.enum(["COLLABORATIVE", "RESTRICTED"], {
+    message: "Opção de visibilidade inválida.",
+  }),
 });
 
 function alturaLogo(valor: number | undefined) {
@@ -197,7 +202,13 @@ export async function salvarConfiguracaoContato(
       // mesmos instantes. Muda só como o calendário é interpretado.
       prisma.organization.update({
         where: { id: organizationId },
-        data: { timezone: campos.timezone },
+        data: {
+          timezone: campos.timezone,
+          // Fase 22 — muda AUTORIZAÇÃO, nunca dado: trocar de modo não
+          // reescreve responsibleMemberId, assignedMemberId nem nada.
+          // Negociação sem responsável continua sem responsável.
+          commercialVisibility: campos.visibilidadeComercial,
+        },
       }),
       prisma.organizationSettings.upsert({
         where: { organizationId },
@@ -235,6 +246,8 @@ export async function salvarConfiguracaoContato(
         themeId: campos.themeId,
         nomePublico: campos.nomePublico ?? null,
         timezone: campos.timezone,
+        // Configuração sensível: registrada sem nenhum PII — só o modo.
+        visibilidadeComercial: campos.visibilidadeComercial,
       },
     });
 
@@ -245,10 +258,15 @@ export async function salvarConfiguracaoContato(
     // Tag própria do fuso: sem isto, a Central/Agenda/Analytics
     // continuariam lendo o fuso antigo do cache até um deploy.
     updateTag(tagFuso(organizationId));
+    // A política de visibilidade NÃO tem tag: ela não é cacheada entre
+    // requisições de propósito (ver src/lib/visibilidade-comercial.ts).
+    // Um `updateTag` aqui sugeriria uma invalidação que não existe.
     // As telas que dependem do calendário precisam refletir na hora.
     revalidatePath("/app");
     revalidatePath("/app/agenda");
     revalidatePath("/app/analytics");
+    revalidatePath("/app/clientes");
+    revalidatePath("/app/pipeline");
     // Redundância deliberada: não consegui verificar ao vivo (limitação
     // de ferramental pra invocar Server Actions fora do navegador, mesma
     // limitação já documentada em fases anteriores desta sessão) que
@@ -392,10 +410,15 @@ export async function aplicarPaletaGerada(
     // Tag própria do fuso: sem isto, a Central/Agenda/Analytics
     // continuariam lendo o fuso antigo do cache até um deploy.
     updateTag(tagFuso(organizationId));
+    // A política de visibilidade NÃO tem tag: ela não é cacheada entre
+    // requisições de propósito (ver src/lib/visibilidade-comercial.ts).
+    // Um `updateTag` aqui sugeriria uma invalidação que não existe.
     // As telas que dependem do calendário precisam refletir na hora.
     revalidatePath("/app");
     revalidatePath("/app/agenda");
     revalidatePath("/app/analytics");
+    revalidatePath("/app/clientes");
+    revalidatePath("/app/pipeline");
     // Mesma rede de segurança documentada em salvarConfiguracaoContato
     // acima — não confiar só em updateTag() invalidar o site público.
     revalidatePath("/", "layout");

@@ -886,7 +886,7 @@ describe("Agenda", () => {
       assunto: "Enviar proposta",
     });
 
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", { agora: AGORA });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { agora: AGORA });
     expect(hoje).toHaveLength(2);
     expect(hoje.map((i) => i.type)).toEqual(["VISIT", "FOLLOW_UP"]);
     expect(hoje[1].subject).toBe("Enviar proposta");
@@ -900,7 +900,7 @@ describe("Agenda", () => {
     await followUpDireto(cenario, interesse, new Date("2026-09-10T15:00:00.000Z"));
     await followUpDireto(cenario, interesse, new Date("2026-09-01T15:00:00.000Z"));
 
-    const contadores = await contarAgenda(cenario.organization.id, "UTC", { agora: AGORA });
+    const contadores = await contarAgenda(cenario.organization.id, "UTC", {}, { agora: AGORA });
     expect(contadores.hoje).toBe(1);
     expect(contadores.proximas).toBe(1);
     expect(contadores.atrasadas).toBe(1);
@@ -914,8 +914,8 @@ describe("Agenda", () => {
     await followUpDireto(cenario, interesse, new Date("2026-09-10T15:00:00.000Z"));
 
     const [hoje, proximas, central] = await Promise.all([
-      buscarAgendaHoje(cenario.organization.id, "UTC", { agora: AGORA }),
-      buscarAgendaProximas(cenario.organization.id, "UTC", { agora: AGORA }),
+      buscarAgendaHoje(cenario.organization.id, "UTC", {}, { agora: AGORA }),
+      buscarAgendaProximas(cenario.organization.id, "UTC", {}, { agora: AGORA }),
       buscarCentralTrabalho(cenario.organization.id, cenario.membro.id, "UTC", { agora: AGORA }),
     ]);
     const ordenar = (v: string[]) => [...v].sort();

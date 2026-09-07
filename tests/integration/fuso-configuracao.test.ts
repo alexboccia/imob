@@ -64,6 +64,7 @@ function formulario(timezone: string): FormData {
   fd.set("themeId", "classic-blue");
   fd.set("footerAparencia", "AUTO");
   fd.set("timezone", timezone);
+  fd.set("visibilidadeComercial", "COLLABORATIVE");
   return fd;
 }
 

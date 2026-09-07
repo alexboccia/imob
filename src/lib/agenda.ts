@@ -279,6 +279,9 @@ export async function buscarAgendaHoje(
   // Fuso comercial da organização — obrigatório e sem padrão: todo
   // conceito de dia aqui é da organização, nunca do processo.
   fuso: string,
+  // Fase 22 — escopo comercial. `{}` no modo colaborativo e para a
+  // camada gerencial: a query fica idêntica à que sempre foi.
+  escopo: WhereAgenda,
   opcoes: { agora?: Date; filtros?: FiltrosAgenda } = {}
 ): Promise<ItemAgenda[]> {
   const agora = opcoes.agora ?? new Date();
@@ -288,6 +291,7 @@ export async function buscarAgendaHoje(
 
   return withOrganization(organizationId, async () => {
     const base: WhereAgenda = {
+      ...escopo,
       organizationId,
       status: "SCHEDULED",
       scheduledAt: { gte: hoje.inicio, lte: hoje.fim },
@@ -311,6 +315,9 @@ export async function buscarAgendaProximas(
   // Fuso comercial da organização — obrigatório e sem padrão: todo
   // conceito de dia aqui é da organização, nunca do processo.
   fuso: string,
+  // Fase 22 — escopo comercial. `{}` no modo colaborativo e para a
+  // camada gerencial: a query fica idêntica à que sempre foi.
+  escopo: WhereAgenda,
   opcoes: { agora?: Date; limite?: number; filtros?: FiltrosAgenda } = {}
 ): Promise<ItemAgenda[]> {
   const agora = opcoes.agora ?? new Date();
@@ -321,6 +328,7 @@ export async function buscarAgendaProximas(
 
   return withOrganization(organizationId, async () => {
     const base: WhereAgenda = {
+      ...escopo,
       organizationId,
       status: "SCHEDULED",
       scheduledAt: { gt: hoje.fim },
@@ -345,6 +353,9 @@ export async function buscarAgendaAnteriores(
   // Fuso comercial da organização — obrigatório e sem padrão: todo
   // conceito de dia aqui é da organização, nunca do processo.
   fuso: string,
+  // Fase 22 — escopo comercial. `{}` no modo colaborativo e para a
+  // camada gerencial: a query fica idêntica à que sempre foi.
+  escopo: WhereAgenda,
   opcoes: { agora?: Date; skip?: number; take?: number; filtros?: FiltrosAgenda } = {}
 ): Promise<ItemAgenda[]> {
   const agora = opcoes.agora ?? new Date();
@@ -354,6 +365,7 @@ export async function buscarAgendaAnteriores(
 
   return withOrganization(organizationId, async () => {
     const base: WhereAgenda = {
+      ...escopo,
       organizationId,
       ...condicaoStatusAnteriores(filtros?.status ?? "TODAS", fuso, agora),
     };
@@ -380,6 +392,9 @@ export async function contarAgenda(
   // Fuso comercial da organização — obrigatório e sem padrão: todo
   // conceito de dia aqui é da organização, nunca do processo.
   fuso: string,
+  // Fase 22 — escopo comercial. `{}` no modo colaborativo e para a
+  // camada gerencial: a query fica idêntica à que sempre foi.
+  escopo: WhereAgenda,
   opcoes: { agora?: Date } = {}
 ): Promise<ContadoresAgenda> {
   const agora = opcoes.agora ?? new Date();
@@ -388,22 +403,25 @@ export async function contarAgenda(
     const [hoje, proximas, anteriores, atrasadas] = await Promise.all([
       prisma.scheduledActivity.count({
         where: {
+          ...escopo,
           organizationId,
-              status: "SCHEDULED",
+          status: "SCHEDULED",
           scheduledAt: { gte: dia.inicio, lte: dia.fim },
         },
       }),
       prisma.scheduledActivity.count({
         where: {
+          ...escopo,
           organizationId,
-              status: "SCHEDULED",
+          status: "SCHEDULED",
           scheduledAt: { gt: dia.fim },
         },
       }),
       prisma.scheduledActivity.count({
         where: {
+          ...escopo,
           organizationId,
-              OR: [
+          OR: [
             { status: "COMPLETED" },
             { status: "CANCELLED" },
             { status: "SCHEDULED", scheduledAt: { lt: dia.inicio } },
@@ -412,8 +430,9 @@ export async function contarAgenda(
       }),
       prisma.scheduledActivity.count({
         where: {
+          ...escopo,
           organizationId,
-              status: "SCHEDULED",
+          status: "SCHEDULED",
           scheduledAt: { lt: dia.inicio },
         },
       }),
@@ -443,6 +462,9 @@ export async function contarResumoDiario(
   // Fuso comercial da organização — obrigatório e sem padrão: todo
   // conceito de dia aqui é da organização, nunca do processo.
   fuso: string,
+  // Fase 22 — escopo comercial. `{}` no modo colaborativo e para a
+  // camada gerencial: a query fica idêntica à que sempre foi.
+  escopo: WhereAgenda,
   opcoes: { agora?: Date } = {}
 ): Promise<ResumoDiario> {
   const agora = opcoes.agora ?? new Date();
@@ -450,13 +472,13 @@ export async function contarResumoDiario(
   return withOrganization(organizationId, async () => {
     const [agendadas, concluidas, canceladas] = await Promise.all([
       prisma.scheduledActivity.count({
-        where: { organizationId, status: "SCHEDULED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
+        where: { ...escopo, organizationId, status: "SCHEDULED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
       }),
       prisma.scheduledActivity.count({
-        where: { organizationId, status: "COMPLETED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
+        where: { ...escopo, organizationId, status: "COMPLETED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
       }),
       prisma.scheduledActivity.count({
-        where: { organizationId, status: "CANCELLED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
+        where: { ...escopo, organizationId, status: "CANCELLED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
       }),
     ]);
     return { agendadas, concluidas, canceladas };

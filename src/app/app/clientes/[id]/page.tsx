@@ -6,6 +6,8 @@ import {
 } from "@/app/app/clientes/actions";
 import { requireOrganizationId } from "@/lib/tenant";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
+import { escopoComercialDaSessao } from "@/lib/escopo-comercial-sessao";
+import { wherePessoa, whereNegociacao } from "@/lib/escopo-comercial";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
@@ -60,6 +62,9 @@ export default async function DetalheClientePage({
   // carregamento, repassada a todos os itens da ficha.
   const fuso = await buscarFusoOrganizacao(organizationId);
   const session = await auth();
+  const escopo = await escopoComercialDaSessao(organizationId);
+  const escopoPessoa = wherePessoa(escopo);
+  const escopoInteresse = whereNegociacao(escopo);
 
   if (!(await hasModule(organizationId, "crm"))) {
     return (
@@ -79,8 +84,16 @@ export default async function DetalheClientePage({
   ] = await Promise.all([
     withOrganization(organizationId, () =>
     Promise.all([
-      prisma.person.findUnique({
-        where: { id, organizationId },
+      // Fase 22 — o ESCOPO entra aqui. `findFirst` em vez de `findUnique`
+      // porque o predicado de pessoa é um OR e findUnique não o aceita;
+      // `id` continua sendo único, então o resultado é o mesmo registro
+      // ou null.
+      //
+      // Fora do escopo -> null -> notFound(). É 404, não 403: o padrão
+      // que a ficha já usava para outro tenant, e que não revela se o
+      // cliente existe.
+      prisma.person.findFirst({
+        where: { ...escopoPessoa, id, organizationId },
         include: {
           interactions: {
             orderBy: { occurredAt: "desc" },
@@ -105,8 +118,20 @@ export default async function DetalheClientePage({
           // invariante de que todo PropertyInterest.organizationId já
           // confere com o do Person referenciado, mas essa é exatamente a
           // defesa que não deve depender só de invariante de aplicação.
+          // Fase 22 — PII COMPARTILHADO, NEGOCIAÇÕES SEPARADAS.
+          //
+          // Se dois corretores têm negociações com o mesmo cliente, os
+          // dois veem a pessoa (o telefone dela não pode existir em duas
+          // versões — é entidade da organização). Mas cada um vê apenas
+          // as SUAS negociações: é nelas que está o trabalho comercial
+          // que a política restrita separa.
+          //
+          // A timeline de interações NÃO é escopada de propósito: uma
+          // Interaction pertence à pessoa e não a uma negociação (não há
+          // propertyInterestId nela), e fragmentar o histórico de contato
+          // faria dois corretores ligarem para o mesmo cliente sem saber.
           propertyInterests: {
-            where: { organizationId },
+            where: { ...escopoInteresse, organizationId },
             orderBy: { updatedAt: "desc" },
             include: {
               property: { select: { id: true, title: true, price: true, rentPrice: true, status: true } },

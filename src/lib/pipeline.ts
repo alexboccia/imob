@@ -432,6 +432,9 @@ export const LIMITE_PIPELINE_ABERTO = 300;
 // selectItemPipeline) — nunca uma query por card.
 export async function buscarPipelineAberto(
   organizationId: string,
+  // Fase 22 — escopo comercial. `{}` no modo colaborativo e para a
+  // camada gerencial: a query fica idêntica à que sempre foi.
+  escopo: Prisma.PropertyInterestWhereInput,
   // Fuso comercial da organização (Fase 18) — usado só pela ordenação,
   // que depende de "o dia já passou?". Resolvido uma vez pela página.
   fuso: string,
@@ -443,6 +446,7 @@ export async function buscarPipelineAberto(
 
   return withOrganization(organizationId, async () => {
     const base: Prisma.PropertyInterestWhereInput = {
+      ...escopo,
       organizationId,
       stage: { in: [...COLUNAS_ABERTAS] },
     };
@@ -469,6 +473,7 @@ export async function buscarPipelineAberto(
 // só cresce com o tempo, ao contrário do board de "em andamento".
 export async function buscarPipelineEncerrado(
   organizationId: string,
+  escopo: Prisma.PropertyInterestWhereInput,
   opcoes: {
     busca?: string;
     resultado?: ResultadoPipeline;
@@ -487,6 +492,7 @@ export async function buscarPipelineEncerrado(
     const stagesEncerrados: PropertyInterestStage[] =
       resultado === "GANHO" ? ["WON"] : resultado === "PERDIDO" ? ["REJECTED"] : ["WON", "REJECTED"];
     const base: Prisma.PropertyInterestWhereInput = {
+      ...escopo,
       organizationId,
       stage: { in: stagesEncerrados },
     };
@@ -620,6 +626,7 @@ export type MetricasPipeline = {
 // qualquer findMany do projeto.
 export async function buscarMetricasPipeline(
   organizationId: string,
+  escopo: Prisma.PropertyInterestWhereInput,
   opcoes: { periodo?: PeriodoPipeline; agora?: Date } = {}
 ): Promise<MetricasPipeline> {
   const periodo = opcoes.periodo ?? "30d";
@@ -630,12 +637,13 @@ export async function buscarMetricasPipeline(
     const [porStageBruto, resultadosBruto] = await Promise.all([
       prisma.propertyInterest.groupBy({
         by: ["stage"],
-        where: { organizationId, stage: { in: [...COLUNAS_ABERTAS] } },
+        where: { ...escopo, organizationId, stage: { in: [...COLUNAS_ABERTAS] } },
         _count: { _all: true },
       }),
       prisma.propertyInterest.groupBy({
         by: ["stage"],
         where: {
+          ...escopo,
           organizationId,
           stage: { in: ["WON", "REJECTED"] },
           // closedAt: {gte,lte} exclui closedAt=null automaticamente por
@@ -949,17 +957,27 @@ export type AnalyticsHistoricoPipeline = {
 // PropertyInterest.
 export async function buscarAnalyticsHistoricoPipeline(
   organizationId: string,
+  escopo: Prisma.PropertyInterestWhereInput,
   opcoes: { periodo?: PeriodoPipeline; agora?: Date } = {}
 ): Promise<AnalyticsHistoricoPipeline> {
   const periodo = opcoes.periodo ?? "30d";
   const agora = opcoes.agora ?? new Date();
   const intervalo = resolverIntervaloPeriodo(periodo, agora);
+  // `{}` no modo colaborativo -> nenhuma condição de relação é
+  // adicionada, e as três queries ficam idênticas às originais.
+  const escopoNaRelacao =
+    Object.keys(escopo).length > 0 ? { ...escopo, organizationId } : null;
 
   return withOrganization(organizationId, async () => {
     const [entradasBruto, transicoesBruto] = await Promise.all([
       prisma.propertyInterestStageHistory.groupBy({
         by: ["newStage"],
         where: {
+          // O histórico pertence à NEGOCIAÇÃO — o escopo atravessa a
+          // relação, com organizationId repetido dentro dela pelo mesmo
+          // motivo de condicaoBusca: fechar o canal de vazamento
+          // indireto de uma linha anômala cross-tenant.
+          ...(escopoNaRelacao ? { propertyInterest: { is: escopoNaRelacao } } : {}),
           organizationId,
           newStage: { in: [...COLUNAS_ABERTAS] },
           ...(intervalo ? { changedAt: { gte: intervalo.inicio, lte: intervalo.fim } } : {}),
@@ -969,6 +987,7 @@ export async function buscarAnalyticsHistoricoPipeline(
       prisma.propertyInterestStageHistory.groupBy({
         by: ["previousStage", "newStage"],
         where: {
+          ...(escopoNaRelacao ? { propertyInterest: { is: escopoNaRelacao } } : {}),
           organizationId,
           ...(intervalo ? { changedAt: { gte: intervalo.inicio, lte: intervalo.fim } } : {}),
         },
@@ -977,7 +996,7 @@ export async function buscarAnalyticsHistoricoPipeline(
     ]);
 
     const registros = await prisma.propertyInterest.findMany({
-      where: { organizationId },
+      where: { ...escopo, organizationId },
       orderBy: { updatedAt: "desc" },
       take: LIMITE_ANALYTICS_HISTORICO,
       select: { id: true, stage: true, closedAt: true },

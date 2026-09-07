@@ -56,10 +56,21 @@ export function construirWhereClientes(params: {
   estagioFiltro?: string;
   origemFiltro?: string;
   papelFiltro?: string;
+  // Fase 22 — fragmento de escopo comercial (wherePessoa). `{}` no modo
+  // colaborativo e para a camada gerencial, e nesse caso o `where`
+  // resultante é idêntico ao que sempre foi.
+  //
+  // Entra via `AND` explícito, nunca por spread: o fragmento tem o seu
+  // próprio `OR` (pessoa com negociação minha OU registro que criei sem
+  // negociação) e este objeto já usa `OR` para a busca — fundir os dois
+  // no mesmo nível faria um sobrescrever o outro e ABRIR o filtro.
+  escopo?: Prisma.PersonWhereInput;
 }): Prisma.PersonWhereInput {
-  const { organizationId, busca, estagioFiltro, origemFiltro, papelFiltro } = params;
+  const { organizationId, busca, estagioFiltro, origemFiltro, papelFiltro, escopo } = params;
+  const temEscopo = escopo && Object.keys(escopo).length > 0;
 
   return {
+    ...(temEscopo ? { AND: [escopo] } : {}),
     organizationId,
     ...(estagioFiltro
       ? { pipelineStage: estagioFiltro as Prisma.PersonWhereInput["pipelineStage"] }

@@ -10,7 +10,16 @@ import {
 // de integração desta sessão (next-auth → next/server não resolve sob
 // Vitest puro).
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
+vi.mock("next/cache", () => ({
+  // Fase 22 — as leituras de política/fuso passam por unstable_cache, que
+  // não existe fora do runtime do Next: aqui o cache passa direto.
+  unstable_cache:
+    <T extends (...args: never[]) => unknown>(fn: T) =>
+    (...args: Parameters<T>) =>
+      fn(...args),
+  revalidatePath: vi.fn(),
+  updateTag: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
 import { auth } from "@/lib/auth";

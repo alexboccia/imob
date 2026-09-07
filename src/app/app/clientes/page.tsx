@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { requireOrganizationId } from "@/lib/tenant";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
+import { escopoComercialDaSessao } from "@/lib/escopo-comercial-sessao";
+import { wherePessoa, whereAtividade } from "@/lib/escopo-comercial";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
 import {
@@ -54,6 +56,10 @@ export default async function ClientesPage({
   // Fuso comercial da organização (Fase 18) — uma resolução por
   // carregamento, repassada à tabela/drawer.
   const fuso = await buscarFusoOrganizacao(organizationId);
+  const escopo = await escopoComercialDaSessao(organizationId);
+  // Fragmento reaproveitado pela listagem e por todos os KPIs — um só
+  // predicado, para que lista e contagem nunca discordem.
+  const escopoPessoa = wherePessoa(escopo);
 
   if (!(await hasModule(organizationId, "crm"))) {
     return (
@@ -85,6 +91,9 @@ export default async function ClientesPage({
     estagioFiltro,
     origemFiltro,
     papelFiltro,
+    // Fase 22 — o escopo entra na QUERY. PII de cliente fora do escopo
+    // não sai do banco; nada é filtrado em memória depois.
+    escopo: escopoPessoa,
   });
 
   const agora = new Date();
@@ -141,16 +150,32 @@ export default async function ClientesPage({
           },
         }),
         prisma.person.count({ where }),
-        prisma.person.count({ where: { organizationId } }),
-        prisma.person.count({ where: { organizationId, pipelineStage: "NEW_LEAD" } }),
+        // Fase 22 — os KPIs também respeitam o escopo. Sem isso um
+        // corretor em modo restrito veria "500 clientes" no topo de uma
+        // lista com 12: contagem agregada é vazamento de existência,
+        // mesmo sem nome nem telefone junto.
+        prisma.person.count({ where: { ...escopoPessoa, organizationId } }),
         prisma.person.count({
-          where: { organizationId, pipelineStage: "NEW_LEAD", createdAt: { gte: seteDiasAtras } },
+          where: { ...escopoPessoa, organizationId, pipelineStage: "NEW_LEAD" },
         }),
         prisma.person.count({
-          where: { organizationId, pipelineStage: { in: [...ESTAGIOS_EM_ATENDIMENTO] } },
+          where: {
+            ...escopoPessoa,
+            organizationId,
+            pipelineStage: "NEW_LEAD",
+            createdAt: { gte: seteDiasAtras },
+          },
+        }),
+        prisma.person.count({
+          where: {
+            ...escopoPessoa,
+            organizationId,
+            pipelineStage: { in: [...ESTAGIOS_EM_ATENDIMENTO] },
+          },
         }),
         prisma.scheduledActivity.count({
           where: {
+            ...whereAtividade(escopo),
             organizationId,
             status: "SCHEDULED",
             scheduledAt: { gte: agora, lte: seteDiasNaFrente },

@@ -7,6 +7,8 @@ import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
+import { escopoComercialDaSessao } from "@/lib/escopo-comercial-sessao";
+import { whereNegociacaoAlvo, whereAtividadeAlvo } from "@/lib/escopo-comercial";
 import { logActivity } from "@/lib/activity-log";
 import {
   erroAcessoNegado,
@@ -81,6 +83,7 @@ export async function criarAgendamentoVisita(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   const fuso = await buscarFusoOrganizacao(organizationId);
 
@@ -117,8 +120,8 @@ export async function criarAgendamentoVisita(
     // organizationId da própria linha de PropertyInterest nem nas FKs
     // simples da H.1 (auditoria H.1, decisão #18: não existe FK composta
     // que garanta essa coerência no banco).
-    const interesse = await prisma.propertyInterest.findUnique({
-      where: { id: propertyInterestId, organizationId },
+    const interesse = await prisma.propertyInterest.findFirst({
+      where: whereNegociacaoAlvo(escopo, propertyInterestId, organizationId),
       select: {
         id: true,
         stage: true,
@@ -257,6 +260,7 @@ export async function remarcarAgendamentoVisita(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   const parsed = remarcarAgendamentoVisitaSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return erroValidacao(parsed.error);
@@ -280,8 +284,8 @@ export async function remarcarAgendamentoVisita(
   }
 
   return withOrganization(organizationId, async () => {
-    const atividade = await prisma.scheduledActivity.findUnique({
-      where: { id: scheduledActivityId, organizationId },
+    const atividade = await prisma.scheduledActivity.findFirst({
+      where: whereAtividadeAlvo(escopo, scheduledActivityId, organizationId),
       select: {
         id: true,
         type: true,
@@ -357,10 +361,11 @@ export async function cancelarAgendamentoVisita(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   return withOrganization(organizationId, async () => {
-    const atividade = await prisma.scheduledActivity.findUnique({
-      where: { id: scheduledActivityId, organizationId },
+    const atividade = await prisma.scheduledActivity.findFirst({
+      where: whereAtividadeAlvo(escopo, scheduledActivityId, organizationId),
       select: { id: true, type: true, status: true, personId: true, propertyId: true },
     });
     if (!atividade) return erroAcessoNegado("Agendamento não encontrado.");
@@ -419,10 +424,11 @@ export async function concluirAgendamentoVisita(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   return withOrganization(organizationId, async () => {
-    const atividade = await prisma.scheduledActivity.findUnique({
-      where: { id: scheduledActivityId, organizationId },
+    const atividade = await prisma.scheduledActivity.findFirst({
+      where: whereAtividadeAlvo(escopo, scheduledActivityId, organizationId),
       select: {
         id: true,
         type: true,
@@ -647,6 +653,7 @@ export async function atualizarObservacaoAgendamentoVisita(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   const parsed = atualizarObservacaoAgendamentoVisitaSchema.safeParse(
     Object.fromEntries(formData.entries())
@@ -658,8 +665,8 @@ export async function atualizarObservacaoAgendamentoVisita(
   const notesNormalizado = parsed.data.notes || null;
 
   return withOrganization(organizationId, async () => {
-    const atividade = await prisma.scheduledActivity.findUnique({
-      where: { id: scheduledActivityId, organizationId },
+    const atividade = await prisma.scheduledActivity.findFirst({
+      where: whereAtividadeAlvo(escopo, scheduledActivityId, organizationId),
       select: { id: true, type: true, status: true, notes: true, personId: true, propertyId: true },
     });
     if (!atividade) return erroAcessoNegado("Agendamento não encontrado.");
@@ -753,6 +760,7 @@ export async function criarFollowUp(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   const fuso = await buscarFusoOrganizacao(organizationId);
 
@@ -782,8 +790,8 @@ export async function criarFollowUp(
     // Mesmo padrão anti-IDOR de criarAgendamentoVisita: só o id da
     // negociação vem do cliente; person, property e organizationId são
     // derivados do banco.
-    const interesse = await prisma.propertyInterest.findUnique({
-      where: { id: propertyInterestId, organizationId },
+    const interesse = await prisma.propertyInterest.findFirst({
+      where: whereNegociacaoAlvo(escopo, propertyInterestId, organizationId),
       select: {
         id: true,
         stage: true,
@@ -860,6 +868,7 @@ export async function atualizarFollowUp(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   const fuso = await buscarFusoOrganizacao(organizationId);
 
@@ -877,8 +886,8 @@ export async function atualizarFollowUp(
   }
 
   return withOrganization(organizationId, async () => {
-    const atividade = await prisma.scheduledActivity.findUnique({
-      where: { id: scheduledActivityId, organizationId },
+    const atividade = await prisma.scheduledActivity.findFirst({
+      where: whereAtividadeAlvo(escopo, scheduledActivityId, organizationId),
       select: { id: true, type: true, status: true, personId: true, propertyId: true, scheduledAt: true },
     });
     if (!atividade || !ehFollowUp(atividade)) {
@@ -936,10 +945,11 @@ export async function concluirFollowUp(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   return withOrganization(organizationId, async () => {
-    const atividade = await prisma.scheduledActivity.findUnique({
-      where: { id: scheduledActivityId, organizationId },
+    const atividade = await prisma.scheduledActivity.findFirst({
+      where: whereAtividadeAlvo(escopo, scheduledActivityId, organizationId),
       select: { id: true, type: true, status: true, personId: true, propertyId: true },
     });
     if (!atividade || !ehFollowUp(atividade)) {
@@ -990,10 +1000,11 @@ export async function cancelarFollowUp(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   return withOrganization(organizationId, async () => {
-    const atividade = await prisma.scheduledActivity.findUnique({
-      where: { id: scheduledActivityId, organizationId },
+    const atividade = await prisma.scheduledActivity.findFirst({
+      where: whereAtividadeAlvo(escopo, scheduledActivityId, organizationId),
       select: { id: true, type: true, status: true, personId: true, propertyId: true },
     });
     if (!atividade || !ehFollowUp(atividade)) {

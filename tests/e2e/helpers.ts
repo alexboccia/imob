@@ -63,6 +63,25 @@ export const ORG_FUSO = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Fase 22 — Organização G, a única do seed com política RESTRITA. Ana e
+// Bruno são BROKER com carteiras separadas, e há um cliente
+// compartilhado entre os dois.
+export const ORG_RESTRITA = {
+  slug: "e2e-org-restrita",
+  email: "owner-restrita@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+export const ORG_RESTRITA_ANA = {
+  slug: "e2e-org-restrita",
+  email: "ana-restrita@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+export const ORG_RESTRITA_BRUNO = {
+  slug: "e2e-org-restrita",
+  email: "bruno-restrita@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const IDS_E2E = {
   imovelParaEditarOrgA: "e2e-imovel-editar-a",
   membroOwnerOrgB: "e2e-membro-owner-b",
@@ -98,6 +117,16 @@ export const IDS_E2E = {
 // runtime ESM do Next — mesmo motivo de IDS_E2E acima já ser duplicado
 // em vez de importado).
 export const HOSTNAME_E2E_ORG_B = "b.e2e-dominio-teste.test";
+
+// Fase 22 — troca de usuário DENTRO do mesmo teste. `login` sozinho não
+// serve: com sessão ativa, /app/login redireciona para /app e o campo de
+// e-mail nunca aparece. Limpar os cookies do contexto é o que torna a
+// troca possível — e vários cenários de visibilidade precisam comparar
+// dois corretores na mesma execução.
+export async function entrarComo(page: Page, credenciais: { email: string; senha: string }) {
+  await page.context().clearCookies();
+  await login(page, credenciais);
+}
 
 export async function login(page: Page, credenciais: { email: string; senha: string }) {
   await page.goto("/app/login");

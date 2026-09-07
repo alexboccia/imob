@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireOrganizationId } from "@/lib/tenant";
 import { hasModule } from "@/lib/entitlements";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
+import { escopoComercialDaSessao } from "@/lib/escopo-comercial-sessao";
+import { whereAtividade } from "@/lib/escopo-comercial";
 import { interpretarPaginacao } from "@/lib/pagination";
 import {
   buscarAgendaHoje,
@@ -113,28 +115,31 @@ export default async function AgendaPage({
   // ... e um único FUSO (Fase 18), resolvido UMA vez por carregamento e
   // repassado a queries e componentes. Nunca uma consulta por item.
   const fuso = await buscarFusoOrganizacao(organizationId);
+  // Fase 22 — universo autorizado. Entra nas listagens E nos contadores:
+  // um contador não escopado vazaria o volume de trabalho alheio.
+  const escopoAtividade = whereAtividade(await escopoComercialDaSessao(organizationId));
 
   const filtros = interpretarFiltrosAgenda(params);
   const temFiltrosAtivos = Boolean(filtros.busca || filtros.de || filtros.ate || filtros.status !== "TODAS");
 
-  const contadores = await contarAgenda(organizationId, fuso, { agora });
+  const contadores = await contarAgenda(organizationId, fuso, escopoAtividade, { agora });
   // Resumo diário (H.5) — antes do redesenho, só era calculado na aba
   // "hoje" (o único lugar que o exibia). Agora os KPIs ficam visíveis em
   // qualquer aba (mesmo padrão de Clientes/Pipeline), então esta mesma
   // query barata (3 counts pelo índice já existente) passa a rodar
   // sempre — nenhuma query nova, só deixou de ser condicional.
-  const resumoDiario = await contarResumoDiario(organizationId, fuso, { agora });
+  const resumoDiario = await contarResumoDiario(organizationId, fuso, escopoAtividade, { agora });
 
   const { page, take } = interpretarPaginacao(params, { pageSizePadrao: 20, pageSizeMaximo: 50 });
   const skip = (page - 1) * take;
 
   let itens: ItemAgenda[];
   if (aba === "hoje") {
-    itens = await buscarAgendaHoje(organizationId, fuso, { agora, filtros });
+    itens = await buscarAgendaHoje(organizationId, fuso, escopoAtividade, { agora, filtros });
   } else if (aba === "proximas") {
-    itens = await buscarAgendaProximas(organizationId, fuso, { agora, filtros });
+    itens = await buscarAgendaProximas(organizationId, fuso, escopoAtividade, { agora, filtros });
   } else {
-    itens = await buscarAgendaAnteriores(organizationId, fuso, { agora, skip, take, filtros });
+    itens = await buscarAgendaAnteriores(organizationId, fuso, escopoAtividade, { agora, skip, take, filtros });
   }
 
   // Próxima visita e agrupamento por período (H.5) — calculados em

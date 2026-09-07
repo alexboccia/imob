@@ -112,7 +112,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     const ctxB = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: hojeAsHoras(2) });
     cenarioB = ctxB.cenario;
 
-    const hojeA = await buscarAgendaHoje(ctxA.cenario.organization.id, "UTC");
+    const hojeA = await buscarAgendaHoje(ctxA.cenario.organization.id, "UTC", {});
 
     expect(hojeA.map((i) => i.id)).toContain(ctxA.atividade.id);
     expect(hojeA.map((i) => i.id)).not.toContain(ctxB.atividade.id);
@@ -160,9 +160,9 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const [hoje, proximas, anteriores] = await Promise.all([
-      buscarAgendaHoje(ctxA.cenario.organization.id, "UTC"),
-      buscarAgendaProximas(ctxA.cenario.organization.id, "UTC"),
-      buscarAgendaAnteriores(ctxA.cenario.organization.id, "UTC"),
+      buscarAgendaHoje(ctxA.cenario.organization.id, "UTC", {}),
+      buscarAgendaProximas(ctxA.cenario.organization.id, "UTC", {}),
+      buscarAgendaAnteriores(ctxA.cenario.organization.id, "UTC", {}),
     ]);
 
     expect(hoje.every((i) => i.id === ctxA.atividade.id)).toBe(true);
@@ -187,7 +187,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       },
     });
 
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC");
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {});
     const item = hoje.find((i) => i.id === anomala.id);
 
     expect(item).toBeDefined();
@@ -222,7 +222,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       },
     });
 
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC");
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {});
     const item = hoje.find((i) => i.id === anomala.id);
 
     expect(item).toBeDefined();
@@ -254,7 +254,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       },
     });
 
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC");
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {});
     const item = hoje.find((i) => i.id === anomala.id);
 
     // O item aparece normalmente (é legitimamente de A) — propertyInterestId
@@ -282,7 +282,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       },
     });
 
-    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC");
+    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {});
 
     expect(hoje.map((i) => i.id)).toEqual([ctx.atividade.id]);
   });
@@ -300,7 +300,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       },
     });
 
-    const proximas = await buscarAgendaProximas(ctx.cenario.organization.id, "UTC");
+    const proximas = await buscarAgendaProximas(ctx.cenario.organization.id, "UTC", {});
 
     expect(proximas.map((i) => i.id)).toEqual([futura.id]);
   });
@@ -309,7 +309,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     const ctx = await cenarioComVisita({ status: "COMPLETED", scheduledAt: passado(2) });
     cenario = ctx.cenario;
 
-    const anteriores = await buscarAgendaAnteriores(ctx.cenario.organization.id, "UTC");
+    const anteriores = await buscarAgendaAnteriores(ctx.cenario.organization.id, "UTC", {});
 
     expect(anteriores.map((i) => i.id)).toContain(ctx.atividade.id);
   });
@@ -318,7 +318,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     const ctx = await cenarioComVisita({ status: "CANCELLED", scheduledAt: futuro(2) });
     cenario = ctx.cenario;
 
-    const anteriores = await buscarAgendaAnteriores(ctx.cenario.organization.id, "UTC");
+    const anteriores = await buscarAgendaAnteriores(ctx.cenario.organization.id, "UTC", {});
 
     expect(anteriores.map((i) => i.id)).toContain(ctx.atividade.id);
   });
@@ -328,9 +328,9 @@ describe("Agenda do corretor — Fase H.3", () => {
     cenario = ctx.cenario;
 
     const [hoje, proximas, anteriores] = await Promise.all([
-      buscarAgendaHoje(ctx.cenario.organization.id, "UTC"),
-      buscarAgendaProximas(ctx.cenario.organization.id, "UTC"),
-      buscarAgendaAnteriores(ctx.cenario.organization.id, "UTC"),
+      buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {}),
+      buscarAgendaProximas(ctx.cenario.organization.id, "UTC", {}),
+      buscarAgendaAnteriores(ctx.cenario.organization.id, "UTC", {}),
     ]);
 
     expect(hoje.map((i) => i.id)).not.toContain(ctx.atividade.id);
@@ -358,7 +358,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: hojeAsHoras(1) },
     });
 
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC");
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {});
 
     expect(hoje.map((i) => i.id)).toEqual([cedo.id, tarde.id]);
   });
@@ -374,7 +374,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: futuro(3) },
     });
 
-    const proximas = await buscarAgendaProximas(cenario.organization.id, "UTC");
+    const proximas = await buscarAgendaProximas(cenario.organization.id, "UTC", {});
 
     expect(proximas.map((i) => i.id)).toEqual([maisPerto.id, maisLonge.id]);
   });
@@ -390,7 +390,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(2), completedAt: new Date() },
     });
 
-    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC");
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", {});
 
     expect(anteriores.map((i) => i.id)).toEqual([maisRecente.id, maisAntiga.id]);
   });
@@ -417,13 +417,13 @@ describe("Agenda do corretor — Fase H.3", () => {
       },
     });
 
-    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC");
+    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {});
     expect(hoje.map((i) => i.type).sort()).toEqual(["FOLLOW_UP", "VISIT"]);
     // O assunto acompanha o follow-up e é null na visita.
     expect(hoje.find((i) => i.type === "FOLLOW_UP")!.subject).toBe("Enviar proposta");
     expect(hoje.find((i) => i.type === "VISIT")!.subject).toBeNull();
 
-    const contadores = await contarAgenda(ctx.cenario.organization.id, "UTC");
+    const contadores = await contarAgenda(ctx.cenario.organization.id, "UTC", {});
     expect(contadores.hoje).toBe(2);
   });
 
@@ -446,9 +446,9 @@ describe("Agenda do corretor — Fase H.3", () => {
       where: { id: ctx.atividade.id, organizationId: ctx.cenario.organization.id },
     });
 
-    await buscarAgendaHoje(ctx.cenario.organization.id, "UTC");
-    await buscarAgendaProximas(ctx.cenario.organization.id, "UTC");
-    await buscarAgendaAnteriores(ctx.cenario.organization.id, "UTC");
+    await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {});
+    await buscarAgendaProximas(ctx.cenario.organization.id, "UTC", {});
+    await buscarAgendaAnteriores(ctx.cenario.organization.id, "UTC", {});
 
     const depois = {
       scheduledActivity: await prisma.scheduledActivity.count({ where }),
@@ -485,7 +485,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ q: "alvarenga" });
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", { filtros });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(hoje.map((i) => i.id)).toEqual([atividade.id]);
   });
@@ -505,7 +505,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ q: "duplex" });
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", { filtros });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(hoje.map((i) => i.id)).toEqual([atividade.id]);
   });
@@ -515,7 +515,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     cenario = ctx.cenario;
 
     const filtros = interpretarFiltrosAgenda({ q: "nome-que-nao-existe-em-lugar-nenhum" });
-    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", { filtros });
+    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {}, { filtros });
 
     expect(hoje).toEqual([]);
   });
@@ -534,7 +534,7 @@ describe("Agenda do corretor — Fase H.3", () => {
 
     const de = new Date(dentro.scheduledAt.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const filtros = interpretarFiltrosAgenda({ de });
-    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", { filtros });
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(anteriores.map((i) => i.id)).toContain(dentro.id);
     expect(anteriores.map((i) => i.id)).not.toContain(foraAntes.id);
@@ -553,7 +553,7 @@ describe("Agenda do corretor — Fase H.3", () => {
 
     const ate = new Date(dentro.scheduledAt.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const filtros = interpretarFiltrosAgenda({ ate });
-    const proximas = await buscarAgendaProximas(cenario.organization.id, "UTC", { filtros });
+    const proximas = await buscarAgendaProximas(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(proximas.map((i) => i.id)).toContain(dentro.id);
     expect(proximas.map((i) => i.id)).not.toContain(foraDepois.id);
@@ -576,7 +576,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     const de = new Date(dentro.scheduledAt.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const ate = new Date(dentro.scheduledAt.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const filtros = interpretarFiltrosAgenda({ de, ate });
-    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", { filtros });
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(anteriores.map((i) => i.id)).toEqual([dentro.id]);
     expect(anteriores.map((i) => i.id)).not.toContain(foraAntes.id);
@@ -598,7 +598,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ status: "CONCLUIDAS" });
-    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", { filtros });
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(anteriores.map((i) => i.id)).toEqual([concluida.id]);
     expect(anteriores.map((i) => i.id)).not.toContain(cancelada.id);
@@ -617,7 +617,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ status: "CANCELADAS" });
-    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", { filtros });
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(anteriores.map((i) => i.id)).toEqual([cancelada.id]);
     expect(anteriores.map((i) => i.id)).not.toContain(concluida.id);
@@ -635,7 +635,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ status: "ATRASADAS" });
-    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", { filtros });
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(anteriores.map((i) => i.id)).toEqual([atrasada.id]);
     expect(anteriores.map((i) => i.id)).not.toContain(concluida.id);
@@ -649,7 +649,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     cenario = ctx.cenario;
 
     const filtros = interpretarFiltrosAgenda({ status: "CONCLUIDAS" });
-    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", { filtros });
+    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {}, { filtros });
 
     expect(hoje).toEqual([]);
   });
@@ -659,7 +659,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     cenario = ctx.cenario;
 
     const filtros = interpretarFiltrosAgenda({ status: "ATRASADAS" });
-    const proximas = await buscarAgendaProximas(ctx.cenario.organization.id, "UTC", { filtros });
+    const proximas = await buscarAgendaProximas(ctx.cenario.organization.id, "UTC", {}, { filtros });
 
     expect(proximas).toEqual([]);
   });
@@ -678,7 +678,7 @@ describe("Agenda do corretor — Fase H.3", () => {
 
     const ate = new Date(dentroDoPeriodo.scheduledAt.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const filtros = interpretarFiltrosAgenda({ q: "kowalski", ate });
-    const proximas = await buscarAgendaProximas(cenario.organization.id, "UTC", { filtros });
+    const proximas = await buscarAgendaProximas(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(proximas.map((i) => i.id)).toEqual([dentroDoPeriodo.id]);
     expect(proximas.map((i) => i.id)).not.toContain(foraDoPeriodo.id);
@@ -696,7 +696,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ q: "nascimento", status: "CONCLUIDAS" });
-    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", { filtros });
+    const anteriores = await buscarAgendaAnteriores(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(anteriores.map((i) => i.id)).toEqual([concluidaAlvo.id]);
     expect(anteriores.map((i) => i.id)).not.toContain(canceladaMesmoNome.id);
@@ -719,8 +719,8 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ q: "paginação teste" });
-    const pagina1 = await buscarAgendaAnteriores(cenario.organization.id, "UTC", { filtros, skip: 0, take: 2 });
-    const pagina2 = await buscarAgendaAnteriores(cenario.organization.id, "UTC", { filtros, skip: 2, take: 2 });
+    const pagina1 = await buscarAgendaAnteriores(cenario.organization.id, "UTC", {}, { filtros, skip: 0, take: 2 });
+    const pagina2 = await buscarAgendaAnteriores(cenario.organization.id, "UTC", {}, { filtros, skip: 2, take: 2 });
 
     expect(pagina1).toHaveLength(2);
     expect(pagina2).toHaveLength(1);
@@ -745,7 +745,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ q: "sigiloso" });
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", { filtros });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(hoje.map((i) => i.id)).not.toContain(anomala.id);
     expect(hoje).toEqual([]);
@@ -770,7 +770,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ q: "imóvel sigiloso" });
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", { filtros });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(hoje.map((i) => i.id)).not.toContain(anomala.id);
     expect(hoje).toEqual([]);
@@ -789,9 +789,9 @@ describe("Agenda do corretor — Fase H.3", () => {
     };
 
     const filtros = interpretarFiltrosAgenda({ q: "teste", de: "2020-01-01", ate: "2030-01-01", status: "AGENDADAS" });
-    await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", { filtros });
-    await buscarAgendaProximas(ctx.cenario.organization.id, "UTC", { filtros });
-    await buscarAgendaAnteriores(ctx.cenario.organization.id, "UTC", { filtros });
+    await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {}, { filtros });
+    await buscarAgendaProximas(ctx.cenario.organization.id, "UTC", {}, { filtros });
+    await buscarAgendaAnteriores(ctx.cenario.organization.id, "UTC", {}, { filtros });
 
     const depois = {
       scheduledActivity: await prisma.scheduledActivity.count({ where }),
@@ -818,7 +818,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ q: "volume" });
-    const proximas = await buscarAgendaProximas(cenario.organization.id, "UTC", { filtros, limite: 3 });
+    const proximas = await buscarAgendaProximas(cenario.organization.id, "UTC", {}, { filtros, limite: 3 });
 
     expect(proximas).toHaveLength(3);
   });
@@ -840,7 +840,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: hojeAsHoras(2) },
     });
 
-    const resumo = await contarResumoDiario(cenario.organization.id, "UTC");
+    const resumo = await contarResumoDiario(cenario.organization.id, "UTC", {});
     expect(resumo.agendadas).toBe(1);
     expect(resumo.concluidas).toBe(0);
     expect(resumo.canceladas).toBe(0);
@@ -854,7 +854,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: hojeAsHoras(2), completedAt: new Date() },
     });
 
-    const resumo = await contarResumoDiario(cenario.organization.id, "UTC");
+    const resumo = await contarResumoDiario(cenario.organization.id, "UTC", {});
     expect(resumo.concluidas).toBe(1);
     expect(resumo.agendadas).toBe(0);
     expect(resumo.canceladas).toBe(0);
@@ -868,7 +868,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "CANCELLED", scheduledAt: hojeAsHoras(2), cancelledAt: new Date() },
     });
 
-    const resumo = await contarResumoDiario(cenario.organization.id, "UTC");
+    const resumo = await contarResumoDiario(cenario.organization.id, "UTC", {});
     expect(resumo.canceladas).toBe(1);
     expect(resumo.agendadas).toBe(0);
     expect(resumo.concluidas).toBe(0);
@@ -882,7 +882,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "COMPLETED", scheduledAt: passado(1), completedAt: new Date() },
     });
 
-    const resumo = await contarResumoDiario(cenario.organization.id, "UTC");
+    const resumo = await contarResumoDiario(cenario.organization.id, "UTC", {});
     expect(resumo.concluidas).toBe(0);
   });
 
@@ -894,7 +894,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       data: { organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: futuro(1) },
     });
 
-    const resumo = await contarResumoDiario(cenario.organization.id, "UTC");
+    const resumo = await contarResumoDiario(cenario.organization.id, "UTC", {});
     expect(resumo.agendadas).toBe(0);
   });
 
@@ -907,7 +907,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       data: { organizationId: cenarioB.organization.id, personId: pessoaB.id, propertyId: imovelB.id, status: "SCHEDULED", scheduledAt: hojeAsHoras(2) },
     });
 
-    const resumoA = await contarResumoDiario(cenario.organization.id, "UTC");
+    const resumoA = await contarResumoDiario(cenario.organization.id, "UTC", {});
     expect(resumoA.agendadas).toBe(0);
   });
 
@@ -931,7 +931,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       },
     });
 
-    const resumo = await contarResumoDiario(ctx.cenario.organization.id, "UTC");
+    const resumo = await contarResumoDiario(ctx.cenario.organization.id, "UTC", {});
     expect(resumo.agendadas).toBe(1);
     expect(resumo.concluidas).toBe(1);
     expect(resumo.canceladas).toBe(0);
@@ -951,16 +951,16 @@ describe("Agenda do corretor — Fase H.3", () => {
       });
     }
 
-    const resumoSemFiltro = await contarResumoDiario(cenario.organization.id, "UTC");
+    const resumoSemFiltro = await contarResumoDiario(cenario.organization.id, "UTC", {});
     expect(resumoSemFiltro.agendadas).toBe(5);
 
     // Aplica busca visual (que reduziria a LISTA pra 1 item) — o resumo
     // diário (função separada, sempre global) não deve mudar.
     const filtros = interpretarFiltrosAgenda({ q: "joão" });
-    const listaFiltrada = await buscarAgendaHoje(cenario.organization.id, "UTC", { filtros });
+    const listaFiltrada = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { filtros });
     expect(listaFiltrada).toHaveLength(1);
 
-    const resumoComFiltro = await contarResumoDiario(cenario.organization.id, "UTC");
+    const resumoComFiltro = await contarResumoDiario(cenario.organization.id, "UTC", {});
     expect(resumoComFiltro.agendadas).toBe(5);
     expect(resumoComFiltro).toEqual(resumoSemFiltro);
   });
@@ -982,7 +982,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ q: "agrupamento manha" });
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", { filtros });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(hoje.map((i) => i.id)).toEqual([manha.id]);
     expect(periodoDaVisita(hoje[0].scheduledAt, "UTC")).toBe("MANHA");
@@ -997,7 +997,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ q: "agrupamento noite" });
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", { filtros });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(hoje.map((i) => i.id)).toEqual([noite.id]);
     expect(periodoDaVisita(hoje[0].scheduledAt, "UTC")).toBe("NOITE");
@@ -1012,7 +1012,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ de: hojeISO(), ate: hojeISO() });
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", { filtros });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(hoje.map((i) => i.id)).toEqual([tarde.id]);
     expect(periodoDaVisita(hoje[0].scheduledAt, "UTC")).toBe("TARDE");
@@ -1023,7 +1023,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     cenario = ctx.cenario;
 
     const filtros = interpretarFiltrosAgenda({ status: "CONCLUIDAS" });
-    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", { filtros });
+    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {}, { filtros });
 
     expect(hoje).toEqual([]);
     expect(proximaVisita(hoje)).toBeNull();
@@ -1040,7 +1040,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ q: "sigiloso agrupamento" });
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", { filtros });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { filtros });
 
     expect(hoje).toEqual([]);
     await prisma.scheduledActivity.deleteMany({ where: { id: anomala.id, organizationId: cenario.organization.id } });
@@ -1063,7 +1063,7 @@ describe("Agenda do corretor — Fase H.3", () => {
 
     // Sem filtro: a visita das 05h é a globalmente mais próxima (menor
     // scheduledAt futuro).
-    const hojeSemFiltro = await buscarAgendaHoje(cenario.organization.id, "UTC", { agora: agoraDoTeste });
+    const hojeSemFiltro = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { agora: agoraDoTeste });
     expect(proximaVisita(hojeSemFiltro, agoraDoTeste)?.id).toBe(doCedo.id);
 
     // Com filtro isolando só a visita das 20h, a "próxima visita" do
@@ -1071,7 +1071,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     // mais próxima (não virou), mas porque é a única presente na lista
     // já filtrada que proximaVisita() recebe.
     const filtros = interpretarFiltrosAgenda({ q: "joao alvo filtro" });
-    const hojeFiltrado = await buscarAgendaHoje(cenario.organization.id, "UTC", { agora: agoraDoTeste, filtros });
+    const hojeFiltrado = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { agora: agoraDoTeste, filtros });
     expect(hojeFiltrado.map((i) => i.id)).toEqual([doAlvo.id]);
     expect(proximaVisita(hojeFiltrado, agoraDoTeste)?.id).toBe(doAlvo.id);
   });
@@ -1088,8 +1088,8 @@ describe("Agenda do corretor — Fase H.3", () => {
       activityLog: await prisma.activityLog.count({ where }),
     };
 
-    const resumo = await contarResumoDiario(ctx.cenario.organization.id, "UTC");
-    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC");
+    const resumo = await contarResumoDiario(ctx.cenario.organization.id, "UTC", {});
+    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {});
     const gruposCalculados = hoje.map((item) => periodoDaVisita(item.scheduledAt, "UTC"));
     const proxima = proximaVisita(hoje);
     void resumo;
@@ -1121,7 +1121,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       data: { organizationId: cenarioB.organization.id, personId: pessoaB.id, propertyId: imovelB.id, status: "SCHEDULED", scheduledAt: hojeAsHoras(2) },
     });
 
-    const hojeDeA = await buscarAgendaHoje(cenario.organization.id, "UTC");
+    const hojeDeA = await buscarAgendaHoje(cenario.organization.id, "UTC", {});
     expect(hojeDeA).toEqual([]);
     expect(painelAgoraDoDia(hojeDeA, "UTC")).toEqual({ tipo: "VAZIO" });
   });
@@ -1141,22 +1141,22 @@ describe("Agenda do corretor — Fase H.3", () => {
       data: { organizationId: cenario.organization.id, personId: pessoaFutura.id, propertyId: imovel.id, status: "SCHEDULED", scheduledAt: hojeAsHoras(18) },
     });
 
-    const resumoSemFiltro = await contarResumoDiario(cenario.organization.id, "UTC", { agora: agoraDoTeste });
+    const resumoSemFiltro = await contarResumoDiario(cenario.organization.id, "UTC", {}, { agora: agoraDoTeste });
     expect(resumoSemFiltro.agendadas).toBe(2);
 
-    const semFiltro = await buscarAgendaHoje(cenario.organization.id, "UTC", { agora: agoraDoTeste });
+    const semFiltro = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { agora: agoraDoTeste });
     expect(painelAgoraDoDia(semFiltro, "UTC", agoraDoTeste).tipo).toBe("AGUARDANDO_RESULTADO");
 
     // Filtro H.4 isola só a visita futura — o painel (baseado no conjunto
     // visível) muda pra "próxima visita"; o resumo diário (sempre global)
     // continua exatamente igual.
     const filtros = interpretarFiltrosAgenda({ q: "cliente futuro h7" });
-    const comFiltro = await buscarAgendaHoje(cenario.organization.id, "UTC", { agora: agoraDoTeste, filtros });
+    const comFiltro = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { agora: agoraDoTeste, filtros });
     expect(comFiltro).toHaveLength(1);
     const estadoFiltrado = painelAgoraDoDia(comFiltro, "UTC", agoraDoTeste);
     expect(estadoFiltrado.tipo).toBe("PROXIMA_VISITA");
 
-    const resumoComFiltro = await contarResumoDiario(cenario.organization.id, "UTC", { agora: agoraDoTeste });
+    const resumoComFiltro = await contarResumoDiario(cenario.organization.id, "UTC", {}, { agora: agoraDoTeste });
     expect(resumoComFiltro).toEqual(resumoSemFiltro);
   });
 
@@ -1170,7 +1170,7 @@ describe("Agenda do corretor — Fase H.3", () => {
     });
 
     const filtros = interpretarFiltrosAgenda({ q: "coerencia h7" });
-    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", { agora: agoraDoTeste, filtros });
+    const hoje = await buscarAgendaHoje(cenario.organization.id, "UTC", {}, { agora: agoraDoTeste, filtros });
 
     expect(hoje.map((i) => i.id)).toEqual([visita.id]);
     expect(periodoDaVisita(hoje[0].scheduledAt, "UTC")).toBe("MANHA");
@@ -1189,7 +1189,7 @@ describe("Agenda do corretor — Fase H.3", () => {
       activityLog: await prisma.activityLog.count({ where }),
     };
 
-    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC");
+    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {});
     const acoes = hoje.map((item) => acaoOperacionalDaVisita(item, "UTC"));
     const painel = painelAgoraDoDia(hoje, "UTC");
     void acoes;

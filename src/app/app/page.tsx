@@ -3,6 +3,8 @@ import { requireOrganizationId } from "@/lib/tenant";
 import { auth } from "@/lib/auth";
 import { hasModule } from "@/lib/entitlements";
 import { buscarFusoOrganizacao, buscarFusoConfigurado } from "@/lib/fuso-organizacao";
+import { escopoComercialDaSessao } from "@/lib/escopo-comercial-sessao";
+import { whereAtividade } from "@/lib/escopo-comercial";
 import { AvisoFusoNaoConfigurado } from "@/components/admin/AvisoFusoNaoConfigurado";
 import { buscarCentralTrabalho } from "@/lib/central-trabalho";
 import { CentralTrabalho } from "@/components/admin/CentralTrabalho";
@@ -45,6 +47,7 @@ export default async function DashboardPage({
   // cacheado por organização) e repassado à Central e aos contadores:
   // "hoje" e "atrasadas" precisam ser o mesmo dia nas duas leituras.
   const fuso = await buscarFusoOrganizacao(organizationId);
+  const escopo = await escopoComercialDaSessao(organizationId);
   // Fase 19 — estado BRUTO do campo (null = nunca configurado), diferente
   // do fuso EFETIVO acima, que já aplicou o fallback. É a distinção que
   // permite avisar sem mentir: "usa UTC porque ninguém escolheu" não é a
@@ -80,7 +83,10 @@ export default async function DashboardPage({
     // tem uma contagem já pronta e barata — "negociações que precisam de
     // atenção" (Pipeline) exigiria carregar o board aberto inteiro só
     // pra extrair um número, e "imóveis parados" já é um KPI acima.
-    contarAgenda(organizationId, fuso),
+    // Fase 22 — o contador de atrasadas da Home também é escopado: em
+    // modo restrito ele mostra o atraso do próprio corretor, nunca o da
+    // organização inteira.
+    contarAgenda(organizationId, fuso, whereAtividade(escopo)),
   ]);
 
   return (

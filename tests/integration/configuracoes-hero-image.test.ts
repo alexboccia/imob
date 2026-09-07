@@ -52,6 +52,8 @@ function formularioMinimo(campos: Record<string, string> = {}): FormData {
   fd.set("footerAparencia", "AUTO");
   // Fase 18 — campo obrigatório do formulário de Configurações.
   fd.set("timezone", "America/Sao_Paulo");
+  // Fase 22 — campo obrigatório do formulário de Configurações.
+  fd.set("visibilidadeComercial", "COLLABORATIVE");
   for (const [chave, valor] of Object.entries(campos)) fd.set(chave, valor);
   return fd;
 }

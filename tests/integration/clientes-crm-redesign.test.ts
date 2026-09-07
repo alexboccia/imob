@@ -7,6 +7,16 @@ import { criarCenario, criarPessoa, criarImovel } from "@/test/fixtures";
 // Vitest puro).
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("next/cache", () => ({
+  // Fase 22 — buscarVisibilidadeComercial passa por unstable_cache, que
+  // não existe fora do runtime do Next: aqui o cache passa direto.
+  unstable_cache:
+    <T extends (...args: never[]) => unknown>(fn: T) =>
+    (...args: Parameters<T>) =>
+      fn(...args),
+  revalidatePath: vi.fn(),
+  updateTag: vi.fn(),
+}));
 
 import { auth } from "@/lib/auth";
 import { buscarResumoClienteCrm } from "@/app/app/clientes/actions";

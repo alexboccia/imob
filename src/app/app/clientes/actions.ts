@@ -27,6 +27,14 @@ import {
   validarAtribuicaoContraPagamentos,
 } from "@/lib/pagamento-comissao";
 import { temPapel, PAPEIS_LIQUIDACAO_COMISSAO } from "@/lib/authorization";
+import { escopoComercialDaSessao } from "@/lib/escopo-comercial-sessao";
+import {
+  whereNegociacaoAlvo,
+  wherePessoaAlvo,
+  whereNegociacao,
+  wherePessoa,
+  type EscopoComercial,
+} from "@/lib/escopo-comercial";
 import { formatarPreco } from "@/lib/format";
 import {
   erroAcessoNegado,
@@ -144,6 +152,10 @@ export async function criarPessoa(
   if (!(await hasModule(organizationId, "crm"))) {
     return { sucesso: false, erro: "CRM não incluído no seu plano." };
   }
+  // Fase 22 — sem predicado de escopo AQUI de propósito: esta action
+  // CRIA uma pessoa nova. Não há alvo preexistente a autorizar, e o
+  // registro nasce vinculado a quem o criou (assignedMemberId), que é
+  // justamente a ponte que wherePessoa reconhece.
 
   // emailNormalized/phoneNormalized populados aqui só por consistência de
   // dado (senão uma Person cadastrada manualmente nunca seria encontrada
@@ -251,10 +263,16 @@ export async function atualizarEstagioFunil(
 
   const organizationId = await requireOrganizationId();
   if (!(await hasModule(organizationId, "crm"))) return;
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   await withOrganization(organizationId, async () => {
-    await prisma.person.update({
-      where: { id: pessoaId, organizationId },
+    // Fase 22 — `updateMany` e não `update`: aqui a escrita É o ponto de
+    // autorização (não há leitura antes dela), e `update` só aceita
+    // where único, o que impediria o predicado de escopo. Fora do
+    // escopo, `count` é 0 e nada é alterado — sem revelar se a pessoa
+    // existe.
+    await prisma.person.updateMany({
+      where: wherePessoaAlvo(escopo, pessoaId, organizationId),
       data: { pipelineStage: estagioFunil },
     });
 
@@ -275,6 +293,7 @@ export async function registrarInteracao(pessoaId: string, formData: FormData) {
 
   const organizationId = await requireOrganizationId();
   if (!(await hasModule(organizationId, "crm"))) return;
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   await withOrganization(organizationId, async () => {
     // pessoaId chega como argumento bindado de Server Action — input do
@@ -285,8 +304,8 @@ export async function registrarInteracao(pessoaId: string, formData: FormData) {
     // propertyId em src/app/[orgSlug]/actions.ts. Falha silenciosa de
     // propósito (mesmo tratamento do hasModule acima): não revela se o
     // Person existe em outra organização.
-    const pessoa = await prisma.person.findUnique({
-      where: { id: pessoaId, organizationId },
+    const pessoa = await prisma.person.findFirst({
+      where: wherePessoaAlvo(escopo, pessoaId, organizationId),
       select: { id: true },
     });
     if (!pessoa) return;
@@ -332,6 +351,7 @@ export async function salvarPreferenciaPessoa(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   const parsedFormData = parsePersonPreferenceFormData(formData);
   if (!parsedFormData.ok) return parsedFormData.estado;
@@ -351,8 +371,8 @@ export async function salvarPreferenciaPessoa(
     // PersonPreference) poderia criar uma linha com personId de outra
     // organização e organizationId da sessão atual — a checagem abaixo é
     // a única coisa que impede isso, não a extensão.
-    const pessoa = await prisma.person.findUnique({
-      where: { id: pessoaId, organizationId },
+    const pessoa = await prisma.person.findFirst({
+      where: wherePessoaAlvo(escopo, pessoaId, organizationId),
       select: { id: true },
     });
     if (!pessoa) {
@@ -482,6 +502,7 @@ export async function criarInteressePessoa(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   const parsed = criarInteresseSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return erroValidacao(parsed.error);
@@ -495,7 +516,7 @@ export async function criarInteressePessoa(
     // enviarContato (src/app/[orgSlug]/actions.ts) validando personId e
     // propertyId separadamente antes de criar uma Interaction.
     const [pessoa, imovel] = await Promise.all([
-      prisma.person.findUnique({ where: { id: pessoaId, organizationId }, select: { id: true } }),
+      prisma.person.findFirst({ where: wherePessoaAlvo(escopo, pessoaId, organizationId), select: { id: true } }),
       prisma.property.findUnique({ where: { id: propertyId, organizationId }, select: { id: true, status: true } }),
     ]);
     if (!pessoa || !imovel) {
@@ -665,14 +686,21 @@ export async function criarOportunidadeDoContato(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   return withOrganization(organizationId, async () => {
     // Fronteira de tenant: a interação precisa existir NESTA organização.
     // interactionId chega bindado de um Server Action — input do
     // navegador como qualquer outro. Mensagem genérica de propósito: não
     // revela se o registro existe em outra organização.
-    const interacao = await prisma.interaction.findUnique({
-      where: { id: interactionId, organizationId },
+    // Fase 22 — a interação é o ponto de entrada desta action, e ela
+    // pertence a uma PESSOA. Sem o predicado abaixo, um membro em modo
+    // restrito poderia passar o id de uma interação de cliente alheio e
+    // criar uma oportunidade sobre ele — virando responsável e ganhando
+    // acesso. Isso seria escalar privilégio por escrita, e o produto não
+    // tem fluxo de "pegar para si".
+    const interacao = await prisma.interaction.findFirst({
+      where: { id: interactionId, organizationId, person: { is: wherePessoa(escopo) } },
       select: { id: true, personId: true, propertyId: true, origin: true },
     });
     if (!interacao) return erroGenerico("Contato não encontrado.");
@@ -815,6 +843,7 @@ export async function atualizarEstagioInteresse(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   const parsed = atualizarEstagioInteresseSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return erroValidacao(parsed.error);
@@ -840,16 +869,16 @@ export async function atualizarEstagioInteresse(
     // `stage`, relido dentro da transação abaixo (mesma correção aplicada
     // em fecharInteresse na P.3: um `stage` capturado aqui fora da
     // transação podia ficar stale entre esta leitura e o guard atômico).
-    const existente = await prisma.propertyInterest.findUnique({
-      where: { id: interesseId, organizationId },
+    const existente = await prisma.propertyInterest.findFirst({
+      where: whereNegociacaoAlvo(escopo, interesseId, organizationId),
       select: { personId: true },
     });
     if (!existente) return erroAcessoNegado("Relacionamento não encontrado.");
 
     const resultado = await prisma.$transaction(async (tx): Promise<ResultadoAtualizacaoEstagio> => {
       for (let tentativa = 0; tentativa < MAX_TENTATIVAS_ATUALIZACAO_ESTAGIO; tentativa++) {
-        const atual = await tx.propertyInterest.findUnique({
-          where: { id: interesseId, organizationId },
+        const atual = await tx.propertyInterest.findFirst({
+          where: whereNegociacaoAlvo(escopo, interesseId, organizationId),
           select: { stage: true },
         });
         if (!atual) return { tipo: "nao_encontrado" };
@@ -862,6 +891,9 @@ export async function atualizarEstagioInteresse(
           // usuário edita só a observação sem tocar no Select).
           if (Object.keys(dadosNotes).length > 0) {
             await tx.propertyInterest.update({
+              // where único: a autorização já aconteceu no lookup desta
+              // action, antes da transação. Repetir o predicado aqui não
+              // acrescentaria segurança e quebraria o `update`.
               where: { id: interesseId, organizationId },
               data: dadosNotes,
             });
@@ -992,6 +1024,7 @@ async function fecharInteresse(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   // Validação ANTES de qualquer escrita: marcar como ganho exige valor
   // real. Um ganho sem valor deixaria o relatório financeiro
@@ -1029,8 +1062,8 @@ async function fecharInteresse(
     // transação podia ficar stale entre esta leitura e o guard atômico,
     // fazendo o ActivityLog gravar um `from` desatualizado mesmo com o
     // dado final sempre correto).
-    const interesse = await prisma.propertyInterest.findUnique({
-      where: { id: interesseId, organizationId },
+    const interesse = await prisma.propertyInterest.findFirst({
+      where: whereNegociacaoAlvo(escopo, interesseId, organizationId),
       select: {
         id: true,
         personId: true,
@@ -1239,6 +1272,7 @@ export async function corrigirDadosFechamento(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   const valorInterpretado = interpretarValorFechamento(formData.get("valorFechamento"));
   if (!valorInterpretado.ok) return erroGenerico(valorInterpretado.erro);
@@ -1262,8 +1296,8 @@ export async function corrigirDadosFechamento(
       // updateMany repete stage: "WON" para que um fechamento revertido
       // por outra transação no meio do caminho não seja corrigido às
       // cegas.
-      const atual = await tx.propertyInterest.findUnique({
-        where: { id: interesseId, organizationId },
+      const atual = await tx.propertyInterest.findFirst({
+        where: whereNegociacaoAlvo(escopo, interesseId, organizationId),
         select: { id: true, personId: true, propertyId: true, stage: true, closedValue: true, commissionValue: true },
       });
       if (!atual) return { tipo: "nao_encontrado" as const };
@@ -1378,6 +1412,7 @@ export async function transferirResponsavelNegociacao(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   const bruto = formData.get("responsavelId");
   const escolhido = String(bruto ?? "").trim();
@@ -1393,8 +1428,8 @@ export async function transferirResponsavelNegociacao(
 
   return withOrganization(organizationId, async () => {
     const resultado = await prisma.$transaction(async (tx) => {
-      const atual = await tx.propertyInterest.findUnique({
-        where: { id: interesseId, organizationId },
+      const atual = await tx.propertyInterest.findFirst({
+        where: whereNegociacaoAlvo(escopo, interesseId, organizationId),
         select: {
           id: true,
           personId: true,
@@ -1529,10 +1564,14 @@ async function resolverAtorTransicao(
 async function carregarDivisao(
   tx: ClienteTransacao,
   organizationId: string,
-  interesseId: string
+  interesseId: string,
+  // Fase 22 — esta é a leitura que autoriza os fluxos de divisão de
+  // comissão: fora do escopo devolve null e a action segue pelo mesmo
+  // caminho de "não encontrado" que já existia.
+  escopo: EscopoComercial
 ) {
-  const interesse = await tx.propertyInterest.findUnique({
-    where: { id: interesseId, organizationId },
+  const interesse = await tx.propertyInterest.findFirst({
+    where: whereNegociacaoAlvo(escopo, interesseId, organizationId),
     select: {
       id: true,
       personId: true,
@@ -1584,6 +1623,7 @@ export async function adicionarParticipante(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   const membroId = String(formData.get("memberId") ?? "").trim();
   if (!membroId) return erroGenerico("Selecione um participante.");
@@ -1596,7 +1636,7 @@ export async function adicionarParticipante(
   return withOrganization(organizationId, async () => {
     const resultado = await prisma.$transaction(async (tx) => {
       await travarDivisao(tx, organizationId, interesseId);
-      const dados = await carregarDivisao(tx, organizationId, interesseId);
+      const dados = await carregarDivisao(tx, organizationId, interesseId, escopo);
       if (!dados) return { tipo: "nao_encontrado" as const };
 
       if (dados.participantes.some((p) => p.memberId === membroId)) {
@@ -1665,6 +1705,7 @@ export async function atualizarParticipante(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   const alocacao = interpretarAlocacao(formData.get("valorParticipacao"));
   if (!alocacao.ok) return erroGenerico(alocacao.erro);
@@ -1673,14 +1714,21 @@ export async function atualizarParticipante(
     const resultado = await prisma.$transaction(async (tx) => {
       // O id da negociação vem do PRÓPRIO registro, nunca do formulário:
       // não há como o navegador apontar a edição para outra negociação.
-      const atual = await tx.propertyInterestParticipant.findUnique({
-        where: { id: participanteId, organizationId },
+      // Fase 22 — o participante pertence a uma NEGOCIAÇÃO; remover um
+      // de negociação fora do escopo seria escrita não autorizada.
+      // (adicionar/atualizar passam por carregarDivisao, que já valida.)
+      const atual = await tx.propertyInterestParticipant.findFirst({
+        where: {
+          id: participanteId,
+          organizationId,
+          propertyInterest: { is: whereNegociacao(escopo) },
+        },
         select: { id: true, propertyInterestId: true, memberId: true, allocationValue: true },
       });
       if (!atual) return { tipo: "nao_encontrado" as const };
 
       await travarDivisao(tx, organizationId, atual.propertyInterestId);
-      const dados = await carregarDivisao(tx, organizationId, atual.propertyInterestId);
+      const dados = await carregarDivisao(tx, organizationId, atual.propertyInterestId, escopo);
       if (!dados) return { tipo: "nao_encontrado" as const };
 
       // A própria linha sai do conjunto comparado: editar uma parcela não
@@ -1767,11 +1815,19 @@ export async function removerParticipante(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   return withOrganization(organizationId, async () => {
     const resultado = await prisma.$transaction(async (tx) => {
-      const atual = await tx.propertyInterestParticipant.findUnique({
-        where: { id: participanteId, organizationId },
+      // Fase 22 — o participante pertence a uma NEGOCIAÇÃO; remover um
+      // de negociação fora do escopo seria escrita não autorizada.
+      // (adicionar/atualizar passam por carregarDivisao, que já valida.)
+      const atual = await tx.propertyInterestParticipant.findFirst({
+        where: {
+          id: participanteId,
+          organizationId,
+          propertyInterest: { is: whereNegociacao(escopo) },
+        },
         select: {
           id: true,
           propertyInterestId: true,
@@ -1916,6 +1972,12 @@ export async function registrarPagamentoParticipante(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  // Fase 22 — sem predicado de escopo AQUI de propósito: esta action
+  // já exige PAPEIS_LIQUIDACAO_COMISSAO (OWNER/ADMIN/MANAGER), e os
+  // três resolvem para escopo de ORGANIZAÇÃO em qualquer política.
+  // O predicado seria `{}` — literalmente sem efeito. Documentado em
+  // vez de aplicado por simetria, que sugeriria uma proteção que não
+  // está agindo aqui.
 
   const valor = interpretarPagamento(formData.get("valorPagamento"));
   if (!valor.ok) return erroGenerico(valor.erro);
@@ -2025,6 +2087,12 @@ export async function cancelarPagamentoParticipante(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  // Fase 22 — sem predicado de escopo AQUI de propósito: esta action
+  // já exige PAPEIS_LIQUIDACAO_COMISSAO (OWNER/ADMIN/MANAGER), e os
+  // três resolvem para escopo de ORGANIZAÇÃO em qualquer política.
+  // O predicado seria `{}` — literalmente sem efeito. Documentado em
+  // vez de aplicado por simetria, que sugeriria uma proteção que não
+  // está agindo aqui.
 
   return withOrganization(organizationId, async () => {
     const resultado = await prisma.$transaction(async (tx) => {
@@ -2145,16 +2213,18 @@ export async function alternarFavoritoInteresse(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   return withOrganization(organizationId, async () => {
-    const atual = await prisma.propertyInterest.findUnique({
-      where: { id: interesseId, organizationId },
+    const atual = await prisma.propertyInterest.findFirst({
+      where: whereNegociacaoAlvo(escopo, interesseId, organizationId),
       select: { favorited: true, personId: true },
     });
     if (!atual) return erroAcessoNegado("Relacionamento não encontrado.");
 
     const novoValor = !atual.favorited;
     await prisma.propertyInterest.update({
+      // where único: o lookup acima já autorizou dentro do escopo.
       where: { id: interesseId, organizationId },
       data: { favorited: novoValor },
     });
@@ -2189,10 +2259,11 @@ export async function removerInteresse(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   return withOrganization(organizationId, async () => {
-    const atual = await prisma.propertyInterest.findUnique({
-      where: { id: interesseId, organizationId },
+    const atual = await prisma.propertyInterest.findFirst({
+      where: whereNegociacaoAlvo(escopo, interesseId, organizationId),
       select: { personId: true },
     });
     if (!atual) return erroAcessoNegado("Relacionamento não encontrado.");
@@ -2244,11 +2315,16 @@ export async function buscarResumoClienteCrm(pessoaId: string): Promise<ResumoCl
   const session = await auth();
   if (!session) redirect("/app/login");
   const organizationId = await requireOrganizationId();
+  // Fase 22 — esta é uma SUPERFÍCIE DE PII alcançável por id (o drawer da
+  // listagem a chama com o id da linha). Sem o escopo aqui, esconder o
+  // cliente da lista não adiantaria nada: bastaria chamar a action com o
+  // id certo para receber nome, telefone e e-mail.
+  const escopo = await escopoComercialDaSessao(organizationId);
 
   return withOrganization(organizationId, async () => {
     const [pessoa, favoritos, visitados, propostas, atividades] = await Promise.all([
-      prisma.person.findUnique({
-        where: { id: pessoaId, organizationId },
+      prisma.person.findFirst({
+        where: wherePessoaAlvo(escopo, pessoaId, organizationId),
         select: {
           id: true,
           name: true,

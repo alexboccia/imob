@@ -296,7 +296,7 @@ describe("membro inativo", () => {
       data: { status: "SUSPENDED" },
     });
 
-    const colunas = await buscarPipelineAberto(c.organization.id, "UTC");
+    const colunas = await buscarPipelineAberto(c.organization.id, {}, "UTC");
     const card = colunas.INTERESTED.find((i) => i.id === interesse!.id);
     // Nome preservado + marca de inativo. NUNCA "sem responsável".
     expect(card?.responsavel?.nome).toBe("Dina Corretora");
@@ -574,21 +574,21 @@ describe("filtro do pipeline", () => {
       responsavelId: "",
     });
 
-    const meus = await buscarPipelineAberto(c.organization.id, "UTC", { responsavel: c.membro.id });
+    const meus = await buscarPipelineAberto(c.organization.id, {}, "UTC", { responsavel: c.membro.id });
     expect(meus.INTERESTED.map((i) => i.id)).toEqual([meu.interesse!.id]);
 
-    const dobruno = await buscarPipelineAberto(c.organization.id, "UTC", { responsavel: bruno.id });
+    const dobruno = await buscarPipelineAberto(c.organization.id, {}, "UTC", { responsavel: bruno.id });
     expect(dobruno.INTERESTED.map((i) => i.id)).toEqual([dele.interesse!.id]);
 
-    const orfaos = await buscarPipelineAberto(c.organization.id, "UTC", { responsavel: "SEM" });
+    const orfaos = await buscarPipelineAberto(c.organization.id, {}, "UTC", { responsavel: "SEM" });
     expect(orfaos.INTERESTED.map((i) => i.id)).toEqual([semDono.interesse!.id]);
 
-    const todos = await buscarPipelineAberto(c.organization.id, "UTC");
+    const todos = await buscarPipelineAberto(c.organization.id, {}, "UTC");
     expect(todos.INTERESTED).toHaveLength(3);
 
     // Id que não existe nesta organização: nenhum resultado, nunca um erro
     // e nunca a lista inteira.
-    const nenhum = await buscarPipelineAberto(c.organization.id, "UTC", { responsavel: "membro-inexistente" });
+    const nenhum = await buscarPipelineAberto(c.organization.id, {}, "UTC", { responsavel: "membro-inexistente" });
     expect(nenhum.INTERESTED).toHaveLength(0);
   });
 
@@ -602,7 +602,7 @@ describe("filtro do pipeline", () => {
     const imovel = await criarImovel({ organizationId: a.organization.id });
     await oportunidadeManual(a.organization.id, pessoa.id, imovel.id);
 
-    const resultado = await buscarPipelineAberto(a.organization.id, "UTC", { responsavel: b.membro.id });
+    const resultado = await buscarPipelineAberto(a.organization.id, {}, "UTC", { responsavel: b.membro.id });
     expect(resultado.INTERESTED).toHaveLength(0);
   });
 });

@@ -312,9 +312,9 @@ describe("Agenda e Central concordam", () => {
       agora: AGORA,
     });
     const [hoje, proximas, contadores] = await Promise.all([
-      buscarAgendaHoje(organizationId, SP, { agora: AGORA }),
-      buscarAgendaProximas(organizationId, SP, { agora: AGORA }),
-      contarAgenda(organizationId, SP, { agora: AGORA }),
+      buscarAgendaHoje(organizationId, SP, {}, { agora: AGORA }),
+      buscarAgendaProximas(organizationId, SP, {}, { agora: AGORA }),
+      contarAgenda(organizationId, SP, {}, { agora: AGORA }),
     ]);
 
     const ordenar = (v: string[]) => [...v].sort();
@@ -337,14 +337,14 @@ describe("Agenda e Central concordam", () => {
     expect(filtros.de).toEqual({ ano: 2026, mes: 9, dia: 7 });
 
     // Em São Paulo a visita está dentro do dia 07.
-    const noBrasil = await buscarAgendaAnteriores(organizationId, SP, {
+    const noBrasil = await buscarAgendaAnteriores(organizationId, SP, {}, {
       agora: new Date("2026-09-30T12:00:00.000Z"),
       filtros,
     });
     expect(noBrasil).toHaveLength(1);
 
     // No calendário UTC o mesmo filtro não a encontra.
-    const emUtc = await buscarAgendaAnteriores(organizationId, "UTC", {
+    const emUtc = await buscarAgendaAnteriores(organizationId, "UTC", {}, {
       agora: new Date("2026-09-30T12:00:00.000Z"),
       filtros,
     });

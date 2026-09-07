@@ -38,6 +38,9 @@ export const IDS_E2E = {
   // Fase 18 — organização dedicada ao FUSO HORÁRIO (ver seção da
   // Organização F).
   imovelOrgFuso: "e2e-imovel-org-fuso",
+  // Fase 22 — organização dedicada à política restrita.
+  imovelOrgRestrita: "e2e-imovel-org-restrita",
+  imovelOrgRestritaSegundo: "e2e-imovel-org-restrita-2",
   // Redesenho de Imóveis — ver duplicata em tests/e2e/helpers.ts.
   imovelComBadgesOrgA: "e2e-imovel-badges-a",
   // Busca do Hero — segunda cidade/bairro (todo o resto do seed usa só
@@ -408,6 +411,25 @@ async function main() {
     timezone: "America/Sao_Paulo",
   });
 
+  // Fase 22 — Organização G: dedicada à POLÍTICA RESTRITA, pelo mesmo
+  // motivo estrutural das organizações C-F. É a única do seed com
+  // commercialVisibility = RESTRICTED; colocar esse modo em qualquer
+  // organização existente esconderia dados que os outros specs afirmam
+  // ver.
+  const orgRestrita = await garantirOrganizacaoComDono({
+    slug: "e2e-org-restrita",
+    timezone: "UTC",
+    name: "Organização E2E Restrita",
+    planId: planoCompleto.id,
+    email: "owner-restrita@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+  await prisma.organization.update({
+    where: { id: orgRestrita.organization.id },
+    data: { commercialVisibility: "RESTRICTED" },
+  });
+
   // Specs como "criar imóvel" e "formulário público cria lead" criam dados
   // novos a cada rodada — sem isso o banco de teste acumularia lixo entre
   // execuções do Playwright. Person cascateia Interaction ao ser apagada;
@@ -419,6 +441,7 @@ async function main() {
     orgAnalytics.organization.id,
     orgCentral.organization.id,
     orgFuso.organization.id,
+    orgRestrita.organization.id,
   ];
   // Usuários criados por usuarios.spec.ts a cada rodada (Fase 8 — correção
   // de causa raiz de um flake real): o seed nunca os limpava, e a
@@ -446,6 +469,11 @@ async function main() {
     "corretor-central@e2e.test",
     // Fase 18 — dono da Organização F (fuso horário), mesmo motivo.
     "owner-fuso@e2e.test",
+    // Fase 22 — Organização G (política restrita): dona e os dois
+    // corretores, cujas carteiras precisam sobreviver à limpeza.
+    "owner-restrita@e2e.test",
+    "ana-restrita@e2e.test",
+    "bruno-restrita@e2e.test",
   ];
 
   // Correção completa do acúmulo (a da Fase 8 cobria só o prefixo
@@ -1207,6 +1235,121 @@ async function main() {
   await criarVisitaOrgF({
     nomePessoa: "Fuso Comeco De Amanha",
     visitaEm: horarioLocalOrgF(1, 0, 15),
+  });
+
+  // =====================================================================
+  // Fase 22 — carteiras separadas da Organização G (política RESTRITA)
+  // =====================================================================
+  // Ana e Bruno são BROKER. Cada um conduz uma negociação, e existe um
+  // CLIENTE COMPARTILHADO com uma negociação de cada — o caso que prova
+  // a doutrina "PII compartilhado, negociações separadas".
+  await garantirImovel({
+    id: IDS_E2E.imovelOrgRestrita,
+    organizationId: orgRestrita.organization.id,
+    title: "Apartamento E2E Restrita",
+  });
+
+  const corretorRestrito = async (email: string, nome: string) => {
+    const usuario = await prisma.user.upsert({
+      where: { email },
+      update: { passwordHash: await bcrypt.hash(senha, 10) },
+      create: { name: nome, email, passwordHash: await bcrypt.hash(senha, 10) },
+      select: { id: true },
+    });
+    return prisma.organizationMember.upsert({
+      where: {
+        organizationId_userId: {
+          organizationId: orgRestrita.organization.id,
+          userId: usuario.id,
+        },
+      },
+      update: { role: "BROKER" },
+      create: {
+        organizationId: orgRestrita.organization.id,
+        userId: usuario.id,
+        role: "BROKER",
+      },
+      select: { id: true },
+    });
+  };
+  const anaRestrita = await corretorRestrito("ana-restrita@e2e.test", "Ana Restrita");
+  const brunoRestrito = await corretorRestrito("bruno-restrita@e2e.test", "Bruno Restrito");
+
+  const negociacaoRestrita = async (opcoes: {
+    nomePessoa: string;
+    responsibleMemberId: string | null;
+    pessoaId?: string;
+    imovelId?: string;
+  }) => {
+    const pessoaId =
+      opcoes.pessoaId ??
+      (
+        await prisma.person.create({
+          data: {
+            organizationId: orgRestrita.organization.id,
+            name: opcoes.nomePessoa,
+            roles: ["LEAD"],
+          },
+          select: { id: true },
+        })
+      ).id;
+    const imovelId = opcoes.imovelId ?? IDS_E2E.imovelOrgRestrita;
+    const interesse = await prisma.propertyInterest.create({
+      data: {
+        organizationId: orgRestrita.organization.id,
+        personId: pessoaId,
+        propertyId: imovelId,
+        stage: "INTERESTED",
+        responsibleMemberId: opcoes.responsibleMemberId,
+      },
+      select: { id: true },
+    });
+    // Um compromisso de HOJE por negociação: prova que a Agenda também
+    // é escopada, não só o Pipeline.
+    await prisma.scheduledActivity.create({
+      data: {
+        organizationId: orgRestrita.organization.id,
+        personId: pessoaId,
+        propertyId: imovelId,
+        propertyInterestId: interesse.id,
+        type: "FOLLOW_UP",
+        subject: `Follow-up de ${opcoes.nomePessoa}`,
+        status: "SCHEDULED",
+        scheduledAt: diasAtras(0),
+      },
+    });
+    return pessoaId;
+  };
+
+  await negociacaoRestrita({
+    nomePessoa: "Cliente Exclusivo Da Ana",
+    responsibleMemberId: anaRestrita.id,
+  });
+  await negociacaoRestrita({
+    nomePessoa: "Cliente Exclusivo Do Bruno",
+    responsibleMemberId: brunoRestrito.id,
+  });
+  await negociacaoRestrita({
+    nomePessoa: "Negociacao Sem Dono",
+    responsibleMemberId: null,
+  });
+
+  // CLIENTE COMPARTILHADO: uma negociação de cada corretor, em imóveis
+  // diferentes (a unique é organizationId+personId+propertyId).
+  const imovelCompartilhado = await garantirImovel({
+    id: IDS_E2E.imovelOrgRestritaSegundo,
+    organizationId: orgRestrita.organization.id,
+    title: "Cobertura E2E Restrita",
+  });
+  const compartilhado = await negociacaoRestrita({
+    nomePessoa: "Cliente Compartilhado",
+    responsibleMemberId: anaRestrita.id,
+  });
+  await negociacaoRestrita({
+    nomePessoa: "Cliente Compartilhado",
+    responsibleMemberId: brunoRestrito.id,
+    pessoaId: compartilhado,
+    imovelId: imovelCompartilhado.id,
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);

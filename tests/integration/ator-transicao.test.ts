@@ -326,7 +326,7 @@ describe("legado e leitura", () => {
       data: { stage: "VISITED" },
     });
 
-    const colunas = await buscarPipelineAberto(c.organization.id, "UTC");
+    const colunas = await buscarPipelineAberto(c.organization.id, {}, "UTC");
     const card = colunas.VISITED.find((i) => i.id === interesseId);
     // Nada foi inferido de ActivityLog, de quem criou nem do responsável.
     expect(card?.atorUltimaTransicao).toBeNull();
@@ -340,7 +340,7 @@ describe("legado e leitura", () => {
     autenticarComo(c, bruno.id);
     await mover(interesseId, "VISITED");
 
-    let colunas = await buscarPipelineAberto(c.organization.id, "UTC");
+    let colunas = await buscarPipelineAberto(c.organization.id, {}, "UTC");
     let card = colunas.VISITED.find((i) => i.id === interesseId);
     expect(card?.atorUltimaTransicao).toMatchObject({
       memberId: bruno.id,
@@ -353,7 +353,7 @@ describe("legado e leitura", () => {
       where: { id: bruno.id },
       data: { status: "SUSPENDED" },
     });
-    colunas = await buscarPipelineAberto(c.organization.id, "UTC");
+    colunas = await buscarPipelineAberto(c.organization.id, {}, "UTC");
     card = colunas.VISITED.find((i) => i.id === interesseId);
     expect(card?.atorUltimaTransicao).toMatchObject({ nome: "Bruno Gerente", inativo: true });
   });
@@ -370,7 +370,7 @@ describe("legado e leitura", () => {
       form({ valorFechamento: "500000" })
     );
 
-    const { itens } = await buscarPipelineEncerrado(c.organization.id);
+    const { itens } = await buscarPipelineEncerrado(c.organization.id, {});
     const item = itens.find((i) => i.id === interesseId);
     expect(item?.atorUltimaTransicao).toMatchObject({ nome: "Bruno Gerente" });
   });

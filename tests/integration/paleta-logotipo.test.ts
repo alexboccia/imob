@@ -7,7 +7,16 @@ import { criarCenario } from "@/test/fixtures";
 // Vitest puro).
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
+vi.mock("next/cache", () => ({
+  // Fase 22 — as leituras de política/fuso passam por unstable_cache, que
+  // não existe fora do runtime do Next: aqui o cache passa direto.
+  unstable_cache:
+    <T extends (...args: never[]) => unknown>(fn: T) =>
+    (...args: Parameters<T>) =>
+      fn(...args),
+  revalidatePath: vi.fn(),
+  updateTag: vi.fn(),
+}));
 // Único ponto de I/O real (fetch do logo + decodificação com sharp) —
 // mockado aqui de propósito (ver seção 14 do pedido: "não faça upload
 // real para R2 apenas para provar o teste"). O que este arquivo testa é

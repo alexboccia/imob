@@ -3,13 +3,14 @@ import { buscarBranding } from "@/lib/branding";
 import { buscarFusoOrganizacao, buscarFusoConfigurado } from "@/lib/fuso-organizacao";
 import { AvisoFusoNaoConfigurado } from "@/components/admin/AvisoFusoNaoConfigurado";
 import { opcoesDeFuso } from "@/lib/fusos-opcoes";
+import { buscarVisibilidadeComercial } from "@/lib/visibilidade-comercial";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { ConfiguracaoContatoForm } from "@/components/admin/ConfiguracaoContatoForm";
 
 export default async function ConfiguracoesPage() {
   const organizationId = await requireOrganizationId();
-  const [config, branding, fuso, fusoConfigurado] = await withOrganization(organizationId, () =>
+  const [config, branding, fuso, fusoConfigurado, visibilidadeComercial] = await withOrganization(organizationId, () =>
     Promise.all([
       buscarConfiguracaoContato(organizationId),
       buscarBranding(organizationId),
@@ -20,6 +21,7 @@ export default async function ConfiguracoesPage() {
       // Fase 19 — valor bruto, para o aviso de adoção saber diferenciar
       // "nunca configurado" de "configurado como UTC".
       buscarFusoConfigurado(organizationId),
+      buscarVisibilidadeComercial(organizationId),
     ])
   );
 
@@ -44,6 +46,7 @@ export default async function ConfiguracoesPage() {
           temaCustomizado: branding.customTheme,
           fuso,
           gruposDeFuso: opcoesDeFuso(fuso),
+          visibilidadeComercial,
         }}
       />
     </div>

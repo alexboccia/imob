@@ -18,6 +18,8 @@ import {
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { CardPipeline } from "@/components/admin/CardPipeline";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
+import { escopoComercialDaSessao } from "@/lib/escopo-comercial-sessao";
+import { whereNegociacao } from "@/lib/escopo-comercial";
 import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
 import { auth } from "@/lib/auth";
 import { PipelineKpiCards } from "@/components/admin/pipeline/PipelineKpiCards";
@@ -101,16 +103,21 @@ export default async function PipelinePage({
   // cujo dia calendário da organização já passou, a mesma definição que
   // Agenda e Central usam.
   const fuso = await buscarFusoOrganizacao(organizationId);
+  // Fase 22 — universo autorizado desta sessão. Entra em TODAS as
+  // consultas do Pipeline (board, encerradas, métricas e histórico),
+  // nunca só na listagem visível.
+  const escopo = await escopoComercialDaSessao(organizationId);
+  const escopoInteresse = whereNegociacao(escopo);
   // Período é deliberadamente independente de q/visao/resultado — só
   // afeta o resumo gerencial (KPIs/Insights), nunca o Kanban/lista abaixo.
   // buscarMetricasPipeline nunca reaproveita os itens já carregados de
   // buscarPipelineAberto/Encerrado (que têm teto de exibição) — 2 queries
   // `groupBy` estruturais próprias, sempre GLOBAIS na parte de estoque atual.
   const periodo = interpretarPeriodoPipeline(params);
-  const metricas = await buscarMetricasPipeline(organizationId, { periodo });
+  const metricas = await buscarMetricasPipeline(organizationId, escopoInteresse, { periodo });
   // Leitura independente, própria (nunca reaproveita os itens de
   // buscarPipelineAberto/Encerrado, que têm teto de exibição).
-  const analyticsHistorico = await buscarAnalyticsHistoricoPipeline(organizationId, { periodo });
+  const analyticsHistorico = await buscarAnalyticsHistoricoPipeline(organizationId, escopoInteresse, { periodo });
   // Fase 11 — uma query só para a página inteira: alimenta o filtro da
   // barra E o diálogo de troca de responsável de todos os cards.
   const [membrosAtribuiveis, session] = await Promise.all([
@@ -156,7 +163,7 @@ export default async function PipelinePage({
   const Insights = <PipelineInsights analytics={analyticsHistorico} />;
 
   if (filtros.visao === "ABERTA") {
-    const colunas = await buscarPipelineAberto(organizationId, fuso, {
+    const colunas = await buscarPipelineAberto(organizationId, escopoInteresse, fuso, {
       busca: filtros.busca,
       responsavel: filtros.responsavel,
     });
@@ -275,7 +282,7 @@ export default async function PipelinePage({
   // PAGE_SIZE_PADRAO/interpretarPaginacao de toda listagem administrativa.
   const { page, take } = interpretarPaginacao(params, { pageSizePadrao: 20, pageSizeMaximo: 50 });
   const skip = (page - 1) * take;
-  const { itens, total } = await buscarPipelineEncerrado(organizationId, {
+  const { itens, total } = await buscarPipelineEncerrado(organizationId, escopoInteresse, {
     busca: filtros.busca,
     resultado: filtros.resultado,
     responsavel: filtros.responsavel,

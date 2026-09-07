@@ -7,7 +7,16 @@ import { criarCenario, criarPessoa, criarImovel } from "@/test/fixtures";
 // mesma limitação de resolução de módulo já documentada nesta sessão
 // (next-auth → next/server não resolve sob Vitest puro).
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/cache", () => ({
+  // Fase 22 — as leituras de política/fuso passam por unstable_cache, que
+  // não existe fora do runtime do Next: aqui o cache passa direto.
+  unstable_cache:
+    <T extends (...args: never[]) => unknown>(fn: T) =>
+    (...args: Parameters<T>) =>
+      fn(...args),
+  revalidatePath: vi.fn(),
+  updateTag: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
 import { auth } from "@/lib/auth";
@@ -1795,7 +1804,7 @@ describe("PropertyInterest — relacionamento Person↔Property (Fase D do CRM)"
     await relacionar(pessoa.id, { propertyId: imovel.id });
     const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
+    const colunas = await buscarPipelineAberto(cenario.organization.id, {}, "UTC");
     const item = colunas.INTERESTED.find((i) => i.id === interesse!.id);
     expect(item).toBeDefined();
     expect(item?.aging).not.toBeNull();
@@ -1813,7 +1822,7 @@ describe("PropertyInterest — relacionamento Person↔Property (Fase D do CRM)"
     });
     expect(await historicoDe(cenario.organization.id, legado.id)).toHaveLength(0);
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
+    const colunas = await buscarPipelineAberto(cenario.organization.id, {}, "UTC");
     const item = colunas.INTERESTED.find((i) => i.id === legado.id);
     expect(item?.aging).toBeNull();
   });

@@ -43,6 +43,8 @@ type ConfiguracaoInicial = {
   // página aplica o fallback explícito antes de entregar).
   fuso: string;
   gruposDeFuso: GrupoFusos[];
+  // Fase 22 — política de visibilidade comercial da organização.
+  visibilidadeComercial: "COLLABORATIVE" | "RESTRICTED";
 };
 
 export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicial }) {
@@ -201,6 +203,60 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           </CardContent>
         </Card>
       </div>
+
+      {/* Visibilidade da carteira comercial (Fase 22). Fica junto do
+          resto da configuração institucional — nenhuma tela nova, e o
+          mesmo gate de OWNER/ADMIN que já protege esta página. */}
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="min-w-0 break-words">Visibilidade da carteira comercial</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            Define o que cada pessoa da equipe enxerga em Clientes, Pipeline e Agenda. Alterar
+            esta opção não transfere nem apaga nada — muda apenas quem tem acesso.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="min-w-0">
+          {/* <fieldset> + <legend>: as duas opções são uma escolha única
+              e precisam ser anunciadas como grupo por leitor de tela. */}
+          <fieldset className="min-w-0 space-y-3">
+            <legend className="sr-only">Visibilidade da carteira comercial</legend>
+            {[
+              {
+                valor: "COLLABORATIVE" as const,
+                titulo: "Compartilhada",
+                descricao:
+                  "Todos os usuários com acesso ao CRM visualizam a carteira da organização.",
+              },
+              {
+                valor: "RESTRICTED" as const,
+                titulo: "Restrita",
+                descricao:
+                  "Corretores visualizam apenas os clientes, negociações e compromissos da própria carteira. Gestores mantêm a visão da organização.",
+              },
+            ].map((opcao) => (
+              <label
+                key={opcao.valor}
+                htmlFor={`visibilidade-${opcao.valor}`}
+                className="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border p-3 has-[:checked]:border-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+              >
+                <input
+                  type="radio"
+                  id={`visibilidade-${opcao.valor}`}
+                  name="visibilidadeComercial"
+                  value={opcao.valor}
+                  defaultChecked={config.visibilidadeComercial === opcao.valor}
+                  className="mt-1 shrink-0"
+                />
+                <span className="min-w-0">
+                  <span className="block font-medium">{opcao.titulo}</span>
+                  <span className="block text-sm text-muted-foreground">{opcao.descricao}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          <ErroCampo erros={estado.fieldErrors?.visibilidadeComercial} />
+        </CardContent>
+      </Card>
 
       {/* Fuso horário (Fase 18). Fica em Configurações, junto do resto
           da configuração institucional — nenhuma tela nova. */}
