@@ -181,6 +181,31 @@ jobs:
       - name: Seed mínimo do banco de teste
         run: npx tsx prisma/seed-e2e.ts
 
+      # Fase 12 — a suíte passa a rodar contra o servidor de PRODUÇÃO no
+      # CI, não contra `next dev`. Causa raiz medida no run 34070254274:
+      # o `next dev` reiniciou 3 vezes por memória ("Server is
+      # approaching the used memory threshold, restarting..."), matando
+      # navegações em voo com ERR_CONNECTION_RESET/REFUSED; os retries
+      # somaram minutos e a suíte bateu no globalTimeout com 12 testes
+      # sem rodar. Quem consome essa memória é o COMPILADOR, que só
+      # existe em modo dev — `next start` serve o build já pronto e não
+      # tem esse crescimento.
+      #
+      # Não é máscara: nenhum timeout de teste, retry ou assertion mudou.
+      # É a remoção da causa. Local continua em `next dev`, onde o
+      # feedback rápido importa mais que a estabilidade de 358 testes
+      # seguidos (ver playwright.config.ts).
+      # NODE_ENV=test não é detalhe: é o que faz o Next carregar
+      # .env.test no BUILD. PUBLIC_ORG_SLUG é lido em build time pelos
+      # rewrites de next.config.ts (`/` -> `/{slug}`), então um build
+      # feito com o env errado serve 404 na home e derruba
+      # site-publico.spec.ts inteiro — reproduzido localmente antes de
+      # subir.
+      - name: Build de produção (servidor da suíte E2E)
+        run: npm run build
+        env:
+          NODE_ENV: test
+
       - name: "Testes E2E (fluxos críticos: login, CRUD de imóvel, isolamento de tenant, bloqueio de módulo, formulário público, mobile)"
         run: npm run test:e2e
 

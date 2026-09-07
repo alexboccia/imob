@@ -71,8 +71,28 @@ test.describe("Atribuição — jornada", () => {
     const eventos = await coletarEventos(page);
 
     await page.goto(`${BASE}/imoveis?utm_source=instagram&utm_campaign=lancamento`);
+    // Espera a PRIMEIRA página gravar a atribuição antes de navegar. Sem
+    // isso o teste corre com o script de captura: a segunda página abre
+    // com o sessionStorage ainda vazio e a jornada perde a campanha —
+    // não por bug do produto, mas porque o teste navegava antes do fato
+    // que ele quer verificar existir. A listagem não emite evento
+    // próprio, então o único sinal determinístico é o storage.
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.sessionStorage.getItem("easymob:atribuicao") !== null)
+      )
+      .toBe(true);
     await page.goto(URL_IMOVEL);
-    await expect.poll(() => eventos.length).toBeGreaterThan(0);
+    // Espera pelo evento QUE O TESTE VAI LER, não por "qualquer evento":
+    // esta jornada passa por duas páginas, e um evento da primeira já
+    // satisfaz `eventos.length > 0` — aí o find() abaixo devolvia
+    // undefined e o teste estourava. Flake real, exposto quando a suíte
+    // passou a rodar contra o servidor de produção (rápido o bastante
+    // para inverter a ordem de chegada). Mesmo padrão que o teste
+    // "nova campanha no meio da jornada" já usava.
+    await expect
+      .poll(() => eventos.filter((e) => e.type === "PROPERTY_VIEW").length)
+      .toBeGreaterThan(0);
 
     const view = eventos.find((e) => e.type === "PROPERTY_VIEW")!;
     expect(view.atribuicao).toMatchObject({ utmSource: "instagram", utmCampaign: "lancamento" });

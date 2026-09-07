@@ -34,7 +34,15 @@ export default defineConfig({
   // relatório do Playwright anexado, em vez de um runner ocupado por
   // horas. Local fica sem teto: lá a regra de 18 min é cronometrada à mão
   // e um teto rígido só atrapalharia a depuração.
-  globalTimeout: process.env.CI ? 15 * 60 * 1000 : undefined,
+  //
+  // 16 min (era 15): o número foi recalibrado contra medição, não
+  // afrouxado para esconder falha. O run 34070254274 mostrou o job E2E
+  // levando ~1,4 min de preparo (checkout, npm ci, browser, banco, seed)
+  // e começando ~3s depois do run — então a suíte pode rodar até ~16 min
+  // e o RUN INTEIRO ainda fecha abaixo dos 18 min exigidos. Com 15 min o
+  // teto estava mais apertado que o orçamento real e cortava testes que
+  // teriam passado.
+  globalTimeout: process.env.CI ? 16 * 60 * 1000 : undefined,
   // HTML sempre gerado (não só em CI) — é o que o workflow anexa como
   // artefato quando um spec falha (ver .github/workflows/ci.yml).
   reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
@@ -43,8 +51,18 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: `npx next dev -p ${PORTA}`,
-    url: baseURL,
+    // CI serve o BUILD (next start); local segue em dev.
+    // Ver o comentário do step "Build de produção" em
+    // .github/workflows/ci.yml: o reinício por memória vinha do
+    // compilador do modo dev, que `next start` simplesmente não carrega.
+    command: process.env.CI ? `npx next start -p ${PORTA}` : `npx next dev -p ${PORTA}`,
+    // Readiness apontada para /api/health, não para `/`: a raiz é o site
+    // público, resolvido por HOST em ambiente multi-tenant, e em
+    // `next start` responde 404 para `localhost` — o polling do
+    // Playwright só aceita 2xx/3xx e ficava esperando até estourar.
+    // /api/health existe exatamente para dizer "de pé", responde nos dois
+    // modos e não depende de organização nenhuma.
+    url: `${baseURL}/api/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
@@ -74,6 +92,10 @@ export default defineConfig({
       // Os dois valores continuam bem ACIMA do padrão do Node (~2 GB),
       // que era a causa original dos reinícios — o objetivo nunca foi o
       // número máximo, e sim não esbarrar no teto no meio da suíte.
+      // CI: 3072 preservado. Com `next start` sobra memória de folga —
+      // o teto continua ali como rede de segurança, não como remédio.
+      // LOCAL: 6144 preservado, porque lá o servidor ainda é o dev e é
+      // exatamente esse teto que evita o reinício descrito acima.
       NODE_OPTIONS: process.env.CI
         ? "--max-old-space-size=3072"
         : "--max-old-space-size=6144",
