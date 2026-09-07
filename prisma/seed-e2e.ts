@@ -41,6 +41,7 @@ export const IDS_E2E = {
   // Fase 22 — organização dedicada à política restrita.
   imovelOrgRestrita: "e2e-imovel-org-restrita",
   imovelOrgRestritaSegundo: "e2e-imovel-org-restrita-2",
+  imovelOrgRestritaGanho: "e2e-imovel-org-restrita-ganho",
   // Redesenho de Imóveis — ver duplicata em tests/e2e/helpers.ts.
   imovelComBadgesOrgA: "e2e-imovel-badges-a",
   // Busca do Hero — segunda cidade/bairro (todo o resto do seed usa só
@@ -1350,6 +1351,64 @@ async function main() {
     responsibleMemberId: brunoRestrito.id,
     pessoaId: compartilhado,
     imovelId: imovelCompartilhado.id,
+  });
+
+  // =====================================================================
+  // Fase 23 — dados de ANALYTICS da carteira (Organização G, RESTRITA)
+  // =====================================================================
+  // Um negócio GANHO conduzido pela Ana, com comissão dividida entre
+  // Ana e Bruno. Prova as duas dimensões distintas na tela: quem conduz
+  // (responsibleMemberId) e quem é beneficiário (participant.memberId).
+  const pessoaGanho = await prisma.person.create({
+    data: {
+      organizationId: orgRestrita.organization.id,
+      name: "Cliente Ganho Da Ana",
+      roles: ["LEAD"],
+    },
+    select: { id: true },
+  });
+  const imovelGanho = await garantirImovel({
+    id: IDS_E2E.imovelOrgRestritaGanho,
+    organizationId: orgRestrita.organization.id,
+    title: "Sobrado E2E Restrita",
+  });
+  const negocioGanho = await prisma.propertyInterest.create({
+    data: {
+      organizationId: orgRestrita.organization.id,
+      personId: pessoaGanho.id,
+      propertyId: imovelGanho.id,
+      stage: "WON",
+      responsibleMemberId: anaRestrita.id,
+      closedAt: diasAtras(2),
+      closedValue: "450000.00",
+      commissionValue: "18000.00",
+    },
+    select: { id: true },
+  });
+  const participacaoAna = await prisma.propertyInterestParticipant.create({
+    data: {
+      organizationId: orgRestrita.organization.id,
+      propertyInterestId: negocioGanho.id,
+      memberId: anaRestrita.id,
+      allocationValue: "12000.00",
+    },
+    select: { id: true },
+  });
+  await prisma.propertyInterestParticipant.create({
+    data: {
+      organizationId: orgRestrita.organization.id,
+      propertyInterestId: negocioGanho.id,
+      memberId: brunoRestrito.id,
+      allocationValue: "6000.00",
+    },
+  });
+  await prisma.propertyInterestParticipantPayment.create({
+    data: {
+      organizationId: orgRestrita.organization.id,
+      participantId: participacaoAna.id,
+      amount: "5000.00",
+      paidAt: diasAtras(1),
+    },
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);

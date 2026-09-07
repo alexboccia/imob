@@ -1,17 +1,16 @@
 import { ShieldCheck, Clock } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { temPapel, PAPEIS_MANUTENCAO } from "@/lib/authorization";
 import { LimparMidiasButton } from "@/components/admin/LimparMidiasButton";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 
 export default async function ManutencaoPage() {
   const session = await auth();
-  // AUTHORIZATION UNCHANGED — mesmo conjunto de papéis já exigido pela
-  // Server Action (actions.ts, inalterada nesta tarefa); a UI só evita
-  // oferecer uma ação que o servidor recusaria de qualquer forma.
-  const podeExecutar =
-    session?.user.role === "OWNER" ||
-    session?.user.role === "ADMIN" ||
-    session?.user.role === "MANAGER";
+  // AUTORIZAÇÃO INALTERADA — exatamente o mesmo trio de sempre, agora
+  // vindo do conjunto nomeado em src/lib/authorization.ts (Fase 23) em
+  // vez de repetido inline aqui e na action. A UI só evita oferecer uma
+  // ação que o servidor recusaria de qualquer forma.
+  const podeExecutar = temPapel(session?.user.role, PAPEIS_MANUTENCAO);
 
   return (
     <div className="space-y-5">

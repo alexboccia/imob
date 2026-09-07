@@ -60,6 +60,19 @@ export const PAPEIS_VISAO_EQUIPE: ReadonlySet<string> = new Set([
   "MANAGER",
 ]);
 
+// Fase 23 — MANUTENÇÃO do site (limpeza de mídias órfãs).
+//
+// Não muda quem tem acesso: é exatamente o trio que a Server Action e a
+// página de /app/manutencao já exigiam, escrito inline em dois lugares.
+// A Fase 21 registrou essa duplicação como dívida — ela contrariava a
+// promessa deste arquivo de ser "um único lugar de verdade", e um dos
+// dois pontos podia divergir do outro sem ninguém perceber.
+export const PAPEIS_MANUTENCAO: ReadonlySet<string> = new Set([
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+]);
+
 export function temPapel(
   role: string | undefined,
   permitidos: ReadonlySet<string>

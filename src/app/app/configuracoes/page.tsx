@@ -5,11 +5,36 @@ import { AvisoFusoNaoConfigurado } from "@/components/admin/AvisoFusoNaoConfigur
 import { opcoesDeFuso } from "@/lib/fusos-opcoes";
 import { buscarVisibilidadeComercial } from "@/lib/visibilidade-comercial";
 import { requireOrganizationId } from "@/lib/tenant";
+import { auth } from "@/lib/auth";
+import { temPapel, PAPEIS_GESTAO_CONFIGURACOES } from "@/lib/authorization";
 import { withOrganization } from "@/lib/tenant-context";
 import { ConfiguracaoContatoForm } from "@/components/admin/ConfiguracaoContatoForm";
 
 export default async function ConfiguracoesPage() {
   const organizationId = await requireOrganizationId();
+
+  // Fase 23 — gate de PÁGINA, fechando a dívida que a Fase 22 registrou:
+  // a Server Action já exigia PAPEIS_GESTAO_CONFIGURACOES, mas a tela
+  // abria para qualquer membro. Um corretor via a configuração inteira
+  // da organização — inclusive a política de visibilidade comercial e o
+  // fuso — e só descobria que não podia mudar nada ao tentar salvar.
+  //
+  // Mesmo conjunto de papéis da action, mesmo padrão de recusa das
+  // outras telas administrativas (ver /app/usuarios/[id]): mensagem
+  // curta, nenhum dado carregado. Nada abaixo desta checagem executa,
+  // então nenhuma consulta de configuração chega a rodar.
+  const session = await auth();
+  if (!temPapel(session?.user.role, PAPEIS_GESTAO_CONFIGURACOES)) {
+    return (
+      <div className="max-w-lg">
+        <h1 className="min-w-0 break-words text-2xl font-semibold">Configurações</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Apenas administradores podem alterar as configurações da imobiliária.
+        </p>
+      </div>
+    );
+  }
+
   const [config, branding, fuso, fusoConfigurado, visibilidadeComercial] = await withOrganization(organizationId, () =>
     Promise.all([
       buscarConfiguracaoContato(organizationId),

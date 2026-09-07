@@ -7,6 +7,10 @@ import {
   PERIODO_ANALYTICS_LABEL,
 } from "@/lib/analytics-comercial";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
+import { auth } from "@/lib/auth";
+import { escopoComercialDaSessao } from "@/lib/escopo-comercial-sessao";
+import { buscarAnalyticsCarteira } from "@/lib/analytics-carteira";
+import { AnalyticsCarteira } from "@/components/admin/analytics/AnalyticsCarteira";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { AnalyticsPeriodoChips } from "@/components/admin/analytics/AnalyticsPeriodoChips";
 import { AnalyticsKpiCards } from "@/components/admin/analytics/AnalyticsKpiCards";
@@ -78,8 +82,49 @@ export default async function AnalyticsPage({
   // CALENDÁRIO DA ORGANIZAÇÃO. A semântica declarada na tela é a mesma:
   // N dias fechados terminando hoje. Só o calendário mudou de dono.
   const fuso = await buscarFusoOrganizacao(organizationId);
-  const analytics = await buscarAnalyticsComercial(organizationId, fuso, { periodo });
   const periodoLabel = PERIODO_ANALYTICS_LABEL[periodo];
+
+  // Fase 23 — a política da Fase 22 finalmente alcança o Analytics.
+  //
+  // A decisão NÃO é filtrar as consultas organizacionais por membro: a
+  // maioria delas mede o site público e os contatos recebidos pela
+  // imobiliária, que não pertencem a corretor nenhum (ver a auditoria em
+  // src/lib/analytics-carteira.ts). Em escopo de MEMBRO a tela troca de
+  // conteúdo para o que tem posse real, em vez de mostrar os mesmos
+  // cards com números filtrados e significado falso.
+  const escopo = await escopoComercialDaSessao(organizationId);
+  const session = await auth();
+  const memberId = session?.user.organizationMemberId ?? null;
+  // Falha FECHADA: escopo de membro sem vínculo não cai na visão
+  // organizacional — fica com uma carteira vazia.
+  const carteira =
+    escopo.tipo === "MEMBRO"
+      ? await buscarAnalyticsCarteira(organizationId, memberId ?? escopo.memberId, fuso, {
+          periodo,
+        })
+      : null;
+  if (carteira) {
+    return (
+      <div className="space-y-5">
+        <div className="min-w-0">
+          <h1 className="min-w-0 break-words text-2xl font-semibold">Analytics comercial</h1>
+          {/* O título de escopo é textual e explícito: nunca "Resultado
+              da imobiliária" com números do usuário. */}
+          <p className="text-sm text-muted-foreground">
+            Minha carteira — os números abaixo são apenas seus.
+          </p>
+        </div>
+
+        <AnalyticsPeriodoChips periodo={periodo} />
+        <AnalyticsCarteira dados={carteira} periodoLabel={periodoLabel} />
+      </div>
+    );
+  }
+
+  // Escopo de ORGANIZAÇÃO: a consulta é EXATAMENTE a de sempre — nenhum
+  // predicado novo, nenhuma linha alterada. É a garantia mais forte de
+  // que nada regride para tenant colaborativo nem para gestor.
+  const analytics = await buscarAnalyticsComercial(organizationId, fuso, { periodo });
 
   return (
     <div className="space-y-5">
@@ -89,7 +134,8 @@ export default async function AnalyticsPage({
       <div className="min-w-0">
         <h1 className="min-w-0 break-words text-2xl font-semibold">Analytics comercial</h1>
         <p className="text-sm text-muted-foreground">
-          Como o mercado procurou a sua imobiliária pelos formulários do site.
+          Visão da imobiliária — como o mercado procurou a sua imobiliária pelos formulários do
+          site.
         </p>
       </div>
 

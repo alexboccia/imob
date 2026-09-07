@@ -124,12 +124,30 @@ export const HOSTNAME_E2E_ORG_B = "b.e2e-dominio-teste.test";
 // troca possível — e vários cenários de visibilidade precisam comparar
 // dois corretores na mesma execução.
 export async function entrarComo(page: Page, credenciais: { email: string; senha: string }) {
-  await page.context().clearCookies();
-  await login(page, credenciais);
+  // Limpar os cookies e ir direto para o formulário tem uma janela de
+  // corrida: uma requisição em voo da página anterior pode reescrever o
+  // cookie de sessão, e /app/login então REDIRECIONA para /app — o campo
+  // #email nunca aparece e o fill estoura por timeout.
+  //
+  // Garante o estado deslogado ANTES de preencher, e preenche NA PÁGINA
+  // JÁ VERIFICADA: uma primeira versão deste helper navegava, conferia, e
+  // então chamava login(), que navegava de novo — a segunda navegação
+  // reintroduzia exatamente a corrida que a conferência tinha eliminado.
+  // Nada aqui é timeout maior nem retry de teste.
+  for (let tentativa = 0; tentativa < 2; tentativa++) {
+    await page.context().clearCookies();
+    await page.goto("/app/login");
+    if (await page.locator("#email").count()) break;
+  }
+  await preencherLogin(page, credenciais);
 }
 
 export async function login(page: Page, credenciais: { email: string; senha: string }) {
   await page.goto("/app/login");
+  await preencherLogin(page, credenciais);
+}
+
+async function preencherLogin(page: Page, credenciais: { email: string; senha: string }) {
   await page.locator("#email").fill(credenciais.email);
   await page.locator("#senha").fill(credenciais.senha);
   await page.getByRole("button", { name: "Entrar" }).click();

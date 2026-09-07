@@ -192,24 +192,25 @@ test.describe("configuração da política", () => {
     await expect(page.locator("#visibilidade-RESTRICTED")).toBeChecked();
   });
 
-  // ACHADO DA AUDITORIA, registrado como dívida: a PÁGINA de
-  // Configurações não tem gate de papel — só a Server Action tem
-  // (PAPEIS_GESTAO_CONFIGURACOES). Um corretor consegue abrir a tela;
-  // o que ele não consegue é SALVAR. É isso que se prova aqui, porque é
-  // isso que está de fato imposto.
-  test("corretor não consegue alterar a política, mesmo abrindo a tela", async ({ page }) => {
+  // FASE 23 — esta dívida foi FECHADA. A Fase 22 registrou que a página
+  // de Configurações não tinha gate de papel (só a action tinha), e este
+  // teste provava o que estava de fato imposto: o corretor abria a tela
+  // e não conseguia salvar. Agora a página também recusa, então a
+  // asserção mudou junto com o comportamento — não foi enfraquecida.
+  test("corretor não recebe a tela de Configurações nem consegue alterar a política", async ({
+    page,
+  }) => {
     await entrarComo(page, ORG_RESTRITA_ANA);
     await page.goto("/app/configuracoes");
 
-    await page.locator("#visibilidade-COLLABORATIVE").check();
-    await Promise.all([
-      page.waitForResponse(
-        (r) => r.request().method() === "POST" && r.url().includes("/app/configuracoes")
-      ),
-      page.getByRole("button", { name: /Salvar alterações/ }).click(),
-    ]);
+    // O formulário não é sequer entregue.
+    await expect(page.locator("#visibilidade-COLLABORATIVE")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Salvar alterações/ })).toHaveCount(0);
+    await expect(
+      page.getByText("Apenas administradores podem alterar as configurações da imobiliária.")
+    ).toBeVisible();
 
-    // A política continua RESTRITA — o servidor recusou.
+    // A política continua RESTRITA.
     await entrarComo(page, ORG_RESTRITA);
     await page.goto("/app/configuracoes");
     await expect(page.locator("#visibilidade-RESTRICTED")).toBeChecked();

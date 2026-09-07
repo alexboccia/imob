@@ -2,6 +2,7 @@
 
 import { ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { auth } from "@/lib/auth";
+import { temPapel, PAPEIS_MANUTENCAO } from "@/lib/authorization";
 import { prisma } from "@/lib/prisma";
 import { getR2Client } from "@/lib/r2";
 import { requireOrganizationId } from "@/lib/tenant";
@@ -11,10 +12,7 @@ const IDADE_MINIMA_MS = 24 * 60 * 60 * 1000;
 
 export async function limparMidiasOrfas() {
   const session = await auth();
-  if (
-    !session ||
-    (session.user.role !== "OWNER" && session.user.role !== "ADMIN" && session.user.role !== "MANAGER")
-  ) {
+  if (!session || !temPapel(session.user.role, PAPEIS_MANUTENCAO)) {
     throw new Error(
       "Apenas administradores ou gestores podem executar essa limpeza."
     );
