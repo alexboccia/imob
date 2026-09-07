@@ -26,6 +26,7 @@ import { RecomendacaoImovelItem } from "@/components/admin/RecomendacaoImovelIte
 import { buscarImoveisCompativeis } from "@/lib/property-matching";
 import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
 import { paraResponsavel } from "@/lib/responsavel-negociacao";
+import { paraParticipantes } from "@/lib/participacao-comissao";
 import { auth } from "@/lib/auth";
 import {
   Select,
@@ -91,6 +92,25 @@ export default async function DetalheClientePage({
                 orderBy: { scheduledAt: "asc" },
                 take: 1,
                 select: { id: true, scheduledAt: true, notes: true },
+              },
+              // Fase 12 — participantes da divisão, no MESMO select
+              // batched das demais relações: uma query para a lista
+              // inteira, nunca uma por negociação (zero N+1).
+              participants: {
+                where: { organizationId },
+                select: {
+                  id: true,
+                  memberId: true,
+                  organizationId: true,
+                  allocationValue: true,
+                  member: {
+                    select: {
+                      status: true,
+                      organizationId: true,
+                      user: { select: { name: true } },
+                    },
+                  },
+                },
               },
               // Fase 11 — responsável pela negociação, no mesmo select
               // batched das demais relações. Nunca uma query por card.
@@ -279,6 +299,15 @@ export default async function DetalheClientePage({
                     // Membro de outro tenant é redigido para null dentro
                     // de paraResponsavel — o nome jamais chega à tela.
                     responsavel: paraResponsavel(interesse.responsibleMember, organizationId),
+                    // Mesma defesa em paraParticipantes: linha anômala
+                    // apontando para outro tenant é descartada na leitura.
+                    participantes: paraParticipantes(
+                      interesse.participants.map((p) => ({
+                        ...p,
+                        allocationValue: decimalParaValor(p.allocationValue),
+                      })),
+                      organizationId
+                    ),
                   }}
                 />
               ))}

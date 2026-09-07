@@ -13,6 +13,8 @@ import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
 import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
 import { ResponsavelNegociacao } from "@/components/admin/ResponsavelNegociacao";
+import { DivisaoComissao } from "@/components/admin/DivisaoComissao";
+import type { ParticipanteExibicao } from "@/lib/participacao-comissao";
 import type { OpcaoResponsavel, ResponsavelNegociacao as Responsavel } from "@/lib/responsavel-negociacao";
 import {
   ESTAGIOS_INTERESSE,
@@ -59,6 +61,9 @@ export function InteresseImovelItem({
     // Fase 11 — null = "Sem responsável" (negociação anterior a esta
     // fase, sem backfill, ou deixada sem dono de propósito).
     responsavel: Responsavel | null;
+    // Fase 12 — divisão da comissão. Lista vazia = nada distribuído;
+    // nunca significa "o responsável ficou com tudo".
+    participantes: ParticipanteExibicao[];
   };
 }) {
   const proximaAcao = obterProximaAcaoComercial(interesse.stage, interesse.property.status);
@@ -182,6 +187,17 @@ export function InteresseImovelItem({
           responsavel={interesse.responsavel}
           membros={membros}
           encerrada={estagioInteresseEncerrado(interesse.stage)}
+        />
+
+        {/* Fase 12 — depois do fechamento na ordem de leitura: primeiro
+            quanto o negócio valeu e qual foi a comissão, depois como ela
+            foi dividida. */}
+        <DivisaoComissao
+          interesseId={interesse.id}
+          commissionValue={interesse.commissionValue}
+          responsavel={interesse.responsavel}
+          participantes={interesse.participantes}
+          membros={membros}
         />
 
         <FechamentoInteresse

@@ -416,6 +416,11 @@ async function main() {
       where: { responsibleMemberId: { in: idsMembros } },
       data: { responsibleMemberId: null },
     });
+    // Fase 12 — participação NÃO é anulável (FK RESTRICT, de propósito):
+    // a linha inteira sai junto com o membro descartável.
+    await prisma.propertyInterestParticipant.deleteMany({
+      where: { memberId: { in: idsMembros } },
+    });
     await prisma.notificationPreference.deleteMany({
       where: { organizationMemberId: { in: idsMembros } },
     });
@@ -794,6 +799,20 @@ async function main() {
         // Fase 11 — negociação COM responsável: dá à tabela "Performance
         // por responsável" uma linha com nome, ganho, valor e comissão.
         responsibleMemberId: orgAnalytics.membro.id,
+        // Fase 12 — divisão PARCIAL e determinística: de R$ 42.500 de
+        // comissão, R$ 25.000 são atribuídos ao dono da organização e
+        // R$ 17.500 ficam NÃO DISTRIBUÍDOS. É exatamente o estado que a
+        // tela precisa provar — saldo declarado, nunca atribuído a
+        // ninguém automaticamente.
+        participants: {
+          create: [
+            {
+              organizationId: orgAnalytics.organization.id,
+              memberId: orgAnalytics.membro.id,
+              allocationValue: 25000,
+            },
+          ],
+        },
       },
     });
     await prisma.propertyInterestStageHistory.create({

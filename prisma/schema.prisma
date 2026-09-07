@@ -671,6 +671,9 @@ model PropertyInterest {
 
   scheduledActivities ScheduledActivity[]
   stageHistory        PropertyInterestStageHistory[]
+  // Fase 12 — divisão da comissão deste negócio. Lista VAZIA por padrão:
+  // não existe split presumido, nem 100% para o responsável.
+  participants        PropertyInterestParticipant[]
 
   // @@unique([organizationId, personId, propertyId]) já serve, por prefixo
   // esquerdo, tanto consultas só por organizationId quanto por
@@ -707,6 +710,80 @@ model PropertyInterest {
 // backfill; ausência de histórico = aging indisponível, nunca uma origem
 // fake). newStage obrigatório: toda linha representa uma transição que de
 // fato aconteceu, gravada na MESMA transação que a mudança de stage.
+// =======================================================================
+// Participante da negociação (Fase 12)
+// =======================================================================
+// Quem tem participação ECONÔMICA num negócio, e quanto da comissão foi
+// atribuído a essa pessoa.
+//
+// POR QUE UMA TABELA NOVA: auditoria da fase varreu participant/split/
+// co-broker/parceiro/beneficiário/repasse/percentual em schema,
+// migrations, actions, analytics, roles e testes — não existia NADA.
+// `DealPerson` parece um join de participação, mas liga Deal a Person
+// (os CLIENTES do negócio), e Deal segue sendo código morto. Cenário C:
+// o domínio precisava ser criado.
+//
+// NÃO É O RESPONSÁVEL. PropertyInterest.responsibleMemberId diz quem
+// CONDUZ a negociação; esta tabela diz quem PARTICIPA do dinheiro. São
+// dimensões diferentes e coexistem: o responsável só vira participante
+// se alguém disser explicitamente que ele é.
+//
+// SEM DEFAULT: nenhuma linha nasce sozinha. Não existe "100% para o
+// responsável", não existe 50/50, não existe percentual de mercado.
+// Comissão sem participante é comissão NÃO DISTRIBUÍDA, e a tela diz
+// isso em vez de inventar um destino.
+model PropertyInterestParticipant {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // CASCADE: participação não existe sem a negociação. É também o que
+  // mantém a ordem de exclusão da organização inteira correta — os
+  // participantes somem junto com o PropertyInterest, que já é apagado
+  // antes de organization_members.
+  propertyInterestId String
+  propertyInterest   PropertyInterest @relation(fields: [propertyInterestId], references: [id], onDelete: Cascade)
+
+  // RESTRICT (default do Prisma para relação obrigatória) — e aqui a
+  // escolha é DELIBERADAMENTE diferente da política SET NULL usada pelas
+  // FKs de ownership. Uma alocação financeira sem beneficiário seria
+  // "R$ 20.000 atribuídos a ninguém": pior que um erro, é um dado que
+  // mente. Membro nunca é apagado no ciclo de vida do tenant (auditado
+  // na Fase 11: /app/usuarios só alterna ACTIVE <-> SUSPENDED), então na
+  // prática este RESTRICT nunca dispara — ele existe para que a
+  // identidade financeira não possa ser perdida em silêncio.
+  memberId String
+  member   OrganizationMember @relation("ParticipantMember", fields: [memberId], references: [id])
+
+  // Parcela da comissão atribuída a este participante, em dinheiro.
+  //
+  // FONTE DE VERDADE ÚNICA, mesma decisão da Fase 10: nenhum percentual é
+  // persistido. A tela oferece um atalho de "%" que só CALCULA o valor no
+  // navegador; guardar os dois criaria duas fontes que divergem na
+  // primeira correção do total.
+  //
+  // OPCIONAL: dá para registrar QUEM participou antes de saber QUANTO —
+  // a comissão total costuma ser definida depois do fechamento.
+  //   null = parcela ainda não definida (declarado na tela)
+  //   0    = impossível, a validação recusa; "sem parcela" já se diz com
+  //          null, e aceitar zero confundiria os dois estados.
+  // Atribuir valor exige commissionValue conhecida: sem total, não há
+  // limite contra o qual validar a soma.
+  allocationValue Decimal? @db.Decimal(14, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Uma participação por membro por negociação. Duas linhas do mesmo
+  // membro tornariam a soma ambígua e a edição imprevisível.
+  @@unique([propertyInterestId, memberId])
+  // Serve a leitura real do Analytics ("participações desta organização
+  // no período") e o agrupamento por membro. O carregamento por
+  // negociação já é servido pelo prefixo esquerdo da @@unique acima.
+  @@index([organizationId, memberId])
+  @@map("property_interest_participants")
+}
+
 model PropertyInterestStageHistory {
   id             String       @id @default(cuid())
   organizationId String
@@ -924,15 +1001,19 @@ model OrganizationMember {
   updatedAt DateTime @updatedAt
 
   notificationPreferences    NotificationPreference[]
-  responsibleProperties      Property[]               @relation("PropertyResponsibleMember")
+  responsibleProperties      Property[]                    @relation("PropertyResponsibleMember")
   // Fase 11 — negociações sob responsabilidade deste membro. Relação
   // SEPARADA de responsibleProperties de propósito: ser responsável pelo
   // imóvel não torna ninguém responsável pela negociação daquele imóvel.
-  responsibleInterests       PropertyInterest[]       @relation("PropertyInterestResponsibleMember")
-  assignedPeople             Person[]                 @relation("PersonAssignedMember")
-  interactions               Interaction[]            @relation("InteractionMember")
-  deals                      Deal[]                   @relation("DealMember")
-  createdScheduledActivities ScheduledActivity[]      @relation("ScheduledActivityCreatedByMember")
+  responsibleInterests       PropertyInterest[]            @relation("PropertyInterestResponsibleMember")
+  // Fase 12 — participações econômicas em negócios. SEPARADA de
+  // responsibleInterests de propósito: conduzir a negociação não implica
+  // receber parcela nenhuma da comissão.
+  commissionParticipations   PropertyInterestParticipant[] @relation("ParticipantMember")
+  assignedPeople             Person[]                      @relation("PersonAssignedMember")
+  interactions               Interaction[]                 @relation("InteractionMember")
+  deals                      Deal[]                        @relation("DealMember")
+  createdScheduledActivities ScheduledActivity[]           @relation("ScheduledActivityCreatedByMember")
 
   @@unique([organizationId, userId])
   @@map("organization_members")
@@ -989,6 +1070,7 @@ model Organization {
   ownerInviteTokens            OwnerInviteToken[]
   domains                      OrganizationDomain[]
   emailDomain                  OrganizationEmailDomain?
+  propertyInterestParticipants PropertyInterestParticipant[]
 
   @@map("organizations")
 }

@@ -16,6 +16,7 @@ import { AnalyticsFunilDigital } from "@/components/admin/analytics/AnalyticsFun
 import { AnalyticsAquisicao } from "@/components/admin/analytics/AnalyticsAquisicao";
 import { AnalyticsResultado } from "@/components/admin/analytics/AnalyticsResultado";
 import { AnalyticsResponsaveis } from "@/components/admin/analytics/AnalyticsResponsaveis";
+import { AnalyticsParticipacao } from "@/components/admin/analytics/AnalyticsParticipacao";
 
 // Analytics comercial (Fase 5).
 //
@@ -114,6 +115,10 @@ export default async function AnalyticsPage({
         semOwnership={analytics.semOwnership}
       />
 
+      {/* Fase 12 — logo depois de "quem conduziu", vem "quem participa
+          do dinheiro". As duas dimensões coexistem, nunca se substituem. */}
+      <AnalyticsParticipacao participacao={analytics.participacao} periodoLabel={periodoLabel} />
+
       <AnalyticsAquisicao
         aquisicao={analytics.aquisicao}
         periodoLabel={periodoLabel}
@@ -173,6 +178,13 @@ export default async function AnalyticsPage({
             medição aparecem em “Sem responsável”, porque nenhuma foi atribuída retroativamente. A
             comissão agrupada por responsável é a dos negócios sob responsabilidade dessa pessoa,
             e não uma afirmação de quanto ela recebeu.
+          </li>
+          <li>
+            A divisão da comissão é <strong>declarada pela equipe</strong>, participante por
+            participante. Nada é dividido automaticamente: ser responsável pela negociação não dá
+            a ninguém parcela nenhuma, e o que não foi atribuído aparece como “não distribuída” em
+            vez de ganhar um destino inventado. “Comissão atribuída” não é valor recebido — o
+            sistema não registra pagamento, imposto nem repasse.
           </li>
           <li>
             O canal de aquisição descreve <strong>a visita</strong> (de onde a pessoa chegou desta

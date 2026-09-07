@@ -317,6 +317,9 @@ export async function limparOrganizacao(
   // precisa sair antes do Property. (personId é CASCADE, sairia sozinho
   // com o Person.deleteMany abaixo, mas isso não ajuda aqui porque
   // Property.deleteMany roda antes do Person.deleteMany nesta função.)
+  // Fase 12 — mesma razão da exclusão de organização em platform: a FK
+  // do participante para OrganizationMember é RESTRICT.
+  await prisma.propertyInterestParticipant.deleteMany({ where: { organizationId } });
   await prisma.propertyInterest.deleteMany({ where: { organizationId } });
   // Property cascateia Media, PropertyStatusHistory e PortalListing.
   await prisma.property.deleteMany({ where: { organizationId } });

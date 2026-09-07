@@ -17,6 +17,10 @@ import { interpretarValorFechamento, decimalParaValor } from "@/lib/valor-fecham
 import { interpretarComissao, comissaoExcedeValorFechado } from "@/lib/comissao";
 import { membroPodeReceberNegociacao } from "@/lib/responsavel-negociacao";
 import {
+  interpretarAlocacao,
+  validarAlocacaoContraTotal,
+} from "@/lib/participacao-comissao";
+import {
   erroAcessoNegado,
   erroGenerico,
   erroValidacao,
@@ -1369,6 +1373,315 @@ export async function transferirResponsavelNegociacao(
     revalidatePath(`/app/imoveis/${resultado.propertyId}`);
     revalidatePath("/app/pipeline");
     return sucesso("Responsável atualizado.");
+  });
+}
+
+// =====================================================================
+// Fase 12 — PARTICIPANTES da negociação e divisão da comissão
+// =====================================================================
+// commissionValue (Fase 10) é a comissão TOTAL do negócio. Estas ações
+// registram quem participa dela e com quanto — sempre por decisão
+// explícita, nunca por dedução.
+//
+// O QUE ESTAS AÇÕES NUNCA FAZEM:
+//   - não criam participante sozinhas (nem o responsável, nem ninguém);
+//   - não distribuem o saldo restante para alguém;
+//   - não presumem 100%, 50/50 nem percentual de mercado;
+//   - não persistem percentual — o "%" da tela só calcula um valor.
+//
+// EDIÇÃO DEPOIS DO FECHAMENTO É PERMITIDA, diferente da transferência de
+// responsável (Fase 11, bloqueada em WON/REJECTED). O motivo é o fluxo
+// real: a comissão costuma ser conhecida DEPOIS do fechamento, e a
+// divisão depende dela — travar o split ao fechar tornaria impossível
+// registrar a divisão da maioria dos negócios reais. Em troca, toda
+// alteração é auditada em ActivityLog.
+//
+// CONCORRÊNCIA: a soma das parcelas é uma invariante que atravessa
+// linhas, então ler-somar-gravar sem proteção permitiria que duas
+// escritas simultâneas passassem juntas do teto. Todas as três ações
+// abaixo serializam pelo MESMO advisory lock, keyed na negociação —
+// mesmo mecanismo já usado em criarPessoa para o limite de plano.
+// pg_advisory_xact_lock é liberado no commit/rollback, nunca precisa de
+// unlock explícito, e trava só esta negociação (não a organização).
+// O cliente de transação vem do prisma ESTENDIDO (src/lib/prisma.ts usa
+// $extends para o tenant-scoping), cujo tipo não é Prisma.TransactionClient.
+// Derivar do próprio $transaction mantém os dois em sincronia sozinhos.
+type ClienteTransacao = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+async function travarDivisao(
+  tx: ClienteTransacao,
+  organizationId: string,
+  interesseId: string
+) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${`split:${interesseId}`}))`;
+}
+
+// Carrega, DENTRO da transação já travada, tudo que a validação precisa:
+// a negociação (com a comissão total) e as participações existentes.
+async function carregarDivisao(
+  tx: ClienteTransacao,
+  organizationId: string,
+  interesseId: string
+) {
+  const interesse = await tx.propertyInterest.findUnique({
+    where: { id: interesseId, organizationId },
+    select: { id: true, personId: true, propertyId: true, commissionValue: true },
+  });
+  if (!interesse) return null;
+  const participantes = await tx.propertyInterestParticipant.findMany({
+    where: { organizationId, propertyInterestId: interesseId },
+    select: { id: true, memberId: true, allocationValue: true },
+  });
+  return { interesse, participantes };
+}
+
+function revalidarDivisao(personId: string, propertyId: string) {
+  revalidatePath(`/app/clientes/${personId}`);
+  revalidatePath(`/app/imoveis/${propertyId}`);
+  revalidatePath("/app/pipeline");
+}
+
+// Adiciona um participante à divisão. A parcela é OPCIONAL: dá para
+// registrar quem participou antes de saber quanto.
+export async function adicionarParticipante(
+  interesseId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  // AUTORIZAÇÃO: o produto não tem papel financeiro (OrganizationRole
+  // cobre gestão de usuários/plataforma, não "financeiro"), então o gate
+  // é o do CRM — inventar um papel aqui seria criar domínio sem
+  // evidência. Limitação documentada; o rastro fica no ActivityLog.
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  const membroId = String(formData.get("memberId") ?? "").trim();
+  if (!membroId) return erroGenerico("Selecione um participante.");
+  const membroValidado = await validarMembroAtribuivel(organizationId, membroId);
+  if (!membroValidado.ok) return erroGenerico(membroValidado.erro);
+
+  const alocacao = interpretarAlocacao(formData.get("valorParticipacao"));
+  if (!alocacao.ok) return erroGenerico(alocacao.erro);
+
+  return withOrganization(organizationId, async () => {
+    const resultado = await prisma.$transaction(async (tx) => {
+      await travarDivisao(tx, organizationId, interesseId);
+      const dados = await carregarDivisao(tx, organizationId, interesseId);
+      if (!dados) return { tipo: "nao_encontrado" as const };
+
+      if (dados.participantes.some((p) => p.memberId === membroId)) {
+        return { tipo: "duplicado" as const };
+      }
+
+      const validacao = validarAlocacaoContraTotal(
+        alocacao.valor,
+        decimalParaValor(dados.interesse.commissionValue),
+        dados.participantes.map((p) => decimalParaValor(p.allocationValue))
+      );
+      if (!validacao.ok) return { tipo: "invalido" as const, erro: validacao.erro };
+
+      const criado = await tx.propertyInterestParticipant.create({
+        data: {
+          organizationId,
+          propertyInterestId: interesseId,
+          memberId: membroId,
+          allocationValue: alocacao.valor,
+        },
+        select: { id: true },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          organizationId,
+          userId: session.user.id,
+          entity: "PropertyInterest",
+          entityId: interesseId,
+          action: "property_interest_participant_added",
+          // Só ids e valores: nome de membro é PII desnecessária no log.
+          payload: { participantId: criado.id, memberId: membroId, valor: alocacao.valor },
+        },
+      });
+
+      return {
+        tipo: "ok" as const,
+        personId: dados.interesse.personId,
+        propertyId: dados.interesse.propertyId,
+      };
+    });
+
+    if (resultado.tipo === "nao_encontrado") return erroAcessoNegado("Negociação não encontrada.");
+    if (resultado.tipo === "duplicado") {
+      return erroGenerico("Este usuário já participa da divisão desta negociação.");
+    }
+    if (resultado.tipo === "invalido") return erroGenerico(resultado.erro);
+
+    revalidarDivisao(resultado.personId, resultado.propertyId);
+    return sucesso("Participante adicionado.");
+  });
+}
+
+// Altera a parcela de um participante já existente. Campo vazio volta o
+// valor para "ainda não definida" (null), que é um estado legítimo — e
+// diferente de zero, que a validação recusa.
+export async function atualizarParticipante(
+  participanteId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  const alocacao = interpretarAlocacao(formData.get("valorParticipacao"));
+  if (!alocacao.ok) return erroGenerico(alocacao.erro);
+
+  return withOrganization(organizationId, async () => {
+    const resultado = await prisma.$transaction(async (tx) => {
+      // O id da negociação vem do PRÓPRIO registro, nunca do formulário:
+      // não há como o navegador apontar a edição para outra negociação.
+      const atual = await tx.propertyInterestParticipant.findUnique({
+        where: { id: participanteId, organizationId },
+        select: { id: true, propertyInterestId: true, memberId: true, allocationValue: true },
+      });
+      if (!atual) return { tipo: "nao_encontrado" as const };
+
+      await travarDivisao(tx, organizationId, atual.propertyInterestId);
+      const dados = await carregarDivisao(tx, organizationId, atual.propertyInterestId);
+      if (!dados) return { tipo: "nao_encontrado" as const };
+
+      // A própria linha sai do conjunto comparado: editar uma parcela não
+      // pode competir com ela mesma no teto.
+      const outras = dados.participantes
+        .filter((p) => p.id !== participanteId)
+        .map((p) => decimalParaValor(p.allocationValue));
+      const validacao = validarAlocacaoContraTotal(
+        alocacao.valor,
+        decimalParaValor(dados.interesse.commissionValue),
+        outras
+      );
+      if (!validacao.ok) return { tipo: "invalido" as const, erro: validacao.erro };
+
+      const anterior = decimalParaValor(atual.allocationValue);
+      if (anterior === alocacao.valor) return { tipo: "sem_mudanca" as const };
+
+      await tx.propertyInterestParticipant.update({
+        where: { id: participanteId, organizationId },
+        data: { allocationValue: alocacao.valor },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          organizationId,
+          userId: session.user.id,
+          entity: "PropertyInterest",
+          entityId: atual.propertyInterestId,
+          action: "property_interest_participant_updated",
+          payload: {
+            participantId: participanteId,
+            memberId: atual.memberId,
+            valorDe: anterior,
+            valorPara: alocacao.valor,
+          },
+        },
+      });
+
+      return {
+        tipo: "ok" as const,
+        personId: dados.interesse.personId,
+        propertyId: dados.interesse.propertyId,
+      };
+    });
+
+    if (resultado.tipo === "nao_encontrado") return erroAcessoNegado("Participação não encontrada.");
+    if (resultado.tipo === "invalido") return erroGenerico(resultado.erro);
+    if (resultado.tipo === "sem_mudanca") return sucesso("Participação mantida.");
+
+    revalidarDivisao(resultado.personId, resultado.propertyId);
+    return sucesso("Participação atualizada.");
+  });
+}
+
+// Remove um participante da divisão. Não redistribui a parcela dele para
+// ninguém: o valor volta a ser saldo NÃO DISTRIBUÍDO, e a tela diz isso.
+export async function removerParticipante(
+  participanteId: string,
+  // Assinatura exigida por useActionState; nenhum dos dois é lido — o
+  // único input desta ação é o participanteId bindado (mesmo padrão e
+  // mesmo disable de criarOportunidadeDoContato).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  return withOrganization(organizationId, async () => {
+    const resultado = await prisma.$transaction(async (tx) => {
+      const atual = await tx.propertyInterestParticipant.findUnique({
+        where: { id: participanteId, organizationId },
+        select: {
+          id: true,
+          propertyInterestId: true,
+          memberId: true,
+          allocationValue: true,
+          propertyInterest: { select: { personId: true, propertyId: true, organizationId: true } },
+        },
+      });
+      if (!atual || atual.propertyInterest.organizationId !== organizationId) {
+        return { tipo: "nao_encontrado" as const };
+      }
+
+      await travarDivisao(tx, organizationId, atual.propertyInterestId);
+
+      const removido = await tx.propertyInterestParticipant.deleteMany({
+        where: { id: participanteId, organizationId },
+      });
+      if (removido.count === 0) return { tipo: "corrida" as const };
+
+      await tx.activityLog.create({
+        data: {
+          organizationId,
+          userId: session.user.id,
+          entity: "PropertyInterest",
+          entityId: atual.propertyInterestId,
+          action: "property_interest_participant_removed",
+          payload: {
+            participantId: participanteId,
+            memberId: atual.memberId,
+            valor: decimalParaValor(atual.allocationValue),
+          },
+        },
+      });
+
+      return {
+        tipo: "ok" as const,
+        personId: atual.propertyInterest.personId,
+        propertyId: atual.propertyInterest.propertyId,
+      };
+    });
+
+    if (resultado.tipo === "nao_encontrado") return erroAcessoNegado("Participação não encontrada.");
+    if (resultado.tipo === "corrida") {
+      return erroGenerico("Não foi possível concluir agora devido a uma alteração concorrente — tente novamente.");
+    }
+
+    revalidarDivisao(resultado.personId, resultado.propertyId);
+    return sucesso("Participante removido.");
   });
 }
 

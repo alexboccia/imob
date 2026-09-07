@@ -420,6 +420,13 @@ export async function deletarOrganization(
       // PropertyInterest também (FK restrict pra Property).
       await tx.deal.deleteMany({ where: { organizationId } });
       await tx.interaction.deleteMany({ where: { organizationId } });
+      // Fase 12 — participantes saem antes: a FK para OrganizationMember
+      // é RESTRICT (identidade financeira nunca se perde em silêncio), e
+      // sem isso a exclusão do membro mais abaixo seria bloqueada. O
+      // CASCADE de propertyInterest também os removeria, mas depender
+      // disso deixaria a ordem correta por acidente em vez de por
+      // decisão.
+      await tx.propertyInterestParticipant.deleteMany({ where: { organizationId } });
       await tx.propertyInterest.deleteMany({ where: { organizationId } });
       await tx.property.deleteMany({ where: { organizationId } });
       await tx.person.deleteMany({ where: { organizationId } });

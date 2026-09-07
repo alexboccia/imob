@@ -23,6 +23,12 @@ import {
   type LinhaResponsavel,
 } from "@/lib/responsavel-negociacao";
 import {
+  agruparPorParticipante,
+  paraParticipantes,
+  resumirDivisao,
+  type LinhaParticipante,
+} from "@/lib/participacao-comissao";
+import {
   classificarCanal,
   rotuloCanal,
   ORDEM_CANAIS,
@@ -853,6 +859,23 @@ export type ImovelMaisProcurado = {
   taxaConversao: number | null;
 };
 
+// Fase 12 — agregado da divisão da comissão no período.
+export type ParticipacaoComissao = {
+  participantes: LinhaParticipante[];
+  // Σ das parcelas atribuídas nos ganhos do período.
+  comissaoAtribuida: number;
+  // Σ de (comissão - atribuído), SOMENTE nos ganhos que têm comissão
+  // registrada. Ganho sem comissão não contribui: não há saldo do que
+  // nunca foi registrado.
+  comissaoNaoDistribuida: number;
+  ganhosComDivisao: number;
+  // Ganhos que TÊM comissão registrada e nenhum participante — é o que a
+  // tela declara em vez de atribuir o valor a alguém.
+  ganhosComComissaoSemDivisao: number;
+  // true quando nenhum ganho do período tem divisão registrada.
+  semDivisao: boolean;
+};
+
 export type AnalyticsComercial = {
   periodo: PeriodoAnalytics;
   granularidade: Granularidade;
@@ -873,6 +896,10 @@ export type AnalyticsComercial = {
   // "Sem responsável". Vazio quando a organização não teve nenhuma
   // oportunidade criada nem fechada no período.
   responsaveis: LinhaResponsavel[];
+  // Fase 12 — uma linha por participante da DIVISÃO da comissão.
+  // Dimensão SEPARADA de `responsaveis`: uma diz quem conduziu, a outra
+  // quem participa do dinheiro. As duas coexistem de propósito.
+  participacao: ParticipacaoComissao;
   // true enquanto NENHUMA negociação da organização tiver responsável —
   // estado normal logo depois do deploy, já que ownership passa a existir
   // daqui pra frente e não houve backfill. A tela usa isso para explicar
@@ -1042,6 +1069,20 @@ export async function buscarAnalyticsComercial(
           // Fase 11 — mesmo join batched do bloco de oportunidades.
           responsibleMember: {
             select: { id: true, status: true, organizationId: true, user: { select: { name: true } } },
+          },
+          // Fase 12 — participantes da divisão, no MESMO select: uma
+          // query para o período inteiro, nunca uma por participante.
+          participants: {
+            where: { organizationId },
+            select: {
+              id: true,
+              memberId: true,
+              organizationId: true,
+              allocationValue: true,
+              member: {
+                select: { status: true, organizationId: true, user: { select: { name: true } } },
+              },
+            },
           },
           sourceInteraction: {
             select: {
@@ -1238,6 +1279,55 @@ export async function buscarAnalyticsComercial(
       }))
     );
 
+    // ---- Participação na comissão (Fase 12) --------------------------
+    // Reaproveita `ganhos`, já carregado com os participantes no mesmo
+    // select — nenhuma query nova, nenhuma query por participante.
+    // Universo: negócios GANHOS no período (closedAt), que é onde a
+    // comissão existe.
+    const ganhosComParticipantes = ganhos.map((g) => ({
+      comissao: decimalParaValor(g.commissionValue),
+      participantes: paraParticipantes(
+        g.participants.map((p) => ({
+          ...p,
+          allocationValue: decimalParaValor(p.allocationValue),
+        })),
+        organizationId
+      ),
+    }));
+
+    const participantesDoPeriodo = agruparPorParticipante(
+      ganhosComParticipantes.flatMap((g) =>
+        g.participantes.map((participante) => ({ participante }))
+      )
+    );
+
+    // Totais da organização no período. Somados negócio a negócio para
+    // que o saldo NÃO DISTRIBUÍDO só exista onde há comissão registrada:
+    // um ganho sem comissão não tem saldo, tem ausência de comissão.
+    let comissaoAtribuida = 0;
+    let comissaoNaoDistribuida = 0;
+    let ganhosComDivisao = 0;
+    let ganhosComComissaoSemDivisao = 0;
+    for (const ganho of ganhosComParticipantes) {
+      const resumo = resumirDivisao(
+        ganho.comissao,
+        ganho.participantes.map((p) => p.alocacao)
+      );
+      comissaoAtribuida += resumo.distribuido;
+      if (resumo.naoDistribuido !== null) comissaoNaoDistribuida += resumo.naoDistribuido;
+      if (ganho.participantes.length > 0) ganhosComDivisao += 1;
+      else if (ganho.comissao !== null) ganhosComComissaoSemDivisao += 1;
+    }
+
+    const participacao: ParticipacaoComissao = {
+      participantes: participantesDoPeriodo,
+      comissaoAtribuida: Math.round(comissaoAtribuida * 100) / 100,
+      comissaoNaoDistribuida: Math.round(comissaoNaoDistribuida * 100) / 100,
+      ganhosComDivisao,
+      ganhosComComissaoSemDivisao,
+      semDivisao: participantesDoPeriodo.length === 0,
+    };
+
     const canais = agruparPorCanal(eventosDigitais, interacoes, oportunidadesPorCanal);
     const campanhas = agruparPorCampanha(eventosDigitais, interacoes, ganhosComValorNumerico);
     const aquisicao: Aquisicao = {
@@ -1294,6 +1384,7 @@ export async function buscarAnalyticsComercial(
       aquisicao,
       resultado,
       responsaveis,
+      participacao,
       semOwnership: algumaNegociacaoComResponsavel === null,
     };
   });
