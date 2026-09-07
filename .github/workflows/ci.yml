@@ -49,6 +49,12 @@ jobs:
   verify:
     name: Verificação (tipos, lint, testes, build)
     runs-on: ubuntu-latest
+    # Containment do JOB inteiro, incluindo setup — camada diferente do
+    # globalTimeout de 16 min do Playwright, que só cobre a execução dos
+    # testes. Alinhado ao teto operacional de 18 min do run: um job
+    # travado morre dentro do orçamento em vez de rodar até o padrão de
+    # 6 horas do GitHub. NÃO substitui monitoramento; é a última linha.
+    timeout-minutes: 18
     services:
       postgres:
         image: postgres:16-alpine
@@ -125,6 +131,7 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
+    timeout-minutes: 18
     services:
       postgres:
         image: postgres:16-alpine
@@ -156,24 +163,80 @@ jobs:
         id: playwright-version
         run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
 
-      - name: Cache dos browsers do Playwright
+      # Guarda só o BINÁRIO do browser (~/.cache/ms-playwright). A chave
+      # inclui a imagem do runner (ImageOS, ex: "ubuntu24") além do SO e
+      # da versão do Playwright: um binário baixado para outra imagem não
+      # deve ser reaproveitado silenciosamente quando o GitHub promover
+      # ubuntu-latest para a próxima LTS.
+      #
+      # SEM restore-keys de propósito. Uma chave parcial devolveria o
+      # cache de outra versão do Playwright, que não contém a revisão de
+      # browser desta versão — o passo seguinte teria de baixar assim
+      # mesmo, e o cache ficaria acumulando revisões velhas. Miss aqui
+      # custa um download de browser (~30s), não uma falha.
+      - name: Cache do browser do Playwright
         id: playwright-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+          key: playwright-browser-${{ runner.os }}-${{ env.ImageOS }}-${{ runner.arch }}-${{ steps.playwright-version.outputs.version }}
 
-      - name: Instalar browser do Playwright (cache miss)
+      # FASE 20 — sem `--with-deps`, e sem um passo de `install-deps` no
+      # caminho de cache hit.
+      #
+      # POR QUÊ, com evidência do run 34144643868 (Fase 19), onde este
+      # passo consumiu 8m14s de um job de 16m25s: o log mostra TODAS as
+      # bibliotecas da lista `chromium` do Playwright (libnss3, libgbm1,
+      # libxkbcommon0, libcups2t64, xvfb, fonts-liberation, ...) como
+      # "already the newest version". O runner ubuntu-24.04 já as traz.
+      #
+      # Os únicos 9 pacotes realmente NOVOS vinham da lista `tools` do
+      # Playwright (ver nativeDeps em playwright-core) e eram todos
+      # fontes de scripts não-latinos e utilitários X11 legados:
+      # fonts-ipafont-gothic (japonês), fonts-wqy-zenhei (chinês),
+      # fonts-tlwg-loma-otf (tailandês), fonts-unifont, xfonts-cyrillic,
+      # xfonts-encodings, xfonts-scalable, xfonts-utils,
+      # fonts-freefont-ttf. A suíte é um produto em português testado só
+      # em Chromium; nenhum teste renderiza esses scripts.
+      #
+      # E o custo não era o tamanho (21,1 MB) e sim a VARIÂNCIA do mirror
+      # do Ubuntu: no MESMO passo, o `apt-get update` puxou 11,8 MB a
+      # 8154 kB/s e logo depois esses 21,1 MB levaram 8 minutos (~44
+      # kB/s). Enquanto o apt estiver no caminho crítico, o orçamento de
+      # 18 minutos depende de um mirror que não controlamos.
+      #
+      # Fontes latinas (fonts-liberation, DejaVu), fonts-noto-color-emoji,
+      # libfontconfig1 e libfreetype6 continuam presentes no runner — são
+      # elas que renderizam o produto.
+      - name: Instalar browser do Playwright (só no cache miss)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
-      - name: Instalar dependências de sistema do Chromium (cache hit)
-        # O cache acima só guarda o binário do browser — as libs de
-        # sistema (libnss3 etc.) não fazem parte de ~/.cache/ms-playwright
-        # e precisam ser garantidas mesmo quando o browser já está em
-        # cache. Rápido: não baixa nada, só confere/instala pacotes apt.
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+      # Rede de segurança para a única premissa desta mudança: a de que o
+      # runner continua trazendo as bibliotecas do Chromium. Se o GitHub
+      # mudar a imagem e remover alguma, isto falha aqui em ~3 segundos,
+      # com um nome de passo e uma mensagem que dizem exatamente o que
+      # fazer — em vez de 402 testes falharem seis minutos depois com
+      # "browser closed unexpectedly", que parece bug de produto.
+      #
+      # Testa a CAPACIDADE (o browser inicia), não a lista de pacotes:
+      # `install-deps --dry-run` sairia com código != 0 por causa das
+      # fontes acima, que são justamente o que não queremos instalar.
+      - name: Verificar que o Chromium inicia sem dependências extras
+        run: |
+          node -e "
+          const { chromium } = require('@playwright/test');
+          chromium.launch().then(b => b.close()).then(
+            () => console.log('Chromium iniciou: as libs do runner bastam.'),
+            (erro) => {
+              console.error('FALHA: o Chromium não iniciou neste runner.');
+              console.error('A imagem do runner provavelmente deixou de trazer alguma lib do Chromium.');
+              console.error('Correção: voltar este passo para \'npx playwright install --with-deps chromium\'.');
+              console.error(String(erro));
+              process.exit(1);
+            }
+          );
+          "
 
       - name: Preparar banco de teste (cria se preciso + aplica migrations)
         run: npx tsx scripts/prepare-test-db.ts
