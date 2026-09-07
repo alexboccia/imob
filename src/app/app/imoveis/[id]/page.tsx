@@ -26,15 +26,6 @@ const MEDIA_TYPE_PARA_TIPO_MIDIA = {
   FLOOR_PLAN: "PLANTA",
 } as const;
 
-// Prisma devolve Decimal (objeto com toString) para colunas monetárias.
-// null continua null — nunca vira 0, que seria "preço zero" em vez de
-// "sem preço".
-function decimalParaNumero(valor: unknown): number | null {
-  if (valor === null || valor === undefined) return null;
-  const n = Number(valor.toString());
-  return Number.isNaN(n) ? null : n;
-}
-
 export default async function EditarImovelPage({
   params,
 }: {
@@ -125,10 +116,10 @@ export default async function EditarImovelPage({
           // console a cada campo de preço preenchido. O formulário já
           // trata esses valores como número, então a conversão acontece
           // aqui, na fronteira servidor→cliente.
-          preco: decimalParaNumero(imovel.price),
-          precoAluguel: decimalParaNumero(imovel.rentPrice),
-          precoCondominio: decimalParaNumero(imovel.condoFee),
-          precoIptu: decimalParaNumero(imovel.propertyTax),
+          preco: decimalParaValor(imovel.price),
+          precoAluguel: decimalParaValor(imovel.rentPrice),
+          precoCondominio: decimalParaValor(imovel.condoFee),
+          precoIptu: decimalParaValor(imovel.propertyTax),
           areaTotal: imovel.totalArea,
           areaPrivativa: imovel.privateArea,
           quartos: imovel.bedrooms,
@@ -254,7 +245,22 @@ export default async function EditarImovelPage({
                     key={recomendacao.person.id}
                     propertyId={imovel.id}
                     propertyStatus={imovel.status}
-                    recomendacao={recomendacao}
+                    // Fase 16 — objeto EXPLÍCITO em vez do resultado
+                    // inteiro do matching. `calcularCompatibilidade`
+                    // devolve `property` junto (o model completo, com os
+                    // Decimal de price/rentPrice/condoFee/propertyTax), e
+                    // passar a variável direto não dispara a checagem de
+                    // excesso do TypeScript — então o Prisma Decimal
+                    // atravessava a fronteira sem ninguém notar. Aqui só
+                    // vai o que o componente declara, o que também deixa
+                    // de mandar o imóvel inteiro para o navegador.
+                    recomendacao={{
+                      score: recomendacao.score,
+                      activeSoftCriteriaCount: recomendacao.activeSoftCriteriaCount,
+                      criteria: recomendacao.criteria,
+                      existingInterest: recomendacao.existingInterest,
+                      person: recomendacao.person,
+                    }}
                   />
                 ))}
               </div>

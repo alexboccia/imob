@@ -60,7 +60,16 @@ export function InteresseImovelItem({
     // Fase 9 — valor negociado do fechamento; null = não registrado.
     closedValue: number | null;
     commissionValue: number | null;
-    property: { id: string; title: string; price: unknown; rentPrice: unknown; status: PropertyStatus };
+    // Fase 16 — `number | null`, nunca `unknown`: era o `unknown` que
+    // deixava um Prisma Decimal cru atravessar a fronteira sem erro de
+    // tipo. Agora passar Decimal aqui não compila.
+    property: {
+      id: string;
+      title: string;
+      price: number | null;
+      rentPrice: number | null;
+      status: PropertyStatus;
+    };
     // Visita SCHEDULED mais próxima deste relacionamento, se houver — já
     // vem pronta da query da página (batch, sem N+1 por card). scheduledAt
     // trafega como string ISO, nunca Date (ver AgendamentoVisita.tsx).

@@ -23,7 +23,9 @@ export function RecomendacaoImovelItem({
     activeSoftCriteriaCount: number;
     criteria: CriterioMatch[];
     existingInterest: { stage: PropertyInterestStage; favorited: boolean } | null;
-    property: { id: string; title: string; price: unknown; rentPrice: unknown };
+    // Fase 16 — mesma razão de InteresseImovelItem: `unknown` permitia
+    // Decimal cru cruzar a fronteira sem o TypeScript reclamar.
+    property: { id: string; title: string; price: number | null; rentPrice: number | null };
   };
 }) {
   // buscarImoveisCompativeis só recomenda Property com status AVAILABLE

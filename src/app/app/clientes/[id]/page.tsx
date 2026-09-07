@@ -29,6 +29,7 @@ import { paraResponsavel } from "@/lib/responsavel-negociacao";
 import { paraParticipantes } from "@/lib/participacao-comissao";
 import { paraPagamentos } from "@/lib/pagamento-comissao";
 import { paraAtorTransicao } from "@/lib/ator-transicao";
+import { precosDoImovel } from "@/lib/imovel-precos";
 import { paraAutorInteracao, rotuloAutorInteracao } from "@/lib/autor-interacao";
 import { temPapel, PAPEIS_LIQUIDACAO_COMISSAO } from "@/lib/authorization";
 import { auth } from "@/lib/auth";
@@ -340,8 +341,10 @@ export default async function DetalheClientePage({
                     property: {
                       id: interesse.property.id,
                       title: interesse.property.title,
-                      price: interesse.property.price,
-                      rentPrice: interesse.property.rentPrice,
+                      // Fase 16 — Decimal do Prisma convertido AQUI, na
+                      // fronteira servidor→cliente. Mesmo racional (e
+                      // mesma solução) já usada no formulário de imóvel.
+                      ...precosDoImovel(interesse.property),
                       status: interesse.property.status,
                     },
                     proximaVisita: interesse.scheduledActivities[0]
@@ -419,7 +422,15 @@ export default async function DetalheClientePage({
                   <RecomendacaoImovelItem
                     key={recomendacao.property.id}
                     pessoaId={pessoa.id}
-                    recomendacao={recomendacao}
+                    // Fase 16 — mesma conversão na fronteira: o resultado
+                    // do matching carrega os preços como Decimal cru.
+                    recomendacao={{
+                      ...recomendacao,
+                      property: {
+                        ...recomendacao.property,
+                        ...precosDoImovel(recomendacao.property),
+                      },
+                    }}
                   />
                 ))}
               </div>
