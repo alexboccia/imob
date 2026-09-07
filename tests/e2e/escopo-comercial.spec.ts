@@ -90,6 +90,15 @@ test.describe("RESTRICTED — cliente compartilhado", () => {
 
       await page.getByRole("link", { name: "Cliente Compartilhado" }).first().click();
       await page.waitForURL(/\/app\/clientes\/[^/]+$/);
+      // Âncora ESTÁVEL antes de ler o texto: a ficha é streamed, e ler
+      // innerText logo após a navegação pegava um render parcial — a
+      // asserção "não contém o imóvel alheio" passava por ausência de
+      // conteúdo, e a de "contém o meu" falhava. Foi o flake observado
+      // no run 34164237912.
+      // CardTitle renderiza <div>, não heading (achado da Fase 17).
+      await expect(
+        page.locator('[data-slot="card-title"]', { hasText: "Imóveis relacionados" })
+      ).toBeVisible();
       const ficha = (await page.locator("main").innerText()).replace(/ /g, " ");
       // NEGOCIAÇÕES SEPARADAS: cada um vê um imóvel só.
       const meu = corretor === ORG_RESTRITA_ANA ? "Apartamento E2E Restrita" : "Cobertura E2E Restrita";
