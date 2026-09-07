@@ -29,6 +29,37 @@ export const PAPEIS_LIQUIDACAO_COMISSAO: ReadonlySet<string> = new Set([
   "MANAGER",
 ]);
 
+// Fase 21 — VISÃO DE EQUIPE na Central.
+//
+// NENHUM papel novo foi criado, e nenhuma migration: a auditoria mostrou
+// que a camada gerencial JÁ EXISTE no domínio e já é {OWNER, ADMIN,
+// MANAGER}. Três capacidades independentes convergem exatamente nesse
+// trio — PAPEIS_GESTAO_CATALOGOS, PAPEIS_LIQUIDACAO_COMISSAO (cujo
+// comentário acima já a chama de "a camada gerencial que este arquivo já
+// define") e a checagem de /app/manutencao. Inventar TEAM_LEAD ou
+// SALES_MANAGER seria um quarto conceito de autoridade para dizer o que
+// o produto já diz.
+//
+// Por que NÃO é o mesmo conjunto de PAPEIS_GESTAO_USUARIOS/CONFIGURACOES
+// ({OWNER, ADMIN}): esses dois são autoridade INSTITUCIONAL — mexer em
+// quem entra na organização e em como ela se apresenta. Acompanhar o
+// trabalho comercial da equipe é autoridade COMERCIAL, e é justamente
+// nela que MANAGER participa em todo o resto do produto.
+//
+// ASSISTANT e BROKER ficam de fora: nenhuma capacidade gerencial do
+// produto os inclui hoje, e esta fase não é o lugar para promovê-los.
+//
+// LIMITE HONESTO desta autorização: ela decide quem recebe a LEITURA
+// AGREGADA da equipe, não quem pode alcançar os dados. O CRM inteiro
+// (Clientes, Pipeline, Agenda) hoje é escopado só por organização e pelo
+// módulo — qualquer membro com CRM já enxerga todas as negociações da
+// organização. Ver a dívida registrada no relatório da Fase 21.
+export const PAPEIS_VISAO_EQUIPE: ReadonlySet<string> = new Set([
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+]);
+
 export function temPapel(
   role: string | undefined,
   permitidos: ReadonlySet<string>

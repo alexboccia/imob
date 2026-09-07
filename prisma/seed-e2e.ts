@@ -1135,6 +1135,14 @@ async function main() {
     nomePessoa: "Central De Outro Corretor",
     responsibleMemberId: outroCorretorCentral.id,
   });
+  // Fase 21 — negociação SEM RESPONSÁVEL. É o fato que a visão de equipe
+  // finalmente consegue mostrar (responsibleMemberId null), e que a
+  // Central pessoal, por definição, nunca exibe. Não altera nenhuma
+  // contagem pessoal do dono: ela não é de ninguém.
+  await criarNegociacaoCentral({
+    nomePessoa: "Central Sem Responsavel",
+    responsibleMemberId: null,
+  });
 
   // =====================================================================
   // Fase 18 — dados de BORDA DE FUSO (Organização F, America/Sao_Paulo)

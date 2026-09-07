@@ -6,6 +6,9 @@ import { buscarFusoOrganizacao, buscarFusoConfigurado } from "@/lib/fuso-organiz
 import { AvisoFusoNaoConfigurado } from "@/components/admin/AvisoFusoNaoConfigurado";
 import { buscarCentralTrabalho } from "@/lib/central-trabalho";
 import { CentralTrabalho } from "@/components/admin/CentralTrabalho";
+import { buscarVisaoEquipe, resolverVisaoCentral } from "@/lib/central-equipe";
+import { CentralEquipe } from "@/components/admin/CentralEquipe";
+import { AlternadorVisaoCentral } from "@/components/admin/AlternadorVisaoCentral";
 import { buscarMetricasDashboard } from "@/lib/dashboard";
 import { contarAgenda } from "@/lib/agenda";
 import { DashboardKpiCards } from "@/components/admin/DashboardKpiCards";
@@ -20,9 +23,16 @@ import { Clock } from "lucide-react";
 // extraída pra src/lib/dashboard.ts — mesmo padrão já usado por
 // src/lib/pipeline.ts/src/lib/agenda.ts, permitindo testar as funções
 // puras isoladamente (dashboard.test.ts) sem precisar de banco.
-export default async function DashboardPage() {
+type SearchParams = { visao?: string };
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
   const organizationId = await requireOrganizationId();
   const session = await auth();
+  const params = await searchParams;
 
   // Fase 17 — a Central é PESSOAL e depende de duas condições, ambas
   // verificadas antes de qualquer query: o vínculo do usuário com esta
@@ -40,8 +50,25 @@ export default async function DashboardPage() {
   // permite avisar sem mentir: "usa UTC porque ninguém escolheu" não é a
   // mesma coisa que "escolheram UTC".
   const fusoConfigurado = await buscarFusoConfigurado(organizationId);
+  // Fase 21 — a decisão de autorização é uma regra NOMEADA e testada
+  // (resolverVisaoCentral), não uma condição inline: `?visao=equipe` é um
+  // pedido, e quem responde é o servidor.
+  const { visao, podeVerEquipe } = resolverVisaoCentral({
+    role: session?.user.role,
+    temCrm,
+    visaoPedida: params.visao,
+  });
+  const verEquipe = visao === "equipe";
+
+  // A Central PESSOAL continua exatamente como estava (Fases 17-19) e
+  // só deixa de ser carregada quando a visão de equipe está ativa — não
+  // por perda de capacidade, e sim para não fazer sete consultas cujo
+  // resultado não seria exibido.
   const central =
-    membroId && temCrm ? await buscarCentralTrabalho(organizationId, membroId, fuso) : null;
+    membroId && temCrm && !verEquipe
+      ? await buscarCentralTrabalho(organizationId, membroId, fuso)
+      : null;
+  const equipe = verEquipe ? await buscarVisaoEquipe(organizationId, fuso) : null;
 
   const [metricas, agenda] = await Promise.all([
     buscarMetricasDashboard(organizationId, fuso),
@@ -82,7 +109,13 @@ export default async function DashboardPage() {
       {/* AÇÃO primeiro, contexto depois: a Central operacional abre a
           tela, e a visão agregada da operação (KPIs e gráficos, que já
           existiam e continuam valendo) segue abaixo. */}
+      {/* O alternador só existe para quem tem autoridade gerencial. Para
+          um BROKER a Home continua sendo, literalmente, a mesma tela de
+          antes — nenhum controle novo, nenhum aviso de acesso negado. */}
+      {podeVerEquipe && <AlternadorVisaoCentral visaoAtual={visao} />}
+
       {central && <CentralTrabalho dados={central} fuso={fuso} />}
+      {equipe && <CentralEquipe dados={equipe} fuso={fuso} />}
 
       <div className="min-w-0 pt-2">
         <h2 className="min-w-0 break-words text-lg font-semibold">Visão geral</h2>
