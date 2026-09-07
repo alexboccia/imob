@@ -7,7 +7,13 @@ import { obterProximaAcaoComercial, type ProximaAcaoComercial } from "@/lib/prox
 import { acaoOperacionalDaVisita } from "@/lib/scheduled-activity-date";
 import { paraResponsavel, type ResponsavelNegociacao } from "@/lib/responsavel-negociacao";
 import { paraAtorTransicao, type AtorTransicao } from "@/lib/ator-transicao";
-import type { MemberStatus, Prisma, PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
+import type {
+  MemberStatus,
+  Prisma,
+  PropertyInterestStage,
+  PropertyStatus,
+  ScheduledActivityType,
+} from "@/generated/prisma/client";
 
 // Pipeline (Fase P.4) — projeção operacional de PropertyInterest, NUNCA uma
 // segunda fonte de verdade: nenhuma tabela nova, nenhum campo persistido
@@ -52,7 +58,16 @@ export type ItemPipeline = {
   // é redigida, nunca vaza nome/título de outro tenant.
   person: { id: string; name: string } | null;
   property: { id: string; title: string; status: PropertyStatus; neighborhood: string } | null;
-  proximaVisita: { id: string; scheduledAtISO: string } | null;
+  // Fase 19 — renomeado de `proximaVisita`: desde que ScheduledActivity
+  // ganhou FOLLOW_UP, esta consulta (que nunca filtrou por tipo) pode
+  // devolver um follow-up, e manter o nome antigo faria o campo mentir.
+  // É o compromisso SCHEDULED mais próximo, seja qual for o tipo.
+  proximoCompromisso: {
+    id: string;
+    tipo: ScheduledActivityType;
+    assunto: string | null;
+    scheduledAtISO: string;
+  } | null;
   // null quando property foi redigido acima (sem status pra calcular) —
   // nunca inferido/adivinhado.
   proximaAcao: ProximaAcaoComercial | null;
@@ -96,7 +111,7 @@ function selectItemPipeline(organizationId: string) {
       where: { organizationId, status: "SCHEDULED" as const },
       orderBy: { scheduledAt: "asc" as const },
       take: 1,
-      select: { id: true, scheduledAt: true },
+      select: { id: true, type: true, subject: true, scheduledAt: true },
     },
     // Fase P.6: última transição de stage registrada, batched (mesmo
     // padrão de scheduledActivities acima — uma única query extra pro
@@ -137,7 +152,12 @@ type LinhaBrutaPipeline = {
   } | null;
   person: { id: string; name: string; organizationId: string };
   property: { id: string; title: string; status: PropertyStatus; neighborhood: string; organizationId: string };
-  scheduledActivities: { id: string; scheduledAt: Date }[];
+  scheduledActivities: {
+    id: string;
+    type: ScheduledActivityType;
+    subject: string | null;
+    scheduledAt: Date;
+  }[];
   stageHistory: {
     newStage: PropertyInterestStage;
     changedAt: Date;
@@ -216,9 +236,11 @@ export function paraItemPipeline(
           neighborhood: linha.property.neighborhood,
         }
       : null;
-  const proximaVisita = linha.scheduledActivities[0]
+  const proximoCompromisso = linha.scheduledActivities[0]
     ? {
         id: linha.scheduledActivities[0].id,
+        tipo: linha.scheduledActivities[0].type,
+        assunto: linha.scheduledActivities[0].subject,
         scheduledAtISO: linha.scheduledActivities[0].scheduledAt.toISOString(),
       }
     : null;
@@ -251,7 +273,7 @@ export function paraItemPipeline(
     updatedAtISO: linha.updatedAt.toISOString(),
     person,
     property,
-    proximaVisita,
+    proximoCompromisso,
     proximaAcao: property ? obterProximaAcaoComercial(linha.stage, property.status) : null,
     aging: formatarAgingStage(agingMs),
     agingMs,
@@ -287,8 +309,8 @@ export function agruparPorColuna(itens: readonly ItemPipeline[]): Record<ColunaA
 // NUNCA apresentado como "tempo na etapa" (ver comentário de
 // ItemPipeline.updatedAtISO).
 function chavePrioridade(item: ItemPipeline, fuso: string, agora: Date): readonly [number, number] {
-  if (item.proximaVisita) {
-    const scheduledAt = new Date(item.proximaVisita.scheduledAtISO);
+  if (item.proximoCompromisso) {
+    const scheduledAt = new Date(item.proximoCompromisso.scheduledAtISO);
     const acao = acaoOperacionalDaVisita({ status: "SCHEDULED", scheduledAt }, fuso, agora);
     const grupo = acao === "RESOLVER_PENDENCIA" ? 0 : 1;
     return [grupo, scheduledAt.getTime()];
@@ -1070,22 +1092,22 @@ function ordenarMotivos(motivos: readonly MotivoPrioridadePipeline[]): MotivoPri
 // aberto atual deste mesmo item. `agora` sempre parâmetro explícito (mesmo
 // racional de calcularAgingStageMs/derivarEpisodiosDaJornada).
 export function classificarPrioridadePipeline(
-  item: Pick<ItemPipeline, "stage" | "proximaVisita" | "agingMs">,
+  item: Pick<ItemPipeline, "stage" | "proximoCompromisso" | "agingMs">,
   tempoMedioHistoricoMs: number | null,
   fuso: string,
   agora: Date
 ): PrioridadePipeline {
   const motivos: MotivoPrioridadePipeline[] = [];
 
-  if (item.proximaVisita) {
+  if (item.proximoCompromisso) {
     const vencida =
       acaoOperacionalDaVisita(
-        { status: "SCHEDULED", scheduledAt: new Date(item.proximaVisita.scheduledAtISO) },
+        { status: "SCHEDULED", scheduledAt: new Date(item.proximoCompromisso.scheduledAtISO) },
         fuso,
         agora
       ) === "RESOLVER_PENDENCIA";
     if (vencida) {
-      motivos.push({ tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: item.proximaVisita.scheduledAtISO });
+      motivos.push({ tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: item.proximoCompromisso.scheduledAtISO });
     }
   } else if (item.stage === "PROPOSAL") {
     motivos.push({ tipo: "PROPOSTA_SEM_PROXIMA_ACAO" });

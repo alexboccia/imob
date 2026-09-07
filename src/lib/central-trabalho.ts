@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { withOrganization } from "@/lib/tenant-context";
 import { intervaloDoDia } from "@/lib/fuso-horario";
 import { ESTAGIOS_INTERESSE } from "@/lib/property-interest-schema";
+import type { ScheduledActivityType } from "@/generated/prisma/client";
 
 // =======================================================================
 // Central de trabalho (Fase 17)
@@ -47,6 +48,8 @@ import { ESTAGIOS_INTERESSE } from "@/lib/property-interest-schema";
 //   ATRASADAS  SCHEDULED cujo DIA já passou
 //   HOJE       SCHEDULED dentro do dia de hoje
 //   PRÓXIMAS   SCHEDULED em um dia futuro
+// Desde a Fase 19 isso vale para VISITA e FOLLOW-UP igualmente: o tipo
+// muda o que se lê no card, nunca em qual bloco ele cai.
 // Uma visita de hoje às 09:00 com agora 15:00 continua em HOJE, nunca em
 // ATRASADAS: só o dia calendário conta, decisão de produto herdada da
 // Fase H.3 e preservada aqui para as duas telas não se contradizerem.
@@ -66,6 +69,13 @@ export const LIMITE_CENTRAL = 5;
 
 export type CompromissoCentral = {
   id: string;
+  // Fase 19 — a Central passou a mostrar VISITA e FOLLOW-UP. O tipo
+  // atravessa como dado para a tela poder dizer o que é em TEXTO, nunca
+  // só por cor ou ícone.
+  tipo: ScheduledActivityType;
+  // Só existe em FOLLOW_UP: o que precisa ser feito. null em VISIT — o
+  // assunto de uma visita é visitar o imóvel.
+  assunto: string | null;
   scheduledAtISO: string;
   notes: string | null;
   // null só na anomalia cross-tenant (FK simples), mesma defesa em
@@ -80,9 +90,16 @@ export type NegociacaoCentral = {
   stage: string;
   pessoa: { id: string; name: string } | null;
   imovel: { id: string; title: string } | null;
-  // Fato verificável: nenhuma visita SCHEDULED futura para esta
-  // negociação. Não é "lead esquecido" — é a ausência de compromisso.
+  // Fato verificável: nenhum compromisso SCHEDULED futuro para esta
+  // negociação. Desde a Fase 19 isso inclui FOLLOW_UP — uma negociação
+  // com follow-up marcado para amanhã NÃO pode continuar aparecendo como
+  // "sem próximo compromisso". Não é "lead esquecido": é a ausência de
+  // compromisso.
   semProximoCompromisso: boolean;
+  // O compromisso futuro mais próximo (MIN(scheduledAt) > agora), quando
+  // existe. Múltiplos compromissos futuros são permitidos — nenhum
+  // unique artificial foi criado.
+  proximoCompromisso: { tipo: ScheduledActivityType; assunto: string | null; scheduledAtISO: string } | null;
   // Data da interação mais recente desta pessoa (Interaction.occurredAt,
   // quando o contato OCORREU — nunca createdAt). null = nenhuma
   // interação registrada, jamais "sem contato há muito tempo".
@@ -102,6 +119,8 @@ export type CentralTrabalho = {
 
 const SELECT_COMPROMISSO = {
   id: true,
+  type: true,
+  subject: true,
   scheduledAt: true,
   notes: true,
   person: { select: { id: true, name: true, organizationId: true } },
@@ -110,6 +129,8 @@ const SELECT_COMPROMISSO = {
 
 type LinhaCompromisso = {
   id: string;
+  type: ScheduledActivityType;
+  subject: string | null;
   scheduledAt: Date;
   notes: string | null;
   person: { id: string; name: string; organizationId: string };
@@ -122,6 +143,8 @@ export function paraCompromisso(
 ): CompromissoCentral {
   return {
     id: linha.id,
+    tipo: linha.type,
+    assunto: linha.subject,
     scheduledAtISO: linha.scheduledAt.toISOString(),
     notes: linha.notes,
     pessoa:
@@ -158,9 +181,11 @@ export async function buscarCentralTrabalho(
   const { inicio: inicioHoje, fim: fimHoje } = intervaloDoDia(agora, fuso);
   const meu = daMinhaResponsabilidade(organizationId, memberId);
 
+  // Fase 19 — SEM filtro de `type`: a Central é a central de
+  // COMPROMISSOS, e visita e follow-up são as duas formas que o produto
+  // tem hoje. Filtrar por tipo aqui esconderia metade do trabalho do dia.
   const baseAtividade = {
     organizationId,
-    type: "VISIT" as const,
     status: "SCHEDULED" as const,
     ...meu,
   };
@@ -217,11 +242,14 @@ export async function buscarCentralTrabalho(
           property: { select: { id: true, title: true, organizationId: true } },
           // Próxima visita agendada — batched pelo Prisma numa consulta
           // só para o conjunto inteiro, nunca uma por card (zero N+1).
+          // Compromisso futuro mais próximo — batched pelo Prisma numa
+          // consulta só para o conjunto inteiro, nunca uma por card
+          // (zero N+1). Sem filtro de tipo: visita e follow-up contam.
           scheduledActivities: {
             where: { organizationId, status: "SCHEDULED", scheduledAt: { gt: agora } },
             orderBy: { scheduledAt: "asc" },
             take: 1,
-            select: { id: true },
+            select: { id: true, type: true, subject: true, scheduledAt: true },
           },
         },
       }),
@@ -262,6 +290,13 @@ export async function buscarCentralTrabalho(
               ? { id: linha.property.id, title: linha.property.title }
               : null,
           semProximoCompromisso: linha.scheduledActivities.length === 0,
+          proximoCompromisso: linha.scheduledActivities[0]
+            ? {
+                tipo: linha.scheduledActivities[0].type,
+                assunto: linha.scheduledActivities[0].subject,
+                scheduledAtISO: linha.scheduledActivities[0].scheduledAt.toISOString(),
+              }
+            : null,
           ultimoContatoISO: ultimoPorPessoa.get(linha.person.id)?.toISOString() ?? null,
         })),
       },

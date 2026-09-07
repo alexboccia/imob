@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LIMITE_ASSUNTO_FOLLOW_UP } from "@/lib/follow-up";
 
 // Mesmo limite/racional de notesSchema em property-interest-schema.ts —
 // sem precedente de outro número "oficial" no projeto. Exportado (H.6)
@@ -29,6 +30,42 @@ export const criarAgendamentoVisitaSchema = z.object({
 export const remarcarAgendamentoVisitaSchema = z.object({
   scheduledAt: scheduledAtInputSchema,
 });
+
+// ---------- Follow-up comercial (Fase 19) ----------
+//
+// `subject` é o COMPROMISSO em si ("Enviar proposta revisada") e é
+// OBRIGATÓRIO para FOLLOW_UP — um follow-up sem assunto não responde
+// "o quê?", que é metade da razão de ele existir. trim antes de tudo:
+// só espaços é ausência, nunca um assunto válido de 3 caracteres em
+// branco.
+export const assuntoFollowUpSchema = z
+  .string()
+  .trim()
+  .min(1, "Descreva a ação (ex: enviar proposta revisada).")
+  .max(
+    LIMITE_ASSUNTO_FOLLOW_UP,
+    `Descrição muito longa (máximo ${LIMITE_ASSUNTO_FOLLOW_UP} caracteres).`
+  );
+
+export const criarFollowUpSchema = z.object({
+  subject: assuntoFollowUpSchema,
+  scheduledAt: scheduledAtInputSchema,
+  // Observação continua sendo o campo da H.6: contexto complementar,
+  // nunca o compromisso.
+  notes: notesSchema,
+});
+
+// Edição: os três campos juntos, no mesmo formulário. Diferente da
+// visita, que só permite remarcar a data (o "assunto" de uma visita é
+// visitar o imóvel, não há texto a corrigir).
+export const atualizarFollowUpSchema = z.object({
+  subject: assuntoFollowUpSchema,
+  scheduledAt: scheduledAtInputSchema,
+  notes: notesSchema,
+});
+
+export type DadosCriarFollowUp = z.infer<typeof criarFollowUpSchema>;
+export type DadosAtualizarFollowUp = z.infer<typeof atualizarFollowUpSchema>;
 
 // Observação do agendamento (Fase H.6) — só o campo `notes`, reaproveita
 // a MESMA validação usada em criarAgendamentoVisitaSchema (trim, máximo

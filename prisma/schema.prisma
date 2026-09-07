@@ -112,8 +112,24 @@ enum PropertyInterestStage {
 // é o que está agendado para acontecer. V1 só agenda VISIT; o enum
 // ScheduledActivityType já é genérico para tipos futuros (FOLLOW_UP, CALL...)
 // sem exigir migration de schema quando chegarem, só de dado.
+// Tipo do COMPROMISSO COMERCIAL agendado (Fase 19).
+//
+// A auditoria confirmou o que a H.1/H.2 já tinha desenhado: este model é
+// uma entidade GENÉRICA de compromisso que até aqui só tinha um tipo. O
+// discriminador `type` existe desde a H.1 com @default(VISIT), os índices
+// são todos type-agnósticos, e as regras específicas de visita
+// (propertyId obrigatório, imóvel AVAILABLE, avanço de stage) sempre
+// viveram na CAMADA DE APLICAÇÃO, nunca no schema. Por isso a Fase 19
+// evolui este enum em vez de criar uma segunda agenda.
+//
+// FOLLOW_UP é deliberadamente UM tipo genérico com assunto textual
+// (`subject`), e não uma taxonomia CALL/EMAIL/DOCUMENT/PROPOSAL: não há
+// evidência de uso real que sustente essa taxonomia, e um enum
+// especulativo engessaria o produto. "Enviar proposta revisada" é mais
+// informativo do que qualquer rótulo que pudéssemos ter adivinhado.
 enum ScheduledActivityType {
   VISIT
+  FOLLOW_UP
 }
 
 enum ScheduledActivityStatus {
@@ -956,6 +972,23 @@ model ScheduledActivity {
   scheduledAt DateTime
   completedAt DateTime?
   cancelledAt DateTime?
+
+  // O QUE precisa ser feito (Fase 19) — só para FOLLOW_UP: "Enviar
+  // proposta revisada", "Cobrar documentos". É o próprio compromisso,
+  // não uma observação sobre ele.
+  //
+  // NULLABLE no schema, com zero backfill, e OBRIGATÓRIO em regra de
+  // aplicação para FOLLOW_UP — exatamente o mesmo padrão que a H.2 já
+  // usa para propertyId/propertyInterestId em VISIT. VISIT não tem
+  // assunto: o assunto de uma visita é visitar o imóvel, e escrever um
+  // texto genérico nas linhas existentes seria inventar dado.
+  //
+  // NÃO se confunde com `notes` abaixo, que a H.6 definiu como
+  // observação OPERACIONAL do agendamento e continua com esse
+  // significado para os dois tipos:
+  //   subject: "Enviar proposta"
+  //   notes:   "Cliente pediu opção com entrada menor."
+  subject String?
 
   notes String?
 

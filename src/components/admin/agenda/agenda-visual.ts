@@ -21,6 +21,12 @@ import type { ItemAgenda } from "@/lib/agenda";
 // precisam de fato de um objeto Date (mesmo padrão de
 // CardPipeline.tsx: `new Date(item.proximaVisita.scheduledAtISO)`).
 export type ItemAgendaClient = Omit<ItemAgenda, "scheduledAt"> & { scheduledAtISO: string };
+// Fase 19 — rótulo do TIPO, compartilhado por Central, Agenda, cards e
+// drawers pra que "Visita" e "Follow-up" nunca sejam escritos de duas
+// formas diferentes. Sempre TEXTO: o tipo nunca é comunicado só por cor
+// ou ícone.
+export { TIPO_ATIVIDADE_LABEL } from "@/lib/follow-up";
+
 export const STATUS_VISITA_LABEL: Record<string, string> = {
   SCHEDULED: "Agendada",
   COMPLETED: "Concluída",

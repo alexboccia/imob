@@ -178,7 +178,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const item = colunas.VISIT_SCHEDULED.find((i) => i.id === interesseA.id);
     expect(item).toBeDefined();
-    expect(item?.proximaVisita).toBeNull();
+    expect(item?.proximoCompromisso).toBeNull();
   });
 
   test("N) Person/Property corretos no card", async () => {
@@ -444,7 +444,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     for (const { id, visitaId, scheduledAt } of interesses) {
       const item = colunas.VISIT_SCHEDULED.find((i) => i.id === id);
-      expect(item?.proximaVisita).toEqual({ id: visitaId, scheduledAtISO: scheduledAt.toISOString() });
+      expect(item?.proximoCompromisso).toEqual({ id: visitaId, tipo: "VISIT" as const, assunto: null, scheduledAtISO: scheduledAt.toISOString() });
     }
   });
 
@@ -1203,7 +1203,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     const prioridade = classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.VISIT_SCHEDULED, "UTC", new Date());
 
     expect(prioridade.nivel).toBe("ALTA");
-    expect(prioridade.motivos[0]).toEqual({ tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: item.proximaVisita!.scheduledAtISO });
+    expect(prioridade.motivos[0]).toEqual({ tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: item.proximoCompromisso!.scheduledAtISO });
   });
 
   test("P8-V) PROPOSAL sem nenhuma ScheduledActivity real -> ALTA com PROPOSTA_SEM_PROXIMA_ACAO", async () => {

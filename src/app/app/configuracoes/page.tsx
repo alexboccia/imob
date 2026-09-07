@@ -1,6 +1,7 @@
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { buscarBranding } from "@/lib/branding";
-import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
+import { buscarFusoOrganizacao, buscarFusoConfigurado } from "@/lib/fuso-organizacao";
+import { AvisoFusoNaoConfigurado } from "@/components/admin/AvisoFusoNaoConfigurado";
 import { opcoesDeFuso } from "@/lib/fusos-opcoes";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
@@ -8,7 +9,7 @@ import { ConfiguracaoContatoForm } from "@/components/admin/ConfiguracaoContatoF
 
 export default async function ConfiguracoesPage() {
   const organizationId = await requireOrganizationId();
-  const [config, branding, fuso] = await withOrganization(organizationId, () =>
+  const [config, branding, fuso, fusoConfigurado] = await withOrganization(organizationId, () =>
     Promise.all([
       buscarConfiguracaoContato(organizationId),
       buscarBranding(organizationId),
@@ -16,6 +17,9 @@ export default async function ConfiguracoesPage() {
       // o fallback explícito (UTC), nunca null, para o formulário nunca
       // apresentar "nenhuma opção selecionada".
       buscarFusoOrganizacao(organizationId),
+      // Fase 19 — valor bruto, para o aviso de adoção saber diferenciar
+      // "nunca configurado" de "configurado como UTC".
+      buscarFusoConfigurado(organizationId),
     ])
   );
 
@@ -27,6 +31,8 @@ export default async function ConfiguracoesPage() {
           Personalize a identidade, os contatos e as informações públicas da imobiliária.
         </p>
       </div>
+
+      <AvisoFusoNaoConfigurado fusoConfigurado={fusoConfigurado} />
 
       <ConfiguracaoContatoForm
         config={{

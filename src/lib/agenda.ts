@@ -8,16 +8,25 @@ import {
   parseDataCalendario,
   type DataCalendario,
 } from "@/lib/fuso-horario";
-import type { Prisma } from "@/generated/prisma/client";
+import type { Prisma, ScheduledActivityType } from "@/generated/prisma/client";
 
-// Agenda do corretor (Fase H.3, evoluída na H.4) — projeção operacional de
-// ScheduledActivity, nunca uma segunda fonte de verdade. Nenhuma tabela
-// nova, nenhum estado paralelo: só consultas read-only sobre o model já
-// existente da H.1, filtradas explicitamente por type="VISIT" (única
-// variante hoje, mas o filtro fica explícito pra quando o enum crescer).
+// Agenda do corretor (Fase H.3, evoluída na H.4 e generalizada na Fase
+// 19) — projeção operacional de ScheduledActivity, nunca uma segunda
+// fonte de verdade. Nenhuma tabela nova, nenhum estado paralelo: só
+// consultas read-only sobre o model já existente da H.1.
+//
+// FASE 19: o filtro `type: "VISIT"` foi REMOVIDO. Ele existia porque
+// VISIT era o único tipo; agora a agenda comercial do corretor tem
+// visitas e follow-ups, e esconder metade dela por causa de um filtro
+// que sobrou seria o pior resultado possível desta fase. O tipo continua
+// atravessando no item, para a tela dizer em TEXTO o que cada linha é.
 
 export type ItemAgenda = {
   id: string;
+  // Fase 19 — a Agenda passou a listar VISITA e FOLLOW-UP.
+  type: ScheduledActivityType;
+  // Só em FOLLOW_UP: o que precisa ser feito. null em VISIT.
+  subject: string | null;
   status: StatusScheduledActivity;
   scheduledAt: Date;
   notes: string | null;
@@ -42,6 +51,8 @@ export const LIMITE_PROXIMAS = 50;
 
 const SELECT_ITEM_AGENDA = {
   id: true,
+  type: true,
+  subject: true,
   status: true,
   scheduledAt: true,
   notes: true,
@@ -54,6 +65,8 @@ const SELECT_ITEM_AGENDA = {
 
 type LinhaBruta = {
   id: string;
+  type: ScheduledActivityType;
+  subject: string | null;
   status: StatusScheduledActivity;
   scheduledAt: Date;
   notes: string | null;
@@ -76,6 +89,8 @@ type LinhaBruta = {
 function paraItemAgenda(linha: LinhaBruta, organizationId: string): ItemAgenda {
   return {
     id: linha.id,
+    type: linha.type,
+    subject: linha.subject,
     status: linha.status,
     scheduledAt: linha.scheduledAt,
     notes: linha.notes,
@@ -274,7 +289,6 @@ export async function buscarAgendaHoje(
   return withOrganization(organizationId, async () => {
     const base: WhereAgenda = {
       organizationId,
-      type: "VISIT",
       status: "SCHEDULED",
       scheduledAt: { gte: hoje.inicio, lte: hoje.fim },
     };
@@ -308,7 +322,6 @@ export async function buscarAgendaProximas(
   return withOrganization(organizationId, async () => {
     const base: WhereAgenda = {
       organizationId,
-      type: "VISIT",
       status: "SCHEDULED",
       scheduledAt: { gt: hoje.fim },
     };
@@ -342,7 +355,6 @@ export async function buscarAgendaAnteriores(
   return withOrganization(organizationId, async () => {
     const base: WhereAgenda = {
       organizationId,
-      type: "VISIT",
       ...condicaoStatusAnteriores(filtros?.status ?? "TODAS", fuso, agora),
     };
     const where = filtros ? combinarWhere(base, filtros, organizationId, fuso) : base;
@@ -377,24 +389,21 @@ export async function contarAgenda(
       prisma.scheduledActivity.count({
         where: {
           organizationId,
-          type: "VISIT",
-          status: "SCHEDULED",
+              status: "SCHEDULED",
           scheduledAt: { gte: dia.inicio, lte: dia.fim },
         },
       }),
       prisma.scheduledActivity.count({
         where: {
           organizationId,
-          type: "VISIT",
-          status: "SCHEDULED",
+              status: "SCHEDULED",
           scheduledAt: { gt: dia.fim },
         },
       }),
       prisma.scheduledActivity.count({
         where: {
           organizationId,
-          type: "VISIT",
-          OR: [
+              OR: [
             { status: "COMPLETED" },
             { status: "CANCELLED" },
             { status: "SCHEDULED", scheduledAt: { lt: dia.inicio } },
@@ -404,8 +413,7 @@ export async function contarAgenda(
       prisma.scheduledActivity.count({
         where: {
           organizationId,
-          type: "VISIT",
-          status: "SCHEDULED",
+              status: "SCHEDULED",
           scheduledAt: { lt: dia.inicio },
         },
       }),
@@ -442,13 +450,13 @@ export async function contarResumoDiario(
   return withOrganization(organizationId, async () => {
     const [agendadas, concluidas, canceladas] = await Promise.all([
       prisma.scheduledActivity.count({
-        where: { organizationId, type: "VISIT", status: "SCHEDULED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
+        where: { organizationId, status: "SCHEDULED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
       }),
       prisma.scheduledActivity.count({
-        where: { organizationId, type: "VISIT", status: "COMPLETED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
+        where: { organizationId, status: "COMPLETED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
       }),
       prisma.scheduledActivity.count({
-        where: { organizationId, type: "VISIT", status: "CANCELLED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
+        where: { organizationId, status: "CANCELLED", scheduledAt: { gte: inicioHoje, lte: fimHoje } },
       }),
     ]);
     return { agendadas, concluidas, canceladas };

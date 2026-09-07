@@ -17,7 +17,13 @@ import {
 } from "@/lib/scheduled-activity-date";
 import { formatarDataHoraNoFuso } from "@/lib/fuso-horario";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
-import { STATUS_VISITA_LABEL, ACAO_OPERACIONAL_LABEL, type ItemAgendaClient } from "./agenda-visual";
+import {
+  STATUS_VISITA_LABEL,
+  ACAO_OPERACIONAL_LABEL,
+  TIPO_ATIVIDADE_LABEL,
+  type ItemAgendaClient,
+} from "./agenda-visual";
+import { FollowUpAgendadoCard } from "@/components/admin/FollowUpComercial";
 import { MessageCircle, Phone } from "lucide-react";
 
 // Redesenho da Agenda (item 13 do pedido) — drawer aberto pelo botão "Ver
@@ -57,6 +63,7 @@ export function AgendaDetalhesDrawer({
     ? acaoOperacionalDaVisita({ status: item.status, scheduledAt }, fuso, agora)
     : null;
 
+  const ehFollowUp = item.type === "FOLLOW_UP";
   const telefone = item.person?.phone ?? null;
   const whatsappHref = telefone ? `https://wa.me/${telefone.replace(/\D/g, "")}` : null;
   const telefoneHref = telefone ? `tel:+${telefone.replace(/\D/g, "")}` : null;
@@ -66,7 +73,12 @@ export function AgendaDetalhesDrawer({
       <SheetContent className="max-w-md">
         <SheetHeader>
           <div className="min-w-0">
-            <SheetTitle>Visita</SheetTitle>
+            {/* Fase 19 — o título diz o TIPO: este drawer passou a abrir
+                visita e follow-up. */}
+            <SheetTitle>{TIPO_ATIVIDADE_LABEL[item.type]}</SheetTitle>
+            {ehFollowUp && item.subject && (
+              <p className="mt-1 min-w-0 break-words text-sm font-medium">{item.subject}</p>
+            )}
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <Badge variant="secondary">{STATUS_VISITA_LABEL[item.status] ?? item.status}</Badge>
               {atrasada && (
@@ -82,7 +94,7 @@ export function AgendaDetalhesDrawer({
             </div>
           </div>
           <SheetDescription className="sr-only">
-            Detalhes da visita {item.person ? `com ${item.person.name}` : ""}
+            Detalhes do compromisso {item.person ? `com ${item.person.name}` : ""}
           </SheetDescription>
         </SheetHeader>
 
@@ -129,6 +141,13 @@ export function AgendaDetalhesDrawer({
             )}
           </div>
 
+          {/* Fase 19 — bloco específico de VISITA: um follow-up pertence
+              à negociação (e portanto a um imóvel), mas o imóvel não é o
+              objeto do compromisso. Mostrar "Imóvel" com o mesmo destaque
+              num follow-up de "cobrar documentos" seria mostrar campo de
+              visita onde não cabe. O caminho para o imóvel continua
+              existindo pela ficha do cliente. */}
+          {!ehFollowUp && (
           <div>
             <h3 className="mb-1.5 text-sm font-medium">Imóvel</h3>
             {item.property ? (
@@ -142,6 +161,7 @@ export function AgendaDetalhesDrawer({
               <p className="text-sm text-muted-foreground">Imóvel indisponível</p>
             )}
           </div>
+          )}
 
           {/* Observação: só leitura aqui quando NÃO acionável — quando
               acionável, a mesma observação já vem editável dentro de
@@ -156,7 +176,29 @@ export function AgendaDetalhesDrawer({
 
           <div className="space-y-3 border-t pt-4">
             <h3 className="text-sm font-medium">Ações</h3>
-            {acionavel ? (
+            {/* Fase 19 — as ações são as do TIPO. Um follow-up nunca
+                atravessa o caminho da visita (que criaria Interaction
+                VISIT e moveria o stage); as Server Actions recusam isso
+                de qualquer forma, mas a UI também não oferece. */}
+            {!acionavel ? (
+              <p className="text-sm text-muted-foreground">
+                Este compromisso já está{" "}
+                {item.status === "COMPLETED" ? "concluído" : "cancelado"} — sem ações disponíveis.
+              </p>
+            ) : ehFollowUp ? (
+              <FollowUpAgendadoCard
+                fuso={fuso}
+                followUp={{
+                  id: item.id,
+                  // subject é obrigatório em regra de aplicação para
+                  // FOLLOW_UP; o fallback existe só para não quebrar a
+                  // tela diante de uma linha anômala.
+                  assunto: item.subject ?? "Follow-up",
+                  scheduledAtISO: item.scheduledAtISO,
+                  notes: item.notes,
+                }}
+              />
+            ) : (
               <AgendamentoVisita
                 fuso={fuso}
                 podeAgendar={false}
@@ -166,11 +208,6 @@ export function AgendaDetalhesDrawer({
                   notes: item.notes,
                 }}
               />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Esta visita já está {item.status === "COMPLETED" ? "concluída" : "cancelada"} — sem ações
-                disponíveis.
-              </p>
             )}
           </div>
         </div>

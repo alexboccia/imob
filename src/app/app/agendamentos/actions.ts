@@ -19,6 +19,8 @@ import {
   criarAgendamentoVisitaSchema,
   remarcarAgendamentoVisitaSchema,
   atualizarObservacaoAgendamentoVisitaSchema,
+  criarFollowUpSchema,
+  atualizarFollowUpSchema,
 } from "@/lib/scheduled-activity-schema";
 import { deDatetimeLocalNoFuso } from "@/lib/fuso-horario";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
@@ -282,6 +284,7 @@ export async function remarcarAgendamentoVisita(
       where: { id: scheduledActivityId, organizationId },
       select: {
         id: true,
+        type: true,
         status: true,
         personId: true,
         propertyId: true,
@@ -290,6 +293,12 @@ export async function remarcarAgendamentoVisita(
       },
     });
     if (!atividade) return erroAcessoNegado("Agendamento não encontrado.");
+    // Fase 19 — GUARDA DE TIPO. Este arquivo passou a conter dois tipos
+    // de compromisso, e esta é a defesa que impede a regressão mais cara
+    // possível: um FOLLOW_UP jamais pode atravessar o caminho de visita
+    // (que cria Interaction VISIT e move o stage). Mensagem genérica,
+    // igual à de "não encontrado" — nunca revela o tipo da linha.
+    if (atividade.type !== "VISIT") return erroAcessoNegado("Agendamento não encontrado.");
 
     // Só SCHEDULED pode ser remarcada — COMPLETED/CANCELLED rejeitadas.
     if (atividade.status !== "SCHEDULED") {
@@ -352,9 +361,15 @@ export async function cancelarAgendamentoVisita(
   return withOrganization(organizationId, async () => {
     const atividade = await prisma.scheduledActivity.findUnique({
       where: { id: scheduledActivityId, organizationId },
-      select: { id: true, status: true, personId: true, propertyId: true },
+      select: { id: true, type: true, status: true, personId: true, propertyId: true },
     });
     if (!atividade) return erroAcessoNegado("Agendamento não encontrado.");
+    // Fase 19 — GUARDA DE TIPO. Este arquivo passou a conter dois tipos
+    // de compromisso, e esta é a defesa que impede a regressão mais cara
+    // possível: um FOLLOW_UP jamais pode atravessar o caminho de visita
+    // (que cria Interaction VISIT e move o stage). Mensagem genérica,
+    // igual à de "não encontrado" — nunca revela o tipo da linha.
+    if (atividade.type !== "VISIT") return erroAcessoNegado("Agendamento não encontrado.");
 
     // Idempotente: cancelar uma visita já CANCELLED é sucesso sem novo
     // efeito (sem ActivityLog duplicado) — nunca erro pra um duplo
@@ -410,6 +425,7 @@ export async function concluirAgendamentoVisita(
       where: { id: scheduledActivityId, organizationId },
       select: {
         id: true,
+        type: true,
         status: true,
         personId: true,
         propertyId: true,
@@ -429,6 +445,12 @@ export async function concluirAgendamentoVisita(
     ) {
       return erroAcessoNegado("Agendamento não encontrado.");
     }
+    // Fase 19 — GUARDA DE TIPO. Este arquivo passou a conter dois tipos
+    // de compromisso, e esta é a defesa que impede a regressão mais cara
+    // possível: um FOLLOW_UP jamais pode atravessar o caminho de visita
+    // (que cria Interaction VISIT e move o stage). Mensagem genérica,
+    // igual à de "não encontrado" — nunca revela o tipo da linha.
+    if (atividade.type !== "VISIT") return erroAcessoNegado("Agendamento não encontrado.");
 
     // Idempotente: concluir uma visita já COMPLETED é sucesso sem novo
     // efeito (sem Interaction/ActivityLog duplicados).
@@ -638,9 +660,15 @@ export async function atualizarObservacaoAgendamentoVisita(
   return withOrganization(organizationId, async () => {
     const atividade = await prisma.scheduledActivity.findUnique({
       where: { id: scheduledActivityId, organizationId },
-      select: { id: true, status: true, notes: true, personId: true, propertyId: true },
+      select: { id: true, type: true, status: true, notes: true, personId: true, propertyId: true },
     });
     if (!atividade) return erroAcessoNegado("Agendamento não encontrado.");
+    // Fase 19 — GUARDA DE TIPO. Este arquivo passou a conter dois tipos
+    // de compromisso, e esta é a defesa que impede a regressão mais cara
+    // possível: um FOLLOW_UP jamais pode atravessar o caminho de visita
+    // (que cria Interaction VISIT e move o stage). Mensagem genérica,
+    // igual à de "não encontrado" — nunca revela o tipo da linha.
+    if (atividade.type !== "VISIT") return erroAcessoNegado("Agendamento não encontrado.");
 
     // Só SCHEDULED pode ter a observação alterada — depois de
     // COMPLETED/CANCELLED, o texto vira parte do histórico encerrado do
@@ -692,5 +720,307 @@ export async function atualizarObservacaoAgendamentoVisita(
 
     revalidarPaginasAgendamento(atividade.personId, atividade.propertyId);
     return sucesso("Observação atualizada.");
+  });
+}
+
+// =======================================================================
+// Follow-up comercial (Fase 19)
+// =======================================================================
+// Actions SEPARADAS das de visita, de propósito. Ramificar dentro de
+// concluirAgendamentoVisita colocaria os dois efeitos possíveis num
+// único caminho de código, e um erro ali criaria uma Interaction VISIT
+// falsa e moveria o stage de uma negociação. Com actions distintas +
+// guarda de tipo nos dois sentidos (as de visita recusam FOLLOW_UP,
+// estas recusam VISIT), a separação é estrutural e testável — não uma
+// convenção que alguém precisa lembrar.
+//
+// Ver src/lib/follow-up.ts para a decisão de domínio inteira.
+
+// Guarda simétrica à das visitas — mesma mensagem genérica.
+function ehFollowUp(atividade: { type: string }): boolean {
+  return atividade.type === "FOLLOW_UP";
+}
+
+export async function criarFollowUp(
+  propertyInterestId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  const fuso = await buscarFusoOrganizacao(organizationId);
+
+  const parsed = criarFollowUpSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!parsed.success) return erroValidacao(parsed.error);
+  const { subject, notes } = parsed.data;
+
+  // Fase 18 preservada: datetime-local é horário de PAREDE da
+  // organização, nunca do navegador nem do processo.
+  const scheduledAt = deDatetimeLocalNoFuso(parsed.data.scheduledAt, fuso);
+  if (!scheduledAt) {
+    return {
+      success: false,
+      message: "Verifique os campos destacados.",
+      fieldErrors: { scheduledAt: ["Data/horário inválidos."] },
+    };
+  }
+  if (scheduledAt.getTime() <= Date.now()) {
+    return {
+      success: false,
+      message: "Verifique os campos destacados.",
+      fieldErrors: { scheduledAt: ["O follow-up deve ser agendado para uma data futura."] },
+    };
+  }
+
+  return withOrganization(organizationId, async () => {
+    // Mesmo padrão anti-IDOR de criarAgendamentoVisita: só o id da
+    // negociação vem do cliente; person, property e organizationId são
+    // derivados do banco.
+    const interesse = await prisma.propertyInterest.findUnique({
+      where: { id: propertyInterestId, organizationId },
+      select: {
+        id: true,
+        stage: true,
+        personId: true,
+        propertyId: true,
+        person: { select: { organizationId: true } },
+        property: { select: { organizationId: true } },
+      },
+    });
+
+    if (
+      !interesse ||
+      interesse.person.organizationId !== organizationId ||
+      interesse.property.organizationId !== organizationId
+    ) {
+      return erroGenerico("Relacionamento não encontrado.");
+    }
+
+    // Mesma regra da visita: negociação encerrada não recebe compromisso
+    // NOVO. Os existentes não são tocados (ver concluir/cancelar) — a
+    // Fase 19 não introduz mutação automática no fechamento.
+    if (interesse.stage === "REJECTED" || interesse.stage === "WON") {
+      return erroGenerico(
+        "Este relacionamento foi encerrado — não é possível agendar um follow-up."
+      );
+    }
+
+    // DELIBERADAMENTE SEM as regras de visita: o imóvel não precisa estar
+    // AVAILABLE (cobrar documentos de um negócio cujo imóvel saiu do ar
+    // continua sendo trabalho legítimo) e o stage NÃO avança — criar um
+    // follow-up não é agendar uma visita.
+    const followUp = await prisma.scheduledActivity.create({
+      data: {
+        organizationId,
+        personId: interesse.personId,
+        propertyId: interesse.propertyId,
+        propertyInterestId: interesse.id,
+        type: "FOLLOW_UP",
+        subject,
+        scheduledAt,
+        notes: notes || null,
+        // Fase 14/17: quem CRIOU. O dono é o responsável pela
+        // negociação, resolvido na leitura — nunca copiado para cá.
+        createdByMemberId: session.user.organizationMemberId ?? null,
+      },
+      select: { id: true },
+    });
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "ScheduledActivity",
+      entityId: followUp.id,
+      action: "follow_up_created",
+    });
+
+    revalidarPaginasAgendamento(interesse.personId, interesse.propertyId);
+    revalidatePath("/app");
+    revalidatePath("/app/agenda");
+    revalidatePath("/app/pipeline");
+    return sucesso("Follow-up agendado.");
+  });
+}
+
+export async function atualizarFollowUp(
+  scheduledActivityId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  const fuso = await buscarFusoOrganizacao(organizationId);
+
+  const parsed = atualizarFollowUpSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!parsed.success) return erroValidacao(parsed.error);
+  const { subject, notes } = parsed.data;
+
+  const scheduledAt = deDatetimeLocalNoFuso(parsed.data.scheduledAt, fuso);
+  if (!scheduledAt) {
+    return {
+      success: false,
+      message: "Verifique os campos destacados.",
+      fieldErrors: { scheduledAt: ["Data/horário inválidos."] },
+    };
+  }
+
+  return withOrganization(organizationId, async () => {
+    const atividade = await prisma.scheduledActivity.findUnique({
+      where: { id: scheduledActivityId, organizationId },
+      select: { id: true, type: true, status: true, personId: true, propertyId: true, scheduledAt: true },
+    });
+    if (!atividade || !ehFollowUp(atividade)) {
+      return erroAcessoNegado("Follow-up não encontrado.");
+    }
+
+    // Só um follow-up ABERTO é editável — depois de concluído/cancelado
+    // o registro é histórico, mesma regra da observação da visita (H.6).
+    if (atividade.status !== "SCHEDULED") {
+      return erroGenerico("Só é possível alterar um follow-up em aberto.");
+    }
+
+    const anterior = atividade.scheduledAt;
+    await prisma.scheduledActivity.update({
+      where: { id: atividade.id, organizationId },
+      // status/completedAt/cancelledAt intocados.
+      data: { subject, scheduledAt, notes: notes || null },
+    });
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "ScheduledActivity",
+      entityId: atividade.id,
+      action: "follow_up_updated",
+      // Metadata mínima e sem PII: só o deslocamento da data. O assunto
+      // é texto livre digitado pelo corretor e não entra no log.
+      payload: { from: anterior.toISOString(), to: scheduledAt.toISOString() },
+    });
+
+    revalidarPaginasAgendamento(atividade.personId, atividade.propertyId);
+    revalidatePath("/app");
+    revalidatePath("/app/agenda");
+    return sucesso("Follow-up atualizado.");
+  });
+}
+
+// Concluir um follow-up marca o COMPROMISSO como cumprido. Nada mais.
+//
+// NÃO cria Interaction e NÃO move stage — ver efeitosDaConclusao em
+// src/lib/follow-up.ts. "Concluí o follow-up de ligar para o João" não
+// prova que a ligação aconteceu, e transformar uma coisa na outra
+// inventaria um fato comercial que ninguém registrou.
+export async function concluirFollowUp(
+  scheduledActivityId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  return withOrganization(organizationId, async () => {
+    const atividade = await prisma.scheduledActivity.findUnique({
+      where: { id: scheduledActivityId, organizationId },
+      select: { id: true, type: true, status: true, personId: true, propertyId: true },
+    });
+    if (!atividade || !ehFollowUp(atividade)) {
+      return erroAcessoNegado("Follow-up não encontrado.");
+    }
+    if (atividade.status === "COMPLETED") return sucesso("Follow-up já estava concluído.");
+    if (atividade.status === "CANCELLED") {
+      return erroGenerico("Não é possível concluir um follow-up cancelado.");
+    }
+
+    // Mesmo guard atômico da conclusão de visita: só uma conclusão
+    // concorrente casa a linha, e a segunda não grava ActivityLog
+    // duplicado. Sem transação porque não há segunda escrita a manter
+    // consistente — é exatamente a diferença entre os dois tipos.
+    const atualizado = await prisma.scheduledActivity.updateMany({
+      where: { id: atividade.id, organizationId, status: "SCHEDULED" },
+      data: { status: "COMPLETED", completedAt: new Date() },
+    });
+    if (atualizado.count === 0) return sucesso("Follow-up já estava concluído.");
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "ScheduledActivity",
+      entityId: atividade.id,
+      action: "follow_up_completed",
+    });
+
+    revalidarPaginasAgendamento(atividade.personId, atividade.propertyId);
+    revalidatePath("/app");
+    revalidatePath("/app/agenda");
+    revalidatePath("/app/pipeline");
+    return sucesso("Follow-up concluído.");
+  });
+}
+
+export async function cancelarFollowUp(
+  scheduledActivityId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  return withOrganization(organizationId, async () => {
+    const atividade = await prisma.scheduledActivity.findUnique({
+      where: { id: scheduledActivityId, organizationId },
+      select: { id: true, type: true, status: true, personId: true, propertyId: true },
+    });
+    if (!atividade || !ehFollowUp(atividade)) {
+      return erroAcessoNegado("Follow-up não encontrado.");
+    }
+    if (atividade.status === "CANCELLED") return sucesso("Follow-up já estava cancelado.");
+    if (atividade.status === "COMPLETED") {
+      return erroGenerico("Não é possível cancelar um follow-up já concluído.");
+    }
+
+    await prisma.scheduledActivity.update({
+      where: { id: atividade.id, organizationId },
+      data: { status: "CANCELLED", cancelledAt: new Date() },
+    });
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "ScheduledActivity",
+      entityId: atividade.id,
+      action: "follow_up_cancelled",
+    });
+
+    revalidarPaginasAgendamento(atividade.personId, atividade.propertyId);
+    revalidatePath("/app");
+    revalidatePath("/app/agenda");
+    revalidatePath("/app/pipeline");
+    return sucesso("Follow-up cancelado.");
   });
 }

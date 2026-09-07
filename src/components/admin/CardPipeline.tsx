@@ -11,6 +11,7 @@ import type { OpcaoResponsavel } from "@/lib/responsavel-negociacao";
 import { MoverEstagioPipeline } from "@/components/admin/MoverEstagioPipeline";
 import { NegociacaoDrawer } from "@/components/admin/pipeline/NegociacaoDrawer";
 import { PRIORIDADE_BADGE_CLASSE, PRIORIDADE_LABEL_CURTO } from "@/components/admin/pipeline/prioridade-visual";
+import { TIPO_ATIVIDADE_LABEL } from "@/lib/follow-up";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,9 +45,9 @@ export function CardPipeline({
   const [drawerAberto, setDrawerAberto] = useState(false);
   const encerrado = estagioInteresseEncerrado(item.stage);
   const pendente =
-    !!item.proximaVisita &&
+    !!item.proximoCompromisso &&
     acaoOperacionalDaVisita(
-      { status: "SCHEDULED", scheduledAt: new Date(item.proximaVisita.scheduledAtISO) },
+      { status: "SCHEDULED", scheduledAt: new Date(item.proximoCompromisso.scheduledAtISO) },
       fuso,
       new Date()
     ) === "RESOLVER_PENDENCIA";
@@ -88,13 +89,18 @@ export function CardPipeline({
                 </p>
               )}
               {item.aging && <p className="text-xs text-muted-foreground">{item.aging}</p>}
-              {item.proximaVisita ? (
+              {item.proximoCompromisso ? (
                 <p className={`text-xs ${pendente ? "font-medium text-destructive" : "text-muted-foreground"}`}>
-                  {pendente ? "Pendência: " : "Próxima visita: "}
-                  {formatarDataHoraNoFuso(item.proximaVisita.scheduledAtISO, fuso)}
+                  {/* Fase 19 — o tipo aparece em TEXTO: o card pode estar
+                      mostrando uma visita ou um follow-up. */}
+                  {pendente ? "Pendência: " : "Próximo: "}
+                  {TIPO_ATIVIDADE_LABEL[item.proximoCompromisso.tipo]}
+                  {item.proximoCompromisso.assunto && ` — ${item.proximoCompromisso.assunto}`}
+                  {" · "}
+                  {formatarDataHoraNoFuso(item.proximoCompromisso.scheduledAtISO, fuso)}
                 </p>
               ) : (
-                <p className="text-xs text-muted-foreground">Sem visita agendada</p>
+                <p className="text-xs text-muted-foreground">Sem compromisso agendado</p>
               )}
             </div>
           )}

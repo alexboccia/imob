@@ -7,8 +7,9 @@ import { ORG_CENTRAL, ORG_B, login } from "./helpers";
 // ABSOLUTOS e PESSOAIS — mesmo motivo estrutural de ORG_AGENDA e
 // ORG_ANALYTICS (ver prisma/seed-e2e.ts).
 //
-// Seed determinístico: 1 visita atrasada, 1 hoje, 1 próxima, 3
-// negociações do dono e 1 de outro corretor.
+// Seed determinístico: 1 visita atrasada, 1 visita hoje, 1 visita
+// próxima, 1 follow-up hoje e 1 amanhã (Fase 19), 4 negociações do dono
+// e 1 de outro corretor.
 
 test.describe("Central de trabalho", () => {
   test("mostra atraso, hoje, próximos e só as minhas negociações", async ({ page }) => {
@@ -19,27 +20,35 @@ test.describe("Central de trabalho", () => {
 
     // ATRASADAS — bloco só existe quando há atraso, e o número é exato.
     await expect(page.getByRole("heading", { name: "Atrasadas" })).toBeVisible();
-    expect(texto).toContain("1 visita em aberto");
+    expect(texto).toContain("1 compromisso em aberto");
     expect(texto).toContain("Central Atrasada");
 
     // HOJE
     await expect(page.getByRole("heading", { name: "Hoje" })).toBeVisible();
-    expect(texto).toContain("1 visita agendada");
+    expect(texto).toContain("2 compromissos agendados");
     expect(texto).toContain("Central Hoje");
 
     // PRÓXIMOS
     await expect(page.getByRole("heading", { name: "Próximos compromissos" })).toBeVisible();
     expect(texto).toContain("Central Proxima");
+    // Fase 19 — o outro tipo de compromisso aparece com o TIPO e o
+    // ASSUNTO em texto, nunca só um ícone.
+    expect(texto).toContain("Follow-up");
+    expect(texto).toContain("Enviar proposta revisada");
 
     // MINHAS NEGOCIAÇÕES — três do dono, e a do outro corretor NUNCA.
     await expect(page.getByRole("heading", { name: "Minhas negociações" })).toBeVisible();
-    expect(texto).toContain("3 negociações em andamento sob sua responsabilidade");
+    expect(texto).toContain("4 negociações em andamento sob sua responsabilidade");
     expect(texto).not.toContain("Central De Outro Corretor");
 
     // Fato derivado, não julgamento: a negociação sem agenda futura é
     // declarada como tal, e a que tem visita marcada não.
     expect(texto).toContain("Sem próximo compromisso");
-    expect(texto).toContain("Com visita agendada");
+    // Fase 19 — o próximo compromisso é NOMEADO pelo tipo: "Com visita
+    // agendada" passaria a ser falso para uma negociação cujo próximo
+    // compromisso é um follow-up.
+    expect(texto).toContain("Visita em ");
+    expect(texto).toContain("Follow-up em ");
     // E nenhuma linguagem de score/prioridade inventada.
     expect(texto).not.toContain("Prioridade");
     expect(texto).not.toContain("lead quente");

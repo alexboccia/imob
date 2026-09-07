@@ -48,7 +48,12 @@ function linhaFake(overrides: {
   personOrganizationId?: string;
   propertyOrganizationId?: string;
   propertyStatus?: PropertyStatus;
-  scheduledActivities?: { id: string; scheduledAt: Date }[];
+  scheduledActivities?: {
+    id: string;
+    type: "VISIT" | "FOLLOW_UP";
+    subject: string | null;
+    scheduledAt: Date;
+  }[];
   stageHistory?: {
     newStage: PropertyInterestStage;
     changedAt: Date;
@@ -111,19 +116,24 @@ describe("paraItemPipeline", () => {
     expect(item.closedAtISO).toBe("2026-02-02T10:00:00.000Z");
   });
 
-  test("F) sem visita agendada -> proximaVisita null", () => {
+  test("F) sem visita agendada -> proximoCompromisso null", () => {
     const item = paraItemPipeline(linhaFake({ scheduledActivities: [] }), ORG);
-    expect(item.proximaVisita).toBeNull();
+    expect(item.proximoCompromisso).toBeNull();
   });
 
-  test("E) com visita agendada -> proximaVisita preenchida com o item retornado pela query (id + scheduledAtISO)", () => {
+  test("E) com visita agendada -> proximoCompromisso preenchida com o item retornado pela query (id + scheduledAtISO)", () => {
     const item = paraItemPipeline(
       linhaFake({
-        scheduledActivities: [{ id: "visita-1", scheduledAt: new Date("2026-03-01T14:00:00.000Z") }],
+        scheduledActivities: [{ id: "visita-1", type: "VISIT" as const, subject: null, scheduledAt: new Date("2026-03-01T14:00:00.000Z") }],
       }),
       ORG
     );
-    expect(item.proximaVisita).toEqual({ id: "visita-1", scheduledAtISO: "2026-03-01T14:00:00.000Z" });
+    expect(item.proximoCompromisso).toEqual({
+      id: "visita-1",
+      tipo: "VISIT",
+      assunto: null,
+      scheduledAtISO: "2026-03-01T14:00:00.000Z",
+    });
   });
 
   test("G) proximaAcao reaproveita obterProximaAcaoComercial (varia com stage/status, nunca reimplementada)", () => {
@@ -195,7 +205,7 @@ function itemFake(overrides: Partial<ItemPipeline> & { stage: PropertyInterestSt
     updatedAtISO: overrides.updatedAtISO ?? "2026-01-01T00:00:00.000Z",
     person: overrides.person ?? { id: "p1", name: "Fulano" },
     property: overrides.property ?? { id: "im1", title: "Imóvel", status: "AVAILABLE", neighborhood: "Centro" },
-    proximaVisita: overrides.proximaVisita ?? null,
+    proximoCompromisso: overrides.proximoCompromisso ?? null,
     proximaAcao: overrides.proximaAcao ?? null,
     aging: overrides.aging ?? null,
     agingMs: overrides.agingMs ?? null,
@@ -246,8 +256,8 @@ describe("ordenarColuna", () => {
 
   test("D) determinístico — mesma entrada sempre produz a mesma ordem", () => {
     const itens = [
-      itemFake({ id: "a", stage: "INTERESTED", proximaVisita: { id: "v1", scheduledAtISO: "2026-06-20T10:00:00.000Z" } }),
-      itemFake({ id: "b", stage: "INTERESTED", proximaVisita: { id: "v2", scheduledAtISO: "2026-06-16T10:00:00.000Z" } }),
+      itemFake({ id: "a", stage: "INTERESTED", proximoCompromisso: { id: "v1", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-06-20T10:00:00.000Z" } }),
+      itemFake({ id: "b", stage: "INTERESTED", proximoCompromisso: { id: "v2", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-06-16T10:00:00.000Z" } }),
     ];
     const resultados = new Set(
       Array.from({ length: 10 }, () => ordenarColuna(itens, "UTC", agora).map((i) => i.id).join(","))
@@ -260,12 +270,12 @@ describe("ordenarColuna", () => {
       itemFake({
         id: "futura",
         stage: "INTERESTED",
-        proximaVisita: { id: "v1", scheduledAtISO: "2026-06-20T10:00:00.000Z" },
+        proximoCompromisso: { id: "v1", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-06-20T10:00:00.000Z" },
       }),
       itemFake({
         id: "pendente",
         stage: "INTERESTED",
-        proximaVisita: { id: "v2", scheduledAtISO: "2026-06-10T10:00:00.000Z" }, // dia já passado
+        proximoCompromisso: { id: "v2", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-06-10T10:00:00.000Z" }, // dia já passado
       }),
     ];
     const ordenado = ordenarColuna(itens, "UTC", agora);
@@ -274,8 +284,8 @@ describe("ordenarColuna", () => {
 
   test("entre itens com visita futura, a mais próxima vem primeiro", () => {
     const itens = [
-      itemFake({ id: "longe", stage: "PROPOSAL", proximaVisita: { id: "v1", scheduledAtISO: "2026-07-01T10:00:00.000Z" } }),
-      itemFake({ id: "perto", stage: "PROPOSAL", proximaVisita: { id: "v2", scheduledAtISO: "2026-06-16T10:00:00.000Z" } }),
+      itemFake({ id: "longe", stage: "PROPOSAL", proximoCompromisso: { id: "v1", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-07-01T10:00:00.000Z" } }),
+      itemFake({ id: "perto", stage: "PROPOSAL", proximoCompromisso: { id: "v2", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-06-16T10:00:00.000Z" } }),
     ];
     const ordenado = ordenarColuna(itens, "UTC", agora);
     expect(ordenado.map((i) => i.id)).toEqual(["perto", "longe"]);
@@ -283,7 +293,7 @@ describe("ordenarColuna", () => {
 
   test("F) itens sem visita vêm por último, ordenados por updatedAt mais antigo primeiro (desempate, nunca exibido como idade da etapa)", () => {
     const itens = [
-      itemFake({ id: "com-visita", stage: "VISITED", proximaVisita: { id: "v1", scheduledAtISO: "2026-06-20T10:00:00.000Z" } }),
+      itemFake({ id: "com-visita", stage: "VISITED", proximoCompromisso: { id: "v1", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-06-20T10:00:00.000Z" } }),
       itemFake({ id: "sem-visita-novo", stage: "VISITED", updatedAtISO: "2026-06-10T00:00:00.000Z" }),
       itemFake({ id: "sem-visita-antigo", stage: "VISITED", updatedAtISO: "2026-01-01T00:00:00.000Z" }),
     ];
@@ -992,14 +1002,14 @@ const DIA = 24 * 60 * 60 * 1000;
 
 function prioridadeItemFake(overrides: {
   stage?: ItemPipeline["stage"];
-  proximaVisita?: ItemPipeline["proximaVisita"];
+  proximoCompromisso?: ItemPipeline["proximoCompromisso"];
   agingMs?: number | null;
 }) {
   return {
     stage: overrides.stage ?? "INTERESTED",
-    proximaVisita: overrides.proximaVisita ?? null,
+    proximoCompromisso: overrides.proximoCompromisso ?? null,
     agingMs: overrides.agingMs ?? null,
-  } satisfies Pick<ItemPipeline, "stage" | "proximaVisita" | "agingMs">;
+  } satisfies Pick<ItemPipeline, "stage" | "proximoCompromisso" | "agingMs">;
 }
 
 describe("classificarPrioridadePipeline", () => {
@@ -1008,7 +1018,7 @@ describe("classificarPrioridadePipeline", () => {
   test("A) atividade vencida (visita SCHEDULED cujo dia já passou) -> ALTA com motivo ATIVIDADE_VENCIDA", () => {
     const item = prioridadeItemFake({
       stage: "VISIT_SCHEDULED",
-      proximaVisita: { id: "v1", scheduledAtISO: "2026-06-10T10:00:00.000Z" },
+      proximoCompromisso: { id: "v1", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-06-10T10:00:00.000Z" },
     });
     const resultado = classificarPrioridadePipeline(item, null, "UTC", agora);
     expect(resultado.nivel).toBe("ALTA");
@@ -1018,7 +1028,7 @@ describe("classificarPrioridadePipeline", () => {
   test("B) próxima ação futura (não vencida) -> NORMAL, sem motivos", () => {
     const item = prioridadeItemFake({
       stage: "VISIT_SCHEDULED",
-      proximaVisita: { id: "v1", scheduledAtISO: "2026-06-20T10:00:00.000Z" },
+      proximoCompromisso: { id: "v1", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-06-20T10:00:00.000Z" },
     });
     const resultado = classificarPrioridadePipeline(item, null, "UTC", agora);
     expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
@@ -1073,7 +1083,7 @@ describe("classificarPrioridadePipeline", () => {
   test("H) legado sem history (agingMs null) mas com atividade vencida -> ainda ALTA (sinais independentes)", () => {
     const item = prioridadeItemFake({
       stage: "VISIT_SCHEDULED",
-      proximaVisita: { id: "v1", scheduledAtISO: "2026-06-10T10:00:00.000Z" },
+      proximoCompromisso: { id: "v1", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-06-10T10:00:00.000Z" },
       agingMs: null,
     });
     const resultado = classificarPrioridadePipeline(item, 5 * DIA, "UTC", agora);
@@ -1094,7 +1104,7 @@ describe("classificarPrioridadePipeline", () => {
   test("L/N) múltiplos motivos simultâneos (atividade vencida + aging acima da média) -> ALTA, ordem canônica sempre igual", () => {
     const item = prioridadeItemFake({
       stage: "VISIT_SCHEDULED",
-      proximaVisita: { id: "v1", scheduledAtISO: "2026-06-10T10:00:00.000Z" },
+      proximoCompromisso: { id: "v1", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-06-10T10:00:00.000Z" },
       agingMs: 10 * DIA,
     });
     const resultado = classificarPrioridadePipeline(item, 5 * DIA, "UTC", agora);
@@ -1118,7 +1128,7 @@ describe("classificarPrioridadePipeline", () => {
   test("S) boundary — visita SCHEDULED ainda hoje (mesmo dia calendário) não é atividade vencida", () => {
     const item = prioridadeItemFake({
       stage: "VISIT_SCHEDULED",
-      proximaVisita: { id: "v1", scheduledAtISO: "2026-06-15T23:59:00.000Z" },
+      proximoCompromisso: { id: "v1", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-06-15T23:59:00.000Z" },
     });
     const resultado = classificarPrioridadePipeline(item, null, "UTC", agora);
     expect(resultado.nivel).toBe("NORMAL");
@@ -1127,7 +1137,7 @@ describe("classificarPrioridadePipeline", () => {
   test("boundary — visita SCHEDULED no dia calendário anterior já é atividade vencida", () => {
     const item = prioridadeItemFake({
       stage: "VISIT_SCHEDULED",
-      proximaVisita: { id: "v1", scheduledAtISO: "2026-06-14T23:59:00.000Z" },
+      proximoCompromisso: { id: "v1", tipo: "VISIT" as const, assunto: null, scheduledAtISO: "2026-06-14T23:59:00.000Z" },
     });
     const resultado = classificarPrioridadePipeline(item, null, "UTC", agora);
     expect(resultado.nivel).toBe("ALTA");

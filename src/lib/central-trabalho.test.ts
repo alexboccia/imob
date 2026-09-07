@@ -80,8 +80,21 @@ describe("classificação temporal (bordas de dia em UTC)", () => {
 });
 
 describe("paraCompromisso", () => {
-  const linha = (over: Partial<{ pessoaOrg: string; imovelOrg: string; semImovel: boolean }> = {}) => ({
+  const linha = (
+    over: Partial<{
+      pessoaOrg: string;
+      imovelOrg: string;
+      semImovel: boolean;
+      tipo: "VISIT" | "FOLLOW_UP";
+      assunto: string | null;
+    }> = {}
+  ) => ({
     id: "a1",
+    // Fase 19 — VISIT por padrão: é o tipo de toda linha existente, e
+    // manter o padrão aqui é o que faz estes casos continuarem provando
+    // exatamente o que provavam antes.
+    type: over.tipo ?? ("VISIT" as const),
+    subject: over.assunto ?? null,
     scheduledAt: new Date("2026-09-07T14:30:00.000Z"),
     notes: "Levar a documentação",
     person: { id: "p1", name: "Ana Cliente", organizationId: over.pessoaOrg ?? ORG },
@@ -93,6 +106,9 @@ describe("paraCompromisso", () => {
   test("mapeia pessoa, imóvel e data em ISO", () => {
     expect(paraCompromisso(linha(), ORG)).toEqual({
       id: "a1",
+      // Fase 19 — o tipo atravessa para a tela poder dizê-lo em texto.
+      tipo: "VISIT",
+      assunto: null,
       scheduledAtISO: "2026-09-07T14:30:00.000Z",
       notes: "Levar a documentação",
       pessoa: { id: "p1", name: "Ana Cliente" },

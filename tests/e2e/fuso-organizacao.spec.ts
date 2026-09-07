@@ -38,7 +38,7 @@ test.describe("calendário comercial no fuso da organização", () => {
     expect(texto).toContain("Fuso Comeco De Amanha");
 
     // ... mas em blocos diferentes. "Hoje" tem exatamente uma.
-    expect(texto).toContain("1 visita agendada");
+    expect(texto).toContain("1 compromisso agendado");
 
     // O bloco de HOJE contém a das 23:30 e NÃO a das 00:15.
     const blocoHoje = page
@@ -72,8 +72,8 @@ test.describe("calendário comercial no fuso da organização", () => {
   test("Agenda e Central concordam sobre o que é hoje", async ({ page }) => {
     await login(page, ORG_FUSO);
     const central = (await page.locator("main").innerText()).replace(/ /g, " ");
-    // A Central afirma 1 visita hoje.
-    expect(central).toContain("1 visita agendada");
+    // A Central afirma 1 compromisso hoje.
+    expect(central).toContain("1 compromisso agendado");
 
     await page.goto("/app/agenda");
     await expect(page.getByRole("heading", { name: "Agenda" })).toBeVisible();
@@ -206,7 +206,7 @@ test.describe.serial("trocar o fuso reinterpreta o calendário, sem tocar no dad
     // Estado inicial: 23:30 local, dentro de HOJE.
     let texto = (await page.locator("main").innerText()).replace(/ /g, " ");
     expect(texto).toContain("23:30");
-    expect(texto).toContain("1 visita agendada");
+    expect(texto).toContain("1 compromisso agendado");
 
     await salvarFuso(page, "UTC");
 
@@ -226,6 +226,6 @@ test.describe.serial("trocar o fuso reinterpreta o calendário, sem tocar no dad
       .getByRole("heading", { name: "Próximos compromissos" })
       .locator("xpath=ancestor::*[@data-slot='card'][1]");
     await expect(blocoProximos).toContainText("Fuso Fim Do Dia");
-    expect(texto).toContain("0 visitas agendadas");
+    expect(texto).toContain("0 compromissos agendados");
   });
 });

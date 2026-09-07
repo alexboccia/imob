@@ -8,6 +8,7 @@ import {
   buscarAgendaAnteriores,
   interpretarFiltrosAgenda,
   contarResumoDiario,
+  contarAgenda,
 } from "@/lib/agenda";
 import {
   proximaVisita,
@@ -394,14 +395,36 @@ describe("Agenda do corretor — Fase H.3", () => {
     expect(anteriores.map((i) => i.id)).toEqual([maisRecente.id, maisAntiga.id]);
   });
 
-  test("T) as queries da agenda filtram explicitamente type: \"VISIT\" (garantia estrutural pro enum crescer no futuro)", () => {
-    const codigo = readFileSync(new URL("../../src/lib/agenda.ts", import.meta.url), "utf-8");
-    const ocorrencias = codigo.match(/type:\s*"VISIT"/g) ?? [];
-    // 3 queries de listagem (Hoje/Próximas/Anteriores) + 4 de contagem
-    // globais (hoje/proximas/anteriores/atrasadas, contarAgenda) + 3 de
-    // contagem do resumo diário (agendadas/concluidas/canceladas,
-    // contarResumoDiario, adicionadas na H.5) = 10.
-    expect(ocorrencias.length).toBe(10);
+  // FASE 19 — este teste afirmava o contrário: que as queries filtravam
+  // type:"VISIT", "garantia estrutural pro enum crescer no futuro". O
+  // enum cresceu, e a resposta certa foi REMOVER o filtro: a agenda é a
+  // agenda comercial do corretor, e esconder os follow-ups seria o pior
+  // resultado possível. O teste passou a provar o comportamento REAL, e
+  // por consulta ao banco em vez de grep no código-fonte.
+  test("T) a agenda lista TODOS os tipos de compromisso, não só visitas", async () => {
+    const ctx = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: hojeAsHoras(2) });
+    cenario = ctx.cenario;
+    await prisma.scheduledActivity.create({
+      data: {
+        organizationId: ctx.cenario.organization.id,
+        personId: ctx.atividade.personId,
+        propertyId: ctx.atividade.propertyId,
+        propertyInterestId: ctx.atividade.propertyInterestId,
+        type: "FOLLOW_UP",
+        subject: "Enviar proposta",
+        status: "SCHEDULED",
+        scheduledAt: hojeAsHoras(5),
+      },
+    });
+
+    const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC");
+    expect(hoje.map((i) => i.type).sort()).toEqual(["FOLLOW_UP", "VISIT"]);
+    // O assunto acompanha o follow-up e é null na visita.
+    expect(hoje.find((i) => i.type === "FOLLOW_UP")!.subject).toBe("Enviar proposta");
+    expect(hoje.find((i) => i.type === "VISIT")!.subject).toBeNull();
+
+    const contadores = await contarAgenda(ctx.cenario.organization.id, "UTC");
+    expect(contadores.hoje).toBe(2);
   });
 
   // -------------------------------------------------------------------
@@ -888,17 +911,30 @@ describe("Agenda do corretor — Fase H.3", () => {
     expect(resumoA.agendadas).toBe(0);
   });
 
-  test("W) type diferente de VISIT: impossível de testar hoje (enum ScheduledActivityType só possui VISIT) — documentado, não simulado com schema/enum novo", () => {
-    // contarResumoDiario filtra explicitamente type:"VISIT" (mesma
-    // garantia estrutural do teste T acima, seção de corretude de
-    // query) — quando o enum ganhar novas variantes numa fase futura,
-    // este filtro já impede que elas entrem no resumo sem exigir
-    // nenhuma mudança aqui. Não há como construir um cenário real com
-    // type != "VISIT" sem alterar prisma/schema.prisma, o que está fora
-    // do escopo da H.5 (instrução explícita: não inventar enum/schema).
-    const codigo = readFileSync(new URL("../../src/lib/agenda.ts", import.meta.url), "utf-8");
-    const trechoResumo = codigo.slice(codigo.indexOf("export async function contarResumoDiario"));
-    expect(trechoResumo.match(/type:\s*"VISIT"/g)?.length).toBe(3);
+  // FASE 19 — a H.5 registrou aqui que um type != VISIT era "impossível
+  // de testar hoje". Deixou de ser: o cenário agora é real, e o resumo
+  // diário conta os dois tipos, porque ele resume O DIA do corretor.
+  test("W) o resumo diário conta visita e follow-up juntos", async () => {
+    const ctx = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: hojeAsHoras(2) });
+    cenario = ctx.cenario;
+    await prisma.scheduledActivity.create({
+      data: {
+        organizationId: ctx.cenario.organization.id,
+        personId: ctx.atividade.personId,
+        propertyId: ctx.atividade.propertyId,
+        propertyInterestId: ctx.atividade.propertyInterestId,
+        type: "FOLLOW_UP",
+        subject: "Cobrar documentos",
+        status: "COMPLETED",
+        scheduledAt: hojeAsHoras(1),
+        completedAt: new Date(),
+      },
+    });
+
+    const resumo = await contarResumoDiario(ctx.cenario.organization.id, "UTC");
+    expect(resumo.agendadas).toBe(1);
+    expect(resumo.concluidas).toBe(1);
+    expect(resumo.canceladas).toBe(0);
   });
 
   test("X) resumo diário NÃO muda quando busca/status/período são aplicados na visualização", async () => {

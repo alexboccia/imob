@@ -1086,6 +1086,50 @@ async function main() {
     responsibleMemberId: orgCentral.membro.id,
     visitaEm: diasAtras(-3),
   });
+  // Fase 19 — uma negociação com FOLLOW-UP de hoje, e nenhuma visita.
+  // Prova na tela o que a fase entregou: a Central passa a mostrar o
+  // outro tipo de compromisso, com o assunto em texto, e a negociação
+  // deixa de aparecer como "sem próximo compromisso".
+  const negociacaoFollowUp = await criarNegociacaoCentral({
+    nomePessoa: "Central Follow Up",
+    responsibleMemberId: orgCentral.membro.id,
+  });
+  const pessoaFollowUp = (
+    await prisma.propertyInterest.findUniqueOrThrow({
+      where: { id: negociacaoFollowUp.id },
+      select: { personId: true },
+    })
+  ).personId;
+  // DOIS follow-ups, de propósito, e cada um prova uma coisa diferente:
+  //
+  //   hoje ao meio-dia UTC  -> aparece no bloco HOJE. A classificação é
+  //                            por DIA (Fases 17/18), então isso vale
+  //                            independentemente da hora em que a suíte
+  //                            roda — inclusive depois do meio-dia.
+  //   amanhã ao meio-dia    -> é o PRÓXIMO COMPROMISSO da negociação
+  //                            (scheduledAt > agora em qualquer horário
+  //                            de execução), o que tira a negociação de
+  //                            "sem próximo compromisso".
+  //
+  // Um único follow-up ao meio-dia de hoje não serviria para as duas
+  // coisas: depois das 12:00 UTC ele deixa de ser futuro.
+  for (const [assunto, quando] of [
+    ["Enviar proposta revisada", diasAtras(0)],
+    ["Cobrar documentos", diasAtras(-1)],
+  ] as const) {
+    await prisma.scheduledActivity.create({
+      data: {
+        organizationId: orgCentral.organization.id,
+        personId: pessoaFollowUp,
+        propertyId: IDS_E2E.imovelOrgCentral,
+        propertyInterestId: negociacaoFollowUp.id,
+        type: "FOLLOW_UP",
+        subject: assunto,
+        status: "SCHEDULED",
+        scheduledAt: quando,
+      },
+    });
+  }
   // Negociação de OUTRO corretor: prova na tela que a Central é pessoal.
   await criarNegociacaoCentral({
     nomePessoa: "Central De Outro Corretor",

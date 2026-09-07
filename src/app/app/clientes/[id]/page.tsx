@@ -110,13 +110,20 @@ export default async function DetalheClientePage({
             orderBy: { updatedAt: "desc" },
             include: {
               property: { select: { id: true, title: true, price: true, rentPrice: true, status: true } },
-              // Visita SCHEDULED mais próxima por scheduledAt — batch numa
-              // única query (Fase H.2), nunca uma consulta por card.
+              // Compromissos SCHEDULED desta negociação, batch numa única
+              // query (Fase H.2), nunca uma consulta por card.
+              //
+              // Fase 19 — o `take: 1` SAIU. Com dois tipos possíveis, ele
+              // devolveria "o mais próximo, seja qual for", e a visita e o
+              // follow-up mais próximos podem ser linhas diferentes; a
+              // separação acontece em memória logo abaixo. O teto de 20 é
+              // defensivo (uma negociação com 20 compromissos abertos já é
+              // uma anomalia operacional), não paginação.
               scheduledActivities: {
                 where: { organizationId, status: "SCHEDULED" },
                 orderBy: { scheduledAt: "asc" },
-                take: 1,
-                select: { id: true, scheduledAt: true, notes: true },
+                take: 20,
+                select: { id: true, type: true, subject: true, scheduledAt: true, notes: true },
               },
               // Fase 12 — participantes da divisão, no MESMO select
               // batched das demais relações: uma query para a lista
@@ -330,7 +337,18 @@ export default async function DetalheClientePage({
             </p>
           ) : (
             <div className="space-y-3">
-              {pessoa.propertyInterests.map((interesse) => (
+              {pessoa.propertyInterests.map((interesse) => {
+                // A lista já vem ordenada por scheduledAt: o primeiro de
+                // cada tipo é o compromisso mais próximo daquele tipo.
+                // Visita e follow-up são dimensões separadas e podem
+                // coexistir na mesma negociação.
+                const proximaVisita = interesse.scheduledActivities.find(
+                  (a) => a.type === "VISIT"
+                );
+                const proximoFollowUp = interesse.scheduledActivities.find(
+                  (a) => a.type === "FOLLOW_UP"
+                );
+                return (
                 <InteresseImovelItem
                   key={interesse.id}
                   fuso={fuso}
@@ -353,11 +371,22 @@ export default async function DetalheClientePage({
                       ...precosDoImovel(interesse.property),
                       status: interesse.property.status,
                     },
-                    proximaVisita: interesse.scheduledActivities[0]
+                    proximaVisita: proximaVisita
                       ? {
-                          id: interesse.scheduledActivities[0].id,
-                          scheduledAtISO: interesse.scheduledActivities[0].scheduledAt.toISOString(),
-                          notes: interesse.scheduledActivities[0].notes,
+                          id: proximaVisita.id,
+                          scheduledAtISO: proximaVisita.scheduledAt.toISOString(),
+                          notes: proximaVisita.notes,
+                        }
+                      : null,
+                    proximoFollowUp: proximoFollowUp
+                      ? {
+                          id: proximoFollowUp.id,
+                          // subject é obrigatório em regra de aplicação
+                          // para FOLLOW_UP; o fallback só existe para não
+                          // quebrar a tela diante de uma linha anômala.
+                          assunto: proximoFollowUp.subject ?? "Follow-up",
+                          scheduledAtISO: proximoFollowUp.scheduledAt.toISOString(),
+                          notes: proximoFollowUp.notes,
                         }
                       : null,
                     // Membro de outro tenant é redigido para null dentro
@@ -394,7 +423,8 @@ export default async function DetalheClientePage({
                     ),
                   }}
                 />
-              ))}
+                );
+              })}
             </div>
           )}
 

@@ -15,6 +15,7 @@ import type { ItemPipeline, PrioridadePipeline } from "@/lib/pipeline";
 import { estagioInteresseEncerrado, ESTAGIO_INTERESSE_LABEL } from "@/lib/property-interest-schema";
 import { acaoOperacionalDaVisita } from "@/lib/scheduled-activity-date";
 import { formatarDataHoraNoFuso } from "@/lib/fuso-horario";
+import { TIPO_ATIVIDADE_LABEL } from "@/lib/follow-up";
 import { MoverEstagioPipeline } from "@/components/admin/MoverEstagioPipeline";
 import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
 import { PRIORIDADE_BADGE_CLASSE, PRIORIDADE_LABEL_CURTO, formatarMotivoPrioridade } from "./prioridade-visual";
@@ -47,9 +48,9 @@ export function NegociacaoDrawer({
 
   const encerrado = estagioInteresseEncerrado(item.stage);
   const pendente =
-    !!item.proximaVisita &&
+    !!item.proximoCompromisso &&
     acaoOperacionalDaVisita(
-      { status: "SCHEDULED", scheduledAt: new Date(item.proximaVisita.scheduledAtISO) },
+      { status: "SCHEDULED", scheduledAt: new Date(item.proximoCompromisso.scheduledAtISO) },
       fuso,
       new Date()
     ) === "RESOLVER_PENDENCIA";
@@ -124,13 +125,16 @@ export function NegociacaoDrawer({
                   {rotuloAtorTransicao(item.atorUltimaTransicao)}
                 </p>
               )}
-              {item.proximaVisita ? (
+              {item.proximoCompromisso ? (
                 <p className={`text-sm ${pendente ? "font-medium text-destructive" : "text-muted-foreground"}`}>
-                  {pendente ? "Pendência: " : "Próxima visita: "}
-                  {formatarDataHoraNoFuso(item.proximaVisita.scheduledAtISO, fuso)}
+                  {pendente ? "Pendência: " : "Próximo compromisso: "}
+                  {TIPO_ATIVIDADE_LABEL[item.proximoCompromisso.tipo]}
+                  {item.proximoCompromisso.assunto && ` — ${item.proximoCompromisso.assunto}`}
+                  {" · "}
+                  {formatarDataHoraNoFuso(item.proximoCompromisso.scheduledAtISO, fuso)}
                 </p>
               ) : (
-                <p className="text-sm text-muted-foreground">Sem visita agendada</p>
+                <p className="text-sm text-muted-foreground">Sem compromisso agendado</p>
               )}
             </div>
           )}

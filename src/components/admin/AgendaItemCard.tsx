@@ -8,6 +8,7 @@ import { AgendaDetalhesDrawer } from "@/components/admin/agenda/AgendaDetalhesDr
 import {
   STATUS_VISITA_LABEL,
   ACAO_OPERACIONAL_LABEL,
+  TIPO_ATIVIDADE_LABEL,
   type ItemAgendaClient,
 } from "@/components/admin/agenda/agenda-visual";
 import {
@@ -65,10 +66,15 @@ export function AgendaItemCard({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="font-medium">{formatarDataHoraNoFuso(item.scheduledAtISO, fuso)}</p>
+              {/* Fase 19 — o tipo em TEXTO ao lado do ícone (o ícone
+                  sozinho não comunica nada a leitor de tela). */}
               <p className="flex items-center gap-1 text-xs text-muted-foreground">
                 <CalendarCheck className="size-3.5 shrink-0" />
-                Visita
+                {TIPO_ATIVIDADE_LABEL[item.type]}
               </p>
+              {item.subject && (
+                <p className="mt-0.5 min-w-0 break-words font-medium">{item.subject}</p>
+              )}
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
               {ehProximaVisita && (

@@ -11,6 +11,7 @@ import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { formatarPreco } from "@/lib/format";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
+import { CriarFollowUp, FollowUpAgendadoCard } from "@/components/admin/FollowUpComercial";
 import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
 import { ResponsavelNegociacao } from "@/components/admin/ResponsavelNegociacao";
 import { DivisaoComissao } from "@/components/admin/DivisaoComissao";
@@ -78,6 +79,11 @@ export function InteresseImovelItem({
     // vem pronta da query da página (batch, sem N+1 por card). scheduledAt
     // trafega como string ISO, nunca Date (ver AgendamentoVisita.tsx).
     proximaVisita: { id: string; scheduledAtISO: string; notes: string | null } | null;
+    // Fase 19 — follow-up SCHEDULED mais próximo desta negociação, se
+    // houver. Dimensão SEPARADA de proximaVisita: as duas coexistem, e
+    // uma negociação pode ter visita e follow-up marcados ao mesmo
+    // tempo. Também vem pronto da query da página (batch, sem N+1).
+    proximoFollowUp: { id: string; assunto: string; scheduledAtISO: string; notes: string | null } | null;
     // Fase 11 — null = "Sem responsável" (negociação anterior a esta
     // fase, sem backfill, ou deixada sem dono de propósito).
     responsavel: Responsavel | null;
@@ -152,11 +158,21 @@ export function InteresseImovelItem({
         </p>
 
         <AgendamentoVisita
-            fuso={fuso}
+          fuso={fuso}
           propertyInterestId={interesse.id}
           podeAgendar={podeAgendarVisita}
           atividadeAgendada={interesse.proximaVisita}
         />
+
+        {/* Fase 19 — follow-up comercial. Fica DENTRO da negociação, que
+            é o que define de quem ele é (responsibleMemberId). Mesma
+            regra do backend replicada aqui só para UX: negociação
+            encerrada não recebe compromisso novo. */}
+        {interesse.proximoFollowUp ? (
+          <FollowUpAgendadoCard fuso={fuso} followUp={interesse.proximoFollowUp} />
+        ) : (
+          podeAgendarVisita && <CriarFollowUp fuso={fuso} propertyInterestId={interesse.id} />
+        )}
 
         {/* Form genérico de stage/notes só existe pra stage ABERTO — uma
             vez encerrado (WON/REJECTED, Fase P.2/P.3), o Select não tem

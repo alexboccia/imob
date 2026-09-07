@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireOrganizationId } from "@/lib/tenant";
 import { auth } from "@/lib/auth";
 import { hasModule } from "@/lib/entitlements";
-import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
+import { buscarFusoOrganizacao, buscarFusoConfigurado } from "@/lib/fuso-organizacao";
+import { AvisoFusoNaoConfigurado } from "@/components/admin/AvisoFusoNaoConfigurado";
 import { buscarCentralTrabalho } from "@/lib/central-trabalho";
 import { CentralTrabalho } from "@/components/admin/CentralTrabalho";
 import { buscarMetricasDashboard } from "@/lib/dashboard";
@@ -34,6 +35,11 @@ export default async function DashboardPage() {
   // cacheado por organização) e repassado à Central e aos contadores:
   // "hoje" e "atrasadas" precisam ser o mesmo dia nas duas leituras.
   const fuso = await buscarFusoOrganizacao(organizationId);
+  // Fase 19 — estado BRUTO do campo (null = nunca configurado), diferente
+  // do fuso EFETIVO acima, que já aplicou o fallback. É a distinção que
+  // permite avisar sem mentir: "usa UTC porque ninguém escolheu" não é a
+  // mesma coisa que "escolheram UTC".
+  const fusoConfigurado = await buscarFusoConfigurado(organizationId);
   const central =
     membroId && temCrm ? await buscarCentralTrabalho(organizationId, membroId, fuso) : null;
 
@@ -68,6 +74,10 @@ export default async function DashboardPage() {
         </h1>
         <p className="text-sm text-muted-foreground">O que precisa da sua atenção agora.</p>
       </div>
+
+      {/* Fase 19 — adoção do fuso: aparece só enquanto ninguém escolheu,
+          nunca bloqueia a Central. */}
+      <AvisoFusoNaoConfigurado fusoConfigurado={fusoConfigurado} />
 
       {/* AÇÃO primeiro, contexto depois: a Central operacional abre a
           tela, e a visão agregada da operação (KPIs e gráficos, que já

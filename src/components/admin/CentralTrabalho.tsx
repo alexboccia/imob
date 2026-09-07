@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatarDataHoraNoFuso, formatarHoraNoFuso } from "@/lib/fuso-horario";
 import { ESTAGIO_INTERESSE_LABEL } from "@/lib/property-interest-schema";
+import { TIPO_ATIVIDADE_LABEL } from "@/lib/follow-up";
 import type { CentralTrabalho as DadosCentral, CompromissoCentral } from "@/lib/central-trabalho";
 
 // Central de trabalho (Fase 17) — a camada operacional da Home.
@@ -33,6 +34,15 @@ function LinhaCompromisso({
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b py-2 last:border-b-0 last:pb-0">
       {/* Horário primeiro: no celular é o dado que orienta o dia. */}
       <span className="font-medium tabular-nums">{quando}</span>
+      {/* Fase 19 — o TIPO em texto, nunca só cor/ícone: a Central passou
+          a misturar visita e follow-up, e o corretor precisa saber o que
+          é cada linha antes de qualquer outra coisa. */}
+      <Badge variant="outline" className="shrink-0">
+        {TIPO_ATIVIDADE_LABEL[compromisso.tipo]}
+      </Badge>
+      {compromisso.assunto && (
+        <span className="min-w-0 break-words font-medium">{compromisso.assunto}</span>
+      )}
       {compromisso.pessoa ? (
         <Link
           href={`/app/clientes/${compromisso.pessoa.id}`}
@@ -102,11 +112,11 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
               {/* Texto junto do número: o estado não depende só de cor. */}
               <Badge variant="outline" className="border-orange-300 text-orange-700">
                 {atrasadas.total}{" "}
-                {atrasadas.total === 1 ? "visita em aberto" : "visitas em aberto"}
+                {atrasadas.total === 1 ? "compromisso em aberto" : "compromissos em aberto"}
               </Badge>
             </TituloBloco>
             <p className="pt-1 text-sm text-muted-foreground">
-              Visitas agendadas cujo dia já passou e que continuam sem conclusão. Mais antiga
+              Compromissos cujo dia já passou e que continuam sem conclusão. Mais antigo
               primeiro.
             </p>
           </CardHeader>
@@ -125,7 +135,7 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
         <CardHeader>
           <TituloBloco>Hoje</TituloBloco>
           <p className="pt-1 text-sm text-muted-foreground">
-            {hoje.total === 1 ? "1 visita agendada" : `${hoje.total} visitas agendadas`}
+            {hoje.total === 1 ? "1 compromisso agendado" : `${hoje.total} compromissos agendados`}
           </p>
         </CardHeader>
         <CardContent>
@@ -148,12 +158,12 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
         <CardHeader>
           <TituloBloco>Próximos compromissos</TituloBloco>
           <p className="pt-1 text-sm text-muted-foreground">
-            Visitas agendadas a partir de amanhã.
+            Compromissos agendados a partir de amanhã.
           </p>
         </CardHeader>
         <CardContent>
           {proximas.length === 0 ? (
-            <Vazio texto="Nenhuma visita agendada para os próximos dias." />
+            <Vazio texto="Nenhum compromisso agendado para os próximos dias." />
           ) : (
             <>
               <ul className="text-sm">
@@ -215,9 +225,15 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {/* Fato verificável, não julgamento: a agenda
                           futura desta negociação está vazia. */}
-                      {n.semProximoCompromisso
-                        ? "Sem próximo compromisso"
-                        : "Com visita agendada"}
+                      {/* Fase 19 — o próximo compromisso é nomeado: pode
+                          ser visita ou follow-up, e "com visita agendada"
+                          passaria a ser falso metade das vezes. */}
+                      {n.proximoCompromisso
+                        ? `${TIPO_ATIVIDADE_LABEL[n.proximoCompromisso.tipo]} em ${formatarDataHoraNoFuso(
+                            n.proximoCompromisso.scheduledAtISO,
+                            fuso
+                          )}`
+                        : "Sem próximo compromisso"}
                       {" · "}
                       {/* null = nenhuma interação registrada. Nunca
                           "sem contato há muito tempo". */}
