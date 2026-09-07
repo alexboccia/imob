@@ -8,6 +8,7 @@ import {
 } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { formatarDataHora } from "@/lib/scheduled-activity-date";
+import { rotuloAtorTransicao, type AtorTransicao } from "@/lib/ator-transicao";
 import { formatarPreco } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { CamposFinanceirosFechamento } from "@/components/admin/CamposFinanceirosFechamento";
@@ -47,6 +48,7 @@ export function FechamentoInteresse({
   closedAtISO,
   closedValue,
   commissionValue,
+  atorFechamento,
   // Contexto exibido no diálogo. Opcionais: nem toda tela que reaproveita
   // este componente tem os dois à mão, e o fechamento nunca depende deles.
   imovelTitulo,
@@ -57,6 +59,11 @@ export function FechamentoInteresse({
   closedAtISO: string | null;
   closedValue?: number | null;
   commissionValue?: number | null;
+  // Fase 14 — quem executou a transição de FECHAMENTO. Aparece na linha
+  // que já mostra "Fechado em ...", que é a superfície onde a última
+  // transição de um negócio encerrado é visível (o drawer só existe para
+  // negócio aberto). null = ator não registrado.
+  atorFechamento?: AtorTransicao | null;
   imovelTitulo?: string;
   clienteNome?: string;
 }) {
@@ -99,6 +106,7 @@ export function FechamentoInteresse({
             <> · Comissão não registrada</>
           )}
           {closedAtISO && <> · Fechado em {formatarDataHora(closedAtISO)}</>}
+          {closedAtISO && <> · por {rotuloAtorTransicao(atorFechamento ?? null)}</>}
         </p>
 
         <button

@@ -43,6 +43,29 @@ function revalidarPaginasAgendamento(personId: string, propertyId: string | null
 }
 
 // Cria uma visita a partir de um PropertyInterest já existente.
+// Fase 14 — ATOR da transição de etapa, com guarda de tenant. Mesma
+// função (e mesmo racional) de src/app/app/clientes/actions.ts: uma
+// sessão inconsistente nunca grava FK cross-tenant num registro de
+// auditoria, e ator ausente vira null sem jamais bloquear a transição.
+//
+// Duplicada aqui, e não extraída para um módulo compartilhado, porque
+// depende do tipo do cliente de transação do prisma ESTENDIDO — que é
+// derivado localmente em cada módulo de actions (ver ClienteTransacao).
+type ClienteTransacaoAgendamento = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+async function resolverAtorTransicao(
+  tx: ClienteTransacaoAgendamento,
+  organizationId: string,
+  memberIdDaSessao: string | undefined
+): Promise<string | null> {
+  if (!memberIdDaSessao) return null;
+  const membro = await tx.organizationMember.findFirst({
+    where: { id: memberIdDaSessao, organizationId },
+    select: { id: true },
+  });
+  return membro?.id ?? null;
+}
+
 export async function criarAgendamentoVisita(
   propertyInterestId: string,
   _prevState: ActionState,
@@ -159,6 +182,15 @@ export async function criarAgendamentoVisita(
             previousStage: interesse.stage,
             newStage: "VISIT_SCHEDULED",
             changedAt: new Date(),
+            // Fase 14 — a transição é CONSEQUÊNCIA de um ato humano
+            // autenticado (alguém agendou a visita), não de um job
+            // automático: o ator é o membro que agendou. Mesma
+            // transação do update de stage.
+            changedByMemberId: await resolverAtorTransicao(
+              tx,
+              organizationId,
+              session.user.organizationMemberId
+            ),
           },
         });
       }
@@ -452,6 +484,14 @@ export async function concluirAgendamentoVisita(
               previousStage: interesse.stage,
               newStage: "VISITED",
               changedAt: new Date(),
+              // Fase 14 — idem: quem CONCLUIU a visita é o ator. Não é
+              // transição automática, é consequência direta de um
+              // clique autenticado.
+              changedByMemberId: await resolverAtorTransicao(
+                tx,
+                organizationId,
+                session.user.organizationMemberId
+              ),
             },
           });
 

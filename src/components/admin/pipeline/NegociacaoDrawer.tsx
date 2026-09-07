@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { rotuloAtorTransicao } from "@/lib/ator-transicao";
 import {
   Sheet,
   SheetContent,
@@ -106,7 +107,18 @@ export function NegociacaoDrawer({
                   </p>
                 </div>
               )}
-              {item.aging && <p className="text-xs text-muted-foreground">{item.aging}</p>}
+              {item.aging && (
+                <p className="text-xs text-muted-foreground">
+                  {item.aging}
+                  {/* Fase 14 — ACCOUNTABILITY na superfície que JÁ mostra
+                      a última transição ("Na etapa há X dias"). Nenhuma
+                      timeline nova foi criada: o ator vive ao lado do
+                      dado que ele explica. Sempre em texto — nunca só
+                      avatar ou cor. */}
+                  {" · por "}
+                  {rotuloAtorTransicao(item.atorUltimaTransicao)}
+                </p>
+              )}
               {item.proximaVisita ? (
                 <p className={`text-sm ${pendente ? "font-medium text-destructive" : "text-muted-foreground"}`}>
                   {pendente ? "Pendência: " : "Próxima visita: "}

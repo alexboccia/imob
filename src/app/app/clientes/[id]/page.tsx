@@ -28,6 +28,7 @@ import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
 import { paraResponsavel } from "@/lib/responsavel-negociacao";
 import { paraParticipantes } from "@/lib/participacao-comissao";
 import { paraPagamentos } from "@/lib/pagamento-comissao";
+import { paraAtorTransicao } from "@/lib/ator-transicao";
 import { temPapel, PAPEIS_LIQUIDACAO_COMISSAO } from "@/lib/authorization";
 import { auth } from "@/lib/auth";
 import {
@@ -127,6 +128,24 @@ export default async function DetalheClientePage({
                       createdByMember: {
                         select: { organizationId: true, user: { select: { name: true } } },
                       },
+                    },
+                  },
+                },
+              },
+              // Fase 14 — última transição de etapa + o membro que a
+              // executou, no MESMO select batched. take: 1 porque a
+              // ficha mostra a linha de fechamento, não uma timeline.
+              stageHistory: {
+                where: { organizationId },
+                orderBy: { changedAt: "desc" as const },
+                take: 1,
+                select: {
+                  changedByMember: {
+                    select: {
+                      id: true,
+                      status: true,
+                      organizationId: true,
+                      user: { select: { name: true } },
                     },
                   },
                 },
@@ -319,6 +338,12 @@ export default async function DetalheClientePage({
                     // Membro de outro tenant é redigido para null dentro
                     // de paraResponsavel — o nome jamais chega à tela.
                     responsavel: paraResponsavel(interesse.responsibleMember, organizationId),
+                    // Fase 14 — num negócio encerrado a última transição
+                    // é o próprio fechamento. Redigido contra tenant.
+                    atorFechamento: paraAtorTransicao(
+                      interesse.stageHistory[0]?.changedByMember ?? null,
+                      organizationId
+                    ),
                     // Mesma defesa em paraParticipantes: linha anômala
                     // apontando para outro tenant é descartada na leitura.
                     participantes: paraParticipantes(

@@ -49,7 +49,16 @@ function linhaFake(overrides: {
   propertyOrganizationId?: string;
   propertyStatus?: PropertyStatus;
   scheduledActivities?: { id: string; scheduledAt: Date }[];
-  stageHistory?: { newStage: PropertyInterestStage; changedAt: Date }[];
+  stageHistory?: {
+    newStage: PropertyInterestStage;
+    changedAt: Date;
+    changedByMember?: {
+      id: string;
+      status: MemberStatus;
+      organizationId: string;
+      user: { name: string | null };
+    } | null;
+  }[];
   responsibleMember?: {
     id: string;
     status: MemberStatus;
@@ -73,7 +82,12 @@ function linhaFake(overrides: {
       organizationId: overrides.propertyOrganizationId ?? ORG,
     },
     scheduledActivities: overrides.scheduledActivities ?? [],
-    stageHistory: overrides.stageHistory ?? [],
+    // Fase 14 — sem ator por padrão: é o estado de todo histórico
+    // legado, e o caso que mais precisa continuar correto.
+    stageHistory: (overrides.stageHistory ?? []).map((h) => ({
+      ...h,
+      changedByMember: h.changedByMember ?? null,
+    })),
     // Fase 11 — sem responsável por padrão: é o estado de toda
     // negociação legada, e o caso que mais precisa continuar correto.
     responsibleMember: overrides.responsibleMember ?? null,
@@ -177,6 +191,7 @@ function itemFake(overrides: Partial<ItemPipeline> & { stage: PropertyInterestSt
     closedValue: overrides.closedValue ?? null,
     commissionValue: overrides.commissionValue ?? null,
     responsavel: overrides.responsavel ?? null,
+    atorUltimaTransicao: overrides.atorUltimaTransicao ?? null,
     updatedAtISO: overrides.updatedAtISO ?? "2026-01-01T00:00:00.000Z",
     person: overrides.person ?? { id: "p1", name: "Fulano" },
     property: overrides.property ?? { id: "im1", title: "Imóvel", status: "AVAILABLE", neighborhood: "Centro" },

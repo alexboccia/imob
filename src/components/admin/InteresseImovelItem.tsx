@@ -16,6 +16,7 @@ import { ResponsavelNegociacao } from "@/components/admin/ResponsavelNegociacao"
 import { DivisaoComissao } from "@/components/admin/DivisaoComissao";
 import type { ParticipanteExibicao } from "@/lib/participacao-comissao";
 import type { PagamentoExibicao } from "@/lib/pagamento-comissao";
+import type { AtorTransicao } from "@/lib/ator-transicao";
 import type { OpcaoResponsavel, ResponsavelNegociacao as Responsavel } from "@/lib/responsavel-negociacao";
 import {
   ESTAGIOS_INTERESSE,
@@ -73,6 +74,8 @@ export function InteresseImovelItem({
     // Fase 13 — ledger de pagamentos por participante (id -> lista).
     // Lista vazia = nada pago; atribuir nunca implica pagar.
     pagamentosPorParticipante: Record<string, PagamentoExibicao[]>;
+    // Fase 14 — quem executou o fechamento. null = não registrado.
+    atorFechamento: AtorTransicao | null;
   };
 }) {
   const proximaAcao = obterProximaAcaoComercial(interesse.stage, interesse.property.status);
@@ -217,6 +220,7 @@ export function InteresseImovelItem({
           closedAtISO={interesse.closedAtISO}
           closedValue={interesse.closedValue}
           commissionValue={interesse.commissionValue}
+          atorFechamento={interesse.atorFechamento}
           imovelTitulo={interesse.property.title}
         />
 

@@ -883,6 +883,40 @@ model PropertyInterestStageHistory {
 
   changedAt DateTime @default(now())
 
+  // Fase 14 — QUEM executou esta transição. Fecha a última lacuna de
+  // accountability do funil: até aqui sabia-se quando o card mudou de
+  // etapa, e não por quem.
+  //
+  // O NOME pareia com `changedAt` acima: mesma transição, quando e por
+  // quem. Identidade TENANT-SPECIFIC (OrganizationMember), nunca User —
+  // User é global e atravessa organizações, e era exatamente por isso
+  // que ActivityLog.userId não servia como ator do histórico.
+  //
+  // ATOR != RESPONSÁVEL. PropertyInterest.responsibleMemberId diz quem
+  // CONDUZ a negociação; este campo diz quem MOVEU aquela etapa. Um
+  // gerente pode fechar o negócio de outra pessoa: o histórico registra
+  // o gerente, e o responsável não muda. Também não se confunde com o
+  // createdByMemberId do ledger de pagamentos (Fase 13) — ali é quem
+  // registrou dinheiro, aqui é quem moveu o funil.
+  //
+  // NULLABLE por três motivos reais, e o null significa "ator não
+  // registrado", jamais "ninguém moveu":
+  //   1. histórico legado — ZERO BACKFILL, nada foi inferido de
+  //      ActivityLog próximo, de quem marcou WON, do responsável atual
+  //      nem de proximidade de timestamp;
+  //   2. sessão sem vínculo de organização, estado possível no produto;
+  //   3. membro que não pertence à organização da negociação é redigido
+  //      para null em vez de gravar FK cross-tenant.
+  //
+  // SET NULL, seguindo a convenção de ATOR do projeto
+  // (ScheduledActivity.createdByMember e os dois atores do ledger) — e
+  // deliberadamente diferente do RESTRICT usado para o BENEFICIÁRIO
+  // financeiro na Fase 13: perder quem moveu um card degrada auditoria,
+  // perder quem recebeu dinheiro corromperia o dado. Na prática nunca
+  // dispara: membro não é apagado no ciclo de vida do tenant.
+  changedByMemberId String?
+  changedByMember   OrganizationMember? @relation("StageHistoryChangedByMember", fields: [changedByMemberId], references: [id])
+
   // Serve exatamente a query "última transição por PropertyInterest" (Kanban
   // aberto, batched via include aninhado — mesmo padrão de
   // scheduledActivities). Nenhum índice adicional: não há consulta
@@ -1099,6 +1133,10 @@ model OrganizationMember {
   // Fase 13 — pagamentos de comissão REGISTRADOS por este membro (ator
   // administrativo), não recebidos por ele. Quem recebe é determinado
   // pelo participante, nunca por estas relações.
+  // Fase 14 — transições de etapa executadas por este membro. Relação
+  // SEPARADA das demais: mover o funil não é conduzir a negociação nem
+  // receber comissão.
+  stageChanges               PropertyInterestStageHistory[]       @relation("StageHistoryChangedByMember")
   registeredPayments         PropertyInterestParticipantPayment[] @relation("PaymentCreatedByMember")
   cancelledPayments          PropertyInterestParticipantPayment[] @relation("PaymentCancelledByMember")
   assignedPeople             Person[]                             @relation("PersonAssignedMember")

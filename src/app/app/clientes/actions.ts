@@ -565,6 +565,13 @@ export async function criarInteressePessoa(
             previousStage: null,
             newStage: "INTERESTED",
             changedAt: criado.createdAt,
+            // Fase 14 — ator da transição, na MESMA transação: a
+            // entrada em INTERESTED e quem a executou são um fato só.
+            changedByMemberId: await resolverAtorTransicao(
+              tx,
+              organizationId,
+              session.user.organizationMemberId
+            ),
           },
         });
 
@@ -718,6 +725,12 @@ export async function criarOportunidadeDoContato(
             previousStage: null,
             newStage: "INTERESTED",
             changedAt: novo.createdAt,
+            // Fase 14 — mesma transação da criação.
+            changedByMemberId: await resolverAtorTransicao(
+              tx,
+              organizationId,
+              session.user.organizationMemberId
+            ),
           },
         });
 
@@ -868,6 +881,15 @@ export async function atualizarEstagioInteresse(
             previousStage: atual.stage,
             newStage: stage,
             changedAt: new Date(),
+            // Fase 14 — gravado DENTRO do mesmo bloco que só a tentativa
+            // vencedora da corrida alcança: o ator registrado é sempre o
+            // da transição que de fato venceu, nunca o de uma tentativa
+            // que perdeu o updateMany e voltou pro loop.
+            changedByMemberId: await resolverAtorTransicao(
+              tx,
+              organizationId,
+              session.user.organizationMemberId
+            ),
           },
         });
 
@@ -1088,6 +1110,14 @@ async function fecharInteresse(
             previousStage: atual.stage,
             newStage: destino,
             changedAt: agora,
+            // Fase 14 — quem executou o FECHAMENTO. Não altera
+            // responsibleMemberId: um gerente pode fechar o negócio de
+            // outra pessoa, e o responsável continua sendo quem era.
+            changedByMemberId: await resolverAtorTransicao(
+              tx,
+              organizationId,
+              session.user.organizationMemberId
+            ),
           },
         });
 
@@ -1457,6 +1487,30 @@ async function travarDivisao(
   interesseId: string
 ) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(${`split:${interesseId}`}))`;
+}
+
+// Fase 14 — ATOR da transição de etapa, com guarda de tenant.
+//
+// O organizationMemberId da sessão é emitido no login para a organização
+// da sessão, então na prática já é consistente. Ainda assim a FK é
+// simples (não composta com organizationId) e este é um registro de
+// auditoria: uma sessão inconsistente jamais pode gravar FK cross-tenant
+// no histórico. Membro de outra organização (ou ausente) devolve null —
+// "ator não registrado" —, e a transição NUNCA é bloqueada por isso:
+// registrar quem moveu é secundário a registrar que moveu.
+//
+// Uma leitura por chave primária, dentro da transação que já está aberta.
+async function resolverAtorTransicao(
+  tx: ClienteTransacao,
+  organizationId: string,
+  memberIdDaSessao: string | undefined
+): Promise<string | null> {
+  if (!memberIdDaSessao) return null;
+  const membro = await tx.organizationMember.findFirst({
+    where: { id: memberIdDaSessao, organizationId },
+    select: { id: true },
+  });
+  return membro?.id ?? null;
 }
 
 // Carrega, DENTRO da transação já travada, tudo que a validação precisa:

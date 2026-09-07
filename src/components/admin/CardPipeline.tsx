@@ -114,6 +114,10 @@ export function CardPipeline({
                 closedAtISO={item.closedAtISO}
                 closedValue={item.closedValue}
               commissionValue={item.commissionValue}
+                // Fase 14 — num negócio encerrado a ÚLTIMA transição é
+                // exatamente o fechamento, então o ator já carregado
+                // serve sem nenhuma query extra.
+                atorFechamento={item.atorUltimaTransicao}
                 imovelTitulo={item.property?.title}
                 clienteNome={item.person?.name}
               />

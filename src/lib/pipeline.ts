@@ -6,6 +6,7 @@ import { ESTAGIOS_INTERESSE, estagioInteresseEncerrado } from "@/lib/property-in
 import { obterProximaAcaoComercial, type ProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import { acaoOperacionalDaVisita } from "@/lib/scheduled-activity-date";
 import { paraResponsavel, type ResponsavelNegociacao } from "@/lib/responsavel-negociacao";
+import { paraAtorTransicao, type AtorTransicao } from "@/lib/ator-transicao";
 import type { MemberStatus, Prisma, PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 
 // Pipeline (Fase P.4) — projeção operacional de PropertyInterest, NUNCA uma
@@ -32,6 +33,11 @@ export type ItemPipeline = {
   // deixada deliberadamente sem dono. Membro inativo continua aparecendo
   // com nome, marcado como inativo — nunca vira "Sem responsável".
   responsavel: ResponsavelNegociacao | null;
+  // Fase 14 — quem executou a ÚLTIMA transição de etapa. null = ator não
+  // registrado (histórico anterior a esta fase, sem backfill), jamais
+  // "ninguém moveu". NÃO é o responsável: um gerente pode mover o card
+  // de outra pessoa.
+  atorUltimaTransicao: AtorTransicao | null;
   // Só usado como critério de DESEMPATE interno de ordenação (grupo "sem
   // visita" de ordenarColuna) — NUNCA exibido como "há X dias nesta
   // etapa". O schema atual não registra quando o stage mudou pela última
@@ -101,7 +107,15 @@ function selectItemPipeline(organizationId: string) {
       where: { organizationId },
       orderBy: { changedAt: "desc" as const },
       take: 1,
-      select: { newStage: true, changedAt: true },
+      // Fase 14 — o ator entra no MESMO select batched que já carregava
+      // a última transição: nenhuma query nova, nenhuma por card.
+      select: {
+        newStage: true,
+        changedAt: true,
+        changedByMember: {
+          select: { id: true, status: true, organizationId: true, user: { select: { name: true } } },
+        },
+      },
     },
   } satisfies Prisma.PropertyInterestSelect;
 }
@@ -124,7 +138,16 @@ type LinhaBrutaPipeline = {
   person: { id: string; name: string; organizationId: string };
   property: { id: string; title: string; status: PropertyStatus; neighborhood: string; organizationId: string };
   scheduledActivities: { id: string; scheduledAt: Date }[];
-  stageHistory: { newStage: PropertyInterestStage; changedAt: Date }[];
+  stageHistory: {
+    newStage: PropertyInterestStage;
+    changedAt: Date;
+    changedByMember: {
+      id: string;
+      status: MemberStatus;
+      organizationId: string;
+      user: { name: string | null };
+    } | null;
+  }[];
 };
 
 // Fase P.6: encontra, dentro do histórico já carregado, a transição mais
@@ -219,6 +242,12 @@ export function paraItemPipeline(
     // organizationId conferido dentro de paraResponsavel — mesma defesa
     // contra anomalia cross-tenant já aplicada a person/property acima.
     responsavel: paraResponsavel(linha.responsibleMember, organizationId),
+    // Membro de outro tenant é redigido para null em paraAtorTransicao —
+    // o nome jamais chega à tela.
+    atorUltimaTransicao: paraAtorTransicao(
+      linha.stageHistory[0]?.changedByMember ?? null,
+      organizationId
+    ),
     updatedAtISO: linha.updatedAt.toISOString(),
     person,
     property,
