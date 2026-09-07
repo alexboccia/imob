@@ -29,6 +29,7 @@ import { paraResponsavel } from "@/lib/responsavel-negociacao";
 import { paraParticipantes } from "@/lib/participacao-comissao";
 import { paraPagamentos } from "@/lib/pagamento-comissao";
 import { paraAtorTransicao } from "@/lib/ator-transicao";
+import { paraAutorInteracao, rotuloAutorInteracao } from "@/lib/autor-interacao";
 import { temPapel, PAPEIS_LIQUIDACAO_COMISSAO } from "@/lib/authorization";
 import { auth } from "@/lib/auth";
 import {
@@ -75,7 +76,22 @@ export default async function DetalheClientePage({
       prisma.person.findUnique({
         where: { id, organizationId },
         include: {
-          interactions: { orderBy: { occurredAt: "desc" }, include: { property: true } },
+          interactions: {
+            orderBy: { occurredAt: "desc" },
+            include: {
+              property: true,
+              // Fase 15 — AUTOR no MESMO include batched da timeline:
+              // uma query para a ficha inteira, nunca uma por interação.
+              member: {
+                select: {
+                  id: true,
+                  status: true,
+                  organizationId: true,
+                  user: { select: { name: true } },
+                },
+              },
+            },
+          },
           preference: true,
           // where: { organizationId } explícito na sub-relação — nunca
           // depender só da integridade implícita do relacionamento
@@ -468,6 +484,25 @@ export default async function DetalheClientePage({
                       )}
                       {interacao.occurredAt.toLocaleString("pt-BR")}
                     </p>
+                    {/* Fase 15 — AUTORIA em texto, na timeline que já
+                        existia. Nunca aparece em captação pública: ali o
+                        fato é completo (quem originou foi o visitante) e
+                        a etiqueta de origem acima já diz isso — escrever
+                        "autor não registrado" sugeriria dado faltante
+                        onde não há. Membro de outro tenant é redigido
+                        dentro de paraAutorInteracao. */}
+                    {rotuloAutorInteracao(
+                      paraAutorInteracao(interacao.member, organizationId),
+                      interacao.origin
+                    ) && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        por{" "}
+                        {rotuloAutorInteracao(
+                          paraAutorInteracao(interacao.member, organizationId),
+                          interacao.origin
+                        )}
+                      </p>
+                    )}
                     {interacao.property && (
                       <p className="text-muted-foreground mt-1">
                         Imóvel: {interacao.property.title}

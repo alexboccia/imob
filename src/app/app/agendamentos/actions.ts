@@ -513,7 +513,16 @@ export async function concluirAgendamentoVisita(
           type: "VISIT",
           occurredAt: atividade.scheduledAt,
           notes: null,
-          memberId: session.user.organizationMemberId ?? null,
+          // Fase 15 — AUTOR da interação de visita: quem CONCLUIU o
+          // agendamento. Não é transição automática — é consequência
+          // direta de um clique autenticado, então há ator determinístico.
+          // Reusa o mesmo resolvedor com guarda de tenant introduzido na
+          // Fase 14, dentro da transação que já estava aberta.
+          memberId: await resolverAtorTransicao(
+            tx,
+            organizationId,
+            session.user.organizationMemberId
+          ),
         },
       });
 

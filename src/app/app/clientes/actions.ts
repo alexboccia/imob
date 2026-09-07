@@ -291,13 +291,24 @@ export async function registrarInteracao(pessoaId: string, formData: FormData) {
     });
     if (!pessoa) return;
 
+    // Fase 15 — AUTOR da interação, com guarda de tenant. O campo já era
+    // escrito (a dívida herdada de "memberId nunca é escrito" vinha de um
+    // grep que filtrava a própria expressão da escrita), mas confiava
+    // cegamente no memberId da sessão. Mesmo padrão da Fase 14: uma
+    // sessão inconsistente nunca grava FK cross-tenant, e ator inválido
+    // vira null sem bloquear o registro do fato comercial.
+    const autor = await prisma.organizationMember.findFirst({
+      where: { id: session.user.organizationMemberId ?? "", organizationId },
+      select: { id: true },
+    });
+
     await prisma.interaction.create({
       data: {
         organizationId,
         personId: pessoaId,
         type: dados.tipo,
         notes: dados.notas || null,
-        memberId: session.user.organizationMemberId ?? null,
+        memberId: autor?.id ?? null,
       },
     });
 
