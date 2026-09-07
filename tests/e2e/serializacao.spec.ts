@@ -72,7 +72,12 @@ test.describe("Fronteira de serialização — superfície corrigida", () => {
     await login(page, ORG_AGENDA);
     await page.goto("/app/imoveis");
     await page.getByRole("link", { name: /Apartamento E2E Agenda/ }).first().click();
-    await page.waitForLoadState("networkidle");
+    // Espera por um FATO da página, não por silêncio de rede: a ficha do
+    // imóvel busca bairros por cidade e, no CI, o storage de mídia não
+    // está configurado — `networkidle` nunca estabiliza e o teste
+    // estourava em 30s. O formulário renderizado é o sinal real de que a
+    // página montou.
+    await expect(page.getByLabel("Título")).toBeVisible();
 
     expect(problemas, `console sujo:\n${problemas.join("\n")}`).toEqual([]);
   });
