@@ -567,9 +567,59 @@ em todo **push direto a `main`**, em dois jobs:
    `prisma generate` → `npx tsc --noEmit` → `npm run lint` → prepara o
    banco de teste (cria + aplica migrations) → roda o seed mínimo →
    `npm run test` (unitários + integração) → `npm run build`.
-2. **`e2e`** — depende de `verify` (`needs`, só roda se o primeiro job
-   passar — economiza minutos de CI numa PR já quebrada) → Playwright com
-   cache de browser → os 9 specs de `tests/e2e/`.
+2. **`e2e`** — Playwright com cache de browser → os specs de
+   `tests/e2e/`.
+
+Os dois jobs rodam **em paralelo**, sem `needs` (Fase 10). Serializá-los
+somava os dois tempos no relógio de parede e estourava o teto operacional
+de 18 minutos do run inteiro; eles não compartilham nada (cada um tem o
+seu Postgres, o seu `npm ci` e o seu banco semeado), então a dependência
+era só de custo, nunca técnica. A proteção contra código quebrado em
+`main` é a branch protection exigindo os **dois** checks.
+
+Cada job tem `timeout-minutes: 18` — containment para job travado, uma
+camada diferente do `globalTimeout` de 16 min do Playwright, que só cobre
+a execução dos testes e não o setup.
+
+### Browser do Playwright e dependências de sistema (Fase 20)
+
+O job de E2E **não instala dependências de sistema**. Ele só restaura (ou
+baixa) o binário do browser e segue.
+
+Isso não é suposição: no run `34144643868` o passo de `install-deps`
+consumiu **8m14s de um job de 16m25s**, e o log mostra todas as
+bibliotecas da lista `chromium` do Playwright (`libnss3`, `libgbm1`,
+`libxkbcommon0`, `libcups2t64`, `xvfb`, `fonts-liberation`, ...) como
+*"already the newest version"* — a imagem `ubuntu-24.04` já as traz. Os
+únicos 9 pacotes realmente instalados vinham da lista `tools` e eram
+fontes de scripts que esta suíte nunca renderiza (japonês, chinês,
+tailandês, cirílico) mais utilitários X11 legados.
+
+O custo também não era o tamanho: no **mesmo passo**, o `apt-get update`
+puxou 11,8 MB a 8154 kB/s e logo depois esses 21,1 MB de fontes levaram
+oito minutos (~44 kB/s). Enquanto o `apt` estiver no caminho crítico, o
+orçamento de 18 minutos depende de um mirror do Ubuntu que não
+controlamos — o problema é a **variância**, não a média.
+
+A única premissa dessa remoção (a imagem do runner continuar trazendo as
+libs do Chromium) é verificada a cada run por um passo de ~2 segundos que
+sobe o Chromium e o fecha. Se a imagem mudar, o job falha ali, com uma
+mensagem que nomeia a correção (`--with-deps`), em vez de 402 testes
+falharem seis minutos depois com "browser closed unexpectedly".
+
+| Cache | Caminho | Chave | Invalidação |
+| --- | --- | --- | --- |
+| Browser do Playwright | `~/.cache/ms-playwright` (~430 MB) | `playwright-browser-<ImageOS>-<arch>-<versão do Playwright>` | Imagem do runner, arquitetura ou versão do Playwright. Sem `restore-keys`: uma chave parcial devolveria a revisão de browser errada. |
+| npm | gerenciado por `actions/setup-node` (`cache: npm`) | `package-lock.json` | Lockfile |
+
+Miss no cache do browser custou **11 segundos** medidos (download do
+Chrome for Testing + headless shell + ffmpeg do CDN do Playwright), não
+uma falha: cache indisponível degrada o tempo, nunca a correção.
+
+**Em ambiente local**, um Linux novo continua precisando de
+`npx playwright install --with-deps chromium` uma vez — a remoção vale
+para o runner do GitHub, que já vem preparado, não para máquinas de
+desenvolvimento.
 
 Banco de teste: cada job sobe seu próprio Postgres **efêmero** como
 [service container](https://docs.github.com/actions/using-containerized-services/about-service-containers)
