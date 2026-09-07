@@ -159,27 +159,44 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      - name: Descobrir versão instalada do Playwright
-        id: playwright-version
-        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      # Versão do Playwright e imagem do runner, no mesmo passo — as duas
+      # compõem a chave de cache abaixo. `ImageOS` (ex: "ubuntu24") é uma
+      # variável de ambiente do runner e precisa ser lida pelo shell:
+      # `${{ env.ImageOS }}` numa expressão resolve para vazio, o que foi
+      # observado no run 34147492559 (chave saiu como
+      # "playwright-browser-Linux--X64-1.62.1", com o campo em branco).
+      # `${ImageOS:-desconhecido}` mantém a chave bem formada caso a
+      # variável deixe de existir.
+      - name: Descobrir versão do Playwright e imagem do runner
+        id: ambiente
+        run: |
+          echo "playwright=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+          echo "imagem=${ImageOS:-desconhecido}" >> "$GITHUB_OUTPUT"
 
-      # Guarda só o BINÁRIO do browser (~/.cache/ms-playwright). A chave
-      # inclui a imagem do runner (ImageOS, ex: "ubuntu24") além do SO e
-      # da versão do Playwright: um binário baixado para outra imagem não
-      # deve ser reaproveitado silenciosamente quando o GitHub promover
-      # ubuntu-latest para a próxima LTS.
+      # Guarda só o BINÁRIO do browser (~/.cache/ms-playwright), ~430 MB.
+      #
+      # A chave combina imagem do runner + arquitetura + versão do
+      # Playwright. A imagem entra porque um binário baixado para
+      # ubuntu24 não deve ser reaproveitado em silêncio quando o GitHub
+      # promover ubuntu-latest para a próxima LTS; ela já carrega o SO,
+      # então `runner.os` seria redundante. A versão do Playwright entra
+      # porque é ela que determina a revisão do browser.
       #
       # SEM restore-keys de propósito. Uma chave parcial devolveria o
-      # cache de outra versão do Playwright, que não contém a revisão de
-      # browser desta versão — o passo seguinte teria de baixar assim
-      # mesmo, e o cache ficaria acumulando revisões velhas. Miss aqui
-      # custa um download de browser (~30s), não uma falha.
+      # cache de outra versão do Playwright, que não contém a revisão
+      # desta — o passo seguinte teria de baixar assim mesmo, e o cache
+      # ficaria acumulando revisões velhas.
+      #
+      # O miss é barato e foi medido no run 34147492559: 11 segundos para
+      # baixar Chrome for Testing + headless shell + ffmpeg do CDN do
+      # Playwright. Cache indisponível degrada o tempo, nunca a
+      # correção.
       - name: Cache do browser do Playwright
         id: playwright-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-browser-${{ runner.os }}-${{ env.ImageOS }}-${{ runner.arch }}-${{ steps.playwright-version.outputs.version }}
+          key: playwright-browser-${{ steps.ambiente.outputs.imagem }}-${{ runner.arch }}-${{ steps.ambiente.outputs.playwright }}
 
       # FASE 20 — sem `--with-deps`, e sem um passo de `install-deps` no
       # caminho de cache hit.
