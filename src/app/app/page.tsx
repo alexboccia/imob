@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { requireOrganizationId } from "@/lib/tenant";
+import { auth } from "@/lib/auth";
+import { hasModule } from "@/lib/entitlements";
+import { buscarCentralTrabalho } from "@/lib/central-trabalho";
+import { CentralTrabalho } from "@/components/admin/CentralTrabalho";
 import { buscarMetricasDashboard } from "@/lib/dashboard";
 import { contarAgenda } from "@/lib/agenda";
 import { DashboardKpiCards } from "@/components/admin/DashboardKpiCards";
@@ -16,6 +20,17 @@ import { Clock } from "lucide-react";
 // puras isoladamente (dashboard.test.ts) sem precisar de banco.
 export default async function DashboardPage() {
   const organizationId = await requireOrganizationId();
+  const session = await auth();
+
+  // Fase 17 — a Central é PESSOAL e depende de duas condições, ambas
+  // verificadas antes de qualquer query: o vínculo do usuário com esta
+  // organização (sem ele não existe "minhas negociações" que se possa
+  // afirmar) e o módulo CRM, o mesmo gate que Agenda, Clientes e
+  // Pipeline já aplicam — a Central lê exatamente esses dados.
+  const membroId = session?.user.organizationMemberId ?? null;
+  const temCrm = await hasModule(organizationId, "crm");
+  const central =
+    membroId && temCrm ? await buscarCentralTrabalho(organizationId, membroId) : null;
 
   const [metricas, agenda] = await Promise.all([
     buscarMetricasDashboard(organizationId),
@@ -39,8 +54,23 @@ export default async function DashboardPage() {
             break-words a palavra (sem espaço pra quebrar) vaza da própria
             caixa em vez de quebrar — mesma proteção que já existia no
             h1 do Dashboard antes deste redesenho, mantida aqui. */}
-        <h1 className="min-w-0 break-words text-2xl font-semibold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Visão geral da sua operação imobiliária.</p>
+        <h1 className="min-w-0 break-words text-2xl font-semibold">
+          {/* Saudação sem "bom dia/boa tarde": o produto trabalha em UTC
+              literal (ver central-trabalho.ts) e não sabe a hora local de
+              quem olha — afirmar período do dia seria chutar. */}
+          {session?.user.name ? `Olá, ${session.user.name}` : "Início"}
+        </h1>
+        <p className="text-sm text-muted-foreground">O que precisa da sua atenção agora.</p>
+      </div>
+
+      {/* AÇÃO primeiro, contexto depois: a Central operacional abre a
+          tela, e a visão agregada da operação (KPIs e gráficos, que já
+          existiam e continuam valendo) segue abaixo. */}
+      {central && <CentralTrabalho dados={central} />}
+
+      <div className="min-w-0 pt-2">
+        <h2 className="min-w-0 break-words text-lg font-semibold">Visão geral</h2>
+        <p className="text-sm text-muted-foreground">Panorama da operação imobiliária.</p>
       </div>
 
       <DashboardKpiCards metricas={metricas} />

@@ -32,6 +32,8 @@ export const IDS_E2E = {
   // spec, então (diferente de imovelParaEditarOrgA) seu título nunca é
   // renomeado por imoveis.spec.ts e pode ser referenciado como constante.
   imovelOrgAgenda: "e2e-imovel-org-agenda",
+  // Fase 17 — organização dedicada à Central de trabalho.
+  imovelOrgCentral: "e2e-imovel-org-central",
   // Redesenho de Imóveis — ver duplicata em tests/e2e/helpers.ts.
   imovelComBadgesOrgA: "e2e-imovel-badges-a",
   // Busca do Hero — segunda cidade/bairro (todo o resto do seed usa só
@@ -345,6 +347,22 @@ async function main() {
     role: "OWNER",
   });
 
+  // Fase 17 — Organização E: dedicada à CENTRAL DE TRABALHO, pelo mesmo
+  // motivo estrutural das organizações C e D. A Home é pessoal e afirma
+  // números absolutos ("1 visita atrasada", "2 negociações"); colocá-la
+  // na Org A ou na da Agenda faria qualquer asserção depender da ordem de
+  // execução dos specs — e adicionar visitas SCHEDULED à Org da Agenda
+  // mudaria os contadores que agenda.spec.ts e pipeline.spec.ts já
+  // afirmam.
+  const orgCentral = await garantirOrganizacaoComDono({
+    slug: "e2e-org-central",
+    name: "Organização E2E Central",
+    planId: planoCompleto.id,
+    email: "owner-central@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+
   // Specs como "criar imóvel" e "formulário público cria lead" criam dados
   // novos a cada rodada — sem isso o banco de teste acumularia lixo entre
   // execuções do Playwright. Person cascateia Interaction ao ser apagada;
@@ -354,6 +372,7 @@ async function main() {
     orgB.organization.id,
     orgAgenda.organization.id,
     orgAnalytics.organization.id,
+    orgCentral.organization.id,
   ];
   // Usuários criados por usuarios.spec.ts a cada rodada (Fase 8 — correção
   // de causa raiz de um flake real): o seed nunca os limpava, e a
@@ -373,6 +392,12 @@ async function main() {
     "owner-b@e2e.test",
     "owner-agenda@e2e.test",
     "owner-analytics@e2e.test",
+    // Fase 17 — Organização E (Central de trabalho). Os DOIS entram: o
+    // dono e o segundo corretor. Sem eles a limpeza de membros
+    // descartáveis apagaria as identidades logo depois de criadas, e as
+    // negociações da Central perderiam o responsável (FK).
+    "owner-central@e2e.test",
+    "corretor-central@e2e.test",
   ];
 
   // Correção completa do acúmulo (a da Fase 8 cobria só o prefixo
@@ -913,13 +938,120 @@ async function main() {
   });
 
   console.log("Seed E2E pronto:");
+  // =====================================================================
+  // Fase 17 — dados determinísticos da CENTRAL DE TRABALHO (Organização E)
+  // =====================================================================
+  // A Home é pessoal e afirma números absolutos, então o estado precisa
+  // ser exato: 1 visita ATRASADA, 1 HOJE, 1 PRÓXIMA, 3 negociações
+  // minhas e 1 de outro membro (que NUNCA pode aparecer).
+  //
+  // As datas são relativas a AGORA_SEED, não fixas: "hoje" só é hoje se
+  // for calculado a cada seed. Todas usam meio-dia UTC pelo mesmo motivo
+  // do resto do seed — a Central classifica pelo DIA calendário UTC
+  // (src/lib/scheduled-activity-date.ts), então o meio-dia nunca escorrega
+  // de dia por causa da hora em que a suíte roda.
+  await garantirImovel({
+    id: IDS_E2E.imovelOrgCentral,
+    organizationId: orgCentral.organization.id,
+    title: "Apartamento E2E Central",
+  });
+
+  // Segundo corretor da Organização E — idempotente, mesmo idiom de
+  // upsert de garantirOrganizacaoComDono.
+  const usuarioOutroCentral = await prisma.user.upsert({
+    where: { email: "corretor-central@e2e.test" },
+    update: {},
+    create: {
+      name: "Bruno Outro Corretor",
+      email: "corretor-central@e2e.test",
+      passwordHash: await bcrypt.hash(senha, 10),
+    },
+    select: { id: true },
+  });
+  const outroCorretorCentral = await prisma.organizationMember.upsert({
+    where: {
+      organizationId_userId: {
+        organizationId: orgCentral.organization.id,
+        userId: usuarioOutroCentral.id,
+      },
+    },
+    update: {},
+    create: {
+      organizationId: orgCentral.organization.id,
+      userId: usuarioOutroCentral.id,
+      role: "BROKER",
+    },
+    select: { id: true },
+  });
+
+  const criarNegociacaoCentral = async (opcoes: {
+    nomePessoa: string;
+    responsibleMemberId: string | null;
+    visitaEm?: Date;
+  }) => {
+    const pessoa = await prisma.person.create({
+      data: {
+        organizationId: orgCentral.organization.id,
+        name: opcoes.nomePessoa,
+        roles: ["LEAD"],
+      },
+      select: { id: true },
+    });
+    const interesse = await prisma.propertyInterest.create({
+      data: {
+        organizationId: orgCentral.organization.id,
+        personId: pessoa.id,
+        propertyId: IDS_E2E.imovelOrgCentral,
+        stage: "INTERESTED",
+        responsibleMemberId: opcoes.responsibleMemberId,
+      },
+      select: { id: true },
+    });
+    if (opcoes.visitaEm) {
+      await prisma.scheduledActivity.create({
+        data: {
+          organizationId: orgCentral.organization.id,
+          personId: pessoa.id,
+          propertyId: IDS_E2E.imovelOrgCentral,
+          propertyInterestId: interesse.id,
+          type: "VISIT",
+          status: "SCHEDULED",
+          scheduledAt: opcoes.visitaEm,
+        },
+      });
+    }
+    return interesse;
+  };
+
+  await criarNegociacaoCentral({
+    nomePessoa: "Central Atrasada",
+    responsibleMemberId: orgCentral.membro.id,
+    visitaEm: diasAtras(3),
+  });
+  await criarNegociacaoCentral({
+    nomePessoa: "Central Hoje",
+    responsibleMemberId: orgCentral.membro.id,
+    visitaEm: diasAtras(0),
+  });
+  await criarNegociacaoCentral({
+    nomePessoa: "Central Proxima",
+    responsibleMemberId: orgCentral.membro.id,
+    visitaEm: diasAtras(-3),
+  });
+  // Negociação de OUTRO corretor: prova na tela que a Central é pessoal.
+  await criarNegociacaoCentral({
+    nomePessoa: "Central De Outro Corretor",
+    responsibleMemberId: outroCorretorCentral.id,
+  });
+
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);
   console.log(
     `  Org C (dedicada à Agenda, CRM habilitado): slug=${orgAgenda.organization.slug} login=owner-agenda@e2e.test`
   );
   console.log(
-    `  Org D (dedicada ao Analytics, CRM habilitado): slug=${orgAnalytics.organization.slug} login=owner-analytics@e2e.test`
+    `  Org D (dedicada ao Analytics, CRM habilitado): slug=${orgAnalytics.organization.slug} login=owner-analytics@e2e.test`,
+    `  Org E (dedicada à Central de trabalho): slug=${orgCentral.organization.slug} login=owner-central@e2e.test`
   );
 }
 

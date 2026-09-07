@@ -12,7 +12,12 @@ import { ORG_A, login } from "./helpers";
 // quebra caractere-a-caractere) — o critério estrutural mínimo definido
 // pra esta tarefa.
 const ROTAS: { path: string; titulo: string }[] = [
-  { path: "/app", titulo: "Dashboard" },
+  // Fase 17 — a Home deixou de se chamar "Dashboard": o h1 passou a
+  // ser a saudação da Central de trabalho. O nome do dono da Org A no
+  // seed é "Organização E2E A", então o título é "Olá, Organização
+  // E2E A" — nome longo de propósito, que é justamente o caso que
+  // esta spec mede (título íntegro, no máximo 2 linhas, sem overflow).
+  { path: "/app", titulo: "Olá, Organização E2E A" },
   { path: "/app/imoveis", titulo: "Imóveis" },
   { path: "/app/clientes", titulo: "Clientes" },
   { path: "/app/pipeline", titulo: "Pipeline" },

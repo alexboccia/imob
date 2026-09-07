@@ -35,6 +35,16 @@ export const ORG_ANALYTICS = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Central de trabalho (Fase 17) — organização dedicada, pelo mesmo motivo
+// estrutural de ORG_AGENDA/ORG_ANALYTICS: a Home afirma números
+// absolutos e pessoais, e o seed dela precisa ser imune à ordem de
+// execução dos outros specs.
+export const ORG_CENTRAL = {
+  slug: "e2e-org-central",
+  email: "owner-central@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const IDS_E2E = {
   imovelParaEditarOrgA: "e2e-imovel-editar-a",
   membroOwnerOrgB: "e2e-membro-owner-b",
