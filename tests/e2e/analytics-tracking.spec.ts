@@ -25,6 +25,25 @@ const URL_IMOVEL = `${BASE_PUBLICA}/imoveis/${IDS_E2E.imovelTopOrgAnalytics}`;
 const URL_OUTRO_IMOVEL = `${BASE_PUBLICA}/imoveis/${IDS_E2E.imovelSecundarioOrgAnalytics}`;
 const ROTA_EVENTO = "**/api/analytics/evento";
 
+// BARREIRA DE CONTEXTO (Fase 17). Esta spec dirige o site público da
+// Organização de Analytics, e analytics.spec.ts — que roda logo em
+// seguida — afirma CONTAGENS ABSOLUTAS dessa mesma organização. Um único
+// evento de tracking que escape para o servidor faz "20 visualizações"
+// virar 21 e derruba a outra spec (achado real, reproduzido no CI: o
+// funil apareceu com 21).
+//
+// Cada teste já registra a sua própria interceptação em `page.route`,
+// mas isso cobre só a página do fixture: qualquer navegação fora dela
+// (contexto criado à mão, aba nova) passaria direto. Esta rota de
+// CONTEXTO fecha a classe inteira do problema — rotas de página têm
+// precedência, então os coletores de cada teste continuam funcionando
+// exatamente como antes.
+test.beforeEach(async ({ context }) => {
+  await context.route(ROTA_EVENTO, (rota) =>
+    rota.fulfill({ status: 202, body: JSON.stringify({ ok: true }) })
+  );
+});
+
 type CorpoEvento = {
   type?: string;
   propertyId?: string;
@@ -232,6 +251,11 @@ test.describe("Tracking — FAIL-OPEN (analytics nunca bloqueia conversão)", ()
     // — é o cenário de navegação privada/política restritiva, em que
     // obterVisitorId devolve null e o tracking simplesmente não acontece.
     const contexto = await browser.newContext();
+    // Contexto próprio: a barreira do beforeEach acima não o alcança, e
+    // esta navegação acontece SEM interceptação de página.
+    await contexto.route(ROTA_EVENTO, (rota) =>
+      rota.fulfill({ status: 202, body: JSON.stringify({ ok: true }) })
+    );
     const pagina = await contexto.newPage();
     await pagina.addInitScript(() => {
       Object.defineProperty(window, "localStorage", {
