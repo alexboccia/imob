@@ -12,7 +12,16 @@ import {
 // puro).
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }));
+vi.mock("next/cache", () => ({
+  // unstable_cache passa direto: a action lê o fuso da organização
+  // (Fase 18) e o cache do Next não existe fora do runtime.
+  unstable_cache:
+    <T extends (...args: never[]) => unknown>(fn: T) =>
+    (...args: Parameters<T>) =>
+      fn(...args),
+  revalidatePath: vi.fn(),
+  updateTag: vi.fn(),
+}));
 
 import { auth } from "@/lib/auth";
 import { salvarConfiguracaoContato } from "@/app/app/configuracoes/actions";
@@ -35,6 +44,8 @@ function formularioMinimo(campos: Record<string, string> = {}): FormData {
   const fd = new FormData();
   fd.set("themeId", "classic-blue");
   fd.set("footerAparencia", "AUTO");
+  // Fase 18 — campo obrigatório do formulário de Configurações.
+  fd.set("timezone", "America/Sao_Paulo");
   for (const [chave, valor] of Object.entries(campos)) fd.set(chave, valor);
   return fd;
 }

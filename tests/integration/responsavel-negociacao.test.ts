@@ -296,7 +296,7 @@ describe("membro inativo", () => {
       data: { status: "SUSPENDED" },
     });
 
-    const colunas = await buscarPipelineAberto(c.organization.id);
+    const colunas = await buscarPipelineAberto(c.organization.id, "UTC");
     const card = colunas.INTERESTED.find((i) => i.id === interesse!.id);
     // Nome preservado + marca de inativo. NUNCA "sem responsável".
     expect(card?.responsavel?.nome).toBe("Dina Corretora");
@@ -477,7 +477,7 @@ describe("WON preserva ownership e alimenta o Analytics", () => {
       form({ valorFechamento: "800000", valorComissao: "40000" })
     );
 
-    const analytics = await buscarAnalyticsComercial(c.organization.id);
+    const analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     const linha = analytics.responsaveis.find((l) => l.nome === "Bruno Corretor");
     expect(linha).toBeDefined();
     expect(linha?.oportunidades).toBe(1);
@@ -507,7 +507,7 @@ describe("WON preserva ownership e alimenta o Analytics", () => {
     });
     expect(legada.id).toBeTruthy();
 
-    const analytics = await buscarAnalyticsComercial(c.organization.id);
+    const analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     const semDono = analytics.responsaveis.find((l) => l.chave === SEM_RESPONSAVEL_CHAVE);
     expect(semDono?.ganhos).toBe(1);
     expect(semDono?.valorFechado).toBe(300000);
@@ -530,7 +530,7 @@ describe("WON preserva ownership e alimenta o Analytics", () => {
       },
     });
 
-    const analytics = await buscarAnalyticsComercial(c.organization.id);
+    const analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     expect(analytics.semOwnership).toBe(true);
   });
 
@@ -549,7 +549,7 @@ describe("WON preserva ownership e alimenta o Analytics", () => {
     );
     await marcarInteresseComoPerdido(b.interesse!.id, ESTADO_INICIAL_ACAO, new FormData());
 
-    const analytics = await buscarAnalyticsComercial(c.organization.id);
+    const analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     const linha = analytics.responsaveis[0];
     expect(linha.ganhos).toBe(1);
     expect(linha.perdidos).toBe(1);
@@ -574,21 +574,21 @@ describe("filtro do pipeline", () => {
       responsavelId: "",
     });
 
-    const meus = await buscarPipelineAberto(c.organization.id, { responsavel: c.membro.id });
+    const meus = await buscarPipelineAberto(c.organization.id, "UTC", { responsavel: c.membro.id });
     expect(meus.INTERESTED.map((i) => i.id)).toEqual([meu.interesse!.id]);
 
-    const dobruno = await buscarPipelineAberto(c.organization.id, { responsavel: bruno.id });
+    const dobruno = await buscarPipelineAberto(c.organization.id, "UTC", { responsavel: bruno.id });
     expect(dobruno.INTERESTED.map((i) => i.id)).toEqual([dele.interesse!.id]);
 
-    const orfaos = await buscarPipelineAberto(c.organization.id, { responsavel: "SEM" });
+    const orfaos = await buscarPipelineAberto(c.organization.id, "UTC", { responsavel: "SEM" });
     expect(orfaos.INTERESTED.map((i) => i.id)).toEqual([semDono.interesse!.id]);
 
-    const todos = await buscarPipelineAberto(c.organization.id);
+    const todos = await buscarPipelineAberto(c.organization.id, "UTC");
     expect(todos.INTERESTED).toHaveLength(3);
 
     // Id que não existe nesta organização: nenhum resultado, nunca um erro
     // e nunca a lista inteira.
-    const nenhum = await buscarPipelineAberto(c.organization.id, { responsavel: "membro-inexistente" });
+    const nenhum = await buscarPipelineAberto(c.organization.id, "UTC", { responsavel: "membro-inexistente" });
     expect(nenhum.INTERESTED).toHaveLength(0);
   });
 
@@ -602,7 +602,7 @@ describe("filtro do pipeline", () => {
     const imovel = await criarImovel({ organizationId: a.organization.id });
     await oportunidadeManual(a.organization.id, pessoa.id, imovel.id);
 
-    const resultado = await buscarPipelineAberto(a.organization.id, { responsavel: b.membro.id });
+    const resultado = await buscarPipelineAberto(a.organization.id, "UTC", { responsavel: b.membro.id });
     expect(resultado.INTERESTED).toHaveLength(0);
   });
 });

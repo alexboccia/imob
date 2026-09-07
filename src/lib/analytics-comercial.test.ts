@@ -22,6 +22,8 @@ import {
   PERIODO_ANALYTICS_DIAS,
 } from "@/lib/analytics-comercial";
 import { formatarPercentualInteiro } from "@/lib/format";
+import { chaveDoDia, numeroDoDia } from "./fuso-horario";
+import type { PeriodoAnalytics } from "./analytics-comercial";
 
 // Executa `fn` com o TZ do processo forçado — as agregações são
 // UTC-literais por convenção do projeto (ver cabeçalho de
@@ -64,14 +66,14 @@ describe("resolverJanelasAnalytics", () => {
   const agora = new Date("2026-03-12T23:30:00.000Z");
 
   test("janela atual cobre N dias calendário UTC fechados, terminando hoje", () => {
-    const { atual, dias } = resolverJanelasAnalytics("7d", agora);
+    const { atual, dias } = resolverJanelasAnalytics("7d", "UTC", agora);
     expect(dias).toBe(7);
     expect(atual.inicio.toISOString()).toBe("2026-03-06T00:00:00.000Z");
     expect(atual.fim.toISOString()).toBe("2026-03-12T23:59:59.999Z");
   });
 
   test("período anterior tem o MESMO comprimento e termina 1ms antes do atual", () => {
-    const { atual, anterior } = resolverJanelasAnalytics("30d", agora);
+    const { atual, anterior } = resolverJanelasAnalytics("30d", "UTC", agora);
     expect(anterior.fim.getTime()).toBe(atual.inicio.getTime() - 1);
     const duracao = (j: { inicio: Date; fim: Date }) => j.fim.getTime() + 1 - j.inicio.getTime();
     expect(duracao(anterior)).toBe(duracao(atual));
@@ -81,7 +83,7 @@ describe("resolverJanelasAnalytics", () => {
   test("13 semanas são 91 dias exatos — 13 baldes de 7 dias, nenhum parcial", () => {
     expect(PERIODO_ANALYTICS_DIAS["13s"]).toBe(91);
     expect(PERIODO_ANALYTICS_DIAS["13s"] % 7).toBe(0);
-    const { atual } = resolverJanelasAnalytics("13s", agora);
+    const { atual } = resolverJanelasAnalytics("13s", "UTC", agora);
     const totalDias = (atual.fim.getTime() + 1 - atual.inicio.getTime()) / (24 * 60 * 60 * 1000);
     expect(totalDias).toBe(91);
   });
@@ -90,7 +92,7 @@ describe("resolverJanelasAnalytics", () => {
     const esperado: string[] = [];
     for (const tz of FUSOS) {
       comTimezone(tz, () => {
-        const { atual, anterior } = resolverJanelasAnalytics("30d", agora);
+        const { atual, anterior } = resolverJanelasAnalytics("30d", "UTC", agora);
         esperado.push(
           [atual.inicio, atual.fim, anterior.inicio, anterior.fim].map((d) => d.toISOString()).join("|")
         );
@@ -100,7 +102,7 @@ describe("resolverJanelasAnalytics", () => {
   });
 
   test("atravessa virada de mês e de ano sem buraco entre as janelas", () => {
-    const { atual, anterior } = resolverJanelasAnalytics("7d", new Date("2027-01-02T10:00:00.000Z"));
+    const { atual, anterior } = resolverJanelasAnalytics("7d", "UTC", new Date("2027-01-02T10:00:00.000Z"));
     expect(atual.inicio.toISOString()).toBe("2026-12-27T00:00:00.000Z");
     expect(anterior.inicio.toISOString()).toBe("2026-12-20T00:00:00.000Z");
     expect(anterior.fim.toISOString()).toBe("2026-12-26T23:59:59.999Z");
@@ -182,7 +184,7 @@ describe("construirSerie", () => {
       ],
       janela,
       "DIA"
-    );
+    , "UTC");
     expect(serie).toHaveLength(7);
     expect(serie.map((p) => p.total)).toEqual([2, 0, 1, 0, 0, 0, 0]);
     // O dia sem contato existe como ponto com zero — nunca some fazendo
@@ -192,7 +194,7 @@ describe("construirSerie", () => {
   });
 
   test("série inteiramente vazia continua tendo um ponto por dia", () => {
-    const serie = construirSerie([], janela, "DIA");
+    const serie = construirSerie([], janela, "DIA", "UTC");
     expect(serie).toHaveLength(7);
     expect(serie.every((p) => p.total === 0)).toBe(true);
   });
@@ -210,7 +212,7 @@ describe("construirSerie", () => {
       ],
       janela13,
       "SEMANA"
-    );
+    , "UTC");
     expect(serie).toHaveLength(13);
     expect(serie[0].total).toBe(2);
     expect(serie[1].total).toBe(1);
@@ -229,7 +231,7 @@ describe("construirSerie", () => {
           ],
           janela,
           "DIA"
-        );
+        , "UTC");
         expect(serie[0].total).toBe(1);
         expect(serie[1].total).toBe(1);
       });
@@ -244,7 +246,7 @@ describe("construirSerie", () => {
       ],
       janela,
       "DIA"
-    );
+    , "UTC");
     expect(serie).toHaveLength(7);
     expect(serie.reduce((s, p) => s + p.total, 0)).toBe(0);
   });
@@ -591,5 +593,97 @@ describe("valor fechado por canal e campanha (Fase 9)", () => {
 
   test("ganho sem campanha não cria linha de campanha fantasma", () => {
     expect(agruparPorCampanha([], [], [{ atribuicao: null, closedValue: 999 }])).toEqual([]);
+  });
+});
+
+// =======================================================================
+// Fase 18 — período no calendário da ORGANIZAÇÃO
+// =======================================================================
+// A semântica declarada na tela não mudou: N dias de calendário fechados
+// terminando hoje, com o período anterior de mesmo comprimento colado
+// antes. O que mudou é de quem é o calendário.
+describe("Fase 18 — janelas no fuso da organização", () => {
+  const SP = "America/Sao_Paulo";
+  const NY = "America/New_York";
+
+  // Os três períodos do produto. O de 91 dias se chama "13s" na UI
+  // (13 semanas) — é o mesmo recorte de 91 dias de calendário.
+  const PERIODOS: readonly [PeriodoAnalytics, number][] = [
+    ["7d", 7],
+    ["30d", 30],
+    ["13s", 91],
+  ];
+
+  test("7d/30d/91d (13s) recortam dias calendário da organização, não do UTC", () => {
+    // 08/09 00:30 UTC ainda é 07/09 21:30 em São Paulo.
+    const agora = new Date("2026-09-08T00:30:00.000Z");
+    for (const [periodo, dias] of PERIODOS) {
+      const janelas = resolverJanelasAnalytics(periodo, SP, agora);
+      expect(janelas.dias).toBe(dias);
+      // O último dia da janela é 07/09 em São Paulo (o dia em curso lá).
+      expect(chaveDoDia(janelas.atual.fim, SP)).toBe("2026-09-07");
+      expect(janelas.atual.fim.toISOString()).toBe("2026-09-08T02:59:59.999Z");
+      // O primeiro dia é (dias - 1) voltas de calendário atrás.
+      expect(numeroDoDia(janelas.atual.fim, SP) - numeroDoDia(janelas.atual.inicio, SP)).toBe(
+        dias - 1
+      );
+      // E o período anterior tem exatamente o mesmo comprimento, colado.
+      expect(janelas.atual.inicio.getTime() - janelas.anterior.fim.getTime()).toBe(1);
+      expect(
+        numeroDoDia(janelas.anterior.fim, SP) - numeroDoDia(janelas.anterior.inicio, SP)
+      ).toBe(dias - 1);
+    }
+  });
+
+  test("a MESMA hora produz janelas diferentes em UTC e em São Paulo", () => {
+    const agora = new Date("2026-09-08T00:30:00.000Z");
+    const emUtc = resolverJanelasAnalytics("7d", "UTC", agora);
+    const emSaoPaulo = resolverJanelasAnalytics("7d", SP, agora);
+    expect(chaveDoDia(emUtc.atual.fim, "UTC")).toBe("2026-09-08");
+    expect(chaveDoDia(emSaoPaulo.atual.fim, SP)).toBe("2026-09-07");
+    expect(emUtc.atual.inicio.getTime()).not.toBe(emSaoPaulo.atual.inicio.getTime());
+  });
+
+  test("janela que atravessa DST tem o número certo de DIAS, não de horas", () => {
+    // 10/11/2026 em Nova York: a janela de 30 dias contém 01/11, que teve
+    // 25 horas. Em milissegundos ela teria 30 × 24h + 1h.
+    const agora = new Date("2026-11-10T18:00:00.000Z");
+    const janelas = resolverJanelasAnalytics("30d", NY, agora);
+    expect(numeroDoDia(janelas.atual.fim, NY) - numeroDoDia(janelas.atual.inicio, NY)).toBe(29);
+    expect(janelas.atual.fim.getTime() + 1 - janelas.atual.inicio.getTime()).toBe(
+      30 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000
+    );
+  });
+
+  test("os baldes da série são dias calendário da organização", () => {
+    const agora = new Date("2026-09-08T00:30:00.000Z");
+    const janelas = resolverJanelasAnalytics("7d", SP, agora);
+    const serie = construirSerie([], janelas.atual, "DIA", SP);
+    expect(serie).toHaveLength(7);
+    expect(serie[0].chave).toBe("2026-09-01");
+    expect(serie[6].chave).toBe("2026-09-07");
+    expect(serie[6].rotulo).toBe("07/09");
+  });
+
+  test("um evento da madrugada UTC cai no balde do dia anterior em São Paulo", () => {
+    const agora = new Date("2026-09-08T00:30:00.000Z");
+    const janelas = resolverJanelasAnalytics("7d", SP, agora);
+    // 08/09 02:00 UTC = 07/09 23:00 em São Paulo.
+    const evento = { occurredAt: new Date("2026-09-08T02:00:00.000Z") };
+    const serie = construirSerie([evento], janelas.atual, "DIA", SP);
+    expect(serie.find((p) => p.chave === "2026-09-07")!.total).toBe(1);
+    expect(serie.reduce((soma, p) => soma + p.total, 0)).toBe(1);
+  });
+
+  test("baldes semanais atravessando DST continuam com 7 dias de calendário cada", () => {
+    const agora = new Date("2026-11-10T18:00:00.000Z");
+    const janelas = resolverJanelasAnalytics("13s", NY, agora);
+    const serie = construirSerie([], janelas.atual, "SEMANA", NY);
+    expect(serie).toHaveLength(13);
+    for (let i = 1; i < serie.length; i++) {
+      const anterior = new Date(`${serie[i - 1].chave}T12:00:00.000Z`);
+      const atual = new Date(`${serie[i].chave}T12:00:00.000Z`);
+      expect(numeroDoDia(atual, "UTC") - numeroDoDia(anterior, "UTC")).toBe(7);
+    }
   });
 });

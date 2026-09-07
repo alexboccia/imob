@@ -1,81 +1,41 @@
-// Exibição/edição de scheduledAt (Fase H.2) — única fonte de verdade,
-// usada por AgendamentoVisita.tsx e testável sem Prisma/DOM. H.2 V1 trata
-// datetime-local como UTC literal (ver parseScheduledAt em
-// scheduled-activity-schema.ts) porque Organization ainda não possui
-// timezone configurado; uma evolução futura com timezone real por
-// organização/usuário precisará revisitar só este arquivo.
+// Classificação temporal de ScheduledActivity (Fases H.2-H.7, corrigida
+// na Fase 18).
+//
+// ATÉ A FASE 17 este arquivo usava a convenção UTC-literal: "hoje" era o
+// dia calendário UTC, e o horário digitado no formulário era interpretado
+// como UTC. Para uma imobiliária em UTC−3 isso fazia o dia virar às 21:00
+// locais — uma visita de 07/09 22:00 em São Paulo já contava como 08/09.
+//
+// A PARTIR DA FASE 18 todo conceito de calendário é resolvido no fuso da
+// ORGANIZAÇÃO (Organization.timezone, fallback explícito UTC). O fuso é um
+// parâmetro OBRIGATÓRIO destas funções, deliberadamente sem valor padrão:
+// esquecer de passá-lo é erro de compilação, nunca um UTC silencioso.
+//
+// A formatação para exibição mora inteira em src/lib/fuso-horario.ts
+// (formatarDataHoraNoFuso e irmãs) — não há wrapper duplicado aqui.
 
-// timeZone: "UTC" explícito é o que faz os componentes exibidos baterem
-// com os componentes digitados — sem isso, toLocaleString converte pro
-// timezone do navegador de quem está vendo a tela, não de quem agendou.
-export function formatarDataHora(iso: string): string {
-  return new Date(iso).toLocaleString("pt-BR", {
-    timeZone: "UTC",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-// iso já está em componentes UTC literais (formato
-// "YYYY-MM-DDTHH:mm:ss.sssZ") — os primeiros 16 caracteres são
-// exatamente o que <input type="datetime-local"> espera, sem nenhuma
-// conversão de timezone no meio do caminho.
-export function paraDatetimeLocal(iso: string): string {
-  return iso.slice(0, 16);
-}
-
-// Só HH:mm (Fase H.7) — usado no painel "Agora", onde a data por extenso
-// de formatarDataHora seria redundante (o próprio bloco já está no
-// contexto "hoje"). Mesma convenção timeZone:"UTC" explícita.
-export function formatarHora(iso: string): string {
-  return new Date(iso).toLocaleString("pt-BR", {
-    timeZone: "UTC",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-// -----------------------------------------------------------------------
-// Agrupamento temporal da Agenda (Fase H.3) — mesma convenção UTC-literal:
-// "hoje" é o dia calendário UTC de `agora`, nunca o dia local de quem está
-// olhando a tela. Os getters usados abaixo são todos os UTC* (nunca
-// getFullYear/getMonth/getDate simples), por isso o resultado independe
-// do timezone do processo — mesma garantia de determinismo de
-// parseScheduledAt em scheduled-activity-schema.ts.
-// -----------------------------------------------------------------------
-
-export function inicioDoDiaUTC(agora: Date = new Date()): Date {
-  return new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate(), 0, 0, 0, 0));
-}
-
-export function fimDoDiaUTC(agora: Date = new Date()): Date {
-  return new Date(
-    Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate(), 23, 59, 59, 999)
-  );
-}
+import { intervaloDoDia, componentesNoFuso } from "@/lib/fuso-horario";
 
 export type StatusScheduledActivity = "SCHEDULED" | "COMPLETED" | "CANCELLED";
 export type PeriodoAgenda = "HOJE" | "PROXIMAS" | "ANTERIORES";
 
 // Única fonte de verdade da classificação Hoje/Próximas/Anteriores — usada
-// tanto pelos testes quanto (implicitamente, via os mesmos limites
-// inicioDoDiaUTC/fimDoDiaUTC) pela query em src/lib/agenda.ts. COMPLETED e
-// CANCELLED são sempre ANTERIORES, independente da data. Uma SCHEDULED cujo
-// dia (UTC-literal) já passou também cai em ANTERIORES — nunca muda de
-// status sozinha (H.2: SCHEDULED no passado não expira automaticamente),
-// só é classificada visualmente como histórico.
+// tanto pelos testes quanto (implicitamente, via os mesmos limites de
+// intervaloDoDia) pelas queries em src/lib/agenda.ts e
+// src/lib/central-trabalho.ts. COMPLETED e CANCELLED são sempre
+// ANTERIORES, independente da data. Uma SCHEDULED cujo dia calendário DA
+// ORGANIZAÇÃO já passou também cai em ANTERIORES — nunca muda de status
+// sozinha (H.2: SCHEDULED no passado não expira automaticamente), só é
+// classificada visualmente como histórico.
 export function classificarPeriodoAgenda(
   atividade: { status: StatusScheduledActivity; scheduledAt: Date },
+  fuso: string,
   agora: Date = new Date()
 ): PeriodoAgenda {
   if (atividade.status !== "SCHEDULED") return "ANTERIORES";
-  const inicioHoje = inicioDoDiaUTC(agora);
-  const fimHoje = fimDoDiaUTC(agora);
-  if (atividade.scheduledAt >= inicioHoje && atividade.scheduledAt <= fimHoje) return "HOJE";
-  if (atividade.scheduledAt > fimHoje) return "PROXIMAS";
+  const { inicio, fim } = intervaloDoDia(agora, fuso);
+  if (atividade.scheduledAt >= inicio && atividade.scheduledAt <= fim) return "HOJE";
+  if (atividade.scheduledAt > fim) return "PROXIMAS";
   return "ANTERIORES";
 }
 
@@ -87,35 +47,20 @@ export function classificarPeriodoAgenda(
 // calendário conta, não a hora exata dentro do dia de hoje).
 export function estaAtrasada(
   atividade: { status: StatusScheduledActivity; scheduledAt: Date },
+  fuso: string,
   agora: Date = new Date()
 ): boolean {
-  return atividade.status === "SCHEDULED" && classificarPeriodoAgenda(atividade, agora) === "ANTERIORES";
+  return (
+    atividade.status === "SCHEDULED" &&
+    classificarPeriodoAgenda(atividade, fuso, agora) === "ANTERIORES"
+  );
 }
 
-// -----------------------------------------------------------------------
-// Filtro de período da Agenda (Fase H.4) — mesma convenção UTC-literal:
-// "YYYY-MM-DD" (valor cru de <input type="date">) é interpretado como
-// data de calendário UTC, nunca timezone local do navegador/processo.
-// -----------------------------------------------------------------------
-
-// Retorna null pra qualquer valor sintaticamente inválido OU uma data que
-// não existe no calendário (ex: "2026-02-30", que new Date(Date.UTC(...))
-// rolaria silenciosamente pra 2026-03-02) — usar Date.UTC cru sem essa
-// checagem deixaria uma data absurda virar uma query Prisma "válida" mas
-// enganosa. Quem chama trata null como "filtro ausente", nunca como erro
-// que precisa de 500.
-export function parseDataUTC(valor: string): Date | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor);
-  if (!match) return null;
-  const ano = Number(match[1]);
-  const mes = Number(match[2]);
-  const dia = Number(match[3]);
-  const data = new Date(Date.UTC(ano, mes - 1, dia));
-  if (data.getUTCFullYear() !== ano || data.getUTCMonth() !== mes - 1 || data.getUTCDate() !== dia) {
-    return null;
-  }
-  return data;
-}
+// Filtro de período da Agenda (Fase H.4, corrigido na Fase 18): o valor
+// cru de <input type="date"> é DATE-ONLY — ano/mês/dia, não um instante.
+// parseDataCalendario/intervaloDaDataCalendario (src/lib/fuso-horario.ts)
+// substituem o antigo parseDataUTC: a mesma data digitada agora recorta o
+// dia comercial da organização, não o dia UTC.
 
 // -----------------------------------------------------------------------
 // Visão diária da aba Hoje (Fase H.5) — agrupamento por período,
@@ -126,11 +71,13 @@ export function parseDataUTC(valor: string): Date | null {
 
 export type PeriodoDia = "MANHA" | "TARDE" | "NOITE";
 
-// Classifica pelo horário UTC-literal (getUTCHours — nunca o fuso local
-// do navegador/processo, mesma convenção do resto do arquivo). Faixas:
-// Manhã [00:00, 12:00), Tarde [12:00, 18:00), Noite [18:00, 24:00).
-export function periodoDaVisita(scheduledAt: Date): PeriodoDia {
-  const hora = scheduledAt.getUTCHours();
+// Classifica pelo horário DE PAREDE no fuso da organização (Fase 18 —
+// antes era getUTCHours, o que jogava uma visita das 19:00 em São Paulo
+// para o dia seguinte de madrugada e a rotulava "Manhã"). Nunca o fuso do
+// navegador nem o do processo. Faixas: Manhã [00:00, 12:00), Tarde
+// [12:00, 18:00), Noite [18:00, 24:00).
+export function periodoDaVisita(scheduledAt: Date, fuso: string): PeriodoDia {
+  const hora = componentesNoFuso(scheduledAt, fuso).hora;
   if (hora < 12) return "MANHA";
   if (hora < 18) return "TARDE";
   return "NOITE";
@@ -146,11 +93,12 @@ export function periodoDaVisita(scheduledAt: Date): PeriodoDia {
 // dois conceitos. Continua SCHEDULED no banco; isto é só rótulo visual.
 export function horarioJaPassouHoje(
   atividade: { status: StatusScheduledActivity; scheduledAt: Date },
+  fuso: string,
   agora: Date = new Date()
 ): boolean {
   return (
     atividade.status === "SCHEDULED" &&
-    classificarPeriodoAgenda(atividade, agora) === "HOJE" &&
+    classificarPeriodoAgenda(atividade, fuso, agora) === "HOJE" &&
     atividade.scheduledAt < agora
   );
 }
@@ -206,6 +154,7 @@ const JANELA_VISITA_AGORA_MS = JANELA_VISITA_AGORA_MINUTOS * 60 * 1000;
 
 export function acaoOperacionalDaVisita(
   atividade: { status: StatusScheduledActivity; scheduledAt: Date },
+  fuso: string,
   agora: Date = new Date()
 ): AcaoOperacionalVisita {
   if (atividade.status !== "SCHEDULED") return null;
@@ -215,7 +164,7 @@ export function acaoOperacionalDaVisita(
   // diferença numérica de horário seja pequena (ex: 23:58 de ontem vs 00:02
   // de hoje), porque cai em ANTERIORES/PROXIMAS aqui, nunca chega a
   // calcular diffMs abaixo.
-  const periodo = classificarPeriodoAgenda(atividade, agora);
+  const periodo = classificarPeriodoAgenda(atividade, fuso, agora);
   if (periodo === "ANTERIORES") return "RESOLVER_PENDENCIA";
   if (periodo === "PROXIMAS") return null;
 
@@ -257,10 +206,11 @@ export type EstadoPainelAgora<T> =
 
 export function painelAgoraDoDia<T extends { status: StatusScheduledActivity; scheduledAt: Date }>(
   itens: readonly T[],
+  fuso: string,
   agora: Date = new Date()
 ): EstadoPainelAgora<T> {
   const aguardandoResultado = itens.filter(
-    (item) => acaoOperacionalDaVisita(item, agora) === "REGISTRAR_RESULTADO"
+    (item) => acaoOperacionalDaVisita(item, fuso, agora) === "REGISTRAR_RESULTADO"
   );
   if (aguardandoResultado.length > 0) {
     const maisAntiga = aguardandoResultado.reduce((mais, atual) =>
@@ -269,7 +219,9 @@ export function painelAgoraDoDia<T extends { status: StatusScheduledActivity; sc
     return { tipo: "AGUARDANDO_RESULTADO", quantidade: aguardandoResultado.length, maisAntiga };
   }
 
-  const emAndamento = itens.filter((item) => acaoOperacionalDaVisita(item, agora) === "VISITA_AGORA");
+  const emAndamento = itens.filter(
+    (item) => acaoOperacionalDaVisita(item, fuso, agora) === "VISITA_AGORA"
+  );
   if (emAndamento.length > 0) {
     const maisProxima = emAndamento.reduce((mais, atual) =>
       atual.scheduledAt < mais.scheduledAt ? atual : mais

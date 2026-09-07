@@ -12,7 +12,14 @@ import {
   LABEL_ORIGEM_CAPTACAO,
   type OrigemCaptacao,
 } from "@/lib/captacao";
-import { inicioDoDiaUTC, fimDoDiaUTC } from "@/lib/scheduled-activity-date";
+import {
+  chaveDoDia,
+  intervaloDoDia,
+  intervaloDoDiaDeslocado,
+  numeroDoDia,
+  inicioDoDiaPorNumero,
+  componentesNoFuso,
+} from "@/lib/fuso-horario";
 import { TIPOS_EVENTO_ANALYTICS } from "@/lib/analytics-eventos";
 import { oportunidadeElegivel } from "@/lib/oportunidade";
 import { agregarValorFechado, decimalParaValor } from "@/lib/valor-fechamento";
@@ -117,20 +124,24 @@ import {
 // `source`.
 //
 // -----------------------------------------------------------------------
-// TIMEZONE
+// TIMEZONE (Fase 18)
 // -----------------------------------------------------------------------
-// O projeto inteiro trata datas na convenção UTC-literal (ver
-// src/lib/scheduled-activity-date.ts e scheduled-activity-schema.ts:
-// Organization ainda NÃO tem timezone configurável). Manter a mesma
-// convenção aqui é o que garante que um contato e a visita dele caiam no
-// mesmo "dia" nas duas telas. Todo bucket é fatiado com getUTC*/Date.UTC,
-// nunca com getters locais — o resultado independe do TZ do processo
-// Node (provado em analytics-comercial.test.ts sob UTC/São Paulo/Tóquio).
-// Quando existir timezone por organização, este arquivo e
-// scheduled-activity-date.ts mudam juntos.
+// Este arquivo previa a mudança: "quando existir timezone por
+// organização, este arquivo e scheduled-activity-date.ts mudam juntos".
+// Foi o que aconteceu. Todo limite de período e todo balde do gráfico
+// são resolvidos no DIA CALENDÁRIO DA ORGANIZAÇÃO
+// (Organization.timezone, fallback explícito UTC), pelos mesmos helpers
+// de src/lib/fuso-horario.ts que a Agenda e a Central usam — é isso que
+// mantém um contato e a visita dele no mesmo "dia" nas três telas.
+//
+// O que NÃO mudou: cada métrica continua recortada pela SUA data
+// (Interaction.occurredAt, PropertyInterest.createdAt/closedAt,
+// Payment.paidAt) — a Fase 18 mexeu só no LIMITE da janela, nunca em
+// qual campo cada coorte usa. E nenhum instante persistido foi tocado.
+//
+// O resultado continua independente do TZ do processo Node (provado em
+// analytics-comercial.test.ts sob UTC/São Paulo/Tóquio).
 // =======================================================================
-
-const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
 // Ordem canônica do catálogo — usada só pra desempate estável quando dois
 // origens têm a mesma contagem (a ordenação primária é por volume).
@@ -201,7 +212,8 @@ export function interpretarPeriodoAnalytics(params: { periodo?: string }): Perio
 export type JanelaAnalytics = { inicio: Date; fim: Date };
 export type JanelasAnalytics = { dias: number; atual: JanelaAnalytics; anterior: JanelaAnalytics };
 
-// Janela em DIAS CALENDÁRIO UTC fechados (não milissegundos rolantes como
+// Janela em DIAS CALENDÁRIO DA ORGANIZAÇÃO fechados (Fase 18 — antes eram
+// dias calendário UTC; não são milissegundos rolantes como
 // resolverIntervaloPeriodo do Pipeline): a série temporal precisa de
 // baldes de dia inteiro, e uma janela rolante faria o primeiro balde
 // nascer pela metade — um dia real apareceria menor do que foi só por
@@ -215,17 +227,27 @@ export type JanelasAnalytics = { dias: number; atual: JanelaAnalytics; anterior:
 // O último dia da janela atual é o dia de HOJE, ainda em curso — fato
 // inerente a qualquer janela "até agora", e dito explicitamente na tela
 // (ver AnalyticsPeriodoResumo).
+// A SEMÂNTICA DECLARADA NA UI FICA INTACTA (Fase 18): continuam sendo N
+// dias de calendário fechados terminando hoje, com o período anterior de
+// mesmo comprimento colado antes. O que muda é de quem é o calendário —
+// da organização, não do UTC. Toda a aritmética de dias passa por
+// intervaloDoDiaDeslocado/numeroDoDia, que somam DIAS de calendário e
+// nunca 24h fixas: numa janela que atravessa DST, "30 dias atrás" é 30
+// voltas do calendário mesmo que sejam 719 ou 721 horas.
 export function resolverJanelasAnalytics(
   periodo: PeriodoAnalytics,
+  fuso: string,
   agora: Date = new Date()
 ): JanelasAnalytics {
   const dias = PERIODO_ANALYTICS_DIAS[periodo];
 
-  const fimAtual = fimDoDiaUTC(agora);
-  const inicioAtual = inicioDoDiaUTC(new Date(agora.getTime() - (dias - 1) * MS_POR_DIA));
+  const fimAtual = intervaloDoDia(agora, fuso).fim;
+  const inicioAtual = intervaloDoDiaDeslocado(agora, fuso, -(dias - 1)).inicio;
 
+  // 1ms antes do início da atual: as duas janelas se tocam sem sobrepor
+  // nem deixar buraco, independente de quantas horas o dia teve.
   const fimAnterior = new Date(inicioAtual.getTime() - 1);
-  const inicioAnterior = new Date(inicioAtual.getTime() - dias * MS_POR_DIA);
+  const inicioAnterior = intervaloDoDiaDeslocado(agora, fuso, -(2 * dias - 1)).inicio;
 
   return {
     dias,
@@ -301,46 +323,59 @@ export type PontoSerie = {
   total: number;
 };
 
-function diaMesUTC(data: Date): string {
-  return `${String(data.getUTCDate()).padStart(2, "0")}/${String(data.getUTCMonth() + 1).padStart(2, "0")}`;
+// Rótulos do eixo lidos no calendário da organização (Fase 18 — antes
+// getUTCDate/getUTCMonth): o balde do dia 07 precisa se chamar "07/09"
+// para quem opera em São Paulo, não "08/09" porque o instante de início
+// do dia é 03:00 UTC.
+function diaMes(data: Date, fuso: string): string {
+  const c = componentesNoFuso(data, fuso);
+  return `${String(c.dia).padStart(2, "0")}/${String(c.mes).padStart(2, "0")}`;
 }
 
-function diaMesAnoUTC(data: Date): string {
-  return `${diaMesUTC(data)}/${data.getUTCFullYear()}`;
+function diaMesAno(data: Date, fuso: string): string {
+  return `${diaMes(data, fuso)}/${componentesNoFuso(data, fuso).ano}`;
 }
 
 // Baldes SEMPRE materializados do primeiro ao último, inclusive os
 // vazios: um dia sem contato é a informação "ninguém procurou nesta
 // terça", não um ponto que some e faz segunda ligar direto em quarta
 // como se fossem consecutivos.
+// Toda a bucketização é feita em NÚMERO DE DIA CALENDÁRIO (Fase 18),
+// nunca em divisão de milissegundos: um dia de 23h ou 25h por causa de
+// DST deslocaria todos os baldes seguintes se a conta fosse
+// (instante - início) / 24h. Dois instantes caem no mesmo balde quando
+// caem no mesmo dia comercial da organização — que é a própria definição
+// do gráfico.
 export function construirSerie(
   eventos: readonly { occurredAt: Date }[],
   janela: JanelaAnalytics,
-  granularidade: Granularidade
+  granularidade: Granularidade,
+  fuso: string
 ): PontoSerie[] {
   const diasPorBalde = granularidade === "SEMANA" ? 7 : 1;
-  const totalDias = Math.round((janela.fim.getTime() + 1 - janela.inicio.getTime()) / MS_POR_DIA);
+  const diaInicial = numeroDoDia(janela.inicio, fuso);
+  const totalDias = numeroDoDia(janela.fim, fuso) - diaInicial + 1;
   const quantidadeBaldes = Math.ceil(totalDias / diasPorBalde);
 
   const pontos: PontoSerie[] = [];
   for (let i = 0; i < quantidadeBaldes; i++) {
-    const inicioBalde = new Date(janela.inicio.getTime() + i * diasPorBalde * MS_POR_DIA);
-    const fimBalde = new Date(inicioBalde.getTime() + (diasPorBalde - 1) * MS_POR_DIA);
+    const inicioBalde = inicioDoDiaPorNumero(diaInicial + i * diasPorBalde, fuso);
+    const fimBalde = inicioDoDiaPorNumero(diaInicial + i * diasPorBalde + diasPorBalde - 1, fuso);
     pontos.push({
-      chave: inicioBalde.toISOString().slice(0, 10),
-      rotulo: diaMesUTC(inicioBalde),
+      // Chave = dia calendário da organização ("YYYY-MM-DD"), nunca
+      // toISOString().slice(0,10), que devolveria o dia UTC.
+      chave: chaveDoDia(inicioBalde, fuso),
+      rotulo: diaMes(inicioBalde, fuso),
       rotuloLongo:
         diasPorBalde === 1
-          ? diaMesAnoUTC(inicioBalde)
-          : `${diaMesUTC(inicioBalde)} a ${diaMesUTC(fimBalde)}`,
+          ? diaMesAno(inicioBalde, fuso)
+          : `${diaMes(inicioBalde, fuso)} a ${diaMes(fimBalde, fuso)}`,
       total: 0,
     });
   }
 
   for (const evento of eventos) {
-    const deslocamentoDias = Math.floor(
-      (evento.occurredAt.getTime() - janela.inicio.getTime()) / MS_POR_DIA
-    );
+    const deslocamentoDias = numeroDoDia(evento.occurredAt, fuso) - diaInicial;
     // Defensivo: um evento fora da janela (nunca deveria chegar aqui, o
     // WHERE já filtra) é ignorado em vez de estourar o array.
     if (deslocamentoDias < 0) continue;
@@ -947,10 +982,15 @@ export type AnalyticsComercial = {
 // mesmo padrão defensivo em camadas do resto do projeto.
 export async function buscarAnalyticsComercial(
   organizationId: string,
+  // Fuso comercial da organização — obrigatório e sem padrão, mesma
+  // convenção da Agenda e da Central. Resolvido uma vez pela página e
+  // repassado: nenhuma consulta de fuso por métrica, por evento ou por
+  // balde do gráfico.
+  fuso: string,
   opcoes: { periodo?: PeriodoAnalytics; agora?: Date } = {}
 ): Promise<AnalyticsComercial> {
   const periodo = opcoes.periodo ?? PERIODO_ANALYTICS_PADRAO;
-  const janelas = resolverJanelasAnalytics(periodo, opcoes.agora ?? new Date());
+  const janelas = resolverJanelasAnalytics(periodo, fuso, opcoes.agora ?? new Date());
   const granularidade = granularidadeDe(periodo);
 
   return withOrganization(organizationId, async () => {
@@ -1442,7 +1482,7 @@ export async function buscarAnalyticsComercial(
         (e) => e.personId
       ),
       interacoesSemOrigem,
-      serie: construirSerie(interacoes, janelas.atual, granularidade),
+      serie: construirSerie(interacoes, janelas.atual, granularidade, fuso),
       origens: distribuirPorOrigem(interacoes),
       topImoveis,
       funil,

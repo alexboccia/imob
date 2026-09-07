@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatarHora } from "@/lib/scheduled-activity-date";
+import { formatarHoraNoFuso } from "@/lib/fuso-horario";
 import type { EstadoPainelAgora } from "@/lib/scheduled-activity-date";
 import type { ItemAgenda } from "@/lib/agenda";
 
@@ -17,11 +17,11 @@ import type { ItemAgenda } from "@/lib/agenda";
 
 // Bloco de cliente/imóvel/links compartilhado entre VISITA_AGORA e
 // PROXIMA_VISITA — só o título acima muda entre os dois estados.
-function BlocoVisita({ visita }: { visita: ItemAgenda }) {
+function BlocoVisita({ visita, fuso }: { visita: ItemAgenda; fuso: string }) {
   return (
     <>
       <p className="font-medium">
-        {formatarHora(visita.scheduledAt.toISOString())}
+        {formatarHoraNoFuso(visita.scheduledAt, fuso)}
         {visita.person ? ` · ${visita.person.name}` : ""}
       </p>
       {visita.property && <p className="text-muted-foreground">{visita.property.title}</p>}
@@ -43,7 +43,13 @@ function BlocoVisita({ visita }: { visita: ItemAgenda }) {
   );
 }
 
-export function PainelAgoraAgenda({ estado }: { estado: EstadoPainelAgora<ItemAgenda> }) {
+export function PainelAgoraAgenda({
+  estado,
+  fuso,
+}: {
+  estado: EstadoPainelAgora<ItemAgenda>;
+  fuso: string;
+}) {
   if (estado.tipo === "VAZIO") return null;
 
   if (estado.tipo === "AGUARDANDO_RESULTADO") {
@@ -57,7 +63,7 @@ export function PainelAgoraAgenda({ estado }: { estado: EstadoPainelAgora<ItemAg
               : `${estado.quantidade} visitas aguardando resultado`}
             <span className="text-xs">
               {" "}
-              (mais antiga: {formatarHora(estado.maisAntiga.scheduledAt.toISOString())})
+              (mais antiga: {formatarHoraNoFuso(estado.maisAntiga.scheduledAt, fuso)})
             </span>
           </p>
         </CardContent>
@@ -70,7 +76,7 @@ export function PainelAgoraAgenda({ estado }: { estado: EstadoPainelAgora<ItemAg
       <Card className="mb-4">
         <CardContent className="text-sm space-y-1 py-3">
           <p className="font-semibold">Visita agora</p>
-          <BlocoVisita visita={estado.visita} />
+          <BlocoVisita visita={estado.visita} fuso={fuso} />
         </CardContent>
       </Card>
     );
@@ -81,7 +87,7 @@ export function PainelAgoraAgenda({ estado }: { estado: EstadoPainelAgora<ItemAg
       <CardContent className="text-sm space-y-1 py-3">
         <p className="font-semibold">Agora</p>
         <p className="text-muted-foreground">Próxima visita</p>
-        <BlocoVisita visita={estado.visita} />
+        <BlocoVisita visita={estado.visita} fuso={fuso} />
       </CardContent>
     </Card>
   );

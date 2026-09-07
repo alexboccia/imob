@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireOrganizationId } from "@/lib/tenant";
 import { auth } from "@/lib/auth";
 import { hasModule } from "@/lib/entitlements";
+import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import { buscarCentralTrabalho } from "@/lib/central-trabalho";
 import { CentralTrabalho } from "@/components/admin/CentralTrabalho";
 import { buscarMetricasDashboard } from "@/lib/dashboard";
@@ -29,11 +30,15 @@ export default async function DashboardPage() {
   // Pipeline já aplicam — a Central lê exatamente esses dados.
   const membroId = session?.user.organizationMemberId ?? null;
   const temCrm = await hasModule(organizationId, "crm");
+  // Fase 18 — o fuso comercial é resolvido UMA vez por carregamento (é
+  // cacheado por organização) e repassado à Central e aos contadores:
+  // "hoje" e "atrasadas" precisam ser o mesmo dia nas duas leituras.
+  const fuso = await buscarFusoOrganizacao(organizationId);
   const central =
-    membroId && temCrm ? await buscarCentralTrabalho(organizationId, membroId) : null;
+    membroId && temCrm ? await buscarCentralTrabalho(organizationId, membroId, fuso) : null;
 
   const [metricas, agenda] = await Promise.all([
-    buscarMetricasDashboard(organizationId),
+    buscarMetricasDashboard(organizationId, fuso),
     // Reaproveita contarAgenda (já existente, já testado via H.4/H.5) só
     // pra ler `.atrasadas` — nenhuma query nova, nenhuma lógica de
     // "atraso" duplicada aqui. Ver relatório final, seção "Atenção
@@ -42,7 +47,7 @@ export default async function DashboardPage() {
     // tem uma contagem já pronta e barata — "negociações que precisam de
     // atenção" (Pipeline) exigiria carregar o board aberto inteiro só
     // pra extrair um número, e "imóveis parados" já é um KPI acima.
-    contarAgenda(organizationId),
+    contarAgenda(organizationId, fuso),
   ]);
 
   return (
@@ -55,9 +60,10 @@ export default async function DashboardPage() {
             caixa em vez de quebrar — mesma proteção que já existia no
             h1 do Dashboard antes deste redesenho, mantida aqui. */}
         <h1 className="min-w-0 break-words text-2xl font-semibold">
-          {/* Saudação sem "bom dia/boa tarde": o produto trabalha em UTC
-              literal (ver central-trabalho.ts) e não sabe a hora local de
-              quem olha — afirmar período do dia seria chutar. */}
+          {/* Saudação sem "bom dia/boa tarde": mesmo com fuso da
+              organização (Fase 18), o produto sabe o dia comercial — não
+              a hora local de QUEM olha. Afirmar período do dia
+              continuaria sendo chute. */}
           {session?.user.name ? `Olá, ${session.user.name}` : "Início"}
         </h1>
         <p className="text-sm text-muted-foreground">O que precisa da sua atenção agora.</p>
@@ -66,7 +72,7 @@ export default async function DashboardPage() {
       {/* AÇÃO primeiro, contexto depois: a Central operacional abre a
           tela, e a visão agregada da operação (KPIs e gráficos, que já
           existiam e continuam valendo) segue abaixo. */}
-      {central && <CentralTrabalho dados={central} />}
+      {central && <CentralTrabalho dados={central} fuso={fuso} />}
 
       <div className="min-w-0 pt-2">
         <h2 className="min-w-0 break-words text-lg font-semibold">Visão geral</h2>

@@ -6,6 +6,7 @@
 import { formatarPreco } from "@/lib/format";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
+import { numeroDoDia, formatarHoraNoFuso, formatarDiaMesNoFuso } from "@/lib/fuso-horario";
 
 // ---------- Interesse (resumo de PersonPreference) ----------
 
@@ -68,25 +69,35 @@ export function resumirInteresse(preferencia: PreferenciaResumo | null): string[
 
 export type InteracaoResumo = { occurredAt: Date; type: string };
 
-function formatarDataContato(data: Date): string {
-  const agora = new Date();
-  const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
-  const dia = new Date(data.getFullYear(), data.getMonth(), data.getDate());
-  const diffDias = Math.round((hoje.getTime() - dia.getTime()) / 86_400_000);
-  const hora = data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+// "Hoje"/"Ontem" são conceitos de CALENDÁRIO e passaram a ser resolvidos
+// no fuso da organização (Fase 18). Antes esta função usava getFullYear/
+// getMonth/getDate simples, ou seja, o fuso do PROCESSO: em produção
+// (contêiner UTC) um contato das 22:00 em São Paulo já aparecia como
+// "Ontem" para quem o registrou minutos antes.
+//
+// A distância em dias vem de numeroDoDia (dia de calendário), nunca de
+// uma divisão por 24h — a conta continua certa atravessando DST.
+function formatarDataContato(data: Date, fuso: string, agora: Date = new Date()): string {
+  const diffDias = numeroDoDia(agora, fuso) - numeroDoDia(data, fuso);
+  const hora = formatarHoraNoFuso(data, fuso);
 
   if (diffDias === 0) return `Hoje, ${hora}`;
   if (diffDias === 1) return `Ontem, ${hora}`;
-  return `${data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}, ${hora}`;
+  return `${formatarDiaMesNoFuso(data, fuso)}, ${hora}`;
 }
 
 // null = "nenhum contato registrado ainda" — quem chama decide o texto de
 // fallback, mesma convenção de resumirInteresse.
 export function resumirUltimoContato(
-  interacao: InteracaoResumo | null
+  interacao: InteracaoResumo | null,
+  fuso: string,
+  agora: Date = new Date()
 ): { texto: string; tipoLabel: string } | null {
   if (!interacao) return null;
-  return { texto: formatarDataContato(interacao.occurredAt), tipoLabel: interacao.type };
+  return {
+    texto: formatarDataContato(interacao.occurredAt, fuso, agora),
+    tipoLabel: interacao.type,
+  };
 }
 
 // ---------- Próxima ação (visita agendada > PropertyInterest aberto > nenhuma) ----------
@@ -100,13 +111,16 @@ export type ProximaAcaoResumo = { texto: string; dataTexto: string | null; urgen
 // tal qual, nunca reimplementada aqui); 3) null ("sem próxima ação" —
 // fallback honesto, sem inventar narrativa pra quem não tem nenhum
 // PropertyInterest nem visita).
-export function resumirProximaAcao(params: {
-  proximaVisita: { scheduledAt: Date } | null;
-  interesseAberto: { stage: PropertyInterestStage; propertyStatus: PropertyStatus } | null;
-}): ProximaAcaoResumo | null {
+export function resumirProximaAcao(
+  params: {
+    proximaVisita: { scheduledAt: Date } | null;
+    interesseAberto: { stage: PropertyInterestStage; propertyStatus: PropertyStatus } | null;
+  },
+  fuso: string
+): ProximaAcaoResumo | null {
   if (params.proximaVisita) {
     const data = params.proximaVisita.scheduledAt;
-    const dataTexto = `${data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+    const dataTexto = `${formatarDiaMesNoFuso(data, fuso)} às ${formatarHoraNoFuso(data, fuso)}`;
     return { texto: "Visita agendada", dataTexto, urgente: false };
   }
 

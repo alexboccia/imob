@@ -17,6 +17,7 @@ import {
 } from "@/lib/pipeline";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { CardPipeline } from "@/components/admin/CardPipeline";
+import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
 import { auth } from "@/lib/auth";
 import { PipelineKpiCards } from "@/components/admin/pipeline/PipelineKpiCards";
@@ -95,6 +96,11 @@ export default async function PipelinePage({
   }
 
   const filtros = interpretarFiltrosPipeline(params);
+  // Fase 18 — fuso comercial da organização, resolvido UMA vez e
+  // repassado às queries e a todos os cards: "pendência" é uma visita
+  // cujo dia calendário da organização já passou, a mesma definição que
+  // Agenda e Central usam.
+  const fuso = await buscarFusoOrganizacao(organizationId);
   // Período é deliberadamente independente de q/visao/resultado — só
   // afeta o resumo gerencial (KPIs/Insights), nunca o Kanban/lista abaixo.
   // buscarMetricasPipeline nunca reaproveita os itens já carregados de
@@ -150,7 +156,7 @@ export default async function PipelinePage({
   const Insights = <PipelineInsights analytics={analyticsHistorico} />;
 
   if (filtros.visao === "ABERTA") {
-    const colunas = await buscarPipelineAberto(organizationId, {
+    const colunas = await buscarPipelineAberto(organizationId, fuso, {
       busca: filtros.busca,
       responsavel: filtros.responsavel,
     });
@@ -165,7 +171,12 @@ export default async function PipelinePage({
       for (const item of colunas[coluna]) {
         prioridadesPorItem.set(
           item.id,
-          classificarPrioridadePipeline(item, analyticsHistorico.tempoMedioHistorico[coluna], agora)
+          classificarPrioridadePipeline(
+            item,
+            analyticsHistorico.tempoMedioHistorico[coluna],
+            fuso,
+            agora
+          )
         );
       }
     }
@@ -242,6 +253,7 @@ export default async function PipelinePage({
                     {colunasExibidas[coluna].map((item) => (
                       <CardPipeline
                         key={item.id}
+                        fuso={fuso}
                         item={item}
                         prioridade={prioridadesPorItem.get(item.id)}
                         membros={membrosAtribuiveis}
@@ -290,7 +302,7 @@ export default async function PipelinePage({
       ) : (
         <div className="grid max-w-2xl grid-cols-1 gap-2">
           {itens.map((item) => (
-            <CardPipeline key={item.id} item={item} membros={membrosAtribuiveis} />
+            <CardPipeline key={item.id} item={item} fuso={fuso} membros={membrosAtribuiveis} />
           ))}
         </div>
       )}

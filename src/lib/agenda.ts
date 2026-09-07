@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { withOrganization } from "@/lib/tenant-context";
 import { normalizarBusca } from "@/lib/pagination";
+import { type StatusScheduledActivity } from "@/lib/scheduled-activity-date";
 import {
-  inicioDoDiaUTC,
-  fimDoDiaUTC,
-  parseDataUTC,
-  type StatusScheduledActivity,
-} from "@/lib/scheduled-activity-date";
+  intervaloDoDia,
+  intervaloDaDataCalendario,
+  parseDataCalendario,
+  type DataCalendario,
+} from "@/lib/fuso-horario";
 import type { Prisma } from "@/generated/prisma/client";
 
 // Agenda do corretor (Fase H.3, evoluída na H.4) — projeção operacional de
@@ -109,8 +110,13 @@ const STATUS_AGENDA_VALIDOS: readonly FiltroStatusAgenda[] = [
 
 export type FiltrosAgenda = {
   busca: string;
-  de: Date | null;
-  ate: Date | null;
+  // DATE-ONLY (Fase 18): o que o usuário escolheu é uma data de
+  // calendário, não um instante. Guardar como Date aqui obrigaria a
+  // decidir o fuso no parse da URL, longe de onde a organização é
+  // conhecida; a conversão para instantes acontece só na query, com o
+  // fuso em mãos (ver condicaoIntervalo).
+  de: DataCalendario | null;
+  ate: DataCalendario | null;
   // true quando `de` e `ate` foram ambos informados e `de` é depois de
   // `ate` — nesse caso as duas datas são IGNORADAS (nunca trocadas
   // silenciosamente entre si) e o caller deve avisar o usuário. Não é
@@ -132,9 +138,13 @@ export function interpretarFiltrosAgenda(params: {
 }): FiltrosAgenda {
   const busca = normalizarBusca(params.q);
 
-  const deBruta = params.de ? parseDataUTC(params.de) : null;
-  const ateBruta = params.ate ? parseDataUTC(params.ate) : null;
-  const intervaloInvalido = deBruta !== null && ateBruta !== null && deBruta > ateBruta;
+  const deBruta = params.de ? parseDataCalendario(params.de) : null;
+  const ateBruta = params.ate ? parseDataCalendario(params.ate) : null;
+  // Comparação entre datas de calendário, sem passar por instante: a
+  // ordem de duas datas não depende de fuso nenhum.
+  const ordinal = (d: DataCalendario) => d.ano * 10_000 + d.mes * 100 + d.dia;
+  const intervaloInvalido =
+    deBruta !== null && ateBruta !== null && ordinal(deBruta) > ordinal(ateBruta);
 
   const statusBruto = (params.status ?? "").trim().toUpperCase();
   const status = ehFiltroStatusValido(statusBruto) ? statusBruto : "TODAS";
@@ -173,12 +183,12 @@ function condicaoBusca(busca: string, organizationId: string): WhereAgenda | nul
 // `OR`/outras chaves no `where` (nunca dentro de um `AND` isolado só por
 // si), o Prisma já aplica isso como "E" sobre qualquer outra condição do
 // mesmo objeto, inclusive as 3 variantes do OR de Anteriores.
-function condicaoIntervalo(filtros: FiltrosAgenda): WhereAgenda | null {
+function condicaoIntervalo(filtros: FiltrosAgenda, fuso: string): WhereAgenda | null {
   if (!filtros.de && !filtros.ate) return null;
   return {
     scheduledAt: {
-      ...(filtros.de ? { gte: inicioDoDiaUTC(filtros.de) } : {}),
-      ...(filtros.ate ? { lte: fimDoDiaUTC(filtros.ate) } : {}),
+      ...(filtros.de ? { gte: intervaloDaDataCalendario(filtros.de, fuso).inicio } : {}),
+      ...(filtros.ate ? { lte: intervaloDaDataCalendario(filtros.ate, fuso).fim } : {}),
     },
   };
 }
@@ -195,8 +205,13 @@ function condicaoIntervalo(filtros: FiltrosAgenda): WhereAgenda | null {
 // quando ele é uma chave direta do `where`, não quando está aninhado
 // dentro de um `AND`. Sem isso, qualquer busca/período ativo faria a
 // consulta cair no guard "sem organizationId explícito" e lançar.
-function combinarWhere(base: WhereAgenda, filtros: FiltrosAgenda, organizationId: string): WhereAgenda {
-  const extras = [condicaoBusca(filtros.busca, organizationId), condicaoIntervalo(filtros)].filter(
+function combinarWhere(
+  base: WhereAgenda,
+  filtros: FiltrosAgenda,
+  organizationId: string,
+  fuso: string
+): WhereAgenda {
+  const extras = [condicaoBusca(filtros.busca, organizationId), condicaoIntervalo(filtros, fuso)].filter(
     (condicao): condicao is WhereAgenda => condicao !== null
   );
   if (extras.length === 0) return base;
@@ -220,8 +235,12 @@ function statusIncompativelComHojeOuProximas(status: FiltroStatusAgenda): boolea
 // (só existe SCHEDULED em Anteriores quando o dia já passou — é a própria
 // definição de atrasada). TODAS mantém a união original (COMPLETED |
 // CANCELLED | SCHEDULED atrasada) já usada desde a H.3.
-function condicaoStatusAnteriores(status: FiltroStatusAgenda, agora: Date): WhereAgenda {
-  const inicioHoje = inicioDoDiaUTC(agora);
+function condicaoStatusAnteriores(
+  status: FiltroStatusAgenda,
+  fuso: string,
+  agora: Date
+): WhereAgenda {
+  const inicioHoje = intervaloDoDia(agora, fuso).inicio;
   if (status === "CONCLUIDAS") return { status: "COMPLETED" };
   if (status === "CANCELADAS") return { status: "CANCELLED" };
   if (status === "AGENDADAS" || status === "ATRASADAS") {
@@ -236,25 +255,30 @@ function condicaoStatusAnteriores(status: FiltroStatusAgenda, agora: Date): Wher
   };
 }
 
-// HOJE: SCHEDULED + scheduledAt dentro do dia UTC-literal atual. Sem
+// HOJE: SCHEDULED + scheduledAt dentro do dia calendário da
+// ORGANIZAÇÃO (Fase 18 — antes era o dia UTC literal). Sem
 // limite — o volume de visitas de um único dia nunca é grande o bastante
 // pra justificar paginação.
 export async function buscarAgendaHoje(
   organizationId: string,
+  // Fuso comercial da organização — obrigatório e sem padrão: todo
+  // conceito de dia aqui é da organização, nunca do processo.
+  fuso: string,
   opcoes: { agora?: Date; filtros?: FiltrosAgenda } = {}
 ): Promise<ItemAgenda[]> {
   const agora = opcoes.agora ?? new Date();
   const filtros = opcoes.filtros;
   if (filtros && statusIncompativelComHojeOuProximas(filtros.status)) return [];
+  const hoje = intervaloDoDia(agora, fuso);
 
   return withOrganization(organizationId, async () => {
     const base: WhereAgenda = {
       organizationId,
       type: "VISIT",
       status: "SCHEDULED",
-      scheduledAt: { gte: inicioDoDiaUTC(agora), lte: fimDoDiaUTC(agora) },
+      scheduledAt: { gte: hoje.inicio, lte: hoje.fim },
     };
-    const where = filtros ? combinarWhere(base, filtros, organizationId) : base;
+    const where = filtros ? combinarWhere(base, filtros, organizationId, fuso) : base;
     const linhas = await prisma.scheduledActivity.findMany({
       where,
       orderBy: { scheduledAt: "asc" },
@@ -270,21 +294,25 @@ export async function buscarAgendaHoje(
 // candidato, nunca justifica paginação nova aqui.
 export async function buscarAgendaProximas(
   organizationId: string,
+  // Fuso comercial da organização — obrigatório e sem padrão: todo
+  // conceito de dia aqui é da organização, nunca do processo.
+  fuso: string,
   opcoes: { agora?: Date; limite?: number; filtros?: FiltrosAgenda } = {}
 ): Promise<ItemAgenda[]> {
   const agora = opcoes.agora ?? new Date();
   const limite = opcoes.limite ?? LIMITE_PROXIMAS;
   const filtros = opcoes.filtros;
   if (filtros && statusIncompativelComHojeOuProximas(filtros.status)) return [];
+  const hoje = intervaloDoDia(agora, fuso);
 
   return withOrganization(organizationId, async () => {
     const base: WhereAgenda = {
       organizationId,
       type: "VISIT",
       status: "SCHEDULED",
-      scheduledAt: { gt: fimDoDiaUTC(agora) },
+      scheduledAt: { gt: hoje.fim },
     };
-    const where = filtros ? combinarWhere(base, filtros, organizationId) : base;
+    const where = filtros ? combinarWhere(base, filtros, organizationId, fuso) : base;
     const linhas = await prisma.scheduledActivity.findMany({
       where,
       orderBy: { scheduledAt: "asc" },
@@ -301,6 +329,9 @@ export async function buscarAgendaProximas(
 // skip/take, resolvida pelo caller com src/lib/pagination.ts.
 export async function buscarAgendaAnteriores(
   organizationId: string,
+  // Fuso comercial da organização — obrigatório e sem padrão: todo
+  // conceito de dia aqui é da organização, nunca do processo.
+  fuso: string,
   opcoes: { agora?: Date; skip?: number; take?: number; filtros?: FiltrosAgenda } = {}
 ): Promise<ItemAgenda[]> {
   const agora = opcoes.agora ?? new Date();
@@ -312,9 +343,9 @@ export async function buscarAgendaAnteriores(
     const base: WhereAgenda = {
       organizationId,
       type: "VISIT",
-      ...condicaoStatusAnteriores(filtros?.status ?? "TODAS", agora),
+      ...condicaoStatusAnteriores(filtros?.status ?? "TODAS", fuso, agora),
     };
-    const where = filtros ? combinarWhere(base, filtros, organizationId) : base;
+    const where = filtros ? combinarWhere(base, filtros, organizationId, fuso) : base;
     const linhas = await prisma.scheduledActivity.findMany({
       where,
       orderBy: { scheduledAt: "desc" },
@@ -334,9 +365,13 @@ export async function buscarAgendaAnteriores(
 // linha.
 export async function contarAgenda(
   organizationId: string,
+  // Fuso comercial da organização — obrigatório e sem padrão: todo
+  // conceito de dia aqui é da organização, nunca do processo.
+  fuso: string,
   opcoes: { agora?: Date } = {}
 ): Promise<ContadoresAgenda> {
   const agora = opcoes.agora ?? new Date();
+  const dia = intervaloDoDia(agora, fuso);
   return withOrganization(organizationId, async () => {
     const [hoje, proximas, anteriores, atrasadas] = await Promise.all([
       prisma.scheduledActivity.count({
@@ -344,7 +379,7 @@ export async function contarAgenda(
           organizationId,
           type: "VISIT",
           status: "SCHEDULED",
-          scheduledAt: { gte: inicioDoDiaUTC(agora), lte: fimDoDiaUTC(agora) },
+          scheduledAt: { gte: dia.inicio, lte: dia.fim },
         },
       }),
       prisma.scheduledActivity.count({
@@ -352,7 +387,7 @@ export async function contarAgenda(
           organizationId,
           type: "VISIT",
           status: "SCHEDULED",
-          scheduledAt: { gt: fimDoDiaUTC(agora) },
+          scheduledAt: { gt: dia.fim },
         },
       }),
       prisma.scheduledActivity.count({
@@ -362,7 +397,7 @@ export async function contarAgenda(
           OR: [
             { status: "COMPLETED" },
             { status: "CANCELLED" },
-            { status: "SCHEDULED", scheduledAt: { lt: inicioDoDiaUTC(agora) } },
+            { status: "SCHEDULED", scheduledAt: { lt: dia.inicio } },
           ],
         },
       }),
@@ -371,7 +406,7 @@ export async function contarAgenda(
           organizationId,
           type: "VISIT",
           status: "SCHEDULED",
-          scheduledAt: { lt: inicioDoDiaUTC(agora) },
+          scheduledAt: { lt: dia.inicio },
         },
       }),
     ]);
@@ -397,11 +432,13 @@ export type ResumoDiario = { agendadas: number; concluidas: number; canceladas: 
 
 export async function contarResumoDiario(
   organizationId: string,
+  // Fuso comercial da organização — obrigatório e sem padrão: todo
+  // conceito de dia aqui é da organização, nunca do processo.
+  fuso: string,
   opcoes: { agora?: Date } = {}
 ): Promise<ResumoDiario> {
   const agora = opcoes.agora ?? new Date();
-  const inicioHoje = inicioDoDiaUTC(agora);
-  const fimHoje = fimDoDiaUTC(agora);
+  const { inicio: inicioHoje, fim: fimHoje } = intervaloDoDia(agora, fuso);
   return withOrganization(organizationId, async () => {
     const [agendadas, concluidas, canceladas] = await Promise.all([
       prisma.scheduledActivity.count({

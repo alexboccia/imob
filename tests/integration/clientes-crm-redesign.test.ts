@@ -235,8 +235,8 @@ describe("Listagem de Clientes redesenhada — fiação de dados (Prisma + tenan
 
     return {
       interesseLinhas: resumirInteresse(pessoa.preference),
-      ultimoContato: resumirUltimoContato(pessoa.interactions[0] ?? null),
-      proximaAcao: resumirProximaAcao({ proximaVisita: pessoa.scheduledActivities[0] ?? null, interesseAberto }),
+      ultimoContato: resumirUltimoContato(pessoa.interactions[0] ?? null, "UTC"),
+      proximaAcao: resumirProximaAcao({ proximaVisita: pessoa.scheduledActivities[0] ?? null, interesseAberto }, "UTC"),
     };
   }
 

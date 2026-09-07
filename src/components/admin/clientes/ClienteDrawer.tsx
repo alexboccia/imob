@@ -23,6 +23,7 @@ import {
 import { buscarResumoClienteCrm, type ResumoClienteDrawer } from "@/app/app/clientes/actions";
 import type { ClienteRow } from "@/app/app/clientes/columns";
 import { MessageCircle, Phone, Mail, CalendarPlus, Heart, Eye, FileText, ListChecks } from "lucide-react";
+import { formatarDiaMesNoFuso, formatarHoraNoFuso } from "@/lib/fuso-horario";
 
 function iniciais(nome: string): string {
   const partes = nome.trim().split(/\s+/);
@@ -40,10 +41,15 @@ function iniciais(nome: string): string {
 // por linha da listagem.
 export function ClienteDrawer({
   cliente,
+  fuso,
   open,
   onOpenChange,
 }: {
   cliente: ClienteRow | null;
+  // Fase 18 — sem isto, toLocaleString formatava no fuso do PROCESSO
+  // (UTC no contêiner, São Paulo em dev) e, na hidratação, no fuso do
+  // NAVEGADOR: dois textos diferentes para o mesmo instante.
+  fuso: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -230,12 +236,10 @@ export function ClienteDrawer({
                       {interacao.propertyTitulo && ` · ${interacao.propertyTitulo}`}
                     </p>
                     <p className="text-muted-foreground">
-                      {interacao.occurredAt.toLocaleString("pt-BR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {`${formatarDiaMesNoFuso(interacao.occurredAt, fuso)} ${formatarHoraNoFuso(
+                        interacao.occurredAt,
+                        fuso
+                      )}`}
                     </p>
                     {interacao.notes && <p className="mt-0.5 text-muted-foreground">{interacao.notes}</p>}
                   </li>

@@ -446,7 +446,7 @@ describe("membros", () => {
     // A parcela NÃO é apagada nem redistribuída.
     expect(Number(linha.allocationValue)).toBe(12000);
 
-    const analytics = await buscarAnalyticsComercial(c.organization.id);
+    const analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     const dela = analytics.participacao.participantes.find((p) => p.nome === "Dina Corretora");
     expect(dela?.inativo).toBe(true);
     expect(dela?.comissaoAtribuida).toBe(12000);
@@ -531,7 +531,7 @@ describe("analytics da participação", () => {
     const { interesseId } = await negocioGanho(c, { comissao: "40000" });
     await adicionar(interesseId, c.membro.id, "25000");
 
-    const analytics = await buscarAnalyticsComercial(c.organization.id);
+    const analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     expect(analytics.participacao.comissaoAtribuida).toBe(25000);
     expect(analytics.participacao.comissaoNaoDistribuida).toBe(15000);
     expect(analytics.participacao.semDivisao).toBe(false);
@@ -542,7 +542,7 @@ describe("analytics da participação", () => {
     const c = await novoCenario();
     await negocioGanho(c, { comissao: "40000" });
 
-    const analytics = await buscarAnalyticsComercial(c.organization.id);
+    const analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     expect(analytics.participacao.comissaoAtribuida).toBe(0);
     expect(analytics.participacao.comissaoNaoDistribuida).toBe(40000);
     expect(analytics.participacao.ganhosComComissaoSemDivisao).toBe(1);
@@ -567,7 +567,7 @@ describe("analytics da participação", () => {
       },
     });
 
-    const analytics = await buscarAnalyticsComercial(organizationId);
+    const analytics = await buscarAnalyticsComercial(organizationId, "UTC");
     expect(analytics.participacao.comissaoNaoDistribuida).toBe(0);
     expect(analytics.participacao.ganhosComComissaoSemDivisao).toBe(0);
   });
@@ -579,7 +579,7 @@ describe("analytics da participação", () => {
     const { interesseId } = await negocioGanho(c, { comissao: "40000", responsavelId: ana.id });
     await adicionar(interesseId, bruno.id, "40000");
 
-    const analytics = await buscarAnalyticsComercial(c.organization.id);
+    const analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     // Dimensões diferentes, números diferentes, ambas corretas.
     const responsavel = analytics.responsaveis.find((l) => l.nome === "Ana Responsavel");
     expect(responsavel?.ganhos).toBe(1);
@@ -621,7 +621,7 @@ describe("analytics da participação", () => {
     );
 
     expect((await adicionar(interesse.id, c.membro.id, "40000")).success).toBe(true);
-    const analytics = await buscarAnalyticsComercial(organizationId);
+    const analytics = await buscarAnalyticsComercial(organizationId, "UTC");
     expect(analytics.participacao.comissaoAtribuida).toBe(40000);
   });
 
@@ -630,7 +630,7 @@ describe("analytics da participação", () => {
     const { interesseId } = await negocioGanho(c, { comissao: "40000" });
     await adicionar(interesseId, c.membro.id);
 
-    const analytics = await buscarAnalyticsComercial(c.organization.id);
+    const analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     const linha = analytics.participacao.participantes[0];
     expect(linha.negocios).toBe(1);
     expect(linha.comissaoAtribuida).toBe(0);

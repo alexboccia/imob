@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireOrganizationId } from "@/lib/tenant";
 import { hasModule } from "@/lib/entitlements";
+import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import { interpretarPaginacao } from "@/lib/pagination";
 import {
   buscarAgendaHoje,
@@ -109,28 +110,31 @@ export default async function AgendaPage({
   // lista da aba ativa precisam concordar sobre o que é "hoje" dentro da
   // mesma requisição.
   const agora = new Date();
+  // ... e um único FUSO (Fase 18), resolvido UMA vez por carregamento e
+  // repassado a queries e componentes. Nunca uma consulta por item.
+  const fuso = await buscarFusoOrganizacao(organizationId);
 
   const filtros = interpretarFiltrosAgenda(params);
   const temFiltrosAtivos = Boolean(filtros.busca || filtros.de || filtros.ate || filtros.status !== "TODAS");
 
-  const contadores = await contarAgenda(organizationId, { agora });
+  const contadores = await contarAgenda(organizationId, fuso, { agora });
   // Resumo diário (H.5) — antes do redesenho, só era calculado na aba
   // "hoje" (o único lugar que o exibia). Agora os KPIs ficam visíveis em
   // qualquer aba (mesmo padrão de Clientes/Pipeline), então esta mesma
   // query barata (3 counts pelo índice já existente) passa a rodar
   // sempre — nenhuma query nova, só deixou de ser condicional.
-  const resumoDiario = await contarResumoDiario(organizationId, { agora });
+  const resumoDiario = await contarResumoDiario(organizationId, fuso, { agora });
 
   const { page, take } = interpretarPaginacao(params, { pageSizePadrao: 20, pageSizeMaximo: 50 });
   const skip = (page - 1) * take;
 
   let itens: ItemAgenda[];
   if (aba === "hoje") {
-    itens = await buscarAgendaHoje(organizationId, { agora, filtros });
+    itens = await buscarAgendaHoje(organizationId, fuso, { agora, filtros });
   } else if (aba === "proximas") {
-    itens = await buscarAgendaProximas(organizationId, { agora, filtros });
+    itens = await buscarAgendaProximas(organizationId, fuso, { agora, filtros });
   } else {
-    itens = await buscarAgendaAnteriores(organizationId, { agora, skip, take, filtros });
+    itens = await buscarAgendaAnteriores(organizationId, fuso, { agora, skip, take, filtros });
   }
 
   // Próxima visita e agrupamento por período (H.5) — calculados em
@@ -139,12 +143,12 @@ export default async function AgendaPage({
   const proximaVisitaItem = aba === "hoje" ? proximaVisita(itens, agora) : null;
   // Painel "Agora" (Fase H.7) — calculado sobre `itens`, o mesmo conjunto
   // VISÍVEL já filtrado.
-  const painelAgora = aba === "hoje" ? painelAgoraDoDia(itens, agora) : null;
+  const painelAgora = aba === "hoje" ? painelAgoraDoDia(itens, fuso, agora) : null;
   const gruposDoDia =
     aba === "hoje"
       ? PERIODOS_DIA.map((periodo) => ({
           periodo,
-          itens: itens.filter((item) => periodoDaVisita(item.scheduledAt) === periodo),
+          itens: itens.filter((item) => periodoDaVisita(item.scheduledAt, fuso) === periodo),
         })).filter((grupo) => grupo.itens.length > 0)
       : null;
 
@@ -179,7 +183,7 @@ export default async function AgendaPage({
 
       <AgendaFiltrosBar aba={aba} filtros={filtros} temFiltrosAtivos={temFiltrosAtivos} />
 
-      {painelAgora && <PainelAgoraAgenda estado={painelAgora} />}
+      {painelAgora && <PainelAgoraAgenda estado={painelAgora} fuso={fuso} />}
 
       {itens.length === 0 ? (
         <div className="rounded-xl border bg-card p-2 text-center sm:p-8">
@@ -206,6 +210,7 @@ export default async function AgendaPage({
                     key={item.id}
                     item={paraItemCliente(item)}
                     agoraISO={agora.toISOString()}
+                    fuso={fuso}
                     ehProximaVisita={proximaVisitaItem?.id === item.id}
                   />
                 ))}
@@ -216,7 +221,12 @@ export default async function AgendaPage({
       ) : (
         <div className="space-y-2">
           {itens.map((item) => (
-            <AgendaItemCard key={item.id} item={paraItemCliente(item)} agoraISO={agora.toISOString()} />
+            <AgendaItemCard
+              key={item.id}
+              item={paraItemCliente(item)}
+              agoraISO={agora.toISOString()}
+              fuso={fuso}
+            />
           ))}
         </div>
       )}

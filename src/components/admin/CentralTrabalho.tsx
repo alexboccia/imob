@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatarDataHora, formatarHora } from "@/lib/scheduled-activity-date";
+import { formatarDataHoraNoFuso, formatarHoraNoFuso } from "@/lib/fuso-horario";
 import { ESTAGIO_INTERESSE_LABEL } from "@/lib/property-interest-schema";
 import type { CentralTrabalho as DadosCentral, CompromissoCentral } from "@/lib/central-trabalho";
 
@@ -18,14 +18,16 @@ import type { CentralTrabalho as DadosCentral, CompromissoCentral } from "@/lib/
 function LinhaCompromisso({
   compromisso,
   mostrarDia,
+  fuso,
 }: {
   compromisso: CompromissoCentral;
   // Em "Hoje" o dia é redundante; em atrasadas/próximas ele é essencial.
   mostrarDia: boolean;
+  fuso: string;
 }) {
   const quando = mostrarDia
-    ? formatarDataHora(compromisso.scheduledAtISO)
-    : formatarHora(compromisso.scheduledAtISO);
+    ? formatarDataHoraNoFuso(compromisso.scheduledAtISO, fuso)
+    : formatarHoraNoFuso(compromisso.scheduledAtISO, fuso);
 
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b py-2 last:border-b-0 last:pb-0">
@@ -81,7 +83,11 @@ function VerTodos({ href, total, exibidos }: { href: string; total: number; exib
   );
 }
 
-export function CentralTrabalho({ dados }: { dados: DadosCentral }) {
+// O fuso atravessa como string simples (Fase 16 preservada: DTOs planos,
+// nenhum objeto do Prisma na fronteira). Formatar com timeZone explícito
+// nos dois lados é também o que evita mismatch de hidratação — sem ele o
+// servidor renderiza num fuso e o navegador re-renderiza no dele.
+export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: string }) {
   const { atrasadas, hoje, proximas, negociacoes } = dados;
 
   return (
@@ -107,7 +113,7 @@ export function CentralTrabalho({ dados }: { dados: DadosCentral }) {
           <CardContent>
             <ul className="text-sm">
               {atrasadas.itens.map((c) => (
-                <LinhaCompromisso key={c.id} compromisso={c} mostrarDia />
+                <LinhaCompromisso key={c.id} compromisso={c} mostrarDia fuso={fuso} />
               ))}
             </ul>
             <VerTodos href="/app/agenda" total={atrasadas.total} exibidos={atrasadas.itens.length} />
@@ -129,7 +135,7 @@ export function CentralTrabalho({ dados }: { dados: DadosCentral }) {
             <>
               <ul className="text-sm">
                 {hoje.itens.map((c) => (
-                  <LinhaCompromisso key={c.id} compromisso={c} mostrarDia={false} />
+                  <LinhaCompromisso key={c.id} compromisso={c} mostrarDia={false} fuso={fuso} />
                 ))}
               </ul>
               <VerTodos href="/app/agenda" total={hoje.total} exibidos={hoje.itens.length} />
@@ -152,7 +158,7 @@ export function CentralTrabalho({ dados }: { dados: DadosCentral }) {
             <>
               <ul className="text-sm">
                 {proximas.map((c) => (
-                  <LinhaCompromisso key={c.id} compromisso={c} mostrarDia />
+                  <LinhaCompromisso key={c.id} compromisso={c} mostrarDia fuso={fuso} />
                 ))}
               </ul>
               <Link
@@ -216,7 +222,7 @@ export function CentralTrabalho({ dados }: { dados: DadosCentral }) {
                       {/* null = nenhuma interação registrada. Nunca
                           "sem contato há muito tempo". */}
                       {n.ultimoContatoISO
-                        ? `último contato em ${formatarDataHora(n.ultimoContatoISO)}`
+                        ? `último contato em ${formatarDataHoraNoFuso(n.ultimoContatoISO, fuso)}`
                         : "sem contato registrado"}
                     </p>
                   </li>

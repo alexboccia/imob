@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { FiltrosAgenda, FiltroStatusAgenda } from "@/lib/agenda";
+import type { DataCalendario } from "@/lib/fuso-horario";
 
 const STATUS_FILTRO_LABEL: Record<FiltroStatusAgenda, string> = {
   TODAS: "Todas",
@@ -25,12 +26,12 @@ const STATUS_FILTRO_OPCOES: FiltroStatusAgenda[] = [
 // capacidade real já suportada por interpretarFiltrosAgenda/
 // buscarAgenda* (src/lib/agenda.ts), não removida s/ necessidade.
 // Nenhum campo novo, nenhum parâmetro de URL novo.
-function paraInputDate(data: Date | null): string {
+// DATE-ONLY (Fase 18): o filtro guarda ano/mês/dia, não um instante — não
+// há conversão de fuso nenhuma para fazer aqui, e é exatamente por isso
+// que o valor volta ao <input type="date"> idêntico ao que foi digitado.
+function paraInputDate(data: DataCalendario | null): string {
   if (!data) return "";
-  const ano = data.getUTCFullYear();
-  const mes = String(data.getUTCMonth() + 1).padStart(2, "0");
-  const dia = String(data.getUTCDate()).padStart(2, "0");
-  return `${ano}-${mes}-${dia}`;
+  return `${String(data.ano).padStart(4, "0")}-${String(data.mes).padStart(2, "0")}-${String(data.dia).padStart(2, "0")}`;
 }
 
 export function AgendaFiltrosBar({

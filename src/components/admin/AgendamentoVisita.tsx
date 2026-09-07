@@ -9,7 +9,7 @@ import {
   atualizarObservacaoAgendamentoVisita,
 } from "@/app/app/agendamentos/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
-import { formatarDataHora, paraDatetimeLocal } from "@/lib/scheduled-activity-date";
+import { formatarDataHoraNoFuso, paraDatetimeLocalNoFuso, rotuloFuso } from "@/lib/fuso-horario";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,7 @@ export function AgendamentoVisita({
   propertyInterestId,
   podeAgendar,
   atividadeAgendada,
+  fuso,
 }: {
   // Opcional: só é lido pelo branch de criação (CriarVisitaForm) abaixo.
   // Callers que só EXIBEM uma atividade já existente (ex: a Agenda, Fase
@@ -54,15 +55,26 @@ export function AgendamentoVisita({
   // tem os dados de PropertyInterest/Property carregados.
   podeAgendar: boolean;
   atividadeAgendada: AtividadeAgendada | null;
+  // Fuso comercial da organização (Fase 18). <input type="datetime-local">
+  // NÃO carrega fuso: o horário digitado passa a ser lido como horário de
+  // parede DA ORGANIZAÇÃO — nunca do navegador de quem preenche, nunca do
+  // processo. Um corretor viajando não desloca a agenda da imobiliária.
+  fuso: string;
 }) {
   if (atividadeAgendada) {
-    return <VisitaAgendadaCard atividade={atividadeAgendada} />;
+    return <VisitaAgendadaCard atividade={atividadeAgendada} fuso={fuso} />;
   }
   if (!podeAgendar || !propertyInterestId) return null;
-  return <CriarVisitaForm propertyInterestId={propertyInterestId} />;
+  return <CriarVisitaForm propertyInterestId={propertyInterestId} fuso={fuso} />;
 }
 
-function CriarVisitaForm({ propertyInterestId }: { propertyInterestId: string }) {
+function CriarVisitaForm({
+  propertyInterestId,
+  fuso,
+}: {
+  propertyInterestId: string;
+  fuso: string;
+}) {
   const [aberto, setAberto] = useState(false);
   const acao = criarAgendamentoVisita.bind(null, propertyInterestId);
   const [estado, formAction, pendente] = useActionState(acao, ESTADO_INICIAL_ACAO);
@@ -85,6 +97,11 @@ function CriarVisitaForm({ propertyInterestId }: { propertyInterestId: string })
           Data e horário
         </Label>
         <Input id={dataId} name="scheduledAt" type="datetime-local" required />
+        {/* Sem isto o campo é ambíguo: o navegador não mostra fuso
+            nenhum e o horário digitado vale para a organização. */}
+        <p className="text-xs text-muted-foreground">
+          Horário no fuso da organização: {rotuloFuso(fuso)}
+        </p>
         {estado.fieldErrors?.scheduledAt && (
           <p className="text-xs text-destructive">{estado.fieldErrors.scheduledAt[0]}</p>
         )}
@@ -110,7 +127,13 @@ function CriarVisitaForm({ propertyInterestId }: { propertyInterestId: string })
   );
 }
 
-function VisitaAgendadaCard({ atividade }: { atividade: AtividadeAgendada }) {
+function VisitaAgendadaCard({
+  atividade,
+  fuso,
+}: {
+  atividade: AtividadeAgendada;
+  fuso: string;
+}) {
   const [remarcando, setRemarcando] = useState(false);
   // Ajuste de state durante a renderização (padrão recomendado pelo React
   // em vez de um useEffect+setState, que dispara o lint
@@ -159,7 +182,7 @@ function VisitaAgendadaCard({ atividade }: { atividade: AtividadeAgendada }) {
     <div className="border rounded-md p-3 space-y-2">
       <p className="text-xs font-medium">
         Próxima visita:{" "}
-        <span className="font-normal">{formatarDataHora(atividade.scheduledAtISO)}</span>
+        <span className="font-normal">{formatarDataHoraNoFuso(atividade.scheduledAtISO, fuso)}</span>
       </p>
 
       {erro?.message && <p className="text-xs text-destructive">{erro.message}</p>}
@@ -205,9 +228,15 @@ function VisitaAgendadaCard({ atividade }: { atividade: AtividadeAgendada }) {
             id={dataId}
             name="scheduledAt"
             type="datetime-local"
-            defaultValue={paraDatetimeLocal(atividade.scheduledAtISO)}
+            defaultValue={paraDatetimeLocalNoFuso(atividade.scheduledAtISO, fuso)}
             required
           />
+          {/* Leitura no sentido inverso: o instante persistido volta ao
+              formulário já convertido para o fuso da organização, para
+              ninguém "corrigir" um horário que estava certo. */}
+          <p className="text-xs text-muted-foreground">
+            Horário no fuso da organização: {rotuloFuso(fuso)}
+          </p>
           {estadoRemarcar.fieldErrors?.scheduledAt && (
             <p className="text-xs text-destructive">{estadoRemarcar.fieldErrors.scheduledAt[0]}</p>
           )}

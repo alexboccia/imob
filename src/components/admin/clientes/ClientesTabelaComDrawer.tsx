@@ -80,7 +80,11 @@ export function ClientesTabelaComDrawer({
   pageSize,
   sortableColumns,
   temFiltroOuBuscaAtivo,
+  fuso,
 }: {
+  // Fuso comercial da organização (Fase 18) — repassado ao drawer, que
+  // exibe datas de interação.
+  fuso: string;
   columns: DataTableColumn<ClienteRow>[];
   data: ClienteRow[];
   totalCount: number;
@@ -125,7 +129,12 @@ export function ClientesTabelaComDrawer({
           <ClienteCardMobile key={cliente.id} cliente={cliente} onClick={() => abrirCliente(cliente)} />
         ))}
       />
-      <ClienteDrawer cliente={clienteAberto} open={drawerAberto} onOpenChange={setDrawerAberto} />
+      <ClienteDrawer
+        cliente={clienteAberto}
+        fuso={fuso}
+        open={drawerAberto}
+        onOpenChange={setDrawerAberto}
+      />
     </>
   );
 }

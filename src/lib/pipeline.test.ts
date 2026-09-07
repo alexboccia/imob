@@ -250,7 +250,7 @@ describe("ordenarColuna", () => {
       itemFake({ id: "b", stage: "INTERESTED", proximaVisita: { id: "v2", scheduledAtISO: "2026-06-16T10:00:00.000Z" } }),
     ];
     const resultados = new Set(
-      Array.from({ length: 10 }, () => ordenarColuna(itens, agora).map((i) => i.id).join(","))
+      Array.from({ length: 10 }, () => ordenarColuna(itens, "UTC", agora).map((i) => i.id).join(","))
     );
     expect(resultados.size).toBe(1);
   });
@@ -268,7 +268,7 @@ describe("ordenarColuna", () => {
         proximaVisita: { id: "v2", scheduledAtISO: "2026-06-10T10:00:00.000Z" }, // dia já passado
       }),
     ];
-    const ordenado = ordenarColuna(itens, agora);
+    const ordenado = ordenarColuna(itens, "UTC", agora);
     expect(ordenado.map((i) => i.id)).toEqual(["pendente", "futura"]);
   });
 
@@ -277,7 +277,7 @@ describe("ordenarColuna", () => {
       itemFake({ id: "longe", stage: "PROPOSAL", proximaVisita: { id: "v1", scheduledAtISO: "2026-07-01T10:00:00.000Z" } }),
       itemFake({ id: "perto", stage: "PROPOSAL", proximaVisita: { id: "v2", scheduledAtISO: "2026-06-16T10:00:00.000Z" } }),
     ];
-    const ordenado = ordenarColuna(itens, agora);
+    const ordenado = ordenarColuna(itens, "UTC", agora);
     expect(ordenado.map((i) => i.id)).toEqual(["perto", "longe"]);
   });
 
@@ -287,7 +287,7 @@ describe("ordenarColuna", () => {
       itemFake({ id: "sem-visita-novo", stage: "VISITED", updatedAtISO: "2026-06-10T00:00:00.000Z" }),
       itemFake({ id: "sem-visita-antigo", stage: "VISITED", updatedAtISO: "2026-01-01T00:00:00.000Z" }),
     ];
-    const ordenado = ordenarColuna(itens, agora);
+    const ordenado = ordenarColuna(itens, "UTC", agora);
     expect(ordenado.map((i) => i.id)).toEqual(["com-visita", "sem-visita-antigo", "sem-visita-novo"]);
   });
 });
@@ -1010,7 +1010,7 @@ describe("classificarPrioridadePipeline", () => {
       stage: "VISIT_SCHEDULED",
       proximaVisita: { id: "v1", scheduledAtISO: "2026-06-10T10:00:00.000Z" },
     });
-    const resultado = classificarPrioridadePipeline(item, null, agora);
+    const resultado = classificarPrioridadePipeline(item, null, "UTC", agora);
     expect(resultado.nivel).toBe("ALTA");
     expect(resultado.motivos).toEqual([{ tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: "2026-06-10T10:00:00.000Z" }]);
   });
@@ -1020,53 +1020,53 @@ describe("classificarPrioridadePipeline", () => {
       stage: "VISIT_SCHEDULED",
       proximaVisita: { id: "v1", scheduledAtISO: "2026-06-20T10:00:00.000Z" },
     });
-    const resultado = classificarPrioridadePipeline(item, null, agora);
+    const resultado = classificarPrioridadePipeline(item, null, "UTC", agora);
     expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
   });
 
   test("C/E) INTERESTED sem próxima ação -> NORMAL (estado esperado nesta etapa, nunca penalizado)", () => {
-    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ stage: "INTERESTED" }), null, agora);
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ stage: "INTERESTED" }), null, "UTC", agora);
     expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
   });
 
   test("VISIT_SCHEDULED sem próxima ação -> NORMAL (não é a regra de PROPOSAL/VISITED)", () => {
-    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ stage: "VISIT_SCHEDULED" }), null, agora);
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ stage: "VISIT_SCHEDULED" }), null, "UTC", agora);
     expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
   });
 
   test("D) PROPOSAL sem próxima ação -> ALTA com motivo PROPOSTA_SEM_PROXIMA_ACAO (etapa mais avançada do funil aberto)", () => {
-    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ stage: "PROPOSAL" }), null, agora);
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ stage: "PROPOSAL" }), null, "UTC", agora);
     expect(resultado.nivel).toBe("ALTA");
     expect(resultado.motivos).toEqual([{ tipo: "PROPOSTA_SEM_PROXIMA_ACAO" }]);
   });
 
   test("VISITED sem próxima ação -> MEDIA com motivo VISITADO_SEM_PROXIMA_ACAO", () => {
-    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ stage: "VISITED" }), null, agora);
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ stage: "VISITED" }), null, "UTC", agora);
     expect(resultado.nivel).toBe("MEDIA");
     expect(resultado.motivos).toEqual([{ tipo: "VISITADO_SEM_PROXIMA_ACAO" }]);
   });
 
   test("F) aging acima da média histórica da etapa -> MEDIA com motivo AGING_ACIMA_DA_MEDIA", () => {
     const item = prioridadeItemFake({ stage: "INTERESTED", agingMs: 10 * DIA });
-    const resultado = classificarPrioridadePipeline(item, 5 * DIA, agora);
+    const resultado = classificarPrioridadePipeline(item, 5 * DIA, "UTC", agora);
     expect(resultado.nivel).toBe("MEDIA");
     expect(resultado.motivos).toEqual([{ tipo: "AGING_ACIMA_DA_MEDIA", agingMs: 10 * DIA, mediaMs: 5 * DIA }]);
   });
 
   test("aging abaixo ou igual à média -> sem motivo AGING_ACIMA_DA_MEDIA", () => {
-    const abaixo = classificarPrioridadePipeline(prioridadeItemFake({ agingMs: 3 * DIA }), 5 * DIA, agora);
-    const igual = classificarPrioridadePipeline(prioridadeItemFake({ agingMs: 5 * DIA }), 5 * DIA, agora);
+    const abaixo = classificarPrioridadePipeline(prioridadeItemFake({ agingMs: 3 * DIA }), 5 * DIA, "UTC", agora);
+    const igual = classificarPrioridadePipeline(prioridadeItemFake({ agingMs: 5 * DIA }), 5 * DIA, "UTC", agora);
     expect(abaixo).toEqual({ nivel: "NORMAL", motivos: [] });
     expect(igual).toEqual({ nivel: "NORMAL", motivos: [] });
   });
 
   test("G) agingMs null (legado sem history) -> nunca gera AGING_ACIMA_DA_MEDIA, mesmo com média disponível", () => {
-    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ agingMs: null }), 5 * DIA, agora);
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ agingMs: null }), 5 * DIA, "UTC", agora);
     expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
   });
 
   test("tempoMedioHistoricoMs null (sem base de comparação pra esta etapa) -> nunca gera AGING_ACIMA_DA_MEDIA", () => {
-    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ agingMs: 100 * DIA }), null, agora);
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({ agingMs: 100 * DIA }), null, "UTC", agora);
     expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
   });
 
@@ -1076,16 +1076,16 @@ describe("classificarPrioridadePipeline", () => {
       proximaVisita: { id: "v1", scheduledAtISO: "2026-06-10T10:00:00.000Z" },
       agingMs: null,
     });
-    const resultado = classificarPrioridadePipeline(item, 5 * DIA, agora);
+    const resultado = classificarPrioridadePipeline(item, 5 * DIA, "UTC", agora);
     expect(resultado.nivel).toBe("ALTA");
   });
 
   test("J/K) WON/REJECTED nunca disparam as regras de PROPOSAL/VISITED (defensivo — caller nunca deve passar terminal)", () => {
-    expect(classificarPrioridadePipeline(prioridadeItemFake({ stage: "WON" }), null, agora)).toEqual({
+    expect(classificarPrioridadePipeline(prioridadeItemFake({ stage: "WON" }), null, "UTC", agora)).toEqual({
       nivel: "NORMAL",
       motivos: [],
     });
-    expect(classificarPrioridadePipeline(prioridadeItemFake({ stage: "REJECTED" }), null, agora)).toEqual({
+    expect(classificarPrioridadePipeline(prioridadeItemFake({ stage: "REJECTED" }), null, "UTC", agora)).toEqual({
       nivel: "NORMAL",
       motivos: [],
     });
@@ -1097,7 +1097,7 @@ describe("classificarPrioridadePipeline", () => {
       proximaVisita: { id: "v1", scheduledAtISO: "2026-06-10T10:00:00.000Z" },
       agingMs: 10 * DIA,
     });
-    const resultado = classificarPrioridadePipeline(item, 5 * DIA, agora);
+    const resultado = classificarPrioridadePipeline(item, 5 * DIA, "UTC", agora);
     expect(resultado.nivel).toBe("ALTA");
     expect(resultado.motivos.map((m) => m.tipo)).toEqual(["ATIVIDADE_VENCIDA", "AGING_ACIMA_DA_MEDIA"]);
   });
@@ -1105,13 +1105,13 @@ describe("classificarPrioridadePipeline", () => {
   test("M) determinístico — mesma entrada sempre produz o mesmo resultado", () => {
     const item = prioridadeItemFake({ stage: "PROPOSAL", agingMs: 10 * DIA });
     const resultados = new Set(
-      Array.from({ length: 10 }, () => JSON.stringify(classificarPrioridadePipeline(item, 5 * DIA, agora)))
+      Array.from({ length: 10 }, () => JSON.stringify(classificarPrioridadePipeline(item, 5 * DIA, "UTC", agora)))
     );
     expect(resultados.size).toBe(1);
   });
 
   test("O) ausência total de sinais -> NORMAL, motivos vazio", () => {
-    const resultado = classificarPrioridadePipeline(prioridadeItemFake({}), null, agora);
+    const resultado = classificarPrioridadePipeline(prioridadeItemFake({}), null, "UTC", agora);
     expect(resultado).toEqual({ nivel: "NORMAL", motivos: [] });
   });
 
@@ -1120,7 +1120,7 @@ describe("classificarPrioridadePipeline", () => {
       stage: "VISIT_SCHEDULED",
       proximaVisita: { id: "v1", scheduledAtISO: "2026-06-15T23:59:00.000Z" },
     });
-    const resultado = classificarPrioridadePipeline(item, null, agora);
+    const resultado = classificarPrioridadePipeline(item, null, "UTC", agora);
     expect(resultado.nivel).toBe("NORMAL");
   });
 
@@ -1129,7 +1129,7 @@ describe("classificarPrioridadePipeline", () => {
       stage: "VISIT_SCHEDULED",
       proximaVisita: { id: "v1", scheduledAtISO: "2026-06-14T23:59:00.000Z" },
     });
-    const resultado = classificarPrioridadePipeline(item, null, agora);
+    const resultado = classificarPrioridadePipeline(item, null, "UTC", agora);
     expect(resultado.nivel).toBe("ALTA");
   });
 });

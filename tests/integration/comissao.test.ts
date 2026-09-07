@@ -298,7 +298,7 @@ describe("analytics de comissão", () => {
     // Ganho sem comissão.
     await ganhar(await oportunidadeManual(organizationId, pessoa.id, imovelC.id), "500000");
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
     expect(a.resultado.fechamentosGanhos).toBe(3);
     expect(a.resultado.comissaoTotal).toBe(50000);
     expect(a.resultado.comissaoMedia).toBe(25000);
@@ -314,7 +314,7 @@ describe("analytics de comissão", () => {
     const imovel = await criarImovel({ organizationId });
     await ganhar(await oportunidadeManual(organizationId, pessoa.id, imovel.id), "800000");
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
     expect(a.resultado.comissaoTotal).toBe(0);
     expect(a.resultado.comissaoMedia).toBeNull();
     expect(a.resultado.comissaoEfetiva).toBeNull();
@@ -345,7 +345,7 @@ describe("analytics de comissão", () => {
     });
     await ganhar(interesse.id, "1200000", "60000");
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
     const anuncios = a.aquisicao.canais.find((x) => x.canal === "ANUNCIOS")!;
     expect(anuncios.valorFechado).toBe(1200000);
     expect(anuncios.comissao).toBe(60000);
@@ -359,7 +359,7 @@ describe("analytics de comissão", () => {
     const imovel = await criarImovel({ organizationId });
     await ganhar(await oportunidadeManual(organizationId, pessoa.id, imovel.id), "450000", "22500");
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
     expect(a.aquisicao.canais.find((x) => x.canal === "SEM_ATRIBUICAO")!.comissao).toBe(22500);
     expect(a.aquisicao.canais.filter((x) => x.canal !== "SEM_ATRIBUICAO")).toEqual([]);
   });
@@ -375,7 +375,7 @@ describe("analytics de comissão", () => {
       data: { stage: "WON", closedAt: new Date(), closedValue: null, commissionValue: null },
     });
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
     expect(a.resultado.fechamentosGanhos).toBe(1);
     expect(a.resultado.valorFechado).toBe(0);
     expect(a.resultado.comissaoTotal).toBe(0);
@@ -386,7 +386,7 @@ describe("analytics de comissão", () => {
 
   test("tenant vazio: zeros e nulls, sem NaN", async () => {
     const c = await novoCenario();
-    const a = await buscarAnalyticsComercial(c.organization.id, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(c.organization.id, "UTC", { periodo: "30d", agora: new Date() });
     expect(a.resultado.comissaoTotal).toBe(0);
     expect(a.resultado.comissaoMedia).toBeNull();
     expect(a.resultado.comissaoEfetiva).toBeNull();

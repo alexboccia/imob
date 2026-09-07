@@ -225,7 +225,7 @@ describe("analytics financeiro", () => {
       data: { stage: "WON", closedAt: new Date(), closedValue: null },
     });
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
 
     expect(a.resultado.fechamentosGanhos).toBe(3);
     expect(a.resultado.valorFechado).toBe(800000);
@@ -247,7 +247,7 @@ describe("analytics financeiro", () => {
       data: { stage: "WON", closedAt: new Date(), closedValue: null },
     });
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
     expect(a.resultado.fechamentosGanhos).toBe(1);
     expect(a.resultado.valorFechado).toBe(0);
     expect(a.resultado.ticketMedio).toBeNull();
@@ -278,7 +278,7 @@ describe("analytics financeiro", () => {
     });
     await ganhar(interesse.id, "1200000");
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
 
     const anuncios = a.aquisicao.canais.find((c) => c.canal === "ANUNCIOS")!;
     expect(anuncios.fechamentos).toBe(1);
@@ -296,7 +296,7 @@ describe("analytics financeiro", () => {
     const imovel = await criarImovel({ organizationId });
     await ganhar(await criarOportunidadeManual(organizationId, pessoa.id, imovel.id), "450000");
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
     const sem = a.aquisicao.canais.find((c) => c.canal === "SEM_ATRIBUICAO")!;
     expect(sem.valorFechado).toBe(450000);
     expect(a.aquisicao.canais.filter((c) => c.canal !== "SEM_ATRIBUICAO")).toEqual([]);
@@ -310,7 +310,7 @@ describe("analytics financeiro", () => {
     const imovel = await criarImovel({ organizationId });
     await perder(await criarOportunidadeManual(organizationId, pessoa.id, imovel.id));
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
     expect(a.resultado.fechamentosPerdidos).toBe(1);
     expect(a.resultado.fechamentosGanhos).toBe(0);
     expect(a.resultado.valorFechado).toBe(0);
@@ -319,7 +319,7 @@ describe("analytics financeiro", () => {
 
   test("tenant vazio: zeros e ticket null, sem NaN", async () => {
     const cenario = await novoCenario();
-    const a = await buscarAnalyticsComercial(cenario.organization.id, {
+    const a = await buscarAnalyticsComercial(cenario.organization.id, "UTC", {
       periodo: "30d",
       agora: new Date(),
     });

@@ -11,6 +11,7 @@ import path from "node:path";
 import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type OrganizationRole } from "../src/generated/prisma/client";
+import { componentesNoFuso, instanteDeComponentes } from "../src/lib/fuso-horario";
 
 config({ path: path.resolve(__dirname, "..", ".env.test"), override: true });
 
@@ -34,6 +35,9 @@ export const IDS_E2E = {
   imovelOrgAgenda: "e2e-imovel-org-agenda",
   // Fase 17 — organização dedicada à Central de trabalho.
   imovelOrgCentral: "e2e-imovel-org-central",
+  // Fase 18 — organização dedicada ao FUSO HORÁRIO (ver seção da
+  // Organização F).
+  imovelOrgFuso: "e2e-imovel-org-fuso",
   // Redesenho de Imóveis — ver duplicata em tests/e2e/helpers.ts.
   imovelComBadgesOrgA: "e2e-imovel-badges-a",
   // Busca do Hero — segunda cidade/bairro (todo o resto do seed usa só
@@ -111,11 +115,20 @@ async function garantirOrganizacaoComDono(opcoes: {
   senha: string;
   role: OrganizationRole;
   membroId?: string;
+  // Fase 18 — fuso EXPLÍCITO e obrigatório em toda organização do seed.
+  // Nenhum spec deve depender do fallback por acidente: se o valor
+  // importa para o teste, ele está escrito aqui.
+  timezone: string;
 }) {
   const organization = await prisma.organization.upsert({
     where: { slug: opcoes.slug },
-    update: { planId: opcoes.planId },
-    create: { slug: opcoes.slug, name: opcoes.name, planId: opcoes.planId },
+    update: { planId: opcoes.planId, timezone: opcoes.timezone },
+    create: {
+      slug: opcoes.slug,
+      name: opcoes.name,
+      planId: opcoes.planId,
+      timezone: opcoes.timezone,
+    },
   });
 
   const passwordHash = await bcrypt.hash(opcoes.senha, 10);
@@ -280,6 +293,9 @@ async function main() {
   });
   const orgA = await garantirOrganizacaoComDono({
     slug: orgSlugA,
+    // UTC explícito: é o calendário sob o qual as asserções absolutas
+    // destes specs foram escritas. Nada muda para elas na Fase 18.
+    timezone: "UTC",
     name: orgNameA,
     planId: planoCompleto.id,
     email: emailA,
@@ -299,6 +315,9 @@ async function main() {
   });
   const orgB = await garantirOrganizacaoComDono({
     slug: "e2e-org-b",
+    // UTC explícito: é o calendário sob o qual as asserções absolutas
+    // destes specs foram escritas. Nada muda para elas na Fase 18.
+    timezone: "UTC",
     name: "Organização E2E B",
     planId: planoBasico.id,
     email: "owner-b@e2e.test",
@@ -324,6 +343,9 @@ async function main() {
   // elimina o vetor de contaminação por construção — nunca por timing.
   const orgAgenda = await garantirOrganizacaoComDono({
     slug: "e2e-org-agenda",
+    // UTC explícito: é o calendário sob o qual as asserções absolutas
+    // destes specs foram escritas. Nada muda para elas na Fase 18.
+    timezone: "UTC",
     name: "Organização E2E Agenda",
     planId: planoCompleto.id,
     email: "owner-agenda@e2e.test",
@@ -340,6 +362,9 @@ async function main() {
   // execução dos specs.
   const orgAnalytics = await garantirOrganizacaoComDono({
     slug: "e2e-org-analytics",
+    // UTC explícito: é o calendário sob o qual as asserções absolutas
+    // destes specs foram escritas. Nada muda para elas na Fase 18.
+    timezone: "UTC",
     name: "Organização E2E Analytics",
     planId: planoCompleto.id,
     email: "owner-analytics@e2e.test",
@@ -356,11 +381,31 @@ async function main() {
   // afirmam.
   const orgCentral = await garantirOrganizacaoComDono({
     slug: "e2e-org-central",
+    // UTC explícito: é o calendário sob o qual as asserções absolutas
+    // destes specs foram escritas. Nada muda para elas na Fase 18.
+    timezone: "UTC",
     name: "Organização E2E Central",
     planId: planoCompleto.id,
     email: "owner-central@e2e.test",
     senha,
     role: "OWNER",
+  });
+
+  // Fase 18 — Organização F: dedicada ao FUSO HORÁRIO, pelo mesmo motivo
+  // estrutural das organizações C, D e E. É a única organização do seed
+  // que NÃO está em UTC, e é isso que a torna útil: em America/Sao_Paulo
+  // (UTC−3) o dia comercial começa 3 horas depois do dia UTC, então uma
+  // visita das 23:30 locais pertence a HOJE mesmo já sendo o dia seguinte
+  // em UTC. Colocar esse dado em qualquer organização existente mudaria a
+  // classificação de visitas que outros specs já afirmam.
+  const orgFuso = await garantirOrganizacaoComDono({
+    slug: "e2e-org-fuso",
+    name: "Organização E2E Fuso",
+    planId: planoCompleto.id,
+    email: "owner-fuso@e2e.test",
+    senha,
+    role: "OWNER",
+    timezone: "America/Sao_Paulo",
   });
 
   // Specs como "criar imóvel" e "formulário público cria lead" criam dados
@@ -373,6 +418,7 @@ async function main() {
     orgAgenda.organization.id,
     orgAnalytics.organization.id,
     orgCentral.organization.id,
+    orgFuso.organization.id,
   ];
   // Usuários criados por usuarios.spec.ts a cada rodada (Fase 8 — correção
   // de causa raiz de um flake real): o seed nunca os limpava, e a
@@ -398,6 +444,8 @@ async function main() {
     // negociações da Central perderiam o responsável (FK).
     "owner-central@e2e.test",
     "corretor-central@e2e.test",
+    // Fase 18 — dono da Organização F (fuso horário), mesmo motivo.
+    "owner-fuso@e2e.test",
   ];
 
   // Correção completa do acúmulo (a da Fase 8 cobria só o prefixo
@@ -1044,6 +1092,71 @@ async function main() {
     responsibleMemberId: outroCorretorCentral.id,
   });
 
+  // =====================================================================
+  // Fase 18 — dados de BORDA DE FUSO (Organização F, America/Sao_Paulo)
+  // =====================================================================
+  // Duas visitas escolhidas para serem indistinguíveis em UTC e distintas
+  // no calendário de São Paulo — é exatamente aí que a Fase 17 errava:
+  //
+  //   hoje      23:30 America/Sao_Paulo  ->  HOJE      (amanhã em UTC)
+  //   amanhã    00:15 America/Sao_Paulo  ->  PRÓXIMA   (amanhã em UTC)
+  //
+  // As duas caem no MESMO dia UTC. Sob a convenção antiga as duas seriam
+  // classificadas igual; sob o fuso da organização elas se separam. Os
+  // instantes são construídos com instanteDeComponentes — o mesmo helper
+  // do produto, nunca "menos três horas" na mão.
+  const FUSO_ORG_F = "America/Sao_Paulo";
+  const horarioLocalOrgF = (deslocamentoDias: number, hora: number, minuto: number) => {
+    const c = componentesNoFuso(new Date(AGORA_SEED), FUSO_ORG_F);
+    return instanteDeComponentes(
+      { ano: c.ano, mes: c.mes, dia: c.dia + deslocamentoDias, hora, minuto },
+      FUSO_ORG_F
+    );
+  };
+
+  await garantirImovel({
+    id: IDS_E2E.imovelOrgFuso,
+    organizationId: orgFuso.organization.id,
+    title: "Apartamento E2E Fuso",
+  });
+
+  const criarVisitaOrgF = async (opcoes: { nomePessoa: string; visitaEm: Date }) => {
+    const pessoa = await prisma.person.create({
+      data: { organizationId: orgFuso.organization.id, name: opcoes.nomePessoa, roles: ["LEAD"] },
+      select: { id: true },
+    });
+    const interesse = await prisma.propertyInterest.create({
+      data: {
+        organizationId: orgFuso.organization.id,
+        personId: pessoa.id,
+        propertyId: IDS_E2E.imovelOrgFuso,
+        stage: "INTERESTED",
+        responsibleMemberId: orgFuso.membro.id,
+      },
+      select: { id: true },
+    });
+    await prisma.scheduledActivity.create({
+      data: {
+        organizationId: orgFuso.organization.id,
+        personId: pessoa.id,
+        propertyId: IDS_E2E.imovelOrgFuso,
+        propertyInterestId: interesse.id,
+        type: "VISIT",
+        status: "SCHEDULED",
+        scheduledAt: opcoes.visitaEm,
+      },
+    });
+  };
+
+  await criarVisitaOrgF({
+    nomePessoa: "Fuso Fim Do Dia",
+    visitaEm: horarioLocalOrgF(0, 23, 30),
+  });
+  await criarVisitaOrgF({
+    nomePessoa: "Fuso Comeco De Amanha",
+    visitaEm: horarioLocalOrgF(1, 0, 15),
+  });
+
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);
   console.log(
@@ -1051,7 +1164,8 @@ async function main() {
   );
   console.log(
     `  Org D (dedicada ao Analytics, CRM habilitado): slug=${orgAnalytics.organization.slug} login=owner-analytics@e2e.test`,
-    `  Org E (dedicada à Central de trabalho): slug=${orgCentral.organization.slug} login=owner-central@e2e.test`
+    `  Org E (dedicada à Central de trabalho): slug=${orgCentral.organization.slug} login=owner-central@e2e.test`,
+    `  Org F (dedicada ao fuso, America/Sao_Paulo): slug=${orgFuso.organization.slug} login=owner-fuso@e2e.test`
   );
 }
 

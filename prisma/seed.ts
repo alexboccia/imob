@@ -15,6 +15,12 @@ async function main() {
 
   const planoPremium = await prisma.plan.findUniqueOrThrow({ where: { code: "PREMIUM" } });
 
+  // Fase 18 — `timezone` deliberadamente AUSENTE aqui. O seed de
+  // desenvolvimento não sabe onde a organização opera, e escrever
+  // America/Sao_Paulo "porque provavelmente é Brasil" seria inventar
+  // dado. null resolve para o fallback explícito (UTC, o comportamento
+  // histórico) e a organização configura o fuso em Configurações —
+  // exatamente o caminho que uma organização real percorre.
   const organization = await prisma.organization.upsert({
     where: { slug: orgSlug },
     update: {},

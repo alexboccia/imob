@@ -45,6 +45,15 @@ export const ORG_CENTRAL = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Fuso horário (Fase 18) — organização dedicada e a ÚNICA do seed fora de
+// UTC (America/Sao_Paulo). Existe para provar a borda de dia: uma visita
+// das 23:30 locais pertence a hoje mesmo já sendo o dia seguinte em UTC.
+export const ORG_FUSO = {
+  slug: "e2e-org-fuso",
+  email: "owner-fuso@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const IDS_E2E = {
   imovelParaEditarOrgA: "e2e-imovel-editar-a",
   membroOwnerOrgB: "e2e-membro-owner-b",

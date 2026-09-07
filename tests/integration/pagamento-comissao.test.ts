@@ -587,7 +587,7 @@ describe("analytics de liquidação", () => {
     const { participanteId } = await negocioComParcela(c, { comissao: "40000", parcela: "20000" });
     await pagar(participanteId, "15000");
 
-    let analytics = await buscarAnalyticsComercial(c.organization.id);
+    let analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     expect(analytics.liquidacao.pagoNoPeriodo).toBe(15000);
     expect(analytics.liquidacao.pagamentos).toBe(1);
     expect(analytics.liquidacao.participantes[0].pago).toBe(15000);
@@ -595,7 +595,7 @@ describe("analytics de liquidação", () => {
     const [linha] = await pagamentosDe(participanteId, c.organization.id);
     await cancelarPagamentoParticipante(linha.id, ESTADO_INICIAL_ACAO, new FormData());
 
-    analytics = await buscarAnalyticsComercial(c.organization.id);
+    analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     expect(analytics.liquidacao.pagoNoPeriodo).toBe(0);
     expect(analytics.liquidacao.participantes).toHaveLength(0);
   });
@@ -607,7 +607,7 @@ describe("analytics de liquidação", () => {
     const antigo = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString().slice(0, 10);
     expect((await pagar(participanteId, "15000", antigo)).success).toBe(true);
 
-    const analytics = await buscarAnalyticsComercial(c.organization.id);
+    const analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     // Coorte por paidAt: o negócio está no período, o pagamento não.
     expect(analytics.liquidacao.pagoNoPeriodo).toBe(0);
     // E o bloco de atribuição (outra coorte) continua contando o negócio.
@@ -619,7 +619,7 @@ describe("analytics de liquidação", () => {
     const { participanteId } = await negocioComParcela(c, { comissao: "40000", parcela: "20000" });
     await pagar(participanteId, "5000");
 
-    const analytics = await buscarAnalyticsComercial(c.organization.id);
+    const analytics = await buscarAnalyticsComercial(c.organization.id, "UTC");
     expect(analytics.participacao.comissaoAtribuida).toBe(20000);
     expect(analytics.participacao.comissaoNaoDistribuida).toBe(20000);
     expect(analytics.liquidacao.pagoNoPeriodo).toBe(5000);

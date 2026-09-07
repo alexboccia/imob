@@ -271,7 +271,7 @@ describe("resultado comercial no dashboard", () => {
   test("coorte contato -> oportunidade, e o canal vem da interação de origem", async () => {
     const { organizationId } = await cenarioComOportunidade();
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
 
     expect(a.resultado.oportunidadesCriadas).toBe(1);
     expect(a.resultado.oportunidadesComOrigem).toBe(1);
@@ -293,7 +293,7 @@ describe("resultado comercial no dashboard", () => {
     fdGanho.set("valorFechamento", "500000");
     await marcarInteresseComoGanho(interesse.id, ESTADO_INICIAL_ACAO, fdGanho);
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
     expect(a.resultado.fechamentosGanhos).toBe(1);
     expect(a.resultado.fechamentosPerdidos).toBe(0);
     expect(a.resultado.taxaOportunidadeParaGanho).toBeCloseTo(100);
@@ -305,7 +305,7 @@ describe("resultado comercial no dashboard", () => {
 
     await marcarInteresseComoPerdido(interesse.id, ESTADO_INICIAL_ACAO, new FormData());
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
     expect(a.resultado.fechamentosGanhos).toBe(0);
     expect(a.resultado.fechamentosPerdidos).toBe(1);
     expect(a.resultado.taxaOportunidadeParaGanho).toBe(0);
@@ -323,7 +323,7 @@ describe("resultado comercial no dashboard", () => {
     await criarContato({ organizationId, personId: pessoa.id, origin: "CONTATO" });
     await criarContato({ organizationId, personId: pessoa.id, origin: "ANUNCIE" });
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
     expect(a.contatos.atual).toBe(3);
     // Só o de página de imóvel pode virar oportunidade.
     expect(a.resultado.contatosElegiveis).toBe(1);
@@ -341,7 +341,7 @@ describe("resultado comercial no dashboard", () => {
     fd.set("propertyId", imovel.id);
     await criarInteressePessoa(pessoa.id, ESTADO_INICIAL_ACAO, fd);
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: new Date() });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: new Date() });
     expect(a.resultado.oportunidadesCriadas).toBe(1);
     expect(a.resultado.oportunidadesComOrigem).toBe(0);
     // A distinção que a tela usa para mostrar "—" em vez de "0".
@@ -351,7 +351,7 @@ describe("resultado comercial no dashboard", () => {
 
   test("tenant vazio: zeros coerentes e taxas null, nunca NaN", async () => {
     const cenario = await novoCenario();
-    const a = await buscarAnalyticsComercial(cenario.organization.id, {
+    const a = await buscarAnalyticsComercial(cenario.organization.id, "UTC", {
       periodo: "30d",
       agora: new Date(),
     });
@@ -366,8 +366,8 @@ describe("resultado comercial no dashboard", () => {
     const { organizationId: idA } = await cenarioComOportunidade();
     const orgB = await novoCenario();
 
-    const a = await buscarAnalyticsComercial(idA, { periodo: "30d", agora: new Date() });
-    const b = await buscarAnalyticsComercial(orgB.organization.id, {
+    const a = await buscarAnalyticsComercial(idA, "UTC", { periodo: "30d", agora: new Date() });
+    const b = await buscarAnalyticsComercial(orgB.organization.id, "UTC", {
       periodo: "30d",
       agora: new Date(),
     });

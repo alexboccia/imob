@@ -6,6 +6,7 @@ import {
   interpretarPeriodoAnalytics,
   PERIODO_ANALYTICS_LABEL,
 } from "@/lib/analytics-comercial";
+import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { AnalyticsPeriodoChips } from "@/components/admin/analytics/AnalyticsPeriodoChips";
 import { AnalyticsKpiCards } from "@/components/admin/analytics/AnalyticsKpiCards";
@@ -73,7 +74,11 @@ export default async function AnalyticsPage({
   }
 
   const periodo = interpretarPeriodoAnalytics(params);
-  const analytics = await buscarAnalyticsComercial(organizationId, { periodo });
+  // Fase 18 — o período (7d/30d/91d/13s) passa a recortar DIAS
+  // CALENDÁRIO DA ORGANIZAÇÃO. A semântica declarada na tela é a mesma:
+  // N dias fechados terminando hoje. Só o calendário mudou de dono.
+  const fuso = await buscarFusoOrganizacao(organizationId);
+  const analytics = await buscarAnalyticsComercial(organizationId, fuso, { periodo });
   const periodoLabel = PERIODO_ANALYTICS_LABEL[periodo];
 
   return (

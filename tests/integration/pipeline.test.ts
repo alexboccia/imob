@@ -140,7 +140,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       propertyId: imovelB.id,
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
 
     const idsRetornados = COLUNAS_ABERTAS.flatMap((c) => colunas[c].map((i) => i.id));
     expect(idsRetornados).toEqual([interesseA.id]);
@@ -175,7 +175,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       },
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const item = colunas.VISIT_SCHEDULED.find((i) => i.id === interesseA.id);
     expect(item).toBeDefined();
     expect(item?.proximaVisita).toBeNull();
@@ -195,7 +195,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       propertyId: imovel.id,
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const item = colunas.INTERESTED.find((i) => i.id === interesse.id);
     expect(item?.person).toEqual({ id: pessoa.id, name: "Cliente Nominal" });
     expect(item?.property).toEqual({
@@ -221,7 +221,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       ids[stage] = interesse.id;
     }
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
 
     for (const stage of COLUNAS_ABERTAS) {
       expect(colunas[stage].map((i) => i.id)).toContain(ids[stage]);
@@ -247,7 +247,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       },
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     for (const coluna of COLUNAS_ABERTAS) {
       expect(colunas[coluna].map((i) => i.id)).not.toContain(interesse.id);
     }
@@ -270,7 +270,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       },
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     for (const coluna of COLUNAS_ABERTAS) {
       expect(colunas[coluna].map((i) => i.id)).not.toContain(interesse.id);
     }
@@ -314,7 +314,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     const resultado = await mudarEstagio(interesse.id, "PROPOSAL");
     expect(resultado.success).toBe(true);
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     expect(colunas.PROPOSAL.map((i) => i.id)).toContain(interesse.id);
     expect(colunas.INTERESTED.map((i) => i.id)).not.toContain(interesse.id);
   });
@@ -334,7 +334,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     const resultado = await mudarEstagio(interesse.id, "WON");
     expect(resultado.success).toBe(false);
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     expect(colunas.PROPOSAL.map((i) => i.id)).toContain(interesse.id);
     const encerradas = await buscarPipelineEncerrado(cenario.organization.id);
     expect(encerradas.itens.map((i) => i.id)).not.toContain(interesse.id);
@@ -355,7 +355,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     const resultado = await mudarEstagio(interesse.id, "REJECTED");
     expect(resultado.success).toBe(false);
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     expect(colunas.VISITED.map((i) => i.id)).toContain(interesse.id);
     const encerradas = await buscarPipelineEncerrado(cenario.organization.id);
     expect(encerradas.itens.map((i) => i.id)).not.toContain(interesse.id);
@@ -373,13 +373,13 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       stage: "PROPOSAL",
     });
 
-    const antes = await buscarPipelineAberto(cenario.organization.id);
+    const antes = await buscarPipelineAberto(cenario.organization.id, "UTC");
     expect(antes.PROPOSAL.map((i) => i.id)).toContain(interesse.id);
 
     const resultado = await marcarGanho(interesse.id);
     expect(resultado.success).toBe(true);
 
-    const depois = await buscarPipelineAberto(cenario.organization.id);
+    const depois = await buscarPipelineAberto(cenario.organization.id, "UTC");
     for (const coluna of COLUNAS_ABERTAS) {
       expect(depois[coluna].map((i) => i.id)).not.toContain(interesse.id);
     }
@@ -402,7 +402,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     const resultado = await marcarPerdido(interesse.id);
     expect(resultado.success).toBe(true);
 
-    const depois = await buscarPipelineAberto(cenario.organization.id);
+    const depois = await buscarPipelineAberto(cenario.organization.id, "UTC");
     for (const coluna of COLUNAS_ABERTAS) {
       expect(depois[coluna].map((i) => i.id)).not.toContain(interesse.id);
     }
@@ -441,7 +441,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       interesses.push({ id: interesse.id, visitaId: visita.id, scheduledAt });
     }
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     for (const { id, visitaId, scheduledAt } of interesses) {
       const item = colunas.VISIT_SCHEDULED.find((i) => i.id === id);
       expect(item?.proximaVisita).toEqual({ id: visitaId, scheduledAtISO: scheduledAt.toISOString() });
@@ -459,7 +459,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       propertyId: imovelB.id,
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id, { busca: "Nome Exclusivo De B" });
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC", { busca: "Nome Exclusivo De B" });
     const total = COLUNAS_ABERTAS.reduce((soma, c) => soma + colunas[c].length, 0);
     expect(total).toBe(0);
   });
@@ -473,7 +473,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       data: { organizationId: cenario.organization.id, personId: pessoaB.id, propertyId: imovelA.id },
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const item = colunas.INTERESTED.find((i) => i.id === interesseAnomalo.id);
     expect(item).toBeDefined();
     expect(item?.person).toBeNull();
@@ -720,7 +720,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       stage: "VISITED",
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const item = colunas.VISITED.find((i) => i.id === interesse.id);
     expect(item?.aging).toBeNull();
   });
@@ -744,7 +744,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       changedAt: new Date(agora.getTime() - 5 * 60 * 60 * 1000), // 5h atrás
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id, { agora });
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC", { agora });
     const item = colunas.VISITED.find((i) => i.id === interesse.id);
     expect(item?.aging).toBe("Na etapa há 5h");
   });
@@ -772,7 +772,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       esperados.push({ id: interesse.id, horas: i });
     }
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id, { agora });
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC", { agora });
     for (const { id, horas } of esperados) {
       const item = colunas.PROPOSAL.find((i) => i.id === id);
       expect(item?.aging).toBe(`Na etapa há ${horas}h`);
@@ -807,7 +807,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       changedAt: new Date(agora.getTime() - 2 * 60 * 60 * 1000),
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id, { agora });
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC", { agora });
     const item = colunas.VISITED.find((i) => i.id === interesse.id);
     expect(item?.aging).toBe("Na etapa há 2h");
   });
@@ -833,7 +833,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       changedAt: new Date(),
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const item = colunas.VISITED.find((i) => i.id === interesse.id);
     expect(item?.aging).toBeNull();
   });
@@ -1197,10 +1197,10 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       scheduledAt: passado(3),
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id);
     const item = colunas.VISIT_SCHEDULED.find((i) => i.id === interesse.id)!;
-    const prioridade = classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.VISIT_SCHEDULED, new Date());
+    const prioridade = classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.VISIT_SCHEDULED, "UTC", new Date());
 
     expect(prioridade.nivel).toBe("ALTA");
     expect(prioridade.motivos[0]).toEqual({ tipo: "ATIVIDADE_VENCIDA", scheduledAtISO: item.proximaVisita!.scheduledAtISO });
@@ -1217,9 +1217,9 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       stage: "PROPOSAL",
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const item = colunas.PROPOSAL.find((i) => i.id === interesse.id)!;
-    const prioridade = classificarPrioridadePipeline(item, null, new Date());
+    const prioridade = classificarPrioridadePipeline(item, null, "UTC", new Date());
 
     expect(prioridade).toEqual({ nivel: "ALTA", motivos: [{ tipo: "PROPOSTA_SEM_PROXIMA_ACAO" }] });
   });
@@ -1242,12 +1242,12 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       stage: "INTERESTED",
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const itemVisitado = colunas.VISITED.find((i) => i.id === visitado.id)!;
     const itemInteressado = colunas.INTERESTED.find((i) => i.id === interessado.id)!;
 
-    expect(classificarPrioridadePipeline(itemVisitado, null, new Date()).nivel).toBe("MEDIA");
-    expect(classificarPrioridadePipeline(itemInteressado, null, new Date())).toEqual({ nivel: "NORMAL", motivos: [] });
+    expect(classificarPrioridadePipeline(itemVisitado, null, "UTC", new Date()).nivel).toBe("MEDIA");
+    expect(classificarPrioridadePipeline(itemInteressado, null, "UTC", new Date())).toEqual({ nivel: "NORMAL", motivos: [] });
   });
 
   test("P8-X) aging real (via PropertyInterestStageHistory) acima da média histórica real (via buscarAnalyticsHistoricoPipeline) -> MEDIA com AGING_ACIMA_DA_MEDIA", async () => {
@@ -1294,13 +1294,13 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       changedAt: passado(8),
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id, { periodo: "TODOS" });
     const item = colunas.INTERESTED.find((i) => i.id === atual.id)!;
     expect(item.agingMs).not.toBeNull();
     expect(analytics.tempoMedioHistorico.INTERESTED).not.toBeNull();
 
-    const prioridade = classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.INTERESTED, new Date());
+    const prioridade = classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.INTERESTED, "UTC", new Date());
     expect(prioridade.nivel).toBe("MEDIA");
     expect(prioridade.motivos.map((m) => m.tipo)).toContain("AGING_ACIMA_DA_MEDIA");
   });
@@ -1316,12 +1316,12 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       stage: "INTERESTED",
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id);
     const item = colunas.INTERESTED.find((i) => i.id === legado.id)!;
     expect(item.agingMs).toBeNull();
 
-    const prioridade = classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.INTERESTED, new Date());
+    const prioridade = classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.INTERESTED, "UTC", new Date());
     expect(prioridade).toEqual({ nivel: "NORMAL", motivos: [] });
   });
 
@@ -1343,11 +1343,11 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       scheduledAt: passado(2),
     });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const item = colunas.VISIT_SCHEDULED.find((i) => i.id === legado.id)!;
     expect(item.agingMs).toBeNull();
 
-    const prioridade = classificarPrioridadePipeline(item, null, new Date());
+    const prioridade = classificarPrioridadePipeline(item, null, "UTC", new Date());
     expect(prioridade.nivel).toBe("ALTA");
   });
 
@@ -1357,7 +1357,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     const imovel = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
     await criarEncerradoDireto({ organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, stage: "WON", closedAt: new Date() });
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const total = COLUNAS_ABERTAS.reduce((soma, c) => soma + colunas[c].length, 0);
     expect(total).toBe(0);
   });
@@ -1390,7 +1390,7 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       scheduledAt: passado(5),
     });
 
-    const colunasA = await buscarPipelineAberto(cenario.organization.id);
+    const colunasA = await buscarPipelineAberto(cenario.organization.id, "UTC");
     expect(colunasA.INTERESTED.map((i) => i.id)).toEqual([interesseA.id]);
     // interesseB nunca aparece em nenhuma coluna de A — sua atividade
     // vencida jamais pode influenciar a prioridade de A.
@@ -1410,11 +1410,11 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       historico: await prisma.propertyInterestStageHistory.count({ where: { organizationId: cenario.organization.id } }),
     };
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const analytics = await buscarAnalyticsHistoricoPipeline(cenario.organization.id);
     for (const coluna of COLUNAS_ABERTAS) {
       for (const item of colunas[coluna]) {
-        classificarPrioridadePipeline(item, analytics.tempoMedioHistorico[coluna], new Date());
+        classificarPrioridadePipeline(item, analytics.tempoMedioHistorico[coluna], "UTC", new Date());
       }
     }
 
@@ -1433,10 +1433,10 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
     const interesse = await criarInteresseDireto({ organizationId: cenario.organization.id, personId: pessoa.id, propertyId: imovel.id, stage: "PROPOSAL" });
 
     async function ler() {
-      const colunas = await buscarPipelineAberto(cenario!.organization.id);
+      const colunas = await buscarPipelineAberto(cenario!.organization.id, "UTC");
       const analytics = await buscarAnalyticsHistoricoPipeline(cenario!.organization.id);
       const item = colunas.PROPOSAL.find((i) => i.id === interesse.id)!;
-      return classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.PROPOSAL, new Date("2026-06-15T12:00:00.000Z"));
+      return classificarPrioridadePipeline(item, analytics.tempoMedioHistorico.PROPOSAL, "UTC", new Date("2026-06-15T12:00:00.000Z"));
     }
 
     const primeira = await ler();

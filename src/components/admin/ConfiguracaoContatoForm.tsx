@@ -18,6 +18,7 @@ import { SeletorAparenciaRodape } from "@/components/admin/SeletorAparenciaRodap
 import { GeradorTemaLogotipo } from "@/components/admin/GeradorTemaLogotipo";
 import { HeroImageUpload } from "@/components/admin/HeroImageUpload";
 import { resolverTemaEfetivo, THEME_ID_CUSTOMIZADO, type TokensTema } from "@/lib/branding/temas";
+import type { GrupoFusos } from "@/lib/fusos-opcoes";
 
 type ConfiguracaoInicial = {
   telefone: string;
@@ -38,6 +39,10 @@ type ConfiguracaoInicial = {
   nomePublico: string | null;
   footerAppearance: string | null;
   temaCustomizado: TokensTema | null;
+  // Fase 18 — fuso horário comercial já resolvido (nunca null aqui: a
+  // página aplica o fallback explícito antes de entregar).
+  fuso: string;
+  gruposDeFuso: GrupoFusos[];
 };
 
 export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicial }) {
@@ -196,6 +201,48 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           </CardContent>
         </Card>
       </div>
+
+      {/* Fuso horário (Fase 18). Fica em Configurações, junto do resto
+          da configuração institucional — nenhuma tela nova. */}
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="min-w-0 break-words">Fuso horário da organização</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            Usado para Agenda, Central e períodos do Analytics. Alterar o fuso não muda nenhuma
+            data já registrada — muda apenas como os dias e horários são interpretados e
+            exibidos.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="min-w-0">
+          <div className="min-w-0 space-y-1.5">
+            <Label htmlFor="timezone">Fuso horário</Label>
+            {/* <select> NATIVO: busca por digitação, teclado e leitor de
+                tela funcionam sem JavaScript, e não há divergência entre
+                servidor e cliente. O rótulo é legível; o valor salvo é
+                sempre o identificador IANA. */}
+            <select
+              id="timezone"
+              name="timezone"
+              defaultValue={config.fuso}
+              className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-96"
+            >
+              {config.gruposDeFuso.map((grupo) => (
+                <optgroup key={grupo.titulo} label={grupo.titulo}>
+                  {grupo.opcoes.map((opcao) => (
+                    <option key={opcao.valor} value={opcao.valor}>
+                      {opcao.rotulo}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <ErroCampo erros={estado.fieldErrors?.timezone} />
+            <p className="min-w-0 break-words text-xs text-muted-foreground">
+              Configuração atual: {config.fuso}.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="min-w-0">
         <CardHeader>

@@ -3,7 +3,8 @@
 import { useState } from "react";
 import type { ItemPipeline, PrioridadePipeline } from "@/lib/pipeline";
 import { estagioInteresseEncerrado } from "@/lib/property-interest-schema";
-import { acaoOperacionalDaVisita, formatarDataHora } from "@/lib/scheduled-activity-date";
+import { acaoOperacionalDaVisita } from "@/lib/scheduled-activity-date";
+import { formatarDataHoraNoFuso } from "@/lib/fuso-horario";
 import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
 import { ResponsavelNegociacao } from "@/components/admin/ResponsavelNegociacao";
 import type { OpcaoResponsavel } from "@/lib/responsavel-negociacao";
@@ -29,9 +30,13 @@ export function CardPipeline({
   item,
   prioridade,
   membros,
+  fuso,
 }: {
   item: ItemPipeline;
   prioridade?: PrioridadePipeline;
+  // Fuso comercial da organização (Fase 18) — carregado UMA vez pela
+  // página e repassado, igual a `membros`. Nunca uma consulta por card.
+  fuso: string;
   // Fase 11 — membros ativos, carregados UMA vez pela página do Pipeline
   // e repassados a todos os cards. Nunca uma query por card.
   membros: OpcaoResponsavel[];
@@ -42,6 +47,7 @@ export function CardPipeline({
     !!item.proximaVisita &&
     acaoOperacionalDaVisita(
       { status: "SCHEDULED", scheduledAt: new Date(item.proximaVisita.scheduledAtISO) },
+      fuso,
       new Date()
     ) === "RESOLVER_PENDENCIA";
 
@@ -85,7 +91,7 @@ export function CardPipeline({
               {item.proximaVisita ? (
                 <p className={`text-xs ${pendente ? "font-medium text-destructive" : "text-muted-foreground"}`}>
                   {pendente ? "Pendência: " : "Próxima visita: "}
-                  {formatarDataHora(item.proximaVisita.scheduledAtISO)}
+                  {formatarDataHoraNoFuso(item.proximaVisita.scheduledAtISO, fuso)}
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">Sem visita agendada</p>
@@ -109,6 +115,7 @@ export function CardPipeline({
           {encerrado ? (
             <div className="border-t pt-2">
               <FechamentoInteresse
+                fuso={fuso}
                 interesseId={item.id}
                 stage={item.stage}
                 closedAtISO={item.closedAtISO}
@@ -134,7 +141,13 @@ export function CardPipeline({
       </Card>
 
       {!encerrado && (
-        <NegociacaoDrawer item={item} prioridade={prioridade} open={drawerAberto} onOpenChange={setDrawerAberto} />
+        <NegociacaoDrawer
+          item={item}
+          prioridade={prioridade}
+          fuso={fuso}
+          open={drawerAberto}
+          onOpenChange={setDrawerAberto}
+        />
       )}
     </>
   );

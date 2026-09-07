@@ -234,8 +234,8 @@ describe("isolamento multi-tenant", () => {
     }
     await registrarEventoAnalytics({ organizationId: orgB.organization.id, propertyId: imovelB.id, type: "PROPERTY_VIEW", visitorId: VISITANTE_A, agora: AGORA });
 
-    const a = await buscarAnalyticsComercial(orgA.organization.id, { periodo: "30d", agora: AGORA });
-    const b = await buscarAnalyticsComercial(orgB.organization.id, { periodo: "30d", agora: AGORA });
+    const a = await buscarAnalyticsComercial(orgA.organization.id, "UTC", { periodo: "30d", agora: AGORA });
+    const b = await buscarAnalyticsComercial(orgB.organization.id, "UTC", { periodo: "30d", agora: AGORA });
 
     expect(a.funil.visualizacoes.atual).toBe(2);
     expect(a.funil.cliquesWhatsapp.atual).toBe(2);
@@ -267,7 +267,7 @@ describe("funil no dashboard", () => {
       ],
     });
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
 
     expect(a.funil.visualizacoes.atual).toBe(4);
     expect(a.contatos.atual).toBe(3);
@@ -285,7 +285,7 @@ describe("funil no dashboard", () => {
       await registrarEventoAnalytics({ organizationId, propertyId: imovel.id, type: "PROPERTY_VIEW", visitorId: v, agora: AGORA });
     }
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
     expect(a.topImoveis).toHaveLength(1);
     expect(a.topImoveis[0]).toMatchObject({
       titulo: "Muito visto e sem contato",
@@ -298,7 +298,7 @@ describe("funil no dashboard", () => {
 
   test("organização sem nenhum evento: taxas null e aviso de ausência de histórico", async () => {
     const cenario = await novoCenario();
-    const a = await buscarAnalyticsComercial(cenario.organization.id, { periodo: "30d", agora: AGORA });
+    const a = await buscarAnalyticsComercial(cenario.organization.id, "UTC", { periodo: "30d", agora: AGORA });
 
     expect(a.funil.visualizacoes.atual).toBe(0);
     expect(a.funil.taxaContatoPorVisualizacao).toBeNull();
@@ -313,7 +313,7 @@ describe("funil no dashboard", () => {
     const antigo = new Date(AGORA.getTime() - 200 * 24 * 60 * 60 * 1000);
     await registrarEventoAnalytics({ organizationId, propertyId: imovel.id, type: "PROPERTY_VIEW", visitorId: VISITANTE_A, agora: antigo });
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
     expect(a.funil.visualizacoes.atual).toBe(0);
     // Já houve medição — a tela não deve dizer "a medição começou agora".
     expect(a.funil.semHistoricoDigital).toBe(false);
@@ -329,7 +329,7 @@ describe("funil no dashboard", () => {
     await registrarEventoAnalytics({ organizationId, propertyId: imovel.id, type: "PROPERTY_VIEW", visitorId: VISITANTE_A, agora: AGORA });
     await registrarEventoAnalytics({ organizationId, propertyId: imovel.id, type: "PROPERTY_VIEW", visitorId: VISITANTE_B, agora: AGORA });
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
     expect(a.funil.visualizacoes.atual).toBe(2);
     expect(a.funil.visualizacoes.anterior).toBe(1);
     expect(a.funil.visualizacoes.percentual).toBeCloseTo(100);

@@ -11,11 +11,11 @@ import {
   type ItemAgendaClient,
 } from "@/components/admin/agenda/agenda-visual";
 import {
-  formatarDataHora,
   estaAtrasada,
   horarioJaPassouHoje,
   acaoOperacionalDaVisita,
 } from "@/lib/scheduled-activity-date";
+import { formatarDataHoraNoFuso } from "@/lib/fuso-horario";
 import { cn } from "@/lib/utils";
 import { CalendarCheck } from "lucide-react";
 
@@ -31,24 +31,28 @@ import { CalendarCheck } from "lucide-react";
 //
 // `item`/`agoraISO` cruzam a fronteira Server -> Client como ISO string
 // (nunca Date bruto) — mesmo padrão defensivo de CardPipeline.tsx, ver
-// ItemAgendaClient em agenda-visual.ts.
+// ItemAgendaClient em agenda-visual.ts. `fuso` atravessa como string
+// (Fase 18): "atrasada"/"horário passou" são conceitos de calendário da
+// ORGANIZAÇÃO, e o navegador de quem olha não tem voto nisso.
 export function AgendaItemCard({
   item,
   agoraISO,
+  fuso,
   ehProximaVisita = false,
 }: {
   item: ItemAgendaClient;
   agoraISO: string;
+  fuso: string;
   ehProximaVisita?: boolean;
 }) {
   const [drawerAberto, setDrawerAberto] = useState(false);
   const agora = new Date(agoraISO);
   const scheduledAt = new Date(item.scheduledAtISO);
   const acionavel = item.status === "SCHEDULED";
-  const atrasada = acionavel && estaAtrasada({ status: item.status, scheduledAt }, agora);
-  const horarioPassou = horarioJaPassouHoje({ status: item.status, scheduledAt }, agora);
+  const atrasada = acionavel && estaAtrasada({ status: item.status, scheduledAt }, fuso, agora);
+  const horarioPassou = horarioJaPassouHoje({ status: item.status, scheduledAt }, fuso, agora);
   const acaoOperacional = acionavel
-    ? acaoOperacionalDaVisita({ status: item.status, scheduledAt }, agora)
+    ? acaoOperacionalDaVisita({ status: item.status, scheduledAt }, fuso, agora)
     : null;
 
   return (
@@ -60,7 +64,7 @@ export function AgendaItemCard({
         <CardContent className="space-y-2 text-sm">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-medium">{formatarDataHora(item.scheduledAtISO)}</p>
+              <p className="font-medium">{formatarDataHoraNoFuso(item.scheduledAtISO, fuso)}</p>
               <p className="flex items-center gap-1 text-xs text-muted-foreground">
                 <CalendarCheck className="size-3.5 shrink-0" />
                 Visita
@@ -110,7 +114,13 @@ export function AgendaItemCard({
         </CardContent>
       </Card>
 
-      <AgendaDetalhesDrawer item={item} agoraISO={agoraISO} open={drawerAberto} onOpenChange={setDrawerAberto} />
+      <AgendaDetalhesDrawer
+        item={item}
+        agoraISO={agoraISO}
+        fuso={fuso}
+        open={drawerAberto}
+        onOpenChange={setDrawerAberto}
+      />
     </>
   );
 }

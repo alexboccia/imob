@@ -19,8 +19,9 @@ import {
   criarAgendamentoVisitaSchema,
   remarcarAgendamentoVisitaSchema,
   atualizarObservacaoAgendamentoVisitaSchema,
-  parseScheduledAt,
 } from "@/lib/scheduled-activity-schema";
+import { deDatetimeLocalNoFuso } from "@/lib/fuso-horario";
+import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 
 // Server Actions da agenda de visitas (Fase H.2 do CRM) — arquivo dedicado,
 // separado de clientes/actions.ts por decisão da própria H.1. Cobre
@@ -79,11 +80,27 @@ export async function criarAgendamentoVisita(
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
 
+  const fuso = await buscarFusoOrganizacao(organizationId);
+
   const parsed = criarAgendamentoVisitaSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return erroValidacao(parsed.error);
   const { notes } = parsed.data;
-  const scheduledAt = parseScheduledAt(parsed.data.scheduledAt);
 
+  // datetime-local não carrega fuso (Fase 18): "2026-09-07T14:30" é um
+  // horário de PAREDE e só vira instante quando se sabe o fuso da
+  // organização. null = data que não existe no calendário — rejeitada
+  // como erro de campo, nunca "rolada" silenciosamente para o mês
+  // seguinte.
+  const scheduledAt = deDatetimeLocalNoFuso(parsed.data.scheduledAt, fuso);
+  if (!scheduledAt) {
+    return {
+      success: false,
+      message: "Verifique os campos destacados.",
+      fieldErrors: { scheduledAt: ["Data/horário inválidos."] },
+    };
+  }
+
+  // Comparação entre INSTANTES: "no futuro" não depende de fuso nenhum.
   if (scheduledAt.getTime() <= Date.now()) {
     return {
       success: false,
@@ -241,7 +258,16 @@ export async function remarcarAgendamentoVisita(
 
   const parsed = remarcarAgendamentoVisitaSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return erroValidacao(parsed.error);
-  const scheduledAt = parseScheduledAt(parsed.data.scheduledAt);
+
+  const fuso = await buscarFusoOrganizacao(organizationId);
+  const scheduledAt = deDatetimeLocalNoFuso(parsed.data.scheduledAt, fuso);
+  if (!scheduledAt) {
+    return {
+      success: false,
+      message: "Verifique os campos destacados.",
+      fieldErrors: { scheduledAt: ["Data/horário inválidos."] },
+    };
+  }
 
   if (scheduledAt.getTime() <= Date.now()) {
     return {

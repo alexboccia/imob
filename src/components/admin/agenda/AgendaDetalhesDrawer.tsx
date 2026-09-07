@@ -11,11 +11,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  formatarDataHora,
   estaAtrasada,
   horarioJaPassouHoje,
   acaoOperacionalDaVisita,
 } from "@/lib/scheduled-activity-date";
+import { formatarDataHoraNoFuso } from "@/lib/fuso-horario";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
 import { STATUS_VISITA_LABEL, ACAO_OPERACIONAL_LABEL, type ItemAgendaClient } from "./agenda-visual";
 import { MessageCircle, Phone } from "lucide-react";
@@ -36,11 +36,13 @@ import { MessageCircle, Phone } from "lucide-react";
 export function AgendaDetalhesDrawer({
   item,
   agoraISO,
+  fuso,
   open,
   onOpenChange,
 }: {
   item: ItemAgendaClient | null;
   agoraISO: string;
+  fuso: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -49,10 +51,10 @@ export function AgendaDetalhesDrawer({
   const agora = new Date(agoraISO);
   const scheduledAt = new Date(item.scheduledAtISO);
   const acionavel = item.status === "SCHEDULED";
-  const atrasada = acionavel && estaAtrasada({ status: item.status, scheduledAt }, agora);
-  const horarioPassou = horarioJaPassouHoje({ status: item.status, scheduledAt }, agora);
+  const atrasada = acionavel && estaAtrasada({ status: item.status, scheduledAt }, fuso, agora);
+  const horarioPassou = horarioJaPassouHoje({ status: item.status, scheduledAt }, fuso, agora);
   const acaoOperacional = acionavel
-    ? acaoOperacionalDaVisita({ status: item.status, scheduledAt }, agora)
+    ? acaoOperacionalDaVisita({ status: item.status, scheduledAt }, fuso, agora)
     : null;
 
   const telefone = item.person?.phone ?? null;
@@ -87,7 +89,7 @@ export function AgendaDetalhesDrawer({
         <div className="flex-1 space-y-5 overflow-y-auto">
           <div>
             <h3 className="mb-1.5 text-sm font-medium">Data e horário</h3>
-            <p className="text-sm text-muted-foreground">{formatarDataHora(item.scheduledAtISO)}</p>
+            <p className="text-sm text-muted-foreground">{formatarDataHoraNoFuso(item.scheduledAtISO, fuso)}</p>
           </div>
 
           {acaoOperacional && (
@@ -156,6 +158,7 @@ export function AgendaDetalhesDrawer({
             <h3 className="text-sm font-medium">Ações</h3>
             {acionavel ? (
               <AgendamentoVisita
+                fuso={fuso}
                 podeAgendar={false}
                 atividadeAgendada={{
                   id: item.id,

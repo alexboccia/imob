@@ -5,6 +5,7 @@ import {
   registrarInteracao,
 } from "@/app/app/clientes/actions";
 import { requireOrganizationId } from "@/lib/tenant";
+import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
@@ -41,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ESTAGIO_LABEL, ESTAGIOS_PIPELINE, TIPO_INTERACAO_LABEL } from "@/lib/crm-labels";
+import { formatarDataHoraNoFuso } from "@/lib/fuso-horario";
 
 // Redesenho da tela de Clientes — ESTAGIO_LABEL/TIPO_INTERACAO_LABEL
 // consolidados em src/lib/crm-labels.ts (antes duplicados aqui e em
@@ -54,6 +56,9 @@ export default async function DetalheClientePage({
 }) {
   const { id } = await params;
   const organizationId = await requireOrganizationId();
+  // Fuso comercial da organização (Fase 18) — uma resolução por
+  // carregamento, repassada a todos os itens da ficha.
+  const fuso = await buscarFusoOrganizacao(organizationId);
   const session = await auth();
 
   if (!(await hasModule(organizationId, "crm"))) {
@@ -328,6 +333,7 @@ export default async function DetalheClientePage({
               {pessoa.propertyInterests.map((interesse) => (
                 <InteresseImovelItem
                   key={interesse.id}
+                  fuso={fuso}
                   membros={membrosAtribuiveis}
                   podeLiquidar={temPapel(session?.user.role, PAPEIS_LIQUIDACAO_COMISSAO)}
                   interesse={{
@@ -493,7 +499,7 @@ export default async function DetalheClientePage({
                           {rotuloOrigemCaptacao(interacao.origin)}
                         </Badge>
                       )}
-                      {interacao.occurredAt.toLocaleString("pt-BR")}
+                      {formatarDataHoraNoFuso(interacao.occurredAt, fuso)}
                     </p>
                     {/* Fase 15 — AUTORIA em texto, na timeline que já
                         existia. Nunca aparece em captação pública: ali o

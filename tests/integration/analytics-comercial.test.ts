@@ -86,7 +86,7 @@ describe("definição de contato comercial (contra o banco)", () => {
     await criarInteracao({ organizationId, personId: pessoa.id, propertyId: imovel.id, origin: null, type: "VISIT", occurredAt: diasAtras(3) });
     await criarInteracao({ organizationId, personId: pessoa.id, origin: null, occurredAt: diasAtras(5) });
 
-    const analytics = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const analytics = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
 
     expect(analytics.contatos.atual).toBe(3);
     // As 3 interações sem origem aparecem como DIVULGAÇÃO, jamais somadas
@@ -104,7 +104,7 @@ describe("definição de contato comercial (contra o banco)", () => {
     await criarInteracao({ organizationId, personId: pessoa.id, origin: "PORTAL_FUTURO", occurredAt: diasAtras(1) });
     await criarInteracao({ organizationId, personId: pessoa.id, origin: "CONTATO", occurredAt: diasAtras(1) });
 
-    const analytics = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const analytics = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
     expect(analytics.contatos.atual).toBe(1);
   });
 });
@@ -126,7 +126,7 @@ describe("período e comparação (contra o banco)", () => {
     // Fora das duas janelas — não pode aparecer em lugar nenhum.
     await criarInteracao({ organizationId, personId: pessoa.id, origin: "CONTATO", occurredAt: diasAtras(200) });
 
-    const analytics = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const analytics = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
     expect(analytics.contatos.atual).toBe(3);
     expect(analytics.contatos.anterior).toBe(2);
     expect(analytics.contatos.diferenca).toBe(1);
@@ -139,7 +139,7 @@ describe("período e comparação (contra o banco)", () => {
     const pessoa = await criarPessoa({ organizationId });
     await criarInteracao({ organizationId, personId: pessoa.id, origin: "IMOVEL", occurredAt: diasAtras(1) });
 
-    const analytics = await buscarAnalyticsComercial(organizationId, { periodo: "7d", agora: AGORA });
+    const analytics = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "7d", agora: AGORA });
     expect(analytics.contatos.anterior).toBe(0);
     expect(analytics.contatos.percentual).toBeNull();
   });
@@ -150,7 +150,7 @@ describe("período e comparação (contra o banco)", () => {
     const pessoa = await criarPessoa({ organizationId });
     await criarInteracao({ organizationId, personId: pessoa.id, origin: "CONTATO", occurredAt: diasAtras(1) });
 
-    const analytics = await buscarAnalyticsComercial(organizationId, { periodo: "13s", agora: AGORA });
+    const analytics = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "13s", agora: AGORA });
     expect(analytics.granularidade).toBe("SEMANA");
     expect(analytics.serie).toHaveLength(13);
     expect(analytics.serie.filter((p) => p.total === 0)).toHaveLength(12);
@@ -169,7 +169,7 @@ describe("pessoas × contatos e recortes por origem", () => {
     }
     await criarInteracao({ organizationId, personId: outra.id, origin: "CONTATO", occurredAt: diasAtras(1) });
 
-    const analytics = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const analytics = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
     expect(analytics.contatos.atual).toBe(5);
     expect(analytics.pessoasDistintas).toBe(2);
   });
@@ -183,7 +183,7 @@ describe("pessoas × contatos e recortes por origem", () => {
       await criarInteracao({ organizationId, personId: proprietario.id, origin: "ANUNCIE", occurredAt: diasAtras(dia) });
     }
 
-    const analytics = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const analytics = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
     expect(analytics.contatos.atual).toBe(3);
     expect(analytics.proprietariosAnunciando).toBe(1);
   });
@@ -197,7 +197,7 @@ describe("pessoas × contatos e recortes por origem", () => {
     await criarInteracao({ organizationId, personId: pessoa.id, origin: "ANUNCIE", occurredAt: diasAtras(2) });
     await criarInteracao({ organizationId, personId: pessoa.id, origin: "ANUNCIE", occurredAt: diasAtras(3) });
 
-    const analytics = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const analytics = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
     expect(analytics.pessoasDistintas).toBe(1);
     expect(analytics.proprietariosAnunciando).toBe(1);
   });
@@ -218,7 +218,7 @@ describe("imóveis que mais geram contato", () => {
     await criarInteracao({ organizationId, personId: pessoa.id, propertyId: menos.id, origin: "IMOVEL", occurredAt: diasAtras(1) });
     await criarInteracao({ organizationId, personId: pessoa.id, origin: "CONTATO", occurredAt: diasAtras(1) });
 
-    const analytics = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const analytics = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
 
     expect(analytics.topImoveis.map((i) => i.titulo)).toEqual([
       "Cobertura muito procurada",
@@ -237,7 +237,7 @@ describe("imóveis que mais geram contato", () => {
     const pessoa = await criarPessoa({ organizationId });
     await criarInteracao({ organizationId, personId: pessoa.id, origin: "CONTATO", occurredAt: diasAtras(1) });
 
-    const analytics = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const analytics = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
     expect(analytics.topImoveis).toEqual([]);
     expect(analytics.imoveisComContato).toBe(0);
   });
@@ -246,7 +246,7 @@ describe("imóveis que mais geram contato", () => {
 describe("tenant vazio", () => {
   test("organização sem nenhuma interação devolve zeros coerentes, nunca NaN/undefined", async () => {
     const cenario = await novoCenario();
-    const analytics = await buscarAnalyticsComercial(cenario.organization.id, { periodo: "30d", agora: AGORA });
+    const analytics = await buscarAnalyticsComercial(cenario.organization.id, "UTC", { periodo: "30d", agora: AGORA });
 
     expect(analytics.contatos).toMatchObject({ atual: 0, anterior: 0, diferenca: 0, percentual: null });
     expect(analytics.pessoasDistintas).toBe(0);
@@ -284,8 +284,8 @@ describe("isolamento multi-tenant", () => {
     // Org B: um único contato, de outra natureza.
     await criarInteracao({ organizationId: orgB.organization.id, personId: pessoaB.id, propertyId: imovelB.id, origin: "IMOVEL", occurredAt: diasAtras(1) });
 
-    const a = await buscarAnalyticsComercial(orgA.organization.id, { periodo: "30d", agora: AGORA });
-    const b = await buscarAnalyticsComercial(orgB.organization.id, { periodo: "30d", agora: AGORA });
+    const a = await buscarAnalyticsComercial(orgA.organization.id, "UTC", { periodo: "30d", agora: AGORA });
+    const b = await buscarAnalyticsComercial(orgB.organization.id, "UTC", { periodo: "30d", agora: AGORA });
 
     expect(a.contatos.atual).toBe(6);
     expect(a.contatos.anterior).toBe(1);
@@ -312,7 +312,7 @@ describe("isolamento multi-tenant", () => {
     await criarInteracao({ organizationId: orgA.organization.id, personId: pessoaA.id, propertyId: imovelA.id, origin: "IMOVEL", occurredAt: diasAtras(1) });
     await criarInteracao({ organizationId: orgB.organization.id, personId: pessoaB.id, origin: "CONTATO", occurredAt: diasAtras(1) });
 
-    const b = await buscarAnalyticsComercial(orgB.organization.id, { periodo: "30d", agora: AGORA });
+    const b = await buscarAnalyticsComercial(orgB.organization.id, "UTC", { periodo: "30d", agora: AGORA });
     expect(b.topImoveis).toEqual([]);
     expect(b.imoveisComContato).toBe(0);
   });

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { withOrganization } from "@/lib/tenant-context";
 import { STATUS_IMOVEL_LABEL } from "@/lib/format";
+import { chaveDoMes, componentesNoFuso, inicioDoMesNoFuso } from "@/lib/fuso-horario";
 
 // Redesenho do Dashboard — achado de investigação: o Dashboard anterior
 // contava "negócios fechados" via `prisma.deal.count(...)`, mas o Deal
@@ -18,13 +19,19 @@ import { STATUS_IMOVEL_LABEL } from "@/lib/format";
 const DIAS_JANELA_ESTAGNACAO = 90;
 const MESES_JANELA_TENDENCIA = 6;
 
-export function chaveMes(data: Date): string {
-  return `${data.getUTCFullYear()}-${String(data.getUTCMonth() + 1).padStart(2, "0")}`;
+// Fase 18 — mês calendário DA ORGANIZAÇÃO. Antes, `chaveMes` usava
+// getUTC* e `rotuloMes` usava getters LOCAIS do processo: as duas metades
+// da mesma janela podiam discordar sobre o mês de um evento ocorrido nas
+// primeiras horas do dia 1º.
+export function chaveMes(data: Date, fuso: string): string {
+  return chaveDoMes(data, fuso);
 }
 
-export function rotuloMes(data: Date): string {
-  const mes = data.toLocaleString("pt-BR", { month: "short" }).replace(".", "");
-  const ano = String(data.getFullYear()).slice(-2);
+export function rotuloMes(data: Date, fuso: string): string {
+  const mes = data
+    .toLocaleString("pt-BR", { timeZone: fuso, month: "short" })
+    .replace(".", "");
+  const ano = String(componentesNoFuso(data, fuso).ano).slice(-2);
   return `${mes.charAt(0).toUpperCase()}${mes.slice(1)}/${ano}`;
 }
 
@@ -34,13 +41,15 @@ export type MesJanela = { chave: string; rotulo: string };
 // sempre em ordem cronológica crescente — mesmo helper usado tanto pra
 // construir a janela de busca (seisMesesAtras) quanto pra bucketizar o
 // resultado, garantindo que as duas pontas nunca divirjam.
-export function mesesJanela(referencia: Date, quantidade: number): MesJanela[] {
+export function mesesJanela(referencia: Date, quantidade: number, fuso: string): MesJanela[] {
   const meses: MesJanela[] = [];
   for (let i = quantidade - 1; i >= 0; i--) {
-    const data = new Date(referencia);
-    data.setDate(1);
-    data.setMonth(data.getMonth() - i);
-    meses.push({ chave: chaveMes(data), rotulo: rotuloMes(data) });
+    // inicioDoMesNoFuso desloca no CAMPO mês (Date.UTC normaliza a virada
+    // de ano) — nunca setMonth sobre um Date em horário local do
+    // processo, que era o que fazia a janela depender de onde o servidor
+    // roda.
+    const data = inicioDoMesNoFuso(referencia, fuso, -i);
+    meses.push({ chave: chaveMes(data, fuso), rotulo: rotuloMes(data, fuso) });
   }
   return meses;
 }
@@ -52,13 +61,14 @@ export function mesesJanela(referencia: Date, quantidade: number): MesJanela[] {
 export function bucketizarPorMes<T>(
   itens: readonly T[],
   meses: readonly MesJanela[],
-  extrairData: (item: T) => Date | null
+  extrairData: (item: T) => Date | null,
+  fuso: string
 ): Map<string, number> {
   const contagem = new Map(meses.map((m) => [m.chave, 0]));
   for (const item of itens) {
     const data = extrairData(item);
     if (!data) continue;
-    const chave = chaveMes(data);
+    const chave = chaveMes(data, fuso);
     if (contagem.has(chave)) {
       contagem.set(chave, (contagem.get(chave) ?? 0) + 1);
     }
@@ -97,22 +107,23 @@ const TETO_COMPOSICAO = 8;
 // arquivo).
 export async function buscarMetricasDashboard(
   organizationId: string,
+  // Fase 18 — "neste mês" e a janela de tendência são conceitos de
+  // calendário e passam a ser da ORGANIZAÇÃO. Antes, setHours(0,0,0,0)
+  // resolvia no fuso do PROCESSO: o mesmo lead contava em meses
+  // diferentes em dev (São Paulo) e em produção (contêiner UTC).
+  fuso: string,
   opcoes: { agora?: Date } = {}
 ): Promise<MetricasDashboard> {
   const agora = opcoes.agora ?? new Date();
 
-  const inicioDoMes = new Date(agora);
-  inicioDoMes.setDate(1);
-  inicioDoMes.setHours(0, 0, 0, 0);
+  const inicioDoMes = inicioDoMesNoFuso(agora, fuso);
 
-  const limiteEstagnacao = new Date(agora);
-  limiteEstagnacao.setDate(limiteEstagnacao.getDate() - DIAS_JANELA_ESTAGNACAO);
+  // Estagnação continua sendo uma DURAÇÃO (90 dias corridos a partir de
+  // agora), não um recorte de calendário — por isso não passa pelo fuso.
+  const limiteEstagnacao = new Date(agora.getTime() - DIAS_JANELA_ESTAGNACAO * 86_400_000);
 
-  const meses = mesesJanela(agora, MESES_JANELA_TENDENCIA);
-  const inicioDaJanela = new Date(agora);
-  inicioDaJanela.setDate(1);
-  inicioDaJanela.setMonth(inicioDaJanela.getMonth() - (MESES_JANELA_TENDENCIA - 1));
-  inicioDaJanela.setHours(0, 0, 0, 0);
+  const meses = mesesJanela(agora, MESES_JANELA_TENDENCIA, fuso);
+  const inicioDaJanela = inicioDoMesNoFuso(agora, fuso, -(MESES_JANELA_TENDENCIA - 1));
 
   return withOrganization(organizationId, async () => {
     const [
@@ -149,8 +160,8 @@ export async function buscarMetricasDashboard(
       prisma.property.groupBy({ where: { organizationId }, by: ["status"], _count: true }),
     ]);
 
-    const contagemLeads = bucketizarPorMes(leadsRecentes, meses, (l) => l.createdAt);
-    const contagemNegocios = bucketizarPorMes(negociosRecentes, meses, (n) => n.closedAt);
+    const contagemLeads = bucketizarPorMes(leadsRecentes, meses, (l) => l.createdAt, fuso);
+    const contagemNegocios = bucketizarPorMes(negociosRecentes, meses, (n) => n.closedAt, fuso);
 
     const tendencia: PontoTendencia[] = meses.map((m) => ({
       mes: m.rotulo,

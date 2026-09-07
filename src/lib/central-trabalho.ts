@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { withOrganization } from "@/lib/tenant-context";
-import { inicioDoDiaUTC, fimDoDiaUTC } from "@/lib/scheduled-activity-date";
+import { intervaloDoDia } from "@/lib/fuso-horario";
 import { ESTAGIOS_INTERESSE } from "@/lib/property-interest-schema";
 
 // =======================================================================
@@ -29,13 +29,18 @@ import { ESTAGIOS_INTERESSE } from "@/lib/property-interest-schema";
 // substituto — é outra dimensão, e a Fase 11 já separou as duas.
 //
 // -----------------------------------------------------------------------
-// TEMPO
+// TEMPO (corrigido na Fase 18)
 // -----------------------------------------------------------------------
-// Reusa a convenção UTC-literal já estabelecida e testada na Agenda
-// (inicioDoDiaUTC/fimDoDiaUTC): "hoje" é o dia calendário UTC de `agora`,
-// nunca o dia local de quem olha a tela. Nenhum timezone por organização
-// foi inventado aqui — essa dívida arquitetural continua aberta e
-// documentada, não resolvida incidentalmente.
+// "Hoje" é o DIA CALENDÁRIO DA ORGANIZAÇÃO (Organization.timezone,
+// fallback explícito UTC), resolvido por intervaloDoDia em
+// src/lib/fuso-horario.ts — exatamente o mesmo helper que a Agenda usa,
+// para as duas telas nunca discordarem sobre o que é hoje.
+//
+// A Fase 17 usava a convenção UTC-literal e registrou essa dívida no
+// relatório: para uma imobiliária em UTC−3, o dia virava às 21:00 locais
+// e uma visita das 22:00 aparecia como "próxima" em vez de "hoje". É esse
+// defeito que esta fase corrige. O fuso chega pronto de quem carrega a
+// tela: nenhuma consulta de fuso por item, zero N+1.
 //
 // As três categorias são MUTUAMENTE EXCLUSIVAS, exatamente como a Agenda
 // já classifica:
@@ -143,12 +148,14 @@ function daMinhaResponsabilidade(organizationId: string, memberId: string) {
 export async function buscarCentralTrabalho(
   organizationId: string,
   memberId: string,
+  // Fuso comercial da organização — obrigatório e sem padrão, mesma
+  // convenção da Agenda: esquecer é erro de compilação, não UTC mudo.
+  fuso: string,
   opcoes: { agora?: Date; limite?: number } = {}
 ): Promise<CentralTrabalho> {
   const agora = opcoes.agora ?? new Date();
   const limite = opcoes.limite ?? LIMITE_CENTRAL;
-  const inicioHoje = inicioDoDiaUTC(agora);
-  const fimHoje = fimDoDiaUTC(agora);
+  const { inicio: inicioHoje, fim: fimHoje } = intervaloDoDia(agora, fuso);
   const meu = daMinhaResponsabilidade(organizationId, memberId);
 
   const baseAtividade = {

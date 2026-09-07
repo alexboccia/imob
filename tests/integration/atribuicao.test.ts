@@ -297,7 +297,7 @@ describe("agregação por canal no dashboard", () => {
     // 1 contato vindo do Instagram.
     await enviarContato(cenario.organization.slug, null, formContato({ imovelId: imovel.id }, INSTAGRAM));
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
 
     const anuncios = a.aquisicao.canais.find((c) => c.canal === "ANUNCIOS")!;
     const social = a.aquisicao.canais.find((c) => c.canal === "SOCIAL")!;
@@ -318,7 +318,7 @@ describe("agregação por canal no dashboard", () => {
     await registrarEventoAnalytics({ organizationId, propertyId: imovel.id, type: "PROPERTY_VIEW", visitorId: VISITANTE, atribuicao: GOOGLE_ADS, agora: AGORA });
     await enviarContato(cenario.organization.slug, null, formContato({ imovelId: imovel.id }, GOOGLE_ADS));
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
     // valorFechado (Fase 9) e comissao (Fase 10) ficam em 0: não houve
     // ganho nesta campanha.
     expect(a.aquisicao.campanhas).toEqual([
@@ -333,7 +333,7 @@ describe("agregação por canal no dashboard", () => {
 
     await registrarEventoAnalytics({ organizationId, propertyId: imovel.id, type: "PROPERTY_VIEW", visitorId: VISITANTE, agora: AGORA });
 
-    const a = await buscarAnalyticsComercial(organizationId, { periodo: "30d", agora: AGORA });
+    const a = await buscarAnalyticsComercial(organizationId, "UTC", { periodo: "30d", agora: AGORA });
     const sem = a.aquisicao.canais.find((c) => c.canal === "SEM_ATRIBUICAO")!;
     expect(sem.visualizacoes).toBe(1);
     expect(a.aquisicao.semAtribuicao).toBe(true);
@@ -342,7 +342,7 @@ describe("agregação por canal no dashboard", () => {
 
   test("tenant vazio: sem canais, sem campanhas, sem NaN", async () => {
     const cenario = await novoCenario();
-    const a = await buscarAnalyticsComercial(cenario.organization.id, { periodo: "30d", agora: AGORA });
+    const a = await buscarAnalyticsComercial(cenario.organization.id, "UTC", { periodo: "30d", agora: AGORA });
     expect(a.aquisicao.canais).toEqual([]);
     expect(a.aquisicao.campanhas).toEqual([]);
   });
@@ -356,8 +356,8 @@ describe("agregação por canal no dashboard", () => {
     await registrarEventoAnalytics({ organizationId: orgA.organization.id, propertyId: imovelA.id, type: "PROPERTY_VIEW", visitorId: VISITANTE, atribuicao: GOOGLE_ADS, agora: AGORA });
     await registrarEventoAnalytics({ organizationId: orgB.organization.id, propertyId: imovelB.id, type: "PROPERTY_VIEW", visitorId: VISITANTE, atribuicao: INSTAGRAM, agora: AGORA });
 
-    const a = await buscarAnalyticsComercial(orgA.organization.id, { periodo: "30d", agora: AGORA });
-    const b = await buscarAnalyticsComercial(orgB.organization.id, { periodo: "30d", agora: AGORA });
+    const a = await buscarAnalyticsComercial(orgA.organization.id, "UTC", { periodo: "30d", agora: AGORA });
+    const b = await buscarAnalyticsComercial(orgB.organization.id, "UTC", { periodo: "30d", agora: AGORA });
 
     expect(a.aquisicao.canais.map((c) => c.canal)).toEqual(["ANUNCIOS"]);
     expect(b.aquisicao.canais.map((c) => c.canal)).toEqual(["SOCIAL"]);

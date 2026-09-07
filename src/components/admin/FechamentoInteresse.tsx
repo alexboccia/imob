@@ -7,7 +7,7 @@ import {
   corrigirDadosFechamento,
 } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
-import { formatarDataHora } from "@/lib/scheduled-activity-date";
+import { formatarDataHoraNoFuso } from "@/lib/fuso-horario";
 import { rotuloAtorTransicao, type AtorTransicao } from "@/lib/ator-transicao";
 import { formatarPreco } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -38,10 +38,11 @@ import type { PropertyInterestStage } from "@/generated/prisma/client";
 // "Marcar como perdido" continua um clique só — negócio perdido não tem
 // valor, e pedir confirmação ali seria atrito sem informação.
 //
-// closedAtISO é um evento real (o new Date() da Server Action), não um
-// horário digitado — mas reaproveita formatarDataHora (UTC-literal) pelo
-// mesmo motivo de sempre: este é um Client Component, o texto é gerado no
-// SSR e na hidratação, e sem timezone fixo os dois divergiriam.
+// closedAtISO é um INSTANTE real (o new Date() da Server Action), não um
+// horário digitado: o valor persistido continua intocado pela Fase 18 —
+// só a EXIBIÇÃO passa a usar o fuso da organização. Timezone explícito
+// também é o que mantém SSR e hidratação idênticos neste Client
+// Component; sem ele os dois divergiriam.
 export function FechamentoInteresse({
   interesseId,
   stage,
@@ -49,6 +50,7 @@ export function FechamentoInteresse({
   closedValue,
   commissionValue,
   atorFechamento,
+  fuso,
   // Contexto exibido no diálogo. Opcionais: nem toda tela que reaproveita
   // este componente tem os dois à mão, e o fechamento nunca depende deles.
   imovelTitulo,
@@ -64,6 +66,8 @@ export function FechamentoInteresse({
   // transição de um negócio encerrado é visível (o drawer só existe para
   // negócio aberto). null = ator não registrado.
   atorFechamento?: AtorTransicao | null;
+  // Fuso comercial da organização (Fase 18) — só formatação.
+  fuso: string;
   imovelTitulo?: string;
   clienteNome?: string;
 }) {
@@ -105,7 +109,7 @@ export function FechamentoInteresse({
           ) : (
             <> · Comissão não registrada</>
           )}
-          {closedAtISO && <> · Fechado em {formatarDataHora(closedAtISO)}</>}
+          {closedAtISO && <> · Fechado em {formatarDataHoraNoFuso(closedAtISO, fuso)}</>}
           {closedAtISO && <> · por {rotuloAtorTransicao(atorFechamento ?? null)}</>}
         </p>
 
@@ -178,7 +182,7 @@ export function FechamentoInteresse({
     return (
       <p className="text-xs text-muted-foreground">
         <span className="font-medium text-foreground">Perdido</span>
-        {closedAtISO && <> — Fechado em {formatarDataHora(closedAtISO)}</>}
+        {closedAtISO && <> — Fechado em {formatarDataHoraNoFuso(closedAtISO, fuso)}</>}
       </p>
     );
   }

@@ -1795,7 +1795,7 @@ describe("PropertyInterest — relacionamento Person↔Property (Fase D do CRM)"
     await relacionar(pessoa.id, { propertyId: imovel.id });
     const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const item = colunas.INTERESTED.find((i) => i.id === interesse!.id);
     expect(item).toBeDefined();
     expect(item?.aging).not.toBeNull();
@@ -1813,7 +1813,7 @@ describe("PropertyInterest — relacionamento Person↔Property (Fase D do CRM)"
     });
     expect(await historicoDe(cenario.organization.id, legado.id)).toHaveLength(0);
 
-    const colunas = await buscarPipelineAberto(cenario.organization.id);
+    const colunas = await buscarPipelineAberto(cenario.organization.id, "UTC");
     const item = colunas.INTERESTED.find((i) => i.id === legado.id);
     expect(item?.aging).toBeNull();
   });

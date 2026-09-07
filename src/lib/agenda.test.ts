@@ -19,21 +19,21 @@ describe("interpretarFiltrosAgenda", () => {
 
   test("data inicial válida é interpretada", () => {
     const filtros = interpretarFiltrosAgenda({ de: "2026-08-20" });
-    expect(filtros.de?.toISOString()).toBe("2026-08-20T00:00:00.000Z");
+    expect(filtros.de).toEqual({ ano: 2026, mes: 8, dia: 20 });
     expect(filtros.ate).toBeNull();
     expect(filtros.intervaloInvalido).toBe(false);
   });
 
   test("data final válida é interpretada", () => {
     const filtros = interpretarFiltrosAgenda({ ate: "2026-08-27" });
-    expect(filtros.ate?.toISOString()).toBe("2026-08-27T00:00:00.000Z");
+    expect(filtros.ate).toEqual({ ano: 2026, mes: 8, dia: 27 });
     expect(filtros.de).toBeNull();
   });
 
   test("intervalo completo (de + ate) é interpretado", () => {
     const filtros = interpretarFiltrosAgenda({ de: "2026-08-20", ate: "2026-08-27" });
-    expect(filtros.de?.toISOString()).toBe("2026-08-20T00:00:00.000Z");
-    expect(filtros.ate?.toISOString()).toBe("2026-08-27T00:00:00.000Z");
+    expect(filtros.de).toEqual({ ano: 2026, mes: 8, dia: 20 });
+    expect(filtros.ate).toEqual({ ano: 2026, mes: 8, dia: 27 });
     expect(filtros.intervaloInvalido).toBe(false);
   });
 
@@ -54,8 +54,8 @@ describe("interpretarFiltrosAgenda", () => {
   test("de === ate (um único dia) não é inválido", () => {
     const filtros = interpretarFiltrosAgenda({ de: "2026-08-20", ate: "2026-08-20" });
     expect(filtros.intervaloInvalido).toBe(false);
-    expect(filtros.de?.toISOString()).toBe("2026-08-20T00:00:00.000Z");
-    expect(filtros.ate?.toISOString()).toBe("2026-08-20T00:00:00.000Z");
+    expect(filtros.de).toEqual({ ano: 2026, mes: 8, dia: 20 });
+    expect(filtros.ate).toEqual({ ano: 2026, mes: 8, dia: 20 });
   });
 
   test("status válido (qualquer caixa) é aceito e normalizado pra maiúsculas", () => {

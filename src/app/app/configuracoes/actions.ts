@@ -24,7 +24,8 @@ import {
   erroValidacao,
   sucesso,
 } from "@/lib/action-result";
-import { tagConfiguracao, tagBranding } from "@/lib/cache-tags";
+import { tagConfiguracao, tagBranding, tagFuso } from "@/lib/cache-tags";
+import { fusoValido } from "@/lib/fuso-horario";
 import { CATALOGO_TEMAS, THEME_ID_CUSTOMIZADO } from "@/lib/branding/temas";
 import { CATALOGO_APARENCIA_RODAPE } from "@/lib/branding/aparencia-rodape";
 import { validarFaviconUrl, validarUrlMidiaOrganizacao } from "@/lib/branding/favicon-url";
@@ -98,6 +99,14 @@ const configuracaoSchema = z.object({
     vazioParaNulo,
     z.string().max(120, "Use no máximo 120 caracteres.").optional()
   ),
+  // Fase 18 — fuso horário comercial. Validado SERVER-SIDE contra a lista
+  // canônica IANA do runtime (fusoValido), nunca texto arbitrário e nunca
+  // offset fixo: `Intl.DateTimeFormat` sozinho aceitaria "-03:00", "utc"
+  // e "Etc/GMT+3" sem reclamar, e offset fixo não descreve DST nenhum.
+  // Valor inválido derruba a submissão inteira — nada é salvo.
+  timezone: z
+    .string()
+    .refine(fusoValido, { message: "Fuso horário inválido." }),
 });
 
 function alturaLogo(valor: number | undefined) {
@@ -178,6 +187,18 @@ export async function salvarConfiguracaoContato(
 
   await withOrganization(organizationId, async () => {
     await prisma.$transaction([
+      // Fuso horário (Fase 18) — mora em Organization, não em Settings.
+      // `where` pelo organizationId DA SESSÃO (requireOrganizationId
+      // acima), jamais um id vindo do formulário: uma organização não tem
+      // como alterar o fuso de outra por este caminho.
+      //
+      // Trocar o fuso NÃO reescreve nenhum timestamp: scheduledAt,
+      // occurredAt, closedAt, paidAt e createdAt continuam sendo os
+      // mesmos instantes. Muda só como o calendário é interpretado.
+      prisma.organization.update({
+        where: { id: organizationId },
+        data: { timezone: campos.timezone },
+      }),
       prisma.organizationSettings.upsert({
         where: { organizationId },
         update: dados,
@@ -210,13 +231,24 @@ export async function salvarConfiguracaoContato(
       userId: session.user.id,
       entity: "OrganizationBranding",
       action: "branding_updated",
-      payload: { themeId: campos.themeId, nomePublico: campos.nomePublico ?? null },
+      payload: {
+        themeId: campos.themeId,
+        nomePublico: campos.nomePublico ?? null,
+        timezone: campos.timezone,
+      },
     });
 
     revalidatePath("/app/configuracoes");
     revalidatePath("/app/imoveis");
     updateTag(tagConfiguracao(organizationId));
     updateTag(tagBranding(organizationId));
+    // Tag própria do fuso: sem isto, a Central/Agenda/Analytics
+    // continuariam lendo o fuso antigo do cache até um deploy.
+    updateTag(tagFuso(organizationId));
+    // As telas que dependem do calendário precisam refletir na hora.
+    revalidatePath("/app");
+    revalidatePath("/app/agenda");
+    revalidatePath("/app/analytics");
     // Redundância deliberada: não consegui verificar ao vivo (limitação
     // de ferramental pra invocar Server Actions fora do navegador, mesma
     // limitação já documentada em fases anteriores desta sessão) que
@@ -357,6 +389,13 @@ export async function aplicarPaletaGerada(
     revalidatePath("/app/configuracoes");
     revalidatePath("/app/imoveis");
     updateTag(tagBranding(organizationId));
+    // Tag própria do fuso: sem isto, a Central/Agenda/Analytics
+    // continuariam lendo o fuso antigo do cache até um deploy.
+    updateTag(tagFuso(organizationId));
+    // As telas que dependem do calendário precisam refletir na hora.
+    revalidatePath("/app");
+    revalidatePath("/app/agenda");
+    revalidatePath("/app/analytics");
     // Mesma rede de segurança documentada em salvarConfiguracaoContato
     // acima — não confiar só em updateTag() invalidar o site público.
     revalidatePath("/", "layout");

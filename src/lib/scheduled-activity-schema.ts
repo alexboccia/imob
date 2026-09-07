@@ -45,23 +45,13 @@ export type DadosAtualizarObservacaoAgendamentoVisita = z.infer<
   typeof atualizarObservacaoAgendamentoVisitaSchema
 >;
 
-// Converte o valor de um <input type="datetime-local"> num Date real.
+// A conversão datetime-local -> instante mora em
+// src/lib/fuso-horario.ts (deDatetimeLocalNoFuso) desde a Fase 18.
 //
-// Decisão de produto da Fase H.2 (documentada porque não há precedente no
-// schema): datetime-local não carrega timezone, e Organization não tem
-// timezone configurado nesta fase (deliberadamente fora de escopo — ver
-// AGENTS.md da H.2, não deve ser inventado no schema.prisma agora). Em vez
-// de `new Date(valor)` puro — que o motor JS resolveria como horário LOCAL
-// do PROCESSO Node, ambíguo entre dev (tipicamente America/Sao_Paulo) e
-// produção (contêiner, tipicamente UTC) — o valor é interpretado como UTC
-// de forma explícita e determinística, sempre com o mesmo resultado
-// independente de onde o código roda. Mesmo racional de parseMesAno em
-// src/lib/property-mapper.ts (Date.UTC explícito, nunca parsing ambíguo de
-// string). Se uma Organization ganhar timezone configurável no futuro,
-// este é o único ponto que precisa mudar.
-export function parseScheduledAt(valor: string): Date {
-  const [dataParte, horaParte] = valor.split("T");
-  const [ano, mes, dia] = dataParte.split("-").map(Number);
-  const [horas, minutos] = horaParte.split(":").map(Number);
-  return new Date(Date.UTC(ano, mes - 1, dia, horas, minutos));
-}
+// Até a Fase 17 o parse acontecia aqui e interpretava o valor como UTC
+// literal, porque Organization não tinha fuso configurável — o que fazia
+// "14:30" digitado por uma imobiliária de São Paulo virar 11:30 local no
+// banco. A resposta para "14:30 em qual fuso?" agora é: no fuso da
+// ORGANIZAÇÃO, resolvido pela Server Action, nunca o do processo Node e
+// nunca o do navegador de quem preencheu o formulário.
+

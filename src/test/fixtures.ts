@@ -77,13 +77,28 @@ export async function criarOrganizacao(opcoes: {
   planId?: string;
   slug?: string;
   name?: string;
-} = {}): Promise<{ id: string; slug: string; planId: string }> {
+  // Fase 18 — ausente por padrão de propósito: é assim que uma
+  // organização legada existe no banco (timezone null), e é esse estado
+  // que o fallback explícito precisa cobrir. Quem testa fuso passa o
+  // valor de forma explícita.
+  timezone?: string | null;
+} = {}): Promise<{ id: string; slug: string; planId: string; timezone: string | null }> {
   const planId = opcoes.planId ?? (await criarPlano()).id;
   const slug = opcoes.slug ?? `org-teste-${sufixoUnico()}`;
   const organization = await prisma.organization.create({
-    data: { slug, name: opcoes.name ?? `Organização de teste ${slug}`, planId },
+    data: {
+      slug,
+      name: opcoes.name ?? `Organização de teste ${slug}`,
+      planId,
+      timezone: opcoes.timezone ?? null,
+    },
   });
-  return { id: organization.id, slug: organization.slug, planId };
+  return {
+    id: organization.id,
+    slug: organization.slug,
+    planId,
+    timezone: organization.timezone,
+  };
 }
 
 export async function criarUsuario(opcoes: {
@@ -254,6 +269,7 @@ export async function criarSubscriptionTrial(opcoes: {
 // criou, na ordem exigida pelas foreign keys do schema.
 export async function criarCenario(opcoes: {
   role?: OrganizationRole;
+  timezone?: string | null;
   modulos?: string[];
   modulosDesabilitados?: string[];
   limites?: Record<string, number | null>;
@@ -269,7 +285,7 @@ export async function criarCenario(opcoes: {
     isTrial: opcoes.isTrial,
     trialDays: opcoes.trialDays,
   });
-  const organization = await criarOrganizacao({ planId: plano.id });
+  const organization = await criarOrganizacao({ planId: plano.id, timezone: opcoes.timezone });
   const usuario = await criarUsuario();
   const membro = await criarMembro({
     organizationId: organization.id,

@@ -19,23 +19,23 @@ const atividade = (iso: string, status: "SCHEDULED" | "COMPLETED" | "CANCELLED" 
 
 describe("classificação temporal (bordas de dia em UTC)", () => {
   test("00:00:00.000 do dia é HOJE, não atrasada", () => {
-    expect(classificarPeriodoAgenda(atividade("2026-09-07T00:00:00.000Z"), meioDia)).toBe("HOJE");
-    expect(estaAtrasada(atividade("2026-09-07T00:00:00.000Z"), meioDia)).toBe(false);
+    expect(classificarPeriodoAgenda(atividade("2026-09-07T00:00:00.000Z"), "UTC", meioDia)).toBe("HOJE");
+    expect(estaAtrasada(atividade("2026-09-07T00:00:00.000Z"), "UTC", meioDia)).toBe(false);
   });
 
   test("23:59:59.999 do dia ainda é HOJE", () => {
-    expect(classificarPeriodoAgenda(atividade("2026-09-07T23:59:59.999Z"), meioDia)).toBe("HOJE");
+    expect(classificarPeriodoAgenda(atividade("2026-09-07T23:59:59.999Z"), "UTC", meioDia)).toBe("HOJE");
   });
 
   test("1ms antes da meia-noite do dia é ATRASADA", () => {
-    expect(classificarPeriodoAgenda(atividade("2026-09-06T23:59:59.999Z"), meioDia)).toBe(
+    expect(classificarPeriodoAgenda(atividade("2026-09-06T23:59:59.999Z"), "UTC", meioDia)).toBe(
       "ANTERIORES"
     );
-    expect(estaAtrasada(atividade("2026-09-06T23:59:59.999Z"), meioDia)).toBe(true);
+    expect(estaAtrasada(atividade("2026-09-06T23:59:59.999Z"), "UTC", meioDia)).toBe(true);
   });
 
   test("1ms depois do fim do dia é PRÓXIMA", () => {
-    expect(classificarPeriodoAgenda(atividade("2026-09-08T00:00:00.000Z"), meioDia)).toBe(
+    expect(classificarPeriodoAgenda(atividade("2026-09-08T00:00:00.000Z"), "UTC", meioDia)).toBe(
       "PROXIMAS"
     );
   });
@@ -45,36 +45,36 @@ describe("classificação temporal (bordas de dia em UTC)", () => {
     // Se as duas telas divergissem, o mesmo compromisso apareceria em
     // categorias diferentes.
     const agora15h = new Date("2026-09-07T15:00:00.000Z");
-    expect(classificarPeriodoAgenda(atividade("2026-09-07T09:00:00.000Z"), agora15h)).toBe("HOJE");
-    expect(estaAtrasada(atividade("2026-09-07T09:00:00.000Z"), agora15h)).toBe(false);
+    expect(classificarPeriodoAgenda(atividade("2026-09-07T09:00:00.000Z"), "UTC", agora15h)).toBe("HOJE");
+    expect(estaAtrasada(atividade("2026-09-07T09:00:00.000Z"), "UTC", agora15h)).toBe(false);
   });
 
   test("a classificação independe da hora de `agora` dentro do dia", () => {
     for (const agora of [meiaNoite, meioDia, quaseMeiaNoite]) {
-      expect(classificarPeriodoAgenda(atividade("2026-09-07T10:00:00.000Z"), agora)).toBe("HOJE");
-      expect(classificarPeriodoAgenda(atividade("2026-09-06T10:00:00.000Z"), agora)).toBe(
+      expect(classificarPeriodoAgenda(atividade("2026-09-07T10:00:00.000Z"), "UTC", agora)).toBe("HOJE");
+      expect(classificarPeriodoAgenda(atividade("2026-09-06T10:00:00.000Z"), "UTC", agora)).toBe(
         "ANTERIORES"
       );
-      expect(classificarPeriodoAgenda(atividade("2026-09-08T10:00:00.000Z"), agora)).toBe(
+      expect(classificarPeriodoAgenda(atividade("2026-09-08T10:00:00.000Z"), "UTC", agora)).toBe(
         "PROXIMAS"
       );
     }
   });
 
   test("COMPLETED e CANCELLED nunca são pendência, mesmo hoje", () => {
-    expect(classificarPeriodoAgenda(atividade("2026-09-07T10:00:00.000Z", "COMPLETED"), meioDia)).toBe(
+    expect(classificarPeriodoAgenda(atividade("2026-09-07T10:00:00.000Z", "COMPLETED"), "UTC", meioDia)).toBe(
       "ANTERIORES"
     );
-    expect(classificarPeriodoAgenda(atividade("2026-09-07T10:00:00.000Z", "CANCELLED"), meioDia)).toBe(
+    expect(classificarPeriodoAgenda(atividade("2026-09-07T10:00:00.000Z", "CANCELLED"), "UTC", meioDia)).toBe(
       "ANTERIORES"
     );
-    expect(estaAtrasada(atividade("2026-09-06T10:00:00.000Z", "COMPLETED"), meioDia)).toBe(false);
-    expect(estaAtrasada(atividade("2026-09-06T10:00:00.000Z", "CANCELLED"), meioDia)).toBe(false);
+    expect(estaAtrasada(atividade("2026-09-06T10:00:00.000Z", "COMPLETED"), "UTC", meioDia)).toBe(false);
+    expect(estaAtrasada(atividade("2026-09-06T10:00:00.000Z", "CANCELLED"), "UTC", meioDia)).toBe(false);
   });
 
   test("as três categorias são mutuamente exclusivas", () => {
     const casos = ["2026-09-05T10:00:00.000Z", "2026-09-07T10:00:00.000Z", "2026-09-09T10:00:00.000Z"];
-    const vistos = casos.map((iso) => classificarPeriodoAgenda(atividade(iso), meioDia));
+    const vistos = casos.map((iso) => classificarPeriodoAgenda(atividade(iso), "UTC", meioDia));
     expect(new Set(vistos).size).toBe(3);
   });
 });

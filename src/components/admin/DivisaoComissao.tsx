@@ -36,6 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { formatarDataNoFuso } from "@/lib/fuso-horario";
 
 const CLASSE_CAMPO =
   "h-9 w-full rounded-lg border border-input bg-transparent px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -57,7 +58,12 @@ export function DivisaoComissao({
   pagamentosPorParticipante,
   membros,
   podeLiquidar,
+  fuso,
 }: {
+  // Fuso comercial da organização (Fase 18) — paidAt continua sendo o
+  // INSTANTE factual do pagamento, intocado no banco; só a data exibida
+  // passa a ser lida no calendário da organização.
+  fuso: string;
   pagamentosPorParticipante: Record<string, PagamentoExibicao[]>;
   podeLiquidar: boolean;
   interesseId: string;
@@ -123,6 +129,7 @@ export function DivisaoComissao({
               pagamentosPorParticipante={pagamentosPorParticipante}
               membros={membros}
               podeLiquidar={podeLiquidar}
+              fuso={fuso}
             />
 
             <DialogFooter>
@@ -145,7 +152,9 @@ function PainelDivisao({
   pagamentosPorParticipante,
   membros,
   podeLiquidar,
+  fuso,
 }: {
+  fuso: string;
   interesseId: string;
   commissionValue: number | null;
   responsavel: ResponsavelNegociacao | null;
@@ -219,6 +228,7 @@ function PainelDivisao({
               commissionValue={commissionValue}
               pagamentos={pagamentosPorParticipante[participante.id] ?? []}
               podeLiquidar={podeLiquidar}
+              fuso={fuso}
             />
           ))}
         </ul>
@@ -301,11 +311,13 @@ function LinhaParticipante({
   commissionValue,
   pagamentos,
   podeLiquidar,
+  fuso,
 }: {
   participante: ParticipanteExibicao;
   commissionValue: number | null;
   pagamentos: PagamentoExibicao[];
   podeLiquidar: boolean;
+  fuso: string;
 }) {
   const [editando, setEditando] = useState(false);
   const [liquidando, setLiquidando] = useState(false);
@@ -419,7 +431,7 @@ function LinhaParticipante({
       )}
 
       {pagamentos.length > 0 && (
-        <HistoricoPagamentos pagamentos={pagamentos} podeLiquidar={podeLiquidar} />
+        <HistoricoPagamentos pagamentos={pagamentos} podeLiquidar={podeLiquidar} fuso={fuso} />
       )}
 
       {estadoRemover.message && !estadoRemover.success && (
@@ -504,14 +516,21 @@ function FormularioPagamento({
 function HistoricoPagamentos({
   pagamentos,
   podeLiquidar,
+  fuso,
 }: {
   pagamentos: PagamentoExibicao[];
   podeLiquidar: boolean;
+  fuso: string;
 }) {
   return (
     <ul className="mt-3 space-y-1 border-t pt-3">
       {pagamentos.map((pagamento) => (
-        <LinhaPagamento key={pagamento.id} pagamento={pagamento} podeLiquidar={podeLiquidar} />
+        <LinhaPagamento
+          key={pagamento.id}
+          pagamento={pagamento}
+          podeLiquidar={podeLiquidar}
+          fuso={fuso}
+        />
       ))}
     </ul>
   );
@@ -520,9 +539,11 @@ function HistoricoPagamentos({
 function LinhaPagamento({
   pagamento,
   podeLiquidar,
+  fuso,
 }: {
   pagamento: PagamentoExibicao;
   podeLiquidar: boolean;
+  fuso: string;
 }) {
   const cancelar = cancelarPagamentoParticipante.bind(null, pagamento.id);
   const [estado, formAction, pendente] = useActionState(cancelar, ESTADO_INICIAL_ACAO);
@@ -531,7 +552,7 @@ function LinhaPagamento({
     <li className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
       <span className={pagamento.cancelado ? "text-muted-foreground line-through" : ""}>
         <span className="font-medium tabular-nums">{formatarPreco(pagamento.valor)}</span> em{" "}
-        {formatarDataCurta(pagamento.paidAtISO)}
+        {formatarDataCurta(pagamento.paidAtISO, fuso)}
         {pagamento.registradoPor && <> · por {pagamento.registradoPor}</>}
       </span>
       {pagamento.cancelado ? (
@@ -560,9 +581,11 @@ function LinhaPagamento({
   );
 }
 
-// Data do FATO, curta. Sem hora: o produto registra o dia do pagamento.
-function formatarDataCurta(iso: string): string {
-  return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "UTC" });
+// Data do FATO, curta. Sem hora: o produto registra o dia do pagamento —
+// e "o dia" é o da organização (Fase 18), não o do UTC nem o do
+// navegador de quem abre a tela.
+function formatarDataCurta(iso: string, fuso: string): string {
+  return formatarDataNoFuso(iso, fuso);
 }
 
 // Campo de parcela com o atalho de "%", que apenas CALCULA sobre a

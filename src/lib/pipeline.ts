@@ -286,20 +286,27 @@ export function agruparPorColuna(itens: readonly ItemPipeline[]): Record<ColunaA
 // updatedAt só como desempate determinístico (mais antigo primeiro) —
 // NUNCA apresentado como "tempo na etapa" (ver comentário de
 // ItemPipeline.updatedAtISO).
-function chavePrioridade(item: ItemPipeline, agora: Date): readonly [number, number] {
+function chavePrioridade(item: ItemPipeline, fuso: string, agora: Date): readonly [number, number] {
   if (item.proximaVisita) {
     const scheduledAt = new Date(item.proximaVisita.scheduledAtISO);
-    const acao = acaoOperacionalDaVisita({ status: "SCHEDULED", scheduledAt }, agora);
+    const acao = acaoOperacionalDaVisita({ status: "SCHEDULED", scheduledAt }, fuso, agora);
     const grupo = acao === "RESOLVER_PENDENCIA" ? 0 : 1;
     return [grupo, scheduledAt.getTime()];
   }
   return [2, new Date(item.updatedAtISO).getTime()];
 }
 
-export function ordenarColuna(itens: readonly ItemPipeline[], agora: Date = new Date()): ItemPipeline[] {
+// `fuso` obrigatório (Fase 18): "pendência" é uma visita cujo DIA
+// calendário da organização já passou — a mesma definição da Agenda e da
+// Central, nunca um dia UTC paralelo só do Pipeline.
+export function ordenarColuna(
+  itens: readonly ItemPipeline[],
+  fuso: string,
+  agora: Date = new Date()
+): ItemPipeline[] {
   return [...itens].sort((a, b) => {
-    const [grupoA, tempoA] = chavePrioridade(a, agora);
-    const [grupoB, tempoB] = chavePrioridade(b, agora);
+    const [grupoA, tempoA] = chavePrioridade(a, fuso, agora);
+    const [grupoB, tempoB] = chavePrioridade(b, fuso, agora);
     if (grupoA !== grupoB) return grupoA - grupoB;
     return tempoA - tempoB;
   });
@@ -403,6 +410,9 @@ export const LIMITE_PIPELINE_ABERTO = 300;
 // selectItemPipeline) — nunca uma query por card.
 export async function buscarPipelineAberto(
   organizationId: string,
+  // Fuso comercial da organização (Fase 18) — usado só pela ordenação,
+  // que depende de "o dia já passou?". Resolvido uma vez pela página.
+  fuso: string,
   opcoes: { busca?: string; agora?: Date; responsavel?: string } = {}
 ): Promise<Record<ColunaAberta, ItemPipeline[]>> {
   const agora = opcoes.agora ?? new Date();
@@ -426,7 +436,7 @@ export async function buscarPipelineAberto(
     const itens = linhas.map((linha) => paraItemPipeline(linha, organizationId, agora));
     const grupos = agruparPorColuna(itens);
     for (const coluna of COLUNAS_ABERTAS) {
-      grupos[coluna] = ordenarColuna(grupos[coluna], agora);
+      grupos[coluna] = ordenarColuna(grupos[coluna], fuso, agora);
     }
     return grupos;
   });
@@ -1062,6 +1072,7 @@ function ordenarMotivos(motivos: readonly MotivoPrioridadePipeline[]): MotivoPri
 export function classificarPrioridadePipeline(
   item: Pick<ItemPipeline, "stage" | "proximaVisita" | "agingMs">,
   tempoMedioHistoricoMs: number | null,
+  fuso: string,
   agora: Date
 ): PrioridadePipeline {
   const motivos: MotivoPrioridadePipeline[] = [];
@@ -1070,6 +1081,7 @@ export function classificarPrioridadePipeline(
     const vencida =
       acaoOperacionalDaVisita(
         { status: "SCHEDULED", scheduledAt: new Date(item.proximaVisita.scheduledAtISO) },
+        fuso,
         agora
       ) === "RESOLVER_PENDENCIA";
     if (vencida) {

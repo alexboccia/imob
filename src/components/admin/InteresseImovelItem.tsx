@@ -41,7 +41,11 @@ export function InteresseImovelItem({
   interesse,
   membros,
   podeLiquidar,
+  fuso,
 }: {
+  // Fuso comercial da organização (Fase 18) — carregado UMA vez pela
+  // página e repassado, igual a `membros`. Nunca uma consulta por item.
+  fuso: string;
   // Fase 13 — registrar/cancelar pagamento exige papel gerencial. O
   // servidor recusa de qualquer forma; isto é a tela não oferecer o que
   // não é permitido.
@@ -148,6 +152,7 @@ export function InteresseImovelItem({
         </p>
 
         <AgendamentoVisita
+            fuso={fuso}
           propertyInterestId={interesse.id}
           podeAgendar={podeAgendarVisita}
           atividadeAgendada={interesse.proximaVisita}
@@ -214,6 +219,7 @@ export function InteresseImovelItem({
             quanto o negócio valeu e qual foi a comissão, depois como ela
             foi dividida. */}
         <DivisaoComissao
+          fuso={fuso}
           interesseId={interesse.id}
           commissionValue={interesse.commissionValue}
           responsavel={interesse.responsavel}
@@ -224,6 +230,7 @@ export function InteresseImovelItem({
         />
 
         <FechamentoInteresse
+            fuso={fuso}
           interesseId={interesse.id}
           stage={interesse.stage}
           closedAtISO={interesse.closedAtISO}

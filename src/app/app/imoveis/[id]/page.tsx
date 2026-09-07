@@ -9,6 +9,7 @@ import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
 import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
 import { ToastSalvo } from "@/components/admin/ToastSalvo";
 import { requireOrganizationId } from "@/lib/tenant";
+import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -33,6 +34,9 @@ export default async function EditarImovelPage({
 }) {
   const { id } = await params;
   const organizationId = await requireOrganizationId();
+  // Fuso comercial da organização (Fase 18) — uma resolução por
+  // carregamento, repassada a todos os itens da ficha.
+  const fuso = await buscarFusoOrganizacao(organizationId);
 
   const [
     [imovel, { opcoesImovel, opcoesCondominio }, { opcoesResidencial, opcoesComercial }, interesses],
@@ -201,11 +205,13 @@ export default async function EditarImovelPage({
                       </span>
                     </p>
                     <AgendamentoVisita
+                      fuso={fuso}
                       propertyInterestId={interesse.id}
                       podeAgendar={podeAgendarVisita}
                       atividadeAgendada={proximaVisita}
                     />
                     <FechamentoInteresse
+                      fuso={fuso}
                       interesseId={interesse.id}
                       stage={interesse.stage}
                       closedAtISO={interesse.closedAt ? interesse.closedAt.toISOString() : null}

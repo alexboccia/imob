@@ -1166,6 +1166,24 @@ model Organization {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Fuso horário comercial da organização (Fase 18) — identificador IANA
+  // ("America/Sao_Paulo", "Europe/Lisbon", "UTC"), NUNCA offset fixo
+  // ("-03:00"), que não descreve DST nem passado nem futuro. Valida
+  // contra a lista canônica do runtime em src/lib/fuso-horario.ts.
+  //
+  // NULLABLE de propósito, com zero backfill: o produto não sabe o fuso
+  // de nenhuma organização existente (não há endereço confiável nem
+  // configuração anterior de onde inferir), e escrever America/Sao_Paulo
+  // para todo mundo seria inventar um dado. null resolve para o fallback
+  // explícito FUSO_PADRAO = "UTC", que é EXATAMENTE o comportamento
+  // histórico — nenhum calendário se desloca sozinho sob uma organização
+  // que não pediu nada. Configurar depois é um clique em Configurações.
+  //
+  // Só interpreta CALENDÁRIO (hoje/atrasadas/próximas, períodos do
+  // Analytics, exibição). Nenhum instante persistido depende deste campo:
+  // mudar o fuso não reescreve scheduledAt/occurredAt/closedAt/paidAt.
+  timezone     String?
+
   // Fase P.9: preço mensal CONTRATADO desta organização, quando diverge do
   // padrão do plano (plan.priceMonthlyCents) — null = usa o padrão do
   // plano. Nunca sobrescreve plan.priceMonthlyCents; resolvido junto com

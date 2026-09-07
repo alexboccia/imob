@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireOrganizationId } from "@/lib/tenant";
+import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
 import {
@@ -50,6 +51,9 @@ export default async function ClientesPage({
   searchParams: Promise<SearchParams>;
 }) {
   const organizationId = await requireOrganizationId();
+  // Fuso comercial da organização (Fase 18) — uma resolução por
+  // carregamento, repassada à tabela/drawer.
+  const fuso = await buscarFusoOrganizacao(organizationId);
 
   if (!(await hasModule(organizationId, "crm"))) {
     return (
@@ -167,11 +171,14 @@ export default async function ClientesPage({
       email: pessoa.email,
       estagio: pessoa.pipelineStage,
       interesseLinhas: resumirInteresse(pessoa.preference),
-      ultimoContato: resumirUltimoContato(pessoa.interactions[0] ?? null),
-      proximaAcao: resumirProximaAcao({
-        proximaVisita: pessoa.scheduledActivities[0] ?? null,
-        interesseAberto,
-      }),
+      ultimoContato: resumirUltimoContato(pessoa.interactions[0] ?? null, fuso),
+      proximaAcao: resumirProximaAcao(
+        {
+          proximaVisita: pessoa.scheduledActivities[0] ?? null,
+          interesseAberto,
+        },
+        fuso
+      ),
       corretorNome: pessoa.assignedMember?.user.name ?? null,
     };
   });
@@ -202,6 +209,7 @@ export default async function ClientesPage({
       </div>
 
       <ClientesTabelaComDrawer
+        fuso={fuso}
         columns={clienteColumns}
         data={linhas}
         totalCount={totalCount}

@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ItemPipeline, PrioridadePipeline } from "@/lib/pipeline";
 import { estagioInteresseEncerrado, ESTAGIO_INTERESSE_LABEL } from "@/lib/property-interest-schema";
-import { acaoOperacionalDaVisita, formatarDataHora } from "@/lib/scheduled-activity-date";
+import { acaoOperacionalDaVisita } from "@/lib/scheduled-activity-date";
+import { formatarDataHoraNoFuso } from "@/lib/fuso-horario";
 import { MoverEstagioPipeline } from "@/components/admin/MoverEstagioPipeline";
 import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
 import { PRIORIDADE_BADGE_CLASSE, PRIORIDADE_LABEL_CURTO, formatarMotivoPrioridade } from "./prioridade-visual";
@@ -31,11 +32,14 @@ import { PRIORIDADE_BADGE_CLASSE, PRIORIDADE_LABEL_CURTO, formatarMotivoPriorida
 export function NegociacaoDrawer({
   item,
   prioridade,
+  fuso,
   open,
   onOpenChange,
 }: {
   item: ItemPipeline | null;
   prioridade?: PrioridadePipeline;
+  // Fuso comercial da organização (Fase 18).
+  fuso: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -46,6 +50,7 @@ export function NegociacaoDrawer({
     !!item.proximaVisita &&
     acaoOperacionalDaVisita(
       { status: "SCHEDULED", scheduledAt: new Date(item.proximaVisita.scheduledAtISO) },
+      fuso,
       new Date()
     ) === "RESOLVER_PENDENCIA";
 
@@ -122,7 +127,7 @@ export function NegociacaoDrawer({
               {item.proximaVisita ? (
                 <p className={`text-sm ${pendente ? "font-medium text-destructive" : "text-muted-foreground"}`}>
                   {pendente ? "Pendência: " : "Próxima visita: "}
-                  {formatarDataHora(item.proximaVisita.scheduledAtISO)}
+                  {formatarDataHoraNoFuso(item.proximaVisita.scheduledAtISO, fuso)}
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground">Sem visita agendada</p>
@@ -134,6 +139,7 @@ export function NegociacaoDrawer({
             <h3 className="text-sm font-medium">Ações</h3>
             {!encerrado && <MoverEstagioPipeline interesseId={item.id} stageAtual={item.stage} />}
             <FechamentoInteresse
+              fuso={fuso}
               interesseId={item.id}
               stage={item.stage}
               closedAtISO={item.closedAtISO}

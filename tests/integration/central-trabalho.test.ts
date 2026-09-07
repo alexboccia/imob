@@ -79,8 +79,12 @@ async function visita(
   });
 }
 
-const central = (organizationId: string, memberId: string) =>
-  buscarCentralTrabalho(organizationId, memberId, { agora: AGORA });
+// Fase 18 — "UTC" explícito: estas asserções foram escritas sob o
+// calendário UTC e continuam significando exatamente o mesmo. O
+// comportamento novo tem testes próprios (ver bloco "fuso da
+// organização" mais abaixo).
+const central = (organizationId: string, memberId: string, fuso = "UTC") =>
+  buscarCentralTrabalho(organizationId, memberId, fuso, { agora: AGORA });
 
 describe("compromissos", () => {
   test("visita de hoje aparece em HOJE", async () => {

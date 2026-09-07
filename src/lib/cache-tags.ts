@@ -13,3 +13,11 @@ export function tagFacetas(organizationId: string): string {
 export function tagBranding(organizationId: string): string {
   return `org:${organizationId}:branding`;
 }
+
+// Fase 18 — tag própria para o fuso horário porque ele mora em
+// Organization, não em OrganizationSettings/Branding: reaproveitar
+// tagConfiguracao faria uma troca de logotipo invalidar o fuso e
+// vice-versa. Invalidada em salvarFusoOrganizacao.
+export function tagFuso(organizationId: string): string {
+  return `org:${organizationId}:fuso`;
+}
