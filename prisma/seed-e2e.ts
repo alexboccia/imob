@@ -416,6 +416,19 @@ async function main() {
       where: { responsibleMemberId: { in: idsMembros } },
       data: { responsibleMemberId: null },
     });
+    // Fase 13 — pagamentos primeiro (FK RESTRICT para participante), e o
+    // ator vira null porque createdBy/cancelledBy são SET NULL.
+    await prisma.propertyInterestParticipantPayment.deleteMany({
+      where: { participant: { memberId: { in: idsMembros } } },
+    });
+    await prisma.propertyInterestParticipantPayment.updateMany({
+      where: { createdByMemberId: { in: idsMembros } },
+      data: { createdByMemberId: null },
+    });
+    await prisma.propertyInterestParticipantPayment.updateMany({
+      where: { cancelledByMemberId: { in: idsMembros } },
+      data: { cancelledByMemberId: null },
+    });
     // Fase 12 — participação NÃO é anulável (FK RESTRICT, de propósito):
     // a linha inteira sai junto com o membro descartável.
     await prisma.propertyInterestParticipant.deleteMany({
@@ -435,6 +448,17 @@ async function main() {
   // Fase 8 — o Person.deleteMany abaixo já cascateia PropertyInterest,
   // mas o history tem FK própria e precisa sair antes.
   await prisma.propertyInterestStageHistory.deleteMany({ where: { organizationId: { in: idsOrgs } } });
+  // Fase 13 — o Person.deleteMany abaixo cascateia PropertyInterest, que
+  // por sua vez cascateia os participantes; mas o ledger tem FK RESTRICT
+  // para participante (de propósito: registro financeiro não some junto
+  // com a parcela), então os pagamentos precisam sair explicitamente
+  // antes — caso contrário o cascade esbarra na constraint.
+  await prisma.propertyInterestParticipantPayment.deleteMany({
+    where: { organizationId: { in: idsOrgs } },
+  });
+  await prisma.propertyInterestParticipant.deleteMany({
+    where: { organizationId: { in: idsOrgs } },
+  });
   await prisma.person.deleteMany({ where: { organizationId: { in: idsOrgs } } });
   await prisma.property.deleteMany({
     where: {
@@ -810,6 +834,20 @@ async function main() {
               organizationId: orgAnalytics.organization.id,
               memberId: orgAnalytics.membro.id,
               allocationValue: 25000,
+              // Fase 13 — liquidação PARCIAL determinística: de
+              // R$ 25.000 atribuídos, R$ 10.000 pagos. É o estado que a
+              // tela precisa provar — atribuído != pago, com saldo
+              // pendente declarado e status derivado "Parcial".
+              payments: {
+                create: [
+                  {
+                    organizationId: orgAnalytics.organization.id,
+                    amount: 10000,
+                    paidAt: diasAtras(1),
+                    createdByMemberId: orgAnalytics.membro.id,
+                  },
+                ],
+              },
             },
           ],
         },

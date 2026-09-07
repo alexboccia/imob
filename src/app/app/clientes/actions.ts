@@ -21,6 +21,14 @@ import {
   validarAlocacaoContraTotal,
 } from "@/lib/participacao-comissao";
 import {
+  interpretarPagamento,
+  interpretarDataPagamento,
+  validarPagamentoContraAtribuicao,
+  validarAtribuicaoContraPagamentos,
+} from "@/lib/pagamento-comissao";
+import { temPapel, PAPEIS_LIQUIDACAO_COMISSAO } from "@/lib/authorization";
+import { formatarPreco } from "@/lib/format";
+import {
   erroAcessoNegado,
   erroGenerico,
   erroValidacao,
@@ -1201,6 +1209,14 @@ export async function corrigirDadosFechamento(
 
   return withOrganization(organizationId, async () => {
     const resultado = await prisma.$transaction(async (tx) => {
+      // Fase 13 — MESMA trava da divisão, e não uma nova: corrigir a
+      // comissão total agora valida contra as parcelas atribuídas, então
+      // esta ação disputa a mesma invariante que adicionar/editar
+      // participante e registrar pagamento. Um único lock por negociação
+      // cobre os três níveis (comissão, parcela, pagamento) e elimina
+      // qualquer ordem de aquisição — logo, qualquer deadlock.
+      await travarDivisao(tx, organizationId, interesseId);
+
       // Fronteira de tenant + guard de estado numa leitura só. O WHERE do
       // updateMany repete stage: "WON" para que um fechamento revertido
       // por outra transação no meio do caminho não seja corrigido às
@@ -1211,6 +1227,28 @@ export async function corrigirDadosFechamento(
       });
       if (!atual) return { tipo: "nao_encontrado" as const };
       if (atual.stage !== "WON") return { tipo: "nao_ganho" as const };
+
+      // Fase 13 — INVARIANTE: commissionValue >= Σ allocationValue.
+      // Antes desta fase a correção não olhava as parcelas, e reduzir a
+      // comissão deixava a divisão somando mais que o total — quebrando
+      // em silêncio a regra que a Fase 12 valida na outra ponta.
+      const parcelas = await tx.propertyInterestParticipant.findMany({
+        where: { organizationId, propertyInterestId: interesseId },
+        select: { allocationValue: true },
+      });
+      const totalAtribuido = parcelas.reduce(
+        (soma, parcela) => soma + (decimalParaValor(parcela.allocationValue) ?? 0),
+        0
+      );
+      const totalAtribuidoCentavos = Math.round(totalAtribuido * 100) / 100;
+      if (totalAtribuidoCentavos > 0) {
+        if (comissaoInterpretada.valor === null) {
+          return { tipo: "abaixo_das_parcelas" as const, atribuido: totalAtribuidoCentavos };
+        }
+        if (comissaoInterpretada.valor < totalAtribuidoCentavos) {
+          return { tipo: "abaixo_das_parcelas" as const, atribuido: totalAtribuidoCentavos };
+        }
+      }
 
       const atualizado = await tx.propertyInterest.updateMany({
         where: { id: interesseId, organizationId, stage: "WON" },
@@ -1245,6 +1283,11 @@ export async function corrigirDadosFechamento(
     }
     if (resultado.tipo === "nao_ganho") {
       return erroGenerico("Só é possível corrigir os valores de uma negociação ganha.");
+    }
+    if (resultado.tipo === "abaixo_das_parcelas") {
+      return erroGenerico(
+        `A comissão não pode ficar abaixo do que já foi dividido entre os participantes (${formatarPreco(resultado.atribuido)}). Ajuste a divisão primeiro.`
+      );
     }
     if (resultado.tipo === "corrida") {
       return erroGenerico("Não foi possível concluir agora devido a uma alteração concorrente — tente novamente.");
@@ -1425,12 +1468,29 @@ async function carregarDivisao(
 ) {
   const interesse = await tx.propertyInterest.findUnique({
     where: { id: interesseId, organizationId },
-    select: { id: true, personId: true, propertyId: true, commissionValue: true },
+    select: {
+      id: true,
+      personId: true,
+      propertyId: true,
+      stage: true,
+      commissionValue: true,
+    },
   });
   if (!interesse) return null;
   const participantes = await tx.propertyInterestParticipant.findMany({
     where: { organizationId, propertyInterestId: interesseId },
-    select: { id: true, memberId: true, allocationValue: true },
+    select: {
+      id: true,
+      memberId: true,
+      allocationValue: true,
+      // Fase 13 — só os pagamentos VÁLIDOS: cancelado sai da soma sem
+      // sumir do histórico. Carregado junto (batched) porque toda
+      // validação de parcela agora depende do que já foi pago.
+      payments: {
+        where: { organizationId, cancelledAt: null },
+        select: { id: true, amount: true },
+      },
+    },
   });
   return { interesse, participantes };
 }
@@ -1570,6 +1630,19 @@ export async function atualizarParticipante(
       );
       if (!validacao.ok) return { tipo: "invalido" as const, erro: validacao.erro };
 
+      // Fase 13 — INVARIANTE NOVA: a parcela não pode cair abaixo do que
+      // já foi pago, nem virar "sem valor" com pagamento registrado.
+      // Sem isto, reduzir a atribuição transformaria pagamento válido em
+      // dívida negativa.
+      const estaLinha = dados.participantes.find((p) => p.id === participanteId);
+      const validacaoPagamentos = validarAtribuicaoContraPagamentos(
+        alocacao.valor,
+        (estaLinha?.payments ?? []).map((pg) => decimalParaValor(pg.amount) ?? 0)
+      );
+      if (!validacaoPagamentos.ok) {
+        return { tipo: "invalido" as const, erro: validacaoPagamentos.erro };
+      }
+
       const anterior = decimalParaValor(atual.allocationValue);
       if (anterior === alocacao.valor) return { tipo: "sem_mudanca" as const };
 
@@ -1648,6 +1721,18 @@ export async function removerParticipante(
 
       await travarDivisao(tx, organizationId, atual.propertyInterestId);
 
+      // Fase 13 — participação com QUALQUER histórico de pagamento não é
+      // removível, inclusive quando todos foram cancelados. Apagá-la
+      // destruiria o registro de que houve movimento financeiro — e
+      // cancelado existe justamente para preservar esse rastro, não para
+      // liberar a exclusão. É também o que a FK RESTRICT do ledger
+      // impõe no banco: contar só os válidos deixaria a action aprovar
+      // um delete que o Postgres recusaria em seguida.
+      const pagamentosNoLedger = await tx.propertyInterestParticipantPayment.count({
+        where: { organizationId, participantId: participanteId },
+      });
+      if (pagamentosNoLedger > 0) return { tipo: "tem_pagamento" as const };
+
       const removido = await tx.propertyInterestParticipant.deleteMany({
         where: { id: participanteId, organizationId },
       });
@@ -1676,12 +1761,272 @@ export async function removerParticipante(
     });
 
     if (resultado.tipo === "nao_encontrado") return erroAcessoNegado("Participação não encontrada.");
+    if (resultado.tipo === "tem_pagamento") {
+      return erroGenerico(
+        "Esta participação tem histórico de pagamentos e não pode ser removida. Se a divisão mudou, ajuste o valor da participação."
+      );
+    }
     if (resultado.tipo === "corrida") {
       return erroGenerico("Não foi possível concluir agora devido a uma alteração concorrente — tente novamente.");
     }
 
     revalidarDivisao(resultado.personId, resultado.propertyId);
     return sucesso("Participante removido.");
+  });
+}
+
+// =====================================================================
+// Fase 13 — PAGAMENTO de comissão (liquidação da parcela)
+// =====================================================================
+// ATRIBUÍDO NÃO É PAGO. Estas ações registram o FATO de que dinheiro
+// mudou de mãos; nada é inferido de WON, de commissionValue, de
+// allocationValue nem da data de fechamento.
+//
+// AUTORIZAÇÃO: gate próprio, mais estreito que o do split. Registrar ou
+// cancelar pagamento afirma que dinheiro saiu — mais grave que atribuir
+// uma parcela. Não é papel financeiro inventado: é a camada gerencial
+// que src/lib/authorization.ts já define (OWNER/ADMIN/MANAGER), o mesmo
+// mecanismo usado nas outras áreas sensíveis do painel.
+//
+// SOMENTE EM NEGÓCIO GANHO. A Fase 12 permite participantes em negócio
+// aberto (dá para saber quem trabalhou antes de saber quanto), mas
+// "pagar comissão" de um negócio que ainda não foi ganho seria outro
+// domínio — adiantamento — que este produto não modela.
+//
+// CONCORRÊNCIA: mesma trava por NEGOCIAÇÃO da Fase 12
+// (travarDivisao), deliberadamente e não por preguiça. Um lock mais fino
+// por participante seria suficiente para a soma de pagamentos, mas
+// criaria um SEGUNDO domínio de lock convivendo com o da divisão — e
+// duas ações que precisassem dos dois em ordens diferentes fechariam um
+// deadlock. Um lock por negociação cobre comissão, parcelas e
+// pagamentos, então não existe ordem de aquisição a definir.
+async function carregarParcelaParaPagamento(
+  tx: ClienteTransacao,
+  organizationId: string,
+  participanteId: string
+) {
+  const parcela = await tx.propertyInterestParticipant.findUnique({
+    where: { id: participanteId, organizationId },
+    select: {
+      id: true,
+      allocationValue: true,
+      propertyInterestId: true,
+      propertyInterest: {
+        select: { organizationId: true, stage: true, personId: true, propertyId: true },
+      },
+    },
+  });
+  // organizationId conferido também na negociação: as FKs são simples e
+  // a leitura nunca confia numa linha anômala cross-tenant.
+  if (!parcela || parcela.propertyInterest.organizationId !== organizationId) return null;
+  return parcela;
+}
+
+async function pagamentosValidosDaParcela(
+  tx: ClienteTransacao,
+  organizationId: string,
+  participanteId: string
+) {
+  const linhas = await tx.propertyInterestParticipantPayment.findMany({
+    where: { organizationId, participantId: participanteId, cancelledAt: null },
+    select: { amount: true },
+  });
+  return linhas.map((l) => decimalParaValor(l.amount) ?? 0);
+}
+
+// Registra um pagamento REALIZADO. Parcial é o caso normal: a soma dos
+// pagamentos válidos vai caminhando até a parcela atribuída.
+export async function registrarPagamentoParticipante(
+  participanteId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  if (!temPapel(session.user.role, PAPEIS_LIQUIDACAO_COMISSAO)) {
+    return erroAcessoNegado("Você não tem permissão para registrar pagamentos de comissão.");
+  }
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  const valor = interpretarPagamento(formData.get("valorPagamento"));
+  if (!valor.ok) return erroGenerico(valor.erro);
+  const data = interpretarDataPagamento(formData.get("dataPagamento"));
+  if (!data.ok) return erroGenerico(data.erro);
+
+  return withOrganization(organizationId, async () => {
+    const resultado = await prisma.$transaction(async (tx) => {
+      // Primeira leitura serve APENAS para descobrir a que negociação
+      // esta parcela pertence — é o que compõe a chave da trava.
+      const referencia = await carregarParcelaParaPagamento(tx, organizationId, participanteId);
+      if (!referencia) return { tipo: "nao_encontrado" as const };
+
+      await travarDivisao(tx, organizationId, referencia.propertyInterestId);
+
+      // RELEITURA DEPOIS DA TRAVA, e não reaproveitamento da leitura
+      // acima: em READ COMMITTED, o valor lido antes do lock pode já ter
+      // sido alterado por uma transação que estava na frente da fila.
+      // Achado real de teste — sem esta releitura, um pagamento aprovado
+      // contra a parcela antiga convivia com uma redução aprovada logo
+      // antes, deixando pago > atribuído.
+      const parcela = await carregarParcelaParaPagamento(tx, organizationId, participanteId);
+      if (!parcela) return { tipo: "nao_encontrado" as const };
+
+      if (parcela.propertyInterest.stage !== "WON") {
+        return { tipo: "nao_ganho" as const };
+      }
+
+      const jaPagos = await pagamentosValidosDaParcela(tx, organizationId, participanteId);
+      const validacao = validarPagamentoContraAtribuicao(
+        valor.valor,
+        decimalParaValor(parcela.allocationValue),
+        jaPagos
+      );
+      if (!validacao.ok) return { tipo: "invalido" as const, erro: validacao.erro };
+
+      const criado = await tx.propertyInterestParticipantPayment.create({
+        data: {
+          organizationId,
+          participantId: participanteId,
+          amount: valor.valor,
+          paidAt: data.data,
+          // Ator tenant-specific. `?? null` porque uma sessão sem vínculo
+          // de organização é estado possível — o pagamento continua
+          // válido, só sem o rastro de quem digitou (o ActivityLog abaixo
+          // guarda o User de qualquer forma).
+          createdByMemberId: session.user.organizationMemberId ?? null,
+        },
+        select: { id: true },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          organizationId,
+          userId: session.user.id,
+          entity: "PropertyInterest",
+          entityId: parcela.propertyInterestId,
+          action: "property_interest_payment_added",
+          // Só ids, valores e datas — nenhum nome.
+          payload: {
+            paymentId: criado.id,
+            participantId: participanteId,
+            valor: valor.valor,
+            paidAt: data.data.toISOString(),
+          },
+        },
+      });
+
+      return {
+        tipo: "ok" as const,
+        personId: parcela.propertyInterest.personId,
+        propertyId: parcela.propertyInterest.propertyId,
+      };
+    });
+
+    if (resultado.tipo === "nao_encontrado") return erroAcessoNegado("Participação não encontrada.");
+    if (resultado.tipo === "nao_ganho") {
+      return erroGenerico(
+        "Só é possível registrar pagamento de comissão em uma negociação ganha."
+      );
+    }
+    if (resultado.tipo === "invalido") return erroGenerico(resultado.erro);
+
+    revalidarDivisao(resultado.personId, resultado.propertyId);
+    return sucesso("Pagamento registrado.");
+  });
+}
+
+// Cancela um pagamento — e é também o caminho de CORREÇÃO: valor errado
+// se conserta cancelando e registrando o certo, nunca reescrevendo um
+// fato consumado. A linha permanece no histórico, marcada; só sai da
+// soma paga.
+export async function cancelarPagamentoParticipante(
+  pagamentoId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  if (!temPapel(session.user.role, PAPEIS_LIQUIDACAO_COMISSAO)) {
+    return erroAcessoNegado("Você não tem permissão para cancelar pagamentos de comissão.");
+  }
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  return withOrganization(organizationId, async () => {
+    const resultado = await prisma.$transaction(async (tx) => {
+      const pagamento = await tx.propertyInterestParticipantPayment.findUnique({
+        where: { id: pagamentoId, organizationId },
+        select: {
+          id: true,
+          amount: true,
+          cancelledAt: true,
+          participantId: true,
+          participant: {
+            select: {
+              organizationId: true,
+              propertyInterestId: true,
+              propertyInterest: { select: { personId: true, propertyId: true } },
+            },
+          },
+        },
+      });
+      if (!pagamento || pagamento.participant.organizationId !== organizationId) {
+        return { tipo: "nao_encontrado" as const };
+      }
+      if (pagamento.cancelledAt !== null) return { tipo: "ja_cancelado" as const };
+
+      await travarDivisao(tx, organizationId, pagamento.participant.propertyInterestId);
+
+      // O WHERE repete cancelledAt: null — se outra transação cancelar no
+      // meio do caminho, esta não sobrescreve o cancelamento alheio.
+      const atualizado = await tx.propertyInterestParticipantPayment.updateMany({
+        where: { id: pagamentoId, organizationId, cancelledAt: null },
+        data: {
+          cancelledAt: new Date(),
+          cancelledByMemberId: session.user.organizationMemberId ?? null,
+        },
+      });
+      if (atualizado.count === 0) return { tipo: "corrida" as const };
+
+      await tx.activityLog.create({
+        data: {
+          organizationId,
+          userId: session.user.id,
+          entity: "PropertyInterest",
+          entityId: pagamento.participant.propertyInterestId,
+          action: "property_interest_payment_cancelled",
+          payload: {
+            paymentId: pagamentoId,
+            participantId: pagamento.participantId,
+            valor: decimalParaValor(pagamento.amount),
+          },
+        },
+      });
+
+      return {
+        tipo: "ok" as const,
+        personId: pagamento.participant.propertyInterest.personId,
+        propertyId: pagamento.participant.propertyInterest.propertyId,
+      };
+    });
+
+    if (resultado.tipo === "nao_encontrado") return erroAcessoNegado("Pagamento não encontrado.");
+    if (resultado.tipo === "ja_cancelado") return erroGenerico("Este pagamento já está cancelado.");
+    if (resultado.tipo === "corrida") {
+      return erroGenerico("Não foi possível concluir agora devido a uma alteração concorrente — tente novamente.");
+    }
+
+    revalidarDivisao(resultado.personId, resultado.propertyId);
+    return sucesso("Pagamento cancelado.");
   });
 }
 

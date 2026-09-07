@@ -17,6 +17,7 @@ import { AnalyticsAquisicao } from "@/components/admin/analytics/AnalyticsAquisi
 import { AnalyticsResultado } from "@/components/admin/analytics/AnalyticsResultado";
 import { AnalyticsResponsaveis } from "@/components/admin/analytics/AnalyticsResponsaveis";
 import { AnalyticsParticipacao } from "@/components/admin/analytics/AnalyticsParticipacao";
+import { AnalyticsLiquidacao } from "@/components/admin/analytics/AnalyticsLiquidacao";
 
 // Analytics comercial (Fase 5).
 //
@@ -119,6 +120,10 @@ export default async function AnalyticsPage({
           do dinheiro". As duas dimensões coexistem, nunca se substituem. */}
       <AnalyticsParticipacao participacao={analytics.participacao} periodoLabel={periodoLabel} />
 
+      {/* Fase 13 — fecha a cadeia: conduziu -> atribuído -> PAGO. Cada
+          bloco responde uma pergunta diferente e nenhum substitui outro. */}
+      <AnalyticsLiquidacao liquidacao={analytics.liquidacao} periodoLabel={periodoLabel} />
+
       <AnalyticsAquisicao
         aquisicao={analytics.aquisicao}
         periodoLabel={periodoLabel}
@@ -185,6 +190,13 @@ export default async function AnalyticsPage({
             a ninguém parcela nenhuma, e o que não foi atribuído aparece como “não distribuída” em
             vez de ganhar um destino inventado. “Comissão atribuída” não é valor recebido — o
             sistema não registra pagamento, imposto nem repasse.
+          </li>
+          <li>
+            Comissão <strong>paga</strong> é diferente de comissão atribuída: só conta quando
+            alguém registra o pagamento, com a data em que ele ocorreu. O bloco de liquidação usa
+            essa data, não a do fechamento — um negócio fechado antes do período e pago dentro
+            dele aparece aqui. Pagamentos cancelados saem da conta mas continuam no histórico da
+            negociação. Nada é considerado pago por ter sido ganho, atribuído ou fechado.
           </li>
           <li>
             O canal de aquisição descreve <strong>a visita</strong> (de onde a pessoa chegou desta

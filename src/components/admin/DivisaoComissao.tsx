@@ -14,6 +14,16 @@ import {
   calcularAlocacaoPorPercentual,
   type ParticipanteExibicao,
 } from "@/lib/participacao-comissao";
+import {
+  registrarPagamentoParticipante,
+  cancelarPagamentoParticipante,
+} from "@/app/app/clientes/actions";
+import {
+  resumirLiquidacao,
+  somarPagamentosValidos,
+  STATUS_LIQUIDACAO_LABEL,
+  type PagamentoExibicao,
+} from "@/lib/pagamento-comissao";
 import type { OpcaoResponsavel, ResponsavelNegociacao } from "@/lib/responsavel-negociacao";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,8 +54,12 @@ export function DivisaoComissao({
   commissionValue,
   responsavel,
   participantes,
+  pagamentosPorParticipante,
   membros,
+  podeLiquidar,
 }: {
+  pagamentosPorParticipante: Record<string, PagamentoExibicao[]>;
+  podeLiquidar: boolean;
   interesseId: string;
   // Comissão TOTAL do negócio (Fase 10). null = não registrada — não
   // existe saldo, e a tela diz isso em vez de mostrar "R$ 0".
@@ -106,7 +120,9 @@ export function DivisaoComissao({
               commissionValue={commissionValue}
               responsavel={responsavel}
               participantes={participantes}
+              pagamentosPorParticipante={pagamentosPorParticipante}
               membros={membros}
+              podeLiquidar={podeLiquidar}
             />
 
             <DialogFooter>
@@ -126,13 +142,17 @@ function PainelDivisao({
   commissionValue,
   responsavel,
   participantes,
+  pagamentosPorParticipante,
   membros,
+  podeLiquidar,
 }: {
   interesseId: string;
   commissionValue: number | null;
   responsavel: ResponsavelNegociacao | null;
   participantes: ParticipanteExibicao[];
+  pagamentosPorParticipante: Record<string, PagamentoExibicao[]>;
   membros: OpcaoResponsavel[];
+  podeLiquidar: boolean;
 }) {
   const adicionar = adicionarParticipante.bind(null, interesseId);
   const [estadoAdicionar, formAdicionar, pendenteAdicionar] = useActionState(
@@ -197,6 +217,8 @@ function PainelDivisao({
               key={participante.id}
               participante={participante}
               commissionValue={commissionValue}
+              pagamentos={pagamentosPorParticipante[participante.id] ?? []}
+              podeLiquidar={podeLiquidar}
             />
           ))}
         </ul>
@@ -277,11 +299,16 @@ function PainelDivisao({
 function LinhaParticipante({
   participante,
   commissionValue,
+  pagamentos,
+  podeLiquidar,
 }: {
   participante: ParticipanteExibicao;
   commissionValue: number | null;
+  pagamentos: PagamentoExibicao[];
+  podeLiquidar: boolean;
 }) {
   const [editando, setEditando] = useState(false);
+  const [liquidando, setLiquidando] = useState(false);
   const atualizar = atualizarParticipante.bind(null, participante.id);
   const remover = removerParticipante.bind(null, participante.id);
   const [estadoAtualizar, formAtualizar, pendenteAtualizar] = useActionState(
@@ -292,6 +319,15 @@ function LinhaParticipante({
     remover,
     ESTADO_INICIAL_ACAO
   );
+
+  // Estado DERIVADO do ledger, nunca persistido: uma coluna `status`
+  // divergiria do histórico no primeiro cancelamento. Cancelado sai da
+  // soma (somarPagamentosValidos filtra) e continua na lista abaixo.
+  const liquidacao = resumirLiquidacao(
+    participante.alocacao,
+    pagamentos.filter((pg) => !pg.cancelado).map((pg) => pg.valor)
+  );
+  const pago = somarPagamentosValidos(pagamentos);
 
   return (
     <li className="rounded-lg border p-3">
@@ -312,6 +348,15 @@ function LinhaParticipante({
               formatarPreco(participante.alocacao)
             )}
           </p>
+          {/* ATRIBUÍDO != PAGO. As três grandezas aparecem juntas, em
+              TEXTO — o status nunca depende só de cor. */}
+          <p className="text-xs text-muted-foreground">
+            Pago {formatarPreco(liquidacao.pago)} ·{" "}
+            {liquidacao.pendente === null
+              ? "pendente —"
+              : `pendente ${formatarPreco(liquidacao.pendente)}`}{" "}
+            · <span className="font-medium text-foreground">{STATUS_LIQUIDACAO_LABEL[liquidacao.status]}</span>
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -321,6 +366,18 @@ function LinhaParticipante({
           >
             {editando ? "Cancelar" : "Editar valor"}
           </button>
+          {/* Só aparece quando há obrigação conhecida e ainda há saldo:
+              sem parcela definida não existe teto para pagar contra, e o
+              servidor recusaria de qualquer forma. */}
+          {podeLiquidar && liquidacao.pendente !== null && liquidacao.pendente > 0 && (
+            <button
+              type="button"
+              onClick={() => setLiquidando((v) => !v)}
+              className="rounded-md text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              {liquidando ? "Fechar" : "Registrar pagamento"}
+            </button>
+          )}
           <form action={formRemover}>
             <button
               type="submit"
@@ -352,6 +409,19 @@ function LinhaParticipante({
         </form>
       )}
 
+      {liquidando && liquidacao.pendente !== null && (
+        <FormularioPagamento
+          participanteId={participante.id}
+          saldo={liquidacao.pendente}
+          atribuido={liquidacao.atribuido}
+          pago={pago}
+        />
+      )}
+
+      {pagamentos.length > 0 && (
+        <HistoricoPagamentos pagamentos={pagamentos} podeLiquidar={podeLiquidar} />
+      )}
+
       {estadoRemover.message && !estadoRemover.success && (
         <p role="alert" className="mt-2 text-xs text-destructive">
           {estadoRemover.message}
@@ -359,6 +429,140 @@ function LinhaParticipante({
       )}
     </li>
   );
+}
+
+// Registro de um pagamento REALIZADO. O contexto inteiro fica à vista
+// antes de digitar: atribuído, já pago e saldo disponível.
+function FormularioPagamento({
+  participanteId,
+  saldo,
+  atribuido,
+  pago,
+}: {
+  participanteId: string;
+  saldo: number;
+  atribuido: number | null;
+  pago: number;
+}) {
+  const registrar = registrarPagamentoParticipante.bind(null, participanteId);
+  const [estado, formAction, pendente] = useActionState(registrar, ESTADO_INICIAL_ACAO);
+  // CAMPO VAZIO de propósito: preencher com o saldo inteiro induziria a
+  // confirmar no automático uma liquidação total que ninguém conferiu.
+  // O saldo aparece como TEXTO ao lado, não como valor pré-digitado.
+  const [digitos, setDigitos] = useState("");
+
+  return (
+    <form action={formAction} className="mt-3 space-y-2 border-t pt-3">
+      <p className="text-xs text-muted-foreground">
+        Atribuído {atribuido === null ? "—" : formatarPreco(atribuido)} · já pago{" "}
+        {formatarPreco(pago)} · disponível{" "}
+        <span className="font-medium text-foreground">{formatarPreco(saldo)}</span>
+      </p>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor={`pagamento-valor-${participanteId}`}>Valor pago</Label>
+          <CampoMoeda
+            id={`pagamento-valor-${participanteId}`}
+            name="valorPagamento"
+            className={CLASSE_CAMPO}
+            digitos={digitos}
+            onDigitosChange={setDigitos}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`pagamento-data-${participanteId}`}>Data do pagamento</Label>
+          <input
+            id={`pagamento-data-${participanteId}`}
+            name="dataPagamento"
+            type="date"
+            className={CLASSE_CAMPO}
+          />
+        </div>
+      </div>
+
+      {estado.message && !estado.success && (
+        <p role="alert" className="text-xs text-destructive">
+          {estado.message}
+        </p>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        Registre apenas pagamentos já realizados — a data não pode ser no futuro.
+      </p>
+
+      <Button type="submit" size="sm" disabled={pendente}>
+        {pendente ? "Registrando..." : "Registrar pagamento"}
+      </Button>
+    </form>
+  );
+}
+
+// Histórico do ledger. Cancelado NÃO some: fica visível e marcado, fora
+// da soma — registro financeiro apagado não deixaria rastro de que
+// existiu.
+function HistoricoPagamentos({
+  pagamentos,
+  podeLiquidar,
+}: {
+  pagamentos: PagamentoExibicao[];
+  podeLiquidar: boolean;
+}) {
+  return (
+    <ul className="mt-3 space-y-1 border-t pt-3">
+      {pagamentos.map((pagamento) => (
+        <LinhaPagamento key={pagamento.id} pagamento={pagamento} podeLiquidar={podeLiquidar} />
+      ))}
+    </ul>
+  );
+}
+
+function LinhaPagamento({
+  pagamento,
+  podeLiquidar,
+}: {
+  pagamento: PagamentoExibicao;
+  podeLiquidar: boolean;
+}) {
+  const cancelar = cancelarPagamentoParticipante.bind(null, pagamento.id);
+  const [estado, formAction, pendente] = useActionState(cancelar, ESTADO_INICIAL_ACAO);
+
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
+      <span className={pagamento.cancelado ? "text-muted-foreground line-through" : ""}>
+        <span className="font-medium tabular-nums">{formatarPreco(pagamento.valor)}</span> em{" "}
+        {formatarDataCurta(pagamento.paidAtISO)}
+        {pagamento.registradoPor && <> · por {pagamento.registradoPor}</>}
+      </span>
+      {pagamento.cancelado ? (
+        // Texto, não só o risco no valor: quem usa leitor de tela precisa
+        // saber que este pagamento não conta.
+        <span className="text-muted-foreground">Cancelado</span>
+      ) : (
+        podeLiquidar && (
+          <form action={formAction}>
+            <button
+              type="submit"
+              disabled={pendente}
+              className="rounded-md font-medium text-destructive underline-offset-4 hover:underline disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              {pendente ? "Cancelando..." : "Cancelar"}
+            </button>
+          </form>
+        )
+      )}
+      {estado.message && !estado.success && (
+        <span role="alert" className="basis-full text-destructive">
+          {estado.message}
+        </span>
+      )}
+    </li>
+  );
+}
+
+// Data do FATO, curta. Sem hora: o produto registra o dia do pagamento.
+function formatarDataCurta(iso: string): string {
+  return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "UTC" });
 }
 
 // Campo de parcela com o atalho de "%", que apenas CALCULA sobre a

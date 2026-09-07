@@ -27,6 +27,8 @@ import { buscarImoveisCompativeis } from "@/lib/property-matching";
 import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
 import { paraResponsavel } from "@/lib/responsavel-negociacao";
 import { paraParticipantes } from "@/lib/participacao-comissao";
+import { paraPagamentos } from "@/lib/pagamento-comissao";
+import { temPapel, PAPEIS_LIQUIDACAO_COMISSAO } from "@/lib/authorization";
 import { auth } from "@/lib/auth";
 import {
   Select,
@@ -108,6 +110,23 @@ export default async function DetalheClientePage({
                       status: true,
                       organizationId: true,
                       user: { select: { name: true } },
+                    },
+                  },
+                  // Fase 13 — ledger de pagamentos, no MESMO select
+                  // batched: uma query para a ficha inteira, nunca uma
+                  // por participante. Traz também os CANCELADOS, que
+                  // continuam no histórico e apenas saem da soma.
+                  payments: {
+                    where: { organizationId },
+                    select: {
+                      id: true,
+                      organizationId: true,
+                      amount: true,
+                      paidAt: true,
+                      cancelledAt: true,
+                      createdByMember: {
+                        select: { organizationId: true, user: { select: { name: true } } },
+                      },
                     },
                   },
                 },
@@ -274,6 +293,7 @@ export default async function DetalheClientePage({
                 <InteresseImovelItem
                   key={interesse.id}
                   membros={membrosAtribuiveis}
+                  podeLiquidar={temPapel(session?.user.role, PAPEIS_LIQUIDACAO_COMISSAO)}
                   interesse={{
                     id: interesse.id,
                     stage: interesse.stage,
@@ -307,6 +327,20 @@ export default async function DetalheClientePage({
                         allocationValue: decimalParaValor(p.allocationValue),
                       })),
                       organizationId
+                    ),
+                    // Fase 13 — ledger por participante, já saneado
+                    // contra linha cross-tenant em paraPagamentos.
+                    pagamentosPorParticipante: Object.fromEntries(
+                      interesse.participants.map((p) => [
+                        p.id,
+                        paraPagamentos(
+                          p.payments.map((pg) => ({
+                            ...pg,
+                            amount: decimalParaValor(pg.amount) ?? 0,
+                          })),
+                          organizationId
+                        ),
+                      ])
                     ),
                   }}
                 />

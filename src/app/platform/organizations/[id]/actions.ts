@@ -426,6 +426,9 @@ export async function deletarOrganization(
       // CASCADE de propertyInterest também os removeria, mas depender
       // disso deixaria a ordem correta por acidente em vez de por
       // decisão.
+      // Fase 13 — pagamentos saem antes dos participantes: a FK é
+      // RESTRICT (registro financeiro não some junto com a parcela).
+      await tx.propertyInterestParticipantPayment.deleteMany({ where: { organizationId } });
       await tx.propertyInterestParticipant.deleteMany({ where: { organizationId } });
       await tx.propertyInterest.deleteMany({ where: { organizationId } });
       await tx.property.deleteMany({ where: { organizationId } });

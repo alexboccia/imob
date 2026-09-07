@@ -774,6 +774,10 @@ model PropertyInterestParticipant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Fase 13 — ledger de pagamentos desta parcela. Lista vazia = nada
+  // pago; atribuir NUNCA implica pagar.
+  payments PropertyInterestParticipantPayment[]
+
   // Uma participação por membro por negociação. Duas linhas do mesmo
   // membro tornariam a soma ambígua e a edição imprevisível.
   @@unique([propertyInterestId, memberId])
@@ -782,6 +786,88 @@ model PropertyInterestParticipant {
   // negociação já é servido pelo prefixo esquerdo da @@unique acima.
   @@index([organizationId, memberId])
   @@map("property_interest_participants")
+}
+
+// =======================================================================
+// Pagamento de comissão (Fase 13)
+// =======================================================================
+// LEDGER de liquidação: cada linha é um pagamento que ACONTECEU.
+//
+// A cadeia financeira do produto tem quatro conceitos distintos, e este
+// model existe para que o quarto pare de ser inferido:
+//   commissionValue  comissão TOTAL do negócio          (Fase 10)
+//   allocationValue  parcela ATRIBUÍDA ao participante  (Fase 12)
+//   Σ pagamentos     o que foi de fato PAGO             (esta fase)
+//   pendente         allocationValue - Σ pagamentos     (derivado)
+//
+// POR QUE UM LEDGER, E NÃO `paidValue` OU `paid Boolean`: um único campo
+// responderia "quanto" e perderia quando, em quantas vezes, quem
+// registrou e o que foi corrigido. Pagamento de comissão é parcelado na
+// prática, e um booleano forçaria liquidação integral numa tacada.
+//
+// POR QUE NÃO REUSAR O `Payment` QUE JÁ EXISTE: aquele é do billing da
+// PLATAFORMA (Payment -> Invoice -> Subscription), dinheiro que a easymob
+// cobra da imobiliária — sentido oposto do fluxo, em amountCents Int,
+// com status de gateway e externalId, operado por operador de
+// plataforma. Nada ali descreve repasse de comissão a um corretor.
+model PropertyInterestParticipantPayment {
+  id             String       @id @default(cuid())
+  // Redundante com participant.organizationId de propósito: a extensão
+  // de tenant-scoping (src/lib/prisma.ts) só reconhece organizationId
+  // como chave DIRETA do where, e o Analytics consulta pagamentos por
+  // organização + data sem passar pelo participante. A consistência é
+  // garantida na escrita, dentro da mesma transação que valida o
+  // participante.
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // RESTRICT: pagamento não existe sem a parcela a que pertence, e
+  // apagar uma participação que já tem histórico financeiro destruiria o
+  // registro do que foi pago. A remoção de participante com pagamento é
+  // bloqueada na action, e esta FK é a rede embaixo disso.
+  // Diferente do CASCADE que liga o participante à negociação: lá a
+  // linha é uma atribuição, aqui é um fato consumado.
+  participantId String
+  participant   PropertyInterestParticipant @relation(fields: [participantId], references: [id])
+
+  // Sempre > 0. Estorno NÃO é valor negativo — é cancelamento (abaixo),
+  // para que a soma paga nunca dependa de interpretar sinal.
+  amount Decimal @db.Decimal(14, 2)
+
+  // QUANDO O PAGAMENTO OCORREU — jamais confundido com createdAt, que é
+  // quando alguém digitou. São coisas diferentes: um pagamento de ontem
+  // pode ser registrado hoje. Todo recorte temporal de liquidação usa
+  // paidAt. Data futura é recusada: esta linha é fato consumado, não
+  // previsão (previsão seria outro domínio, fora desta fase).
+  paidAt DateTime
+
+  // Ator ADMINISTRATIVO, em identidade tenant-specific — ActivityLog só
+  // guarda User, que é global e atravessa organizações. SET NULL (e não
+  // RESTRICT como o participante) porque isto é rastro de conveniência,
+  // não a identidade do dinheiro: quem RECEBE é o participante. Mesma
+  // política de ScheduledActivity.createdByMember.
+  createdByMemberId String?
+  createdByMember   OrganizationMember? @relation("PaymentCreatedByMember", fields: [createdByMemberId], references: [id])
+
+  // SOFT-CANCEL, nunca delete: registro financeiro apagado não deixa
+  // rastro de que existiu. Cancelado sai da soma paga (deixa de ser
+  // "pagamento válido") mas continua visível no histórico. É também o
+  // mecanismo de CORREÇÃO: erro de digitação se conserta cancelando e
+  // registrando o valor certo, em vez de reescrever um fato. Mesmo
+  // padrão de ScheduledActivity.cancelledAt.
+  cancelledAt         DateTime?
+  cancelledByMemberId String?
+  cancelledByMember   OrganizationMember? @relation("PaymentCancelledByMember", fields: [cancelledByMemberId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Carregamento do ledger de uma parcela, já ordenado pela data do fato.
+  @@index([participantId, paidAt])
+  // Recorte do Analytics: "quanto foi pago nesta organização no período",
+  // que é uma coorte por paidAt e não passa pelo participante.
+  @@index([organizationId, paidAt])
+  @@map("property_interest_participant_payments")
 }
 
 model PropertyInterestStageHistory {
@@ -1001,19 +1087,24 @@ model OrganizationMember {
   updatedAt DateTime @updatedAt
 
   notificationPreferences    NotificationPreference[]
-  responsibleProperties      Property[]                    @relation("PropertyResponsibleMember")
+  responsibleProperties      Property[]                           @relation("PropertyResponsibleMember")
   // Fase 11 — negociações sob responsabilidade deste membro. Relação
   // SEPARADA de responsibleProperties de propósito: ser responsável pelo
   // imóvel não torna ninguém responsável pela negociação daquele imóvel.
-  responsibleInterests       PropertyInterest[]            @relation("PropertyInterestResponsibleMember")
+  responsibleInterests       PropertyInterest[]                   @relation("PropertyInterestResponsibleMember")
   // Fase 12 — participações econômicas em negócios. SEPARADA de
   // responsibleInterests de propósito: conduzir a negociação não implica
   // receber parcela nenhuma da comissão.
-  commissionParticipations   PropertyInterestParticipant[] @relation("ParticipantMember")
-  assignedPeople             Person[]                      @relation("PersonAssignedMember")
-  interactions               Interaction[]                 @relation("InteractionMember")
-  deals                      Deal[]                        @relation("DealMember")
-  createdScheduledActivities ScheduledActivity[]           @relation("ScheduledActivityCreatedByMember")
+  commissionParticipations   PropertyInterestParticipant[]        @relation("ParticipantMember")
+  // Fase 13 — pagamentos de comissão REGISTRADOS por este membro (ator
+  // administrativo), não recebidos por ele. Quem recebe é determinado
+  // pelo participante, nunca por estas relações.
+  registeredPayments         PropertyInterestParticipantPayment[] @relation("PaymentCreatedByMember")
+  cancelledPayments          PropertyInterestParticipantPayment[] @relation("PaymentCancelledByMember")
+  assignedPeople             Person[]                             @relation("PersonAssignedMember")
+  interactions               Interaction[]                        @relation("InteractionMember")
+  deals                      Deal[]                               @relation("DealMember")
+  createdScheduledActivities ScheduledActivity[]                  @relation("ScheduledActivityCreatedByMember")
 
   @@unique([organizationId, userId])
   @@map("organization_members")
@@ -1043,34 +1134,35 @@ model Organization {
   // os limites efetivos em resolverEntitlementsOrganizacao.
   priceMonthlyCentsOverride Int?
 
-  members                      OrganizationMember[]
-  limitOverrides               OrganizationLimitOverride[]
-  settings                     OrganizationSettings?
-  branding                     OrganizationBranding?
-  subscriptions                Subscription[]
-  invoices                     Invoice[]
-  billingEvents                BillingEvent[]
-  activityLogs                 ActivityLog[]
-  notifications                Notification[]
-  aiUsages                     AiUsage[]
-  people                       Person[]
-  personPreferences            PersonPreference[]
-  propertyInterests            PropertyInterest[]
-  propertyInterestStageHistory PropertyInterestStageHistory[]
-  scheduledActivities          ScheduledActivity[]
-  properties                   Property[]
-  media                        Media[]
-  propertyStatusHistory        PropertyStatusHistory[]
-  interactions                 Interaction[]
-  analyticsEvents              PropertyAnalyticsEvent[]
-  deals                        Deal[]
-  portalListings               PortalListing[]
-  featureOptions               FeatureOption[]
-  propertyTypeOptions          PropertyTypeOption[]
-  ownerInviteTokens            OwnerInviteToken[]
-  domains                      OrganizationDomain[]
-  emailDomain                  OrganizationEmailDomain?
-  propertyInterestParticipants PropertyInterestParticipant[]
+  members                             OrganizationMember[]
+  limitOverrides                      OrganizationLimitOverride[]
+  settings                            OrganizationSettings?
+  branding                            OrganizationBranding?
+  subscriptions                       Subscription[]
+  invoices                            Invoice[]
+  billingEvents                       BillingEvent[]
+  activityLogs                        ActivityLog[]
+  notifications                       Notification[]
+  aiUsages                            AiUsage[]
+  people                              Person[]
+  personPreferences                   PersonPreference[]
+  propertyInterests                   PropertyInterest[]
+  propertyInterestStageHistory        PropertyInterestStageHistory[]
+  scheduledActivities                 ScheduledActivity[]
+  properties                          Property[]
+  media                               Media[]
+  propertyStatusHistory               PropertyStatusHistory[]
+  interactions                        Interaction[]
+  analyticsEvents                     PropertyAnalyticsEvent[]
+  deals                               Deal[]
+  portalListings                      PortalListing[]
+  featureOptions                      FeatureOption[]
+  propertyTypeOptions                 PropertyTypeOption[]
+  ownerInviteTokens                   OwnerInviteToken[]
+  domains                             OrganizationDomain[]
+  emailDomain                         OrganizationEmailDomain?
+  propertyInterestParticipants        PropertyInterestParticipant[]
+  propertyInterestParticipantPayments PropertyInterestParticipantPayment[]
 
   @@map("organizations")
 }

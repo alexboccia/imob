@@ -319,6 +319,8 @@ export async function limparOrganizacao(
   // Property.deleteMany roda antes do Person.deleteMany nesta função.)
   // Fase 12 — mesma razão da exclusão de organização em platform: a FK
   // do participante para OrganizationMember é RESTRICT.
+  // Fase 13 — mesma ordem: pagamento (FK RESTRICT) antes do participante.
+  await prisma.propertyInterestParticipantPayment.deleteMany({ where: { organizationId } });
   await prisma.propertyInterestParticipant.deleteMany({ where: { organizationId } });
   await prisma.propertyInterest.deleteMany({ where: { organizationId } });
   // Property cascateia Media, PropertyStatusHistory e PortalListing.

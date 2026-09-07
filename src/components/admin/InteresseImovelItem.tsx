@@ -15,6 +15,7 @@ import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
 import { ResponsavelNegociacao } from "@/components/admin/ResponsavelNegociacao";
 import { DivisaoComissao } from "@/components/admin/DivisaoComissao";
 import type { ParticipanteExibicao } from "@/lib/participacao-comissao";
+import type { PagamentoExibicao } from "@/lib/pagamento-comissao";
 import type { OpcaoResponsavel, ResponsavelNegociacao as Responsavel } from "@/lib/responsavel-negociacao";
 import {
   ESTAGIOS_INTERESSE,
@@ -38,7 +39,12 @@ import {
 export function InteresseImovelItem({
   interesse,
   membros,
+  podeLiquidar,
 }: {
+  // Fase 13 — registrar/cancelar pagamento exige papel gerencial. O
+  // servidor recusa de qualquer forma; isto é a tela não oferecer o que
+  // não é permitido.
+  podeLiquidar: boolean;
   // Fase 11 — membros ativos, carregados UMA vez pela página e passados
   // a cada item. Nunca uma query por card.
   membros: OpcaoResponsavel[];
@@ -64,6 +70,9 @@ export function InteresseImovelItem({
     // Fase 12 — divisão da comissão. Lista vazia = nada distribuído;
     // nunca significa "o responsável ficou com tudo".
     participantes: ParticipanteExibicao[];
+    // Fase 13 — ledger de pagamentos por participante (id -> lista).
+    // Lista vazia = nada pago; atribuir nunca implica pagar.
+    pagamentosPorParticipante: Record<string, PagamentoExibicao[]>;
   };
 }) {
   const proximaAcao = obterProximaAcaoComercial(interesse.stage, interesse.property.status);
@@ -197,7 +206,9 @@ export function InteresseImovelItem({
           commissionValue={interesse.commissionValue}
           responsavel={interesse.responsavel}
           participantes={interesse.participantes}
+          pagamentosPorParticipante={interesse.pagamentosPorParticipante}
           membros={membros}
+          podeLiquidar={podeLiquidar}
         />
 
         <FechamentoInteresse

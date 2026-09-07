@@ -29,6 +29,10 @@ import {
   type LinhaParticipante,
 } from "@/lib/participacao-comissao";
 import {
+  agruparPagamentosPorParticipante,
+  type LinhaPagamentoParticipante,
+} from "@/lib/pagamento-comissao";
+import {
   classificarCanal,
   rotuloCanal,
   ORDEM_CANAIS,
@@ -876,6 +880,15 @@ export type ParticipacaoComissao = {
   semDivisao: boolean;
 };
 
+// Fase 13 — liquidação no período. Deliberadamente só FLUXO.
+export type LiquidacaoComissao = {
+  // Σ dos pagamentos válidos com paidAt dentro da janela.
+  pagoNoPeriodo: number;
+  // Quantidade de pagamentos — parcelas, não negócios.
+  pagamentos: number;
+  participantes: LinhaPagamentoParticipante[];
+};
+
 export type AnalyticsComercial = {
   periodo: PeriodoAnalytics;
   granularidade: Granularidade;
@@ -900,6 +913,8 @@ export type AnalyticsComercial = {
   // Dimensão SEPARADA de `responsaveis`: uma diz quem conduziu, a outra
   // quem participa do dinheiro. As duas coexistem de propósito.
   participacao: ParticipacaoComissao;
+  // Fase 13 — o que foi efetivamente PAGO no período (coorte por paidAt).
+  liquidacao: LiquidacaoComissao;
   // true enquanto NENHUMA negociação da organização tiver responsável —
   // estado normal logo depois do deploy, já que ownership passa a existir
   // daqui pra frente e não houve backfill. A tela usa isso para explicar
@@ -950,6 +965,7 @@ export async function buscarAnalyticsComercial(
       fechamentosDoPeriodo,
       algumaOportunidadeComOrigem,
       algumaNegociacaoComResponsavel,
+      pagamentosDoPeriodo,
       configContato,
     ] = await Promise.all([
       prisma.interaction.findMany({
@@ -1110,6 +1126,29 @@ export async function buscarAnalyticsComercial(
       prisma.propertyInterest.findFirst({
         where: { organizationId, responsibleMemberId: { not: null } },
         select: { id: true },
+      }),
+      // Fase 13 — pagamentos do período. COORTE PRÓPRIA, por paidAt:
+      // um negócio fechado em janeiro e pago em março pertence a março.
+      // Por isso esta query não reaproveita a coorte de fechamentos dos
+      // outros blocos, e cancelados ficam de fora da soma.
+      prisma.propertyInterestParticipantPayment.findMany({
+        where: {
+          organizationId,
+          cancelledAt: null,
+          paidAt: { gte: janelas.atual.inicio, lte: janelas.atual.fim },
+        },
+        select: {
+          amount: true,
+          participant: {
+            select: {
+              memberId: true,
+              organizationId: true,
+              member: {
+                select: { status: true, organizationId: true, user: { select: { name: true } } },
+              },
+            },
+          },
+        },
       }),
       buscarConfiguracaoContato(organizationId),
     ]);
@@ -1328,6 +1367,32 @@ export async function buscarAnalyticsComercial(
       semDivisao: participantesDoPeriodo.length === 0,
     };
 
+    // ---- Liquidação (Fase 13) ----------------------------------------
+    // FLUXO, não estoque: só o que foi PAGO dentro da janela. Saldo
+    // pendente é estoque atual e não entra num bloco filtrado por
+    // período — misturaria as duas naturezas. O saldo vive no contexto
+    // da negociação, onde a pergunta é sobre aquele negócio.
+    const pagamentosValidos = pagamentosDoPeriodo.filter(
+      (pg) =>
+        pg.participant.organizationId === organizationId &&
+        pg.participant.member.organizationId === organizationId
+    );
+    const liquidacao: LiquidacaoComissao = {
+      pagoNoPeriodo:
+        Math.round(
+          pagamentosValidos.reduce((soma, pg) => soma + (decimalParaValor(pg.amount) ?? 0), 0) * 100
+        ) / 100,
+      pagamentos: pagamentosValidos.length,
+      participantes: agruparPagamentosPorParticipante(
+        pagamentosValidos.map((pg) => ({
+          memberId: pg.participant.memberId,
+          nome: pg.participant.member.user.name?.trim() || "Membro sem nome",
+          inativo: pg.participant.member.status !== "ACTIVE",
+          valor: decimalParaValor(pg.amount) ?? 0,
+        }))
+      ),
+    };
+
     const canais = agruparPorCanal(eventosDigitais, interacoes, oportunidadesPorCanal);
     const campanhas = agruparPorCampanha(eventosDigitais, interacoes, ganhosComValorNumerico);
     const aquisicao: Aquisicao = {
@@ -1385,6 +1450,7 @@ export async function buscarAnalyticsComercial(
       resultado,
       responsaveis,
       participacao,
+      liquidacao,
       semOwnership: algumaNegociacaoComResponsavel === null,
     };
   });

@@ -17,6 +17,18 @@ export const PAPEIS_GESTAO_USUARIOS: ReadonlySet<string> = new Set([
   "ADMIN",
 ]);
 
+// Fase 13 — LIQUIDAÇÃO de comissão. Não é papel financeiro inventado: é
+// a camada gerencial que este arquivo já define, aplicada a uma operação
+// mais sensível que as demais do CRM. Registrar ou cancelar pagamento
+// afirma que dinheiro mudou de mãos — mais grave que atribuir uma parcela
+// (Fase 12), que segue no gate do CRM. A assimetria é deliberada e está
+// documentada como dívida no relatório da fase.
+export const PAPEIS_LIQUIDACAO_COMISSAO: ReadonlySet<string> = new Set([
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+]);
+
 export function temPapel(
   role: string | undefined,
   permitidos: ReadonlySet<string>
