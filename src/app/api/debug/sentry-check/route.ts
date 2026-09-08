@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
-import { auth } from "@/lib/auth";
 import { temPapel, PAPEIS_GESTAO_CONFIGURACOES } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import { logger } from "@/lib/logger";
 
 // Mecanismo pra confirmar que a integração com a Sentry está de fato
@@ -23,8 +23,7 @@ export async function GET(request: Request) {
   const emProducao = ambiente === "production";
 
   if (emProducao) {
-    const session = await auth();
-    if (!temPapel(session?.user.role, PAPEIS_GESTAO_CONFIGURACOES)) {
+    if (!temPapel(await papelAtual(), PAPEIS_GESTAO_CONFIGURACOES)) {
       return NextResponse.json({ erro: "Não autorizado." }, { status: 403 });
     }
   }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { verificarSaudeCompleta } from "@/lib/health";
-import { auth } from "@/lib/auth";
 import { temPapel, PAPEIS_GESTAO_CONFIGURACOES } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 
 // Diagnóstico aprofundado — checa PostgreSQL, R2 (HeadBucket de verdade)
 // e presença de configuração da Resend. Deliberadamente SEPARADO de
@@ -17,8 +17,7 @@ export async function GET() {
   const emProducao = ambiente === "production";
 
   if (emProducao) {
-    const session = await auth();
-    if (!temPapel(session?.user.role, PAPEIS_GESTAO_CONFIGURACOES)) {
+    if (!temPapel(await papelAtual(), PAPEIS_GESTAO_CONFIGURACOES)) {
       return NextResponse.json({ erro: "Não autorizado." }, { status: 403 });
     }
   }

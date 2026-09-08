@@ -1,12 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { temPapel, PAPEIS_GESTAO_CATALOGOS } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import { TiposImovelGrupoCard } from "@/components/admin/tipos-imovel/TiposImovelGrupoCard";
 
 export default async function TiposImovelPage() {
-  const session = await auth();
   const organizationId = await requireOrganizationId();
   // AUTHORIZATION UNCHANGED — a leitura da página continua acessível a
   // qualquer membro autenticado da organização (nenhum guard novo aqui);
@@ -15,7 +14,7 @@ export default async function TiposImovelPage() {
   // oferecer uma ação que o servidor recusaria de qualquer forma — mesmo
   // padrão já usado em Características/Usuários. A garantia real continua
   // inteiramente no servidor (actions.ts).
-  const podeGerenciar = temPapel(session?.user.role, PAPEIS_GESTAO_CATALOGOS);
+  const podeGerenciar = temPapel(await papelAtual(), PAPEIS_GESTAO_CATALOGOS);
 
   const opcoes = await withOrganization(organizationId, () =>
     prisma.propertyTypeOption.findMany({ where: { organizationId } })

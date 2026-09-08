@@ -7,6 +7,7 @@ import {
   PAPEIS_GESTAO_CATALOGOS,
   PAPEIS_LIQUIDACAO_COMISSAO,
   PAPEIS_RESOLUCAO_IDENTIDADE,
+  PAPEIS_FINANCEIRO,
 } from "./authorization";
 
 // ---------------------------------------------------------------------
@@ -147,3 +148,37 @@ describe("PAPEIS_RESOLUCAO_IDENTIDADE", () => {
     expect(PAPEIS_RESOLUCAO_IDENTIDADE).not.toBe(PAPEIS_VISAO_EQUIPE);
   });
 });
+
+// =======================================================================
+// Fase 27 — contrato financeiro
+// =======================================================================
+describe("PAPEIS_FINANCEIRO", () => {
+  test("quem responde pelo contrato é a camada proprietária/administrativa", () => {
+    expect(temPapel("OWNER", PAPEIS_FINANCEIRO)).toBe(true);
+    expect(temPapel("ADMIN", PAPEIS_FINANCEIRO)).toBe(true);
+  });
+
+  test("MANAGER NÃO herda autoridade financeira por gerir a equipe", () => {
+    // É a armadilha que o enunciado nomeia: acumular capacidades
+    // operacionais não é o mesmo que poder comprometer a imobiliária.
+    expect(temPapel("MANAGER", PAPEIS_FINANCEIRO)).toBe(false);
+  });
+
+  test("BROKER e ASSISTANT não têm nada com o contrato", () => {
+    expect(temPapel("BROKER", PAPEIS_FINANCEIRO)).toBe(false);
+    expect(temPapel("ASSISTANT", PAPEIS_FINANCEIRO)).toBe(false);
+  });
+
+  test("papel ausente ou desconhecido nunca acessa finanças", () => {
+    // undefined é o que papelAtual() devolve para vínculo suspenso ou
+    // inexistente: falha fechado.
+    expect(temPapel(undefined, PAPEIS_FINANCEIRO)).toBe(false);
+    expect(temPapel("", PAPEIS_FINANCEIRO)).toBe(false);
+    expect(temPapel("SUPER_ADMIN", PAPEIS_FINANCEIRO)).toBe(false);
+  });
+
+  test("é conjunto PRÓPRIO: mudar configurações não pode mudar finanças", () => {
+    expect(PAPEIS_FINANCEIRO).not.toBe(PAPEIS_GESTAO_CONFIGURACOES);
+  });
+});
+

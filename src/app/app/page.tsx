@@ -12,6 +12,7 @@ import { buscarVisaoEquipe, resolverVisaoCentral } from "@/lib/central-equipe";
 import { CentralEquipe } from "@/components/admin/CentralEquipe";
 import { AlternadorVisaoCentral } from "@/components/admin/AlternadorVisaoCentral";
 import { temPapel, PAPEIS_RESOLUCAO_IDENTIDADE } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import {
   buscarCaptacoesPendentes,
   contarCaptacoesPendentes,
@@ -88,7 +89,7 @@ export default async function DashboardPage({
   // "nenhum contato pendente" seria ruído diário.
   //
   // Só para quem pode resolver: para um BROKER a Home continua idêntica.
-  const podeIdentificar = temCrm && temPapel(session?.user.role, PAPEIS_RESOLUCAO_IDENTIDADE);
+  const podeIdentificar = temCrm && temPapel(await papelAtual(), PAPEIS_RESOLUCAO_IDENTIDADE);
   const captacoesPendentes = podeIdentificar
     ? await contarCaptacoesPendentes(organizationId)
     : 0;

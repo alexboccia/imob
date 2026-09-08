@@ -508,6 +508,35 @@ async function main() {
     data: { commercialVisibility: "RESTRICTED" },
   });
 
+  // Fase 27 — Organizações L e M: dedicadas ao CICLO FINANCEIRO.
+  //
+  //   L: trial VIGENTE  -> a tela de assinatura mostra prazo e limites;
+  //   M: trial VENCIDO  -> a operação para, e é justamente ali que se
+  //                        prova que o caminho de regularização
+  //                        continua aberto.
+  //
+  // Dedicadas porque o spec manipula o período de trial: mexer nisso em
+  // qualquer organização existente bloquearia a operação dela e
+  // derrubaria toda spec que depende de navegar no painel.
+  const orgTrial = await garantirOrganizacaoComDono({
+    slug: "e2e-org-trial",
+    timezone: "UTC",
+    name: "Organização E2E Trial",
+    planId: planoStarter.id,
+    email: "owner-trial@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+  const orgVencida = await garantirOrganizacaoComDono({
+    slug: "e2e-org-vencida",
+    timezone: "UTC",
+    name: "Organização E2E Vencida",
+    planId: planoStarter.id,
+    email: "owner-vencida@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+
   // Specs como "criar imóvel" e "formulário público cria lead" criam dados
   // novos a cada rodada — sem isso o banco de teste acumularia lixo entre
   // execuções do Playwright. Person cascateia Interaction ao ser apagada;
@@ -524,6 +553,8 @@ async function main() {
     orgAcesso.organization.id,
     orgMultiA.organization.id,
     orgMultiB.organization.id,
+    orgTrial.organization.id,
+    orgVencida.organization.id,
   ];
   // Usuários criados por usuarios.spec.ts a cada rodada (Fase 8 — correção
   // de causa raiz de um flake real): o seed nunca os limpava, e a
@@ -569,6 +600,9 @@ async function main() {
     // Fase 26 — identidade multi-org e a dona da segunda organização.
     "multi-org@e2e.test",
     "owner-multi-b@e2e.test",
+    // Fase 27 — donas das organizações do ciclo financeiro.
+    "owner-trial@e2e.test",
+    "owner-vencida@e2e.test",
   ];
 
   // Correção completa do acúmulo (a da Fase 8 cobria só o prefixo
@@ -1753,6 +1787,25 @@ async function main() {
   }
   await prisma.signupToken.deleteMany({ where: { email: { startsWith: "cadastro-e2e-" } } });
 
+  // Períodos de trial determinísticos: um vigente, um vencido. Recriados
+  // a cada rodada porque o spec observa exatamente essa diferença.
+  const agoraTrial = new Date();
+  for (const [org, fim] of [
+    [orgTrial, new Date(agoraTrial.getTime() + 14 * 24 * 60 * 60 * 1000)] as const,
+    [orgVencida, new Date(agoraTrial.getTime() - 24 * 60 * 60 * 1000)] as const,
+  ]) {
+    await prisma.subscription.deleteMany({ where: { organizationId: org.organization.id } });
+    await prisma.subscription.create({
+      data: {
+        organizationId: org.organization.id,
+        planId: planoStarter.id,
+        status: "TRIALING",
+        currentPeriodStart: new Date(agoraTrial.getTime() - 24 * 60 * 60 * 1000),
+        currentPeriodEnd: fim,
+      },
+    });
+  }
+
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);
   console.log(
@@ -1765,7 +1818,8 @@ async function main() {
     `  Org G (dedicada à visibilidade restrita): slug=${orgRestrita.organization.slug} login=owner-restrita@e2e.test`,
     `  Org H (dedicada à captação ambígua): slug=${orgCaptacao.organization.slug} login=owner-captacao@e2e.test`,
     `  Org I (dedicada ao ciclo de acesso): slug=${orgAcesso.organization.slug} login=owner-acesso@e2e.test`,
-    `  Orgs J/K (multi-org): ${orgMultiA.organization.slug} + ${orgMultiB.organization.slug} login=multi-org@e2e.test`
+    `  Orgs J/K (multi-org): ${orgMultiA.organization.slug} + ${orgMultiB.organization.slug} login=multi-org@e2e.test`,
+    `  Orgs L/M (assinatura): ${orgTrial.organization.slug} (vigente) + ${orgVencida.organization.slug} (vencido)`
   );
 }
 

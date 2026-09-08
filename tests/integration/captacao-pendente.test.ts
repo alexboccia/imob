@@ -12,6 +12,7 @@ vi.mock("next/cache", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
+import type { OrganizationRole } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
 import { criarCenario, criarPessoa, criarImovel, criarUsuario, criarMembro } from "@/test/fixtures";
 import { enviarContato, enviarAnuncioProprietario } from "@/app/[orgSlug]/actions";
@@ -41,10 +42,28 @@ async function novoCenario(): Promise<Cenario> {
   return cenario;
 }
 
-function autenticarComo(cenario: Cenario, role = "OWNER", membroId?: string) {
+// Fase 27 — o papel agora vem do VÍNCULO, não do token: autorização
+// server-side lê a membership atual. Um teste que "finge" um papel na
+// sessão sem o vínculo correspondente passou a testar uma ficção, então
+// o helper grava o papel de verdade antes de autenticar.
+async function autenticarComo(
+  cenario: Cenario,
+  role = "OWNER",
+  membroId?: string,
+  // O papel é lido do VÍNCULO de (organização, usuário da sessão) — então
+  // autenticar "como um corretor" exige a identidade dele, não a do dono
+  // do cenário com um papel fingido na sessão.
+  userId?: string
+) {
+  // O papel precisa EXISTIR no vínculo, não só na sessão.
+  await prisma.organizationMember.updateMany({
+    where: { id: membroId ?? cenario.membro.id, organizationId: cenario.organization.id },
+    data: { role: role as OrganizationRole },
+  });
+
   vi.mocked(auth).mockResolvedValue({
     user: {
-      id: cenario.usuario.id,
+      id: userId ?? cenario.usuario.id,
       organizationId: cenario.organization.id,
       organizationMemberId: membroId ?? cenario.membro.id,
       role,
@@ -219,7 +238,7 @@ describe("resolução de identidade", () => {
 
   test("resolver cria UMA Interaction, no instante ORIGINAL do envio, sem autor", async () => {
     const { cenario, orgId, a, captacao } = await comCaptacaoPendente("resolver");
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
 
     const estado = await resolverCaptacaoPendente(
       captacao.id,
@@ -249,7 +268,7 @@ describe("resolução de identidade", () => {
 
   test("resolver NÃO sobrescreve e-mail nem telefone do cadastro escolhido", async () => {
     const { cenario, orgId, b, captacao } = await comCaptacaoPendente("sem-sobrescrita");
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
     const antes = await prisma.person.findUniqueOrThrow({ where: { id: b.id, organizationId: orgId } });
 
     await resolverCaptacaoPendente(captacao.id, ESTADO_INICIAL_ACAO, formData({ personId: b.id }));
@@ -262,7 +281,7 @@ describe("resolução de identidade", () => {
 
   test("duas resoluções simultâneas: uma vence, nenhuma Interaction duplicada", async () => {
     const { cenario, orgId, a, b, captacao } = await comCaptacaoPendente("corrida");
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
 
     const resultados = await Promise.all([
       resolverCaptacaoPendente(captacao.id, ESTADO_INICIAL_ACAO, formData({ personId: a.id })),
@@ -284,7 +303,7 @@ describe("resolução de identidade", () => {
 
   test("resolver de novo, em sequência, não cria uma segunda Interaction", async () => {
     const { cenario, orgId, a, captacao } = await comCaptacaoPendente("repetida");
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
 
     await resolverCaptacaoPendente(captacao.id, ESTADO_INICIAL_ACAO, formData({ personId: a.id }));
     const segunda = await resolverCaptacaoPendente(
@@ -305,7 +324,7 @@ describe("resolução de identidade", () => {
       userId: usuario.id,
       role: "BROKER",
     });
-    autenticarComo(cenario, "BROKER", membro.id);
+    await autenticarComo(cenario, "BROKER", membro.id, usuario.id);
 
     const estado = await resolverCaptacaoPendente(
       captacao.id,
@@ -322,7 +341,7 @@ describe("resolução de identidade", () => {
   test("IDOR: captação de outra organização não é resolvível nem visível", async () => {
     const alvo = await comCaptacaoPendente("vitima");
     const atacante = await novoCenario();
-    autenticarComo(atacante);
+    await autenticarComo(atacante);
 
     const estado = await resolverCaptacaoPendente(
       alvo.captacao.id,
@@ -344,7 +363,7 @@ describe("resolução de identidade", () => {
     const { cenario, orgId, captacao } = await comCaptacaoPendente("cross-person");
     const outra = await novoCenario();
     const pessoaDeOutraOrg = await criarPessoa({ organizationId: outra.organization.id });
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
 
     const estado = await resolverCaptacaoPendente(
       captacao.id,

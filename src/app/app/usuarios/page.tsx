@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireOrganizationId } from "@/lib/tenant";
 import { temPapel, PAPEIS_GESTAO_USUARIOS } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
 import {
   interpretarPaginacao,
@@ -69,7 +70,7 @@ export default async function UsuariosPage({
 }) {
   const session = await auth();
   const organizationId = await requireOrganizationId();
-  const ehAdministrador = temPapel(session?.user.role, PAPEIS_GESTAO_USUARIOS);
+  const ehAdministrador = temPapel(await papelAtual(), PAPEIS_GESTAO_USUARIOS);
   const sessaoEhOwner = session?.user.role === "OWNER";
 
   const params = await searchParams;

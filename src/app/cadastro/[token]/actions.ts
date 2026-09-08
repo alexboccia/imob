@@ -8,13 +8,9 @@ import { verificarCadastro, consumirCadastro } from "@/lib/acesso-token";
 import { CUSTO_BCRYPT, senhaSchema } from "@/lib/senha";
 import { bootstrapOrganizacao } from "@/lib/bootstrap-organizacao";
 import { derivarSlug } from "@/lib/slug-organizacao";
+import { CODIGO_PLANO_SELF_SERVICE } from "@/lib/plano-self-service";
 import { logActivity } from "@/lib/activity-log";
 import { type ActionState, erroGenerico, erroValidacao } from "@/lib/action-result";
-
-// Plano do self-service, resolvido POR CÓDIGO no servidor. Jamais vem do
-// browser: aceitar planId do formulário deixaria qualquer pessoa criar
-// uma organização no plano mais caro, com todos os módulos, de graça.
-const CODIGO_PLANO_SELF_SERVICE = "STARTER";
 
 const confirmarSchema = z.object({ senha: senhaSchema });
 

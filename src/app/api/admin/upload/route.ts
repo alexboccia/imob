@@ -6,6 +6,7 @@ import { getR2Client } from "@/lib/r2";
 import { requireOrganizationId } from "@/lib/tenant";
 import { logActivity } from "@/lib/activity-log";
 import { temPapel, PAPEIS_GESTAO_USUARIOS, PAPEIS_GESTAO_CONFIGURACOES } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import {
   validarArquivo,
   sanitizarNomeLogico,
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
   }
 
   const papeisPermitidos = PAPEIS_POR_PASTA[pasta];
-  if (papeisPermitidos && !temPapel(session.user.role, papeisPermitidos)) {
+  if (papeisPermitidos && !temPapel(await papelAtual(), papeisPermitidos)) {
     return erro("Você não tem permissão para enviar arquivos aqui.", 403);
   }
 

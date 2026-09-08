@@ -35,6 +35,7 @@ import { paraAtorTransicao } from "@/lib/ator-transicao";
 import { precosDoImovel } from "@/lib/imovel-precos";
 import { paraAutorInteracao, rotuloAutorInteracao } from "@/lib/autor-interacao";
 import { temPapel, PAPEIS_LIQUIDACAO_COMISSAO } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import { auth } from "@/lib/auth";
 import {
   Select,
@@ -61,6 +62,9 @@ export default async function DetalheClientePage({
   // Fuso comercial da organização (Fase 18) — uma resolução por
   // carregamento, repassada a todos os itens da ficha.
   const fuso = await buscarFusoOrganizacao(organizationId);
+  // Papel EFETIVO resolvido uma vez (Fase 27): a lista renderiza vários
+  // itens e um await dentro do JSX de cada um seria inválido.
+  const podeLiquidar = temPapel(await papelAtual(), PAPEIS_LIQUIDACAO_COMISSAO);
   const session = await auth();
   const escopo = await escopoComercialDaSessao(organizationId);
   const escopoPessoa = wherePessoa(escopo);
@@ -378,7 +382,7 @@ export default async function DetalheClientePage({
                   key={interesse.id}
                   fuso={fuso}
                   membros={membrosAtribuiveis}
-                  podeLiquidar={temPapel(session?.user.role, PAPEIS_LIQUIDACAO_COMISSAO)}
+                  podeLiquidar={podeLiquidar}
                   interesse={{
                     id: interesse.id,
                     stage: interesse.stage,

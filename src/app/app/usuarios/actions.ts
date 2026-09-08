@@ -20,6 +20,7 @@ import {
 } from "@/lib/acesso-token";
 import { enviarEmailConviteMembro } from "@/lib/email";
 import { temPapel, PAPEIS_GESTAO_USUARIOS } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import { LIMITE_BIO_PUBLICA, LIMITE_CRECI } from "@/lib/perfil-publico-limites";
 import { urlDeUploadValida } from "@/lib/upload-url";
 import {
@@ -62,7 +63,7 @@ export async function convidarUsuario(
   // (OWNER/ADMIN). Convidar não é uma capacidade nova que precise de um
   // papel novo: é a mesma capacidade, exercida de forma segura. MANAGER
   // continua fora — gerir equipe comercial não é administrar acessos.
-  if (!temPapel(session.user.role, PAPEIS_GESTAO_USUARIOS)) {
+  if (!temPapel(await papelAtual(), PAPEIS_GESTAO_USUARIOS)) {
     return erroAcessoNegado();
   }
 
@@ -214,7 +215,7 @@ export async function reenviarConviteUsuario(
 ): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
-  if (!temPapel(session.user.role, PAPEIS_GESTAO_USUARIOS)) {
+  if (!temPapel(await papelAtual(), PAPEIS_GESTAO_USUARIOS)) {
     return erroAcessoNegado();
   }
 
@@ -339,7 +340,7 @@ export async function atualizarUsuario(
 ): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
-  if (!temPapel(session.user.role, PAPEIS_GESTAO_USUARIOS)) {
+  if (!temPapel(await papelAtual(), PAPEIS_GESTAO_USUARIOS)) {
     return erroAcessoNegado();
   }
 
@@ -483,7 +484,7 @@ export async function alternarStatusUsuario(
 ): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
-  if (!temPapel(session.user.role, PAPEIS_GESTAO_USUARIOS)) {
+  if (!temPapel(await papelAtual(), PAPEIS_GESTAO_USUARIOS)) {
     return erroAcessoNegado();
   }
 

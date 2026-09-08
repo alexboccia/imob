@@ -5,8 +5,8 @@ import { AvisoFusoNaoConfigurado } from "@/components/admin/AvisoFusoNaoConfigur
 import { opcoesDeFuso } from "@/lib/fusos-opcoes";
 import { buscarVisibilidadeComercial } from "@/lib/visibilidade-comercial";
 import { requireOrganizationId } from "@/lib/tenant";
-import { auth } from "@/lib/auth";
 import { temPapel, PAPEIS_GESTAO_CONFIGURACOES } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import { withOrganization } from "@/lib/tenant-context";
 import { ConfiguracaoContatoForm } from "@/components/admin/ConfiguracaoContatoForm";
 
@@ -23,8 +23,7 @@ export default async function ConfiguracoesPage() {
   // outras telas administrativas (ver /app/usuarios/[id]): mensagem
   // curta, nenhum dado carregado. Nada abaixo desta checagem executa,
   // então nenhuma consulta de configuração chega a rodar.
-  const session = await auth();
-  if (!temPapel(session?.user.role, PAPEIS_GESTAO_CONFIGURACOES)) {
+  if (!temPapel(await papelAtual(), PAPEIS_GESTAO_CONFIGURACOES)) {
     return (
       <div className="max-w-lg">
         <h1 className="min-w-0 break-words text-2xl font-semibold">Configurações</h1>

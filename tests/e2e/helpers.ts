@@ -98,6 +98,19 @@ export const ORG_CAPTACAO_CORRETOR = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Fase 27 — organizações do ciclo financeiro: uma com trial vigente,
+// outra com trial vencido.
+export const ORG_TRIAL = {
+  slug: "e2e-org-trial",
+  email: "owner-trial@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+export const ORG_VENCIDA = {
+  slug: "e2e-org-vencida",
+  email: "owner-vencida@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 // Fase 26 — identidade multi-org: OWNER na Organização J e BROKER na K,
 // que têm fusos e políticas de visibilidade diferentes. É a matriz que
 // prova que trocar de organização troca papel, calendário e escopo.

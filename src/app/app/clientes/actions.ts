@@ -27,6 +27,7 @@ import {
   validarAtribuicaoContraPagamentos,
 } from "@/lib/pagamento-comissao";
 import { temPapel, PAPEIS_LIQUIDACAO_COMISSAO } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import { escopoComercialDaSessao } from "@/lib/escopo-comercial-sessao";
 import {
   whereNegociacaoAlvo,
@@ -1964,7 +1965,7 @@ export async function registrarPagamentoParticipante(
 ): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
-  if (!temPapel(session.user.role, PAPEIS_LIQUIDACAO_COMISSAO)) {
+  if (!temPapel(await papelAtual(), PAPEIS_LIQUIDACAO_COMISSAO)) {
     return erroAcessoNegado("Você não tem permissão para registrar pagamentos de comissão.");
   }
 
@@ -2079,7 +2080,7 @@ export async function cancelarPagamentoParticipante(
 ): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
-  if (!temPapel(session.user.role, PAPEIS_LIQUIDACAO_COMISSAO)) {
+  if (!temPapel(await papelAtual(), PAPEIS_LIQUIDACAO_COMISSAO)) {
     return erroAcessoNegado("Você não tem permissão para cancelar pagamentos de comissão.");
   }
 

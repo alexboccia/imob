@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { temPapel, PAPEIS_GESTAO_CATALOGOS } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import {
   type ActionState,
   erroAcessoNegado,
@@ -27,7 +28,7 @@ export async function criarTipoImovel(
 ): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
-  if (!temPapel(session.user.role, PAPEIS_GESTAO_CATALOGOS)) {
+  if (!temPapel(await papelAtual(), PAPEIS_GESTAO_CATALOGOS)) {
     return erroAcessoNegado();
   }
 
@@ -64,7 +65,7 @@ export async function criarTipoImovel(
 export async function removerTipoImovel(id: string): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
-  if (!temPapel(session.user.role, PAPEIS_GESTAO_CATALOGOS)) {
+  if (!temPapel(await papelAtual(), PAPEIS_GESTAO_CATALOGOS)) {
     return erroAcessoNegado();
   }
 

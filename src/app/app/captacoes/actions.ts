@@ -9,6 +9,7 @@ import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
 import { temPapel, PAPEIS_RESOLUCAO_IDENTIDADE } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import {
   erroAcessoNegado,
   erroGenerico,
@@ -54,7 +55,7 @@ export async function resolverCaptacaoPendente(
   }
   // Camada gerencial: uma captação pendente não tem dono, e escolher a
   // identidade de um contato liga PII a um cadastro.
-  if (!temPapel(session.user.role, PAPEIS_RESOLUCAO_IDENTIDADE)) {
+  if (!temPapel(await papelAtual(), PAPEIS_RESOLUCAO_IDENTIDADE)) {
     return erroAcessoNegado("Apenas administradores ou gestores podem identificar contatos.");
   }
 

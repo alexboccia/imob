@@ -11,6 +11,7 @@ vi.mock("next/cache", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
+import type { OrganizationRole } from "@/generated/prisma/client";
 import { criarCenario, criarPessoa, criarImovel, criarUsuario, criarMembro } from "@/test/fixtures";
 import { auth } from "@/lib/auth";
 import {
@@ -37,11 +38,21 @@ afterEach(async () => {
 async function novoCenario(): Promise<Cenario> {
   const cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
   cenarios.push(cenario);
-  autenticarComo(cenario, cenario.membro.id, "OWNER");
+  await autenticarComo(cenario, cenario.membro.id, "OWNER");
   return cenario;
 }
 
-function autenticarComo(cenario: Cenario, membroId: string | undefined, role = "OWNER") {
+// Fase 27 — o papel agora vem do VÍNCULO, não do token: autorização
+// server-side lê a membership atual. Um teste que "finge" um papel na
+// sessão sem o vínculo correspondente passou a testar uma ficção, então
+// o helper grava o papel de verdade antes de autenticar.
+async function autenticarComo(cenario: Cenario, membroId: string | undefined, role = "OWNER") {
+  // O papel precisa EXISTIR no vínculo, não só na sessão.
+  await prisma.organizationMember.updateMany({
+    where: { id: membroId ?? cenario.membro.id, organizationId: cenario.organization.id },
+    data: { role: role as OrganizationRole },
+  });
+
   vi.mocked(auth).mockResolvedValue({
     user: {
       id: cenario.usuario.id,
@@ -502,7 +513,7 @@ describe("autorização e tenant", () => {
     await pagar(participanteId, "1000");
     const [linha] = await pagamentosDe(participanteId, c.organization.id);
 
-    autenticarComo(c, c.membro.id, "BROKER");
+    await autenticarComo(c, c.membro.id, "BROKER");
     const registro = await pagar(participanteId, "1000");
     expect(registro.success).toBe(false);
     expect(registro.message).toContain("permissão");
@@ -518,7 +529,7 @@ describe("autorização e tenant", () => {
   test("MANAGER pode registrar", async () => {
     const c = await novoCenario();
     const { participanteId } = await negocioComParcela(c, { comissao: "40000", parcela: "20000" });
-    autenticarComo(c, c.membro.id, "MANAGER");
+    await autenticarComo(c, c.membro.id, "MANAGER");
     expect((await pagar(participanteId, "1000")).success).toBe(true);
   });
 
@@ -527,10 +538,10 @@ describe("autorização e tenant", () => {
     const b = await criarCenario({ modulos: ["core", "properties", "crm"] });
     cenarios.push(b);
 
-    autenticarComo(b, b.membro.id, "OWNER");
+    await autenticarComo(b, b.membro.id, "OWNER");
     const alvo = await negocioComParcela(b, { comissao: "40000", parcela: "20000" });
 
-    autenticarComo(a, a.membro.id, "OWNER");
+    await autenticarComo(a, a.membro.id, "OWNER");
     const r = await pagar(alvo.participanteId, "1000");
     expect(r.success).toBe(false);
     // Mensagem genérica: não revela que a participação existe em outro tenant.
@@ -543,12 +554,12 @@ describe("autorização e tenant", () => {
     const b = await criarCenario({ modulos: ["core", "properties", "crm"] });
     cenarios.push(b);
 
-    autenticarComo(b, b.membro.id, "OWNER");
+    await autenticarComo(b, b.membro.id, "OWNER");
     const alvo = await negocioComParcela(b, { comissao: "40000", parcela: "20000" });
     await pagar(alvo.participanteId, "5000");
     const [linha] = await pagamentosDe(alvo.participanteId, b.organization.id);
 
-    autenticarComo(a, a.membro.id, "OWNER");
+    await autenticarComo(a, a.membro.id, "OWNER");
     expect(
       (await cancelarPagamentoParticipante(linha.id, ESTADO_INICIAL_ACAO, new FormData())).success
     ).toBe(false);

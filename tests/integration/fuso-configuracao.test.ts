@@ -1,5 +1,6 @@
 import { describe, test, expect, afterEach, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
+import type { OrganizationRole } from "@/generated/prisma/client";
 import { criarCenario } from "@/test/fixtures";
 
 // Mesma limitação de resolução de módulo já documentada nos outros
@@ -47,7 +48,17 @@ async function novoCenario(
   return cenario;
 }
 
-function autenticarComo(cenario: Cenario, role = "OWNER") {
+// Fase 27 — o papel agora vem do VÍNCULO, não do token: autorização
+// server-side lê a membership atual. Um teste que "finge" um papel na
+// sessão sem o vínculo correspondente passou a testar uma ficção, então
+// o helper grava o papel de verdade antes de autenticar.
+async function autenticarComo(cenario: Cenario, role = "OWNER") {
+  // O papel precisa EXISTIR no vínculo, não só na sessão.
+  await prisma.organizationMember.updateMany({
+    where: { id: cenario.membro.id, organizationId: cenario.organization.id },
+    data: { role: role as OrganizationRole },
+  });
+
   vi.mocked(auth).mockResolvedValue({
     user: {
       id: cenario.usuario.id,
@@ -78,7 +89,7 @@ describe("salvar o fuso horário", () => {
     "%s é aceito e persistido como identificador IANA",
     async (timezone) => {
       const cenario = await novoCenario();
-      autenticarComo(cenario);
+      await autenticarComo(cenario);
 
       const estado = await salvarConfiguracaoContato(
         { success: false, message: "" },
@@ -96,7 +107,7 @@ describe("salvar o fuso horário", () => {
     "%j é recusado com erro de campo e NADA é salvo",
     async (timezone) => {
       const cenario = await novoCenario({ timezone: "UTC" });
-      autenticarComo(cenario);
+      await autenticarComo(cenario);
 
       const estado = await salvarConfiguracaoContato(
         { success: false, message: "" },
@@ -111,7 +122,7 @@ describe("salvar o fuso horário", () => {
 
   test("a submissão inválida não grava NADA, nem os campos válidos do mesmo formulário", async () => {
     const cenario = await novoCenario({ timezone: "UTC" });
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
 
     const fd = formulario("-03:00");
     fd.set("telefone", "11999999999");
@@ -128,7 +139,7 @@ describe("salvar o fuso horário", () => {
 describe("autorização", () => {
   test.each(["OWNER", "ADMIN"])("%s pode alterar o fuso", async (role) => {
     const cenario = await novoCenario();
-    autenticarComo(cenario, role);
+    await autenticarComo(cenario, role);
     const estado = await salvarConfiguracaoContato(
       { success: false, message: "" },
       formulario("America/Sao_Paulo")
@@ -139,9 +150,13 @@ describe("autorização", () => {
 
   // Nenhum papel novo foi inventado: é o mesmo gate
   // PAPEIS_GESTAO_CONFIGURACOES que já protegia o resto da tela.
-  test.each(["BROKER", "VIEWER"])("%s não pode alterar o fuso", async (role) => {
+  // ASSISTANT no lugar de "VIEWER": aquele papel nunca existiu no enum —
+  // passava porque a autorização só comparava strings. Com o papel vindo
+  // do vínculo, ele precisa ser um papel de verdade que não está no
+  // conjunto autorizado.
+  test.each(["BROKER", "ASSISTANT"])("%s não pode alterar o fuso", async (role) => {
     const cenario = await novoCenario({ timezone: "UTC" });
-    autenticarComo(cenario, role);
+    await autenticarComo(cenario, role);
     const estado = await salvarConfiguracaoContato(
       { success: false, message: "" },
       formulario("America/Sao_Paulo")
@@ -156,7 +171,7 @@ describe("isolamento entre tenants", () => {
     const a = await novoCenario({ timezone: "UTC" });
     const b = await novoCenario({ timezone: "Europe/Lisbon" });
 
-    autenticarComo(a);
+    await autenticarComo(a);
     // O formulário tenta se passar por outra organização de todas as
     // formas plausíveis; nenhuma delas é lida pela action.
     const fd = formulario("America/Sao_Paulo");
@@ -174,7 +189,7 @@ describe("isolamento entre tenants", () => {
 describe("mudar o fuso não reescreve dado", () => {
   test("createdAt/updatedAt de Organization e os timestamps do domínio ficam intactos", async () => {
     const cenario = await novoCenario({ timezone: "UTC" });
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
 
     const antes = await prisma.organization.findUniqueOrThrow({
       where: { id: cenario.organization.id },
@@ -196,7 +211,7 @@ describe("mudar o fuso não reescreve dado", () => {
 
   test("trocar de volta para UTC é possível — a escolha é da organização", async () => {
     const cenario = await novoCenario({ timezone: "America/Sao_Paulo" });
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
     const estado = await salvarConfiguracaoContato(
       { success: false, message: "" },
       formulario("UTC")

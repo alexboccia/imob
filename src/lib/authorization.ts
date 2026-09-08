@@ -95,6 +95,20 @@ export const PAPEIS_RESOLUCAO_IDENTIDADE: ReadonlySet<string> = new Set([
   "MANAGER",
 ]);
 
+// Fase 27 — CONTRATO FINANCEIRO da organização com o easymob.
+//
+// Conjunto próprio, e não reuso de PAPEIS_GESTAO_CONFIGURACOES: aquele
+// nomeia "quem ajusta como a imobiliária opera"; este nomeia "quem
+// responde pelo contrato". São a mesma dupla de papéis hoje, e isso é
+// coincidência de valor, não de significado — fundi-los faria uma
+// mudança em um alterar o outro em silêncio.
+//
+// MANAGER fica FORA deliberadamente. Gerir a equipe comercial é
+// capacidade operacional; comprometer a imobiliária financeiramente não
+// decorre dela. Um papel não herda autoridade contratual por acumular
+// outras capacidades.
+export const PAPEIS_FINANCEIRO: ReadonlySet<string> = new Set(["OWNER", "ADMIN"]);
+
 export function temPapel(
   role: string | undefined,
   permitidos: ReadonlySet<string>

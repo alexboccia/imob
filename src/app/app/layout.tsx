@@ -16,7 +16,9 @@ import {
   temPapel,
   PAPEIS_RESOLUCAO_IDENTIDADE,
   PAPEIS_GESTAO_CONFIGURACOES,
+  PAPEIS_FINANCEIRO,
 } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 
 const TODOS_NAV_LINKS: {
   href: string;
@@ -60,6 +62,9 @@ const TODOS_NAV_LINKS: {
   // visíveis para todos DE PROPÓSITO: as duas telas renderizam conteúdo
   // real e útil em modo somente-leitura, não uma recusa.
   { href: "/app/configuracoes", label: "Configurações", papeis: PAPEIS_GESTAO_CONFIGURACOES },
+  // Fase 27 — o contrato da imobiliária com o produto. Recortado por
+  // PAPEIS_FINANCEIRO: um gestor comercial não responde pelo contrato.
+  { href: "/app/assinatura", label: "Assinatura", papeis: PAPEIS_FINANCEIRO },
   { href: "/app/manutencao", label: "Manutenção" },
 ];
 
@@ -79,8 +84,11 @@ export default async function AdminLayout({
   // cadeado "Pro" convida a assinar um plano, enquanto um item que este
   // usuário jamais poderá abrir só anunciaria que existe uma tela que
   // não é dele.
+  // Resolvido UMA vez, fora do filtro: o papel é o mesmo para todos os
+  // links, e um await dentro do callback nem seria válido.
+  const papel = await papelAtual();
   const NAV_LINKS = TODOS_NAV_LINKS.filter(
-    (link) => !link.papeis || temPapel(session.user?.role, link.papeis)
+    (link) => !link.papeis || temPapel(papel, link.papeis)
   );
   const modulosHabilitados = new Map<string, boolean>();
   if (organizationId) {

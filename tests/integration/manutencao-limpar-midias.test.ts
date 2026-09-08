@@ -1,5 +1,6 @@
 import { describe, test, expect, afterEach, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
+import type { OrganizationRole } from "@/generated/prisma/client";
 import { criarCenario, criarImovel } from "@/test/fixtures";
 
 // Mesma limitação de resolução de módulo já documentada nos outros testes
@@ -70,7 +71,17 @@ import { limparMidiasOrfas } from "@/app/app/manutencao/actions";
 
 type Cenario = Awaited<ReturnType<typeof criarCenario>>;
 
-function autenticarComo(cenario: Cenario, role: string = "OWNER") {
+// Fase 27 — o papel agora vem do VÍNCULO, não do token: autorização
+// server-side lê a membership atual. Um teste que "finge" um papel na
+// sessão sem o vínculo correspondente passou a testar uma ficção, então
+// o helper grava o papel de verdade antes de autenticar.
+async function autenticarComo(cenario: Cenario, role: string = "OWNER") {
+  // O papel precisa EXISTIR no vínculo, não só na sessão.
+  await prisma.organizationMember.updateMany({
+    where: { id: cenario.membro.id, organizationId: cenario.organization.id },
+    data: { role: role as OrganizationRole },
+  });
+
   vi.mocked(auth).mockResolvedValue({
     user: {
       id: cenario.usuario.id,
@@ -119,7 +130,7 @@ describe("limparMidiasOrfas", () => {
 
   test("remove apenas arquivo sem vínculo e com mais de 24 horas; protege arquivo recente sem vínculo", async () => {
     cenario = await criarCenario();
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
 
     const prefixo = `${cenario.organization.id}/imoveis/`;
     s3mock.__setObjetosFake([
@@ -137,7 +148,7 @@ describe("limparMidiasOrfas", () => {
 
   test("não remove arquivo com mais de 24 horas que está vinculado a uma Media existente", async () => {
     cenario = await criarCenario();
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
 
     const prefixo = `${cenario.organization.id}/imoveis/`;
     const chaveEmUso = `${prefixo}usada.jpg`;
@@ -162,7 +173,7 @@ describe("limparMidiasOrfas", () => {
   test("tenant isolation: listagem usa somente o prefixo da própria organização", async () => {
     cenario = await criarCenario();
     cenarioB = await criarCenario();
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
 
     s3mock.__setObjetosFake([
       { Key: `${cenario.organization.id}/imoveis/minha.jpg`, LastModified: antigoDe25h },
@@ -179,7 +190,9 @@ describe("limparMidiasOrfas", () => {
 
   test("papel sem permissão não executa a limpeza", async () => {
     cenario = await criarCenario();
-    autenticarComo(cenario, "AGENT");
+    // "AGENT" também nunca existiu no enum (ver comentário equivalente em
+    // fuso-configuracao): BROKER é um papel real fora de PAPEIS_MANUTENCAO.
+    await autenticarComo(cenario, "BROKER");
 
     s3mock.__setObjetosFake([
       { Key: `${cenario.organization.id}/imoveis/orfa-antiga.jpg`, LastModified: antigoDe25h },

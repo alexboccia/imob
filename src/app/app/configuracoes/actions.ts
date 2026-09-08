@@ -17,6 +17,7 @@ import {
   LOGO_RODAPE_ALTURA_PADRAO,
 } from "@/lib/logo";
 import { temPapel, PAPEIS_GESTAO_CONFIGURACOES } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import {
   type ActionState,
   erroAcessoNegado,
@@ -141,7 +142,7 @@ export async function salvarConfiguracaoContato(
 ): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
-  if (!temPapel(session.user.role, PAPEIS_GESTAO_CONFIGURACOES)) {
+  if (!temPapel(await papelAtual(), PAPEIS_GESTAO_CONFIGURACOES)) {
     return erroAcessoNegado();
   }
 
@@ -339,7 +340,7 @@ async function resolverPaletaAtual(organizationId: string): Promise<ResultadoPre
 export async function gerarPreviaPaletaLogotipo(): Promise<ResultadoPreviaPaleta> {
   const session = await auth();
   if (!session) redirect("/app/login");
-  if (!temPapel(session.user.role, PAPEIS_GESTAO_CONFIGURACOES)) {
+  if (!temPapel(await papelAtual(), PAPEIS_GESTAO_CONFIGURACOES)) {
     return { ok: false, erro: "Você não tem permissão para gerar uma paleta." };
   }
 
@@ -371,7 +372,7 @@ export async function aplicarPaletaGerada(
 ): Promise<ResultadoAplicarPaleta> {
   const session = await auth();
   if (!session) redirect("/app/login");
-  if (!temPapel(session.user.role, PAPEIS_GESTAO_CONFIGURACOES)) {
+  if (!temPapel(await papelAtual(), PAPEIS_GESTAO_CONFIGURACOES)) {
     return erroAcessoNegado();
   }
 

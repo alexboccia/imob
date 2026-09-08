@@ -1,13 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { temPapel, PAPEIS_GESTAO_CATALOGOS } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import { CaracteristicasKpiCards } from "@/components/admin/caracteristicas/CaracteristicasKpiCards";
 import { CaracteristicasGrupoCard } from "@/components/admin/caracteristicas/CaracteristicasGrupoCard";
 
 export default async function CaracteristicasPage() {
-  const session = await auth();
   const organizationId = await requireOrganizationId();
   // AUTHORIZATION UNCHANGED — a leitura da página continua acessível a
   // qualquer membro autenticado da organização (nenhum guard novo aqui,
@@ -17,7 +16,7 @@ export default async function CaracteristicasPage() {
   // recusaria de qualquer forma — mesmo padrão já usado em Usuários. A
   // garantia real continua inteiramente no servidor (actions.ts,
   // inalterado nesta tarefa).
-  const podeGerenciar = temPapel(session?.user.role, PAPEIS_GESTAO_CATALOGOS);
+  const podeGerenciar = temPapel(await papelAtual(), PAPEIS_GESTAO_CATALOGOS);
 
   // Mesma query única de antes (findMany sem filtro de categoria) — os 3
   // KPIs são derivados EM MEMÓRIA a partir deste mesmo resultado, zero

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { hasModule } from "@/lib/entitlements";
 import { temPapel, PAPEIS_RESOLUCAO_IDENTIDADE } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import {
   buscarCaptacoesPendentes,
@@ -19,7 +20,7 @@ export default async function CaptacoesPage() {
 
   const organizationId = await requireOrganizationId();
   if (!(await hasModule(organizationId, "crm"))) redirect("/app");
-  if (!temPapel(session.user.role, PAPEIS_RESOLUCAO_IDENTIDADE)) redirect("/app");
+  if (!temPapel(await papelAtual(), PAPEIS_RESOLUCAO_IDENTIDADE)) redirect("/app");
 
   const fuso = await buscarFusoOrganizacao(organizationId);
   const [captacoes, total] = await Promise.all([

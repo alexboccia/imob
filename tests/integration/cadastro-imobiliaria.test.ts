@@ -1,6 +1,21 @@
-import { describe, test, expect, afterEach, beforeAll, vi } from "vitest";
+import { describe, test, expect, afterEach, beforeEach, vi } from "vitest";
 
 vi.mock("@/lib/auth", () => ({ auth: vi.fn(), unstable_update: vi.fn() }));
+
+// O plano do self-service é resolvido por CÓDIGO, e `Plan(code:
+// "STARTER")` é uma linha de catálogo GLOBAL que já pertence a
+// tests/integration/bootstrap-starter-p9.test.ts — aquele arquivo apaga
+// e recria o STARTER para testar o script que o cria.
+//
+// O contrato de isolamento desta suíte é POR ORGANIZAÇÃO (ver
+// vitest.config.ts), não por catálogo. Depender da linha global fazia os
+// dois arquivos disputarem o mesmo registro sob fileParallelism, com
+// falha de chave estrangeira em quem tentasse apagá-lo. O código próprio
+// devolve este arquivo ao contrato: ele passa a ser dono do que cria.
+const CODIGO_PLANO_TESTE = "SELF-SERVICE-TESTE";
+vi.mock("@/lib/plano-self-service", () => ({
+  CODIGO_PLANO_SELF_SERVICE: "SELF-SERVICE-TESTE",
+}));
 vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
 vi.mock("next/cache", () => ({
   unstable_cache:
@@ -37,16 +52,16 @@ const organizacoesCriadas: string[] = [];
 const usuariosCriados: string[] = [];
 const emailsUsados: string[] = [];
 
-// O self-service resolve o plano por CÓDIGO. O banco de teste não tem os
-// planos do seed de produção, então ele é garantido aqui — com os mesmos
-// valores do plano de entrada real (trial de 14 dias, gratuito).
-beforeAll(async () => {
-  const existente = await prisma.plan.findUnique({ where: { code: "STARTER" } });
+// Plano de entrada com os MESMOS valores do real (gratuito, trial de 14
+// dias, um único usuário) — só o código é próprio deste arquivo, para
+// que ele não dispute catálogo com ninguém.
+beforeEach(async () => {
+  const existente = await prisma.plan.findUnique({ where: { code: CODIGO_PLANO_TESTE } });
   if (!existente) {
     const plano = await prisma.plan.create({
       data: {
-        code: "STARTER",
-        name: "Starter",
+        code: CODIGO_PLANO_TESTE,
+        name: "Plano de entrada (teste)",
         priceMonthlyCents: 0,
         isTrial: true,
         trialDays: 14,
@@ -258,7 +273,7 @@ describe("confirmação: a organização nasce aqui", () => {
 
     const org = await prisma.organization.findFirstOrThrow({ where: { name: nome } });
     organizacoesCriadas.push(org.id);
-    const starter = await prisma.plan.findUniqueOrThrow({ where: { code: "STARTER" } });
+    const starter = await prisma.plan.findUniqueOrThrow({ where: { code: CODIGO_PLANO_TESTE } });
     // O plano é o do servidor, não o do formulário.
     expect(org.planId).toBe(starter.id);
 

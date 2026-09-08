@@ -24,6 +24,7 @@ vi.mock("@/lib/email", () => ({
 
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import type { OrganizationRole } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
 import { criarCenario, criarUsuario, criarMembro } from "@/test/fixtures";
 import { hashToken } from "@/lib/acesso-token";
@@ -58,7 +59,17 @@ async function novoCenario(): Promise<Cenario> {
   return cenario;
 }
 
-function autenticarComo(cenario: Cenario, role = "OWNER") {
+// Fase 27 — o papel agora vem do VÍNCULO, não do token: autorização
+// server-side lê a membership atual. Um teste que "finge" um papel na
+// sessão sem o vínculo correspondente passou a testar uma ficção, então
+// o helper grava o papel de verdade antes de autenticar.
+async function autenticarComo(cenario: Cenario, role = "OWNER") {
+  // O papel precisa EXISTIR no vínculo, não só na sessão.
+  await prisma.organizationMember.updateMany({
+    where: { id: cenario.membro.id, organizationId: cenario.organization.id },
+    data: { role: role as OrganizationRole },
+  });
+
   vi.mocked(auth).mockResolvedValue({
     user: {
       id: cenario.usuario.id,
@@ -95,7 +106,7 @@ async function aceitar(token: string, senha?: string) {
 describe("convidar", () => {
   test("pessoa nova: nasce sem senha utilizável, vínculo INVITED e convite enviado", async () => {
     const cenario = await novoCenario();
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
     const email = `novo-${Date.now()}@e2e.test`;
 
     const estado = await convidarUsuario(
@@ -123,7 +134,7 @@ describe("convidar", () => {
 
   test("o token bruto não é persistido — o banco guarda o sha256", async () => {
     const cenario = await novoCenario();
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
     const email = `hash-${Date.now()}@e2e.test`;
     await convidarUsuario(ESTADO_INICIAL_ACAO, formData({ nome: "Hash", email, papel: "BROKER" }));
 
@@ -147,7 +158,7 @@ describe("convidar", () => {
       role: "BROKER",
     });
 
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
     const estado = await convidarUsuario(
       ESTADO_INICIAL_ACAO,
       formData({ nome: "Nome Digitado Pelo Admin", email: existente.email, papel: "MANAGER" })
@@ -174,7 +185,7 @@ describe("convidar", () => {
     usuariosAvulsos.push(existente.id);
     await criarMembro({ organizationId: outra.organization.id, userId: existente.id, role: "BROKER" });
 
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
     const conhecido = await convidarUsuario(
       ESTADO_INICIAL_ACAO,
       formData({ nome: "Nome Valido", email: existente.email, papel: "BROKER" })
@@ -193,7 +204,7 @@ describe("convidar", () => {
 
   test("vínculo ACTIVE, INVITED e SUSPENDED têm respostas próprias e nenhum papel é sobrescrito", async () => {
     const cenario = await novoCenario();
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
     const usuario = await criarUsuario({ email: `estados-${Date.now()}@e2e.test` });
     usuariosAvulsos.push(usuario.id);
     const vinculo = await criarMembro({
@@ -235,7 +246,7 @@ describe("convidar", () => {
   test("MANAGER não convida; BROKER não convida", async () => {
     const cenario = await novoCenario();
     for (const papel of ["MANAGER", "BROKER", "ASSISTANT"]) {
-      autenticarComo(cenario, papel);
+      await autenticarComo(cenario, papel);
       const estado = await convidarUsuario(
         ESTADO_INICIAL_ACAO,
         formData({ nome: "Terceiro Nome", email: `negado-${papel}-${Date.now()}@e2e.test`, papel: "BROKER" })
@@ -247,7 +258,7 @@ describe("convidar", () => {
 
   test("ADMIN não consegue criar um OWNER", async () => {
     const cenario = await novoCenario();
-    autenticarComo(cenario, "ADMIN");
+    await autenticarComo(cenario, "ADMIN");
     const estado = await convidarUsuario(
       ESTADO_INICIAL_ACAO,
       formData({ nome: "Quer Ser Dono", email: `owner-${Date.now()}@e2e.test`, papel: "OWNER" })
@@ -258,7 +269,7 @@ describe("convidar", () => {
 
   test("falha de e-mail deixa o convite VÁLIDO e reenviável, nunca um estado incoerente", async () => {
     const cenario = await novoCenario();
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
     falharEnvio = true;
     const email = `sem-email-${Date.now()}@e2e.test`;
 
@@ -280,7 +291,7 @@ describe("convidar", () => {
 describe("reenviar convite", () => {
   async function comConvitePendente() {
     const cenario = await novoCenario();
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
     const email = `pendente-${Date.now()}-${Math.random()}@e2e.test`;
     await convidarUsuario(ESTADO_INICIAL_ACAO, formData({ nome: "Pendente", email, papel: "BROKER" }));
     const usuario = await prisma.user.findUniqueOrThrow({ where: { email } });
@@ -324,7 +335,7 @@ describe("reenviar convite", () => {
   test("vínculo de OUTRA organização não é reenviável (IDOR)", async () => {
     const alvo = await comConvitePendente();
     const atacante = await novoCenario();
-    autenticarComo(atacante);
+    await autenticarComo(atacante);
 
     const estado = await reenviarConviteUsuario(alvo.vinculo.id, ESTADO_INICIAL_ACAO, new FormData());
 
@@ -335,7 +346,7 @@ describe("reenviar convite", () => {
   test("não há convite a reenviar para quem já está ativo", async () => {
     const { cenario, vinculo } = await comConvitePendente();
     await prisma.organizationMember.update({ where: { id: vinculo.id }, data: { status: "ACTIVE" } });
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
 
     const estado = await reenviarConviteUsuario(vinculo.id, ESTADO_INICIAL_ACAO, new FormData());
     expect(estado.success).toBe(false);
@@ -345,7 +356,7 @@ describe("reenviar convite", () => {
 describe("aceitação do convite", () => {
   async function comConvitePendente() {
     const cenario = await novoCenario();
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
     const email = `aceite-${Date.now()}-${Math.random()}@e2e.test`;
     await convidarUsuario(ESTADO_INICIAL_ACAO, formData({ nome: "Aceite", email, papel: "BROKER" }));
     const usuario = await prisma.user.findUniqueOrThrow({ where: { email } });
@@ -414,7 +425,7 @@ describe("aceitação do convite", () => {
     usuariosAvulsos.push(existente.id);
     await criarMembro({ organizationId: outra.organization.id, userId: existente.id, role: "BROKER" });
 
-    autenticarComo(cenario);
+    await autenticarComo(cenario);
     await convidarUsuario(
       ESTADO_INICIAL_ACAO,
       formData({ nome: "Nome Valido", email: existente.email, papel: "MANAGER" })

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireOrganizationId } from "@/lib/tenant";
 import { temPapel, PAPEIS_GESTAO_USUARIOS } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import { EditarUsuarioForm } from "@/components/admin/EditarUsuarioForm";
 
 export default async function EditarUsuarioPage({
@@ -20,7 +21,7 @@ export default async function EditarUsuarioPage({
   });
   if (!membro) notFound();
 
-  if (!temPapel(session?.user.role, PAPEIS_GESTAO_USUARIOS)) {
+  if (!temPapel(await papelAtual(), PAPEIS_GESTAO_USUARIOS)) {
     return (
       <div className="max-w-lg">
         <p className="text-sm text-muted-foreground">
