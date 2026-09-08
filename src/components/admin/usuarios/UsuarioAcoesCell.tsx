@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { alternarStatusUsuario } from "@/app/app/usuarios/actions";
+import { alternarStatusUsuario, reenviarConviteUsuario } from "@/app/app/usuarios/actions";
 import { Button } from "@/components/ui/button";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 
@@ -20,22 +20,59 @@ import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 export function UsuarioAcoesCell({
   membershipId,
   ativo,
+  // Fase 25 — o status BRUTO, e não só o booleano: com o convite de
+  // membro, INVITED deixou de ser inalcançável nesta tela, e "ativar/
+  // desativar" não é a ação certa para quem nunca entrou. O que essa
+  // pessoa precisa é de outro link.
+  status,
   ehVoceMesmo,
   podeGerenciar,
 }: {
   membershipId: string;
   ativo: boolean;
+  status: string;
   ehVoceMesmo: boolean;
   podeGerenciar: boolean;
 }) {
   const acao = alternarStatusUsuario.bind(null, membershipId, !ativo);
   const [estado, formAction, pendente] = useActionState(acao, ESTADO_INICIAL_ACAO);
+  const reenviar = reenviarConviteUsuario.bind(null, membershipId);
+  const [estadoConvite, acaoConvite, reenviando] = useActionState(
+    reenviar,
+    ESTADO_INICIAL_ACAO
+  );
 
   if (ehVoceMesmo) {
     return <span className="text-xs text-muted-foreground">Você</span>;
   }
   if (!podeGerenciar) {
     return null;
+  }
+
+  if (status === "INVITED") {
+    return (
+      <form action={acaoConvite} onClick={(e) => e.stopPropagation()}>
+        <Button type="submit" variant="ghost" size="sm" disabled={reenviando}>
+          {reenviando ? "Enviando..." : "Reenviar convite"}
+        </Button>
+        {/* Sucesso e erro aparecem no mesmo lugar: reenviar convite é
+            uma ação sem retorno visível nenhum (o efeito acontece na
+            caixa de e-mail de outra pessoa), então dizer que saiu é a
+            única confirmação possível. O link NUNCA é exibido aqui. */}
+        {estadoConvite.message && (
+          <p
+            role="status"
+            className={
+              estadoConvite.success
+                ? "mt-1 text-xs text-emerald-700"
+                : "mt-1 text-xs text-destructive"
+            }
+          >
+            {estadoConvite.message}
+          </p>
+        )}
+      </form>
+    );
   }
 
   return (

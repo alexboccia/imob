@@ -875,7 +875,7 @@ describe("Fase P.9 — criarOrganization com plano STARTER cria trial server-sid
     vi.mocked(auth).mockReset();
     if (organizationId) {
       await prisma.subscription.deleteMany({ where: { organizationId } });
-      await prisma.ownerInviteToken.deleteMany({ where: { organizationId } });
+      await prisma.inviteToken.deleteMany({ where: { organizationId } });
       await prisma.organizationMember.deleteMany({ where: { organizationId } });
       await prisma.organization.delete({ where: { id: organizationId } });
     }

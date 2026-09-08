@@ -1,3 +1,5 @@
+import path from "node:path";
+import { execFileSync } from "node:child_process";
 import type { Page } from "@playwright/test";
 
 // Credenciais do seed determinístico (prisma/seed-e2e.ts) — lidas do mesmo
@@ -66,6 +68,23 @@ export const ORG_FUSO = {
 // Fase 22 — Organização G, a única do seed com política RESTRITA. Ana e
 // Bruno são BROKER com carteiras separadas, e há um cliente
 // compartilhado entre os dois.
+// Fase 25 — Organização I: dedicada ao ciclo de acesso (convite,
+// ativação, recuperação de senha). Dedicada porque os specs desta fase
+// TROCAM senha e suspendem vínculos — usar credenciais compartilhadas
+// derrubaria o login de todos os outros specs.
+export const ORG_ACESSO = {
+  slug: "e2e-org-acesso",
+  email: "owner-acesso@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
+// O corretor que "esquece a senha". Identidade e vínculo ativos.
+export const ORG_ACESSO_CORRETOR = {
+  slug: "e2e-org-acesso",
+  email: "corretor-acesso@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 // Fase 24 — Organização H: dedicada à captação de identidade ambígua.
 export const ORG_CAPTACAO = {
   slug: "e2e-org-captacao",
@@ -76,6 +95,16 @@ export const ORG_CAPTACAO = {
 export const ORG_CAPTACAO_CORRETOR = {
   slug: "e2e-org-captacao",
   email: "corretor-captacao@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
+// Identidade que já tem conta em OUTRA organização (a de captação) — é
+// quem prova que convidar alguém existente cria vínculo novo sem criar
+// segunda identidade. Dedicada de propósito: aceitar o convite lhe dá um
+// segundo vínculo ativo, e fazer isso com um dono compartilhado
+// contaminaria todas as specs que logam com ele.
+export const USUARIO_JA_TEM_CONTA = {
+  email: "ja-tem-conta@e2e.test",
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
@@ -181,4 +210,30 @@ async function preencherLogin(page: Page, credenciais: { email: string; senha: s
 // antes de enviar.
 export async function esperarJanelaAntiSpam(page: Page) {
   await page.waitForTimeout(1600);
+}
+
+// =======================================================================
+// Fase 25 — obter o token de acesso no E2E
+// =======================================================================
+// O token bruto só existe no e-mail, e não há e-mail em teste. Este
+// helper roda scripts/e2e-token.ts, que reescreve o hash da linha criada
+// pelo fluxo REAL para o hash de um token conhecido, e o devolve. Ver o
+// cabeçalho daquele arquivo: o que se testa depois é o consumo de
+// verdade — validação, expiração, uso único e replay.
+export function obterTokenDeAcesso(
+  tipo: "convite" | "reset",
+  email: string,
+  modo?: "expirado"
+): string {
+  const raiz = path.resolve(__dirname, "..", "..");
+  const saida = execFileSync(
+    "npx",
+    ["tsx", path.join(raiz, "scripts", "e2e-token.ts"), tipo, email, ...(modo ? [modo] : [])],
+    { cwd: raiz, encoding: "utf8" }
+  ).trim();
+  // Só a ÚLTIMA linha: qualquer ferramenta da cadeia (npx, dotenv) pode
+  // escrever no stdout antes do token, e concatenar isso ao segredo
+  // produziria uma URL silenciosamente inválida — que foi exatamente o
+  // que aconteceu na primeira execução deste spec.
+  return saida.split("\n").pop()!.trim();
 }

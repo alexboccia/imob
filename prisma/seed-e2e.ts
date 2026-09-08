@@ -447,6 +447,21 @@ async function main() {
     role: "OWNER",
   });
 
+  // Fase 25 — Organização I: dedicada ao CICLO DE ACESSO, pelo mesmo
+  // motivo estrutural das organizações C-H. Os specs desta fase criam e
+  // consomem convites, redefinem senhas e suspendem vínculos — mexer na
+  // senha ou no status de um membro de qualquer organização existente
+  // derrubaria specs que fazem login com aquelas credenciais.
+  const orgAcesso = await garantirOrganizacaoComDono({
+    slug: "e2e-org-acesso",
+    timezone: "UTC",
+    name: "Organização E2E Acesso",
+    planId: planoCompleto.id,
+    email: "owner-acesso@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+
   // Specs como "criar imóvel" e "formulário público cria lead" criam dados
   // novos a cada rodada — sem isso o banco de teste acumularia lixo entre
   // execuções do Playwright. Person cascateia Interaction ao ser apagada;
@@ -460,6 +475,7 @@ async function main() {
     orgFuso.organization.id,
     orgRestrita.organization.id,
     orgCaptacao.organization.id,
+    orgAcesso.organization.id,
   ];
   // Usuários criados por usuarios.spec.ts a cada rodada (Fase 8 — correção
   // de causa raiz de um flake real): o seed nunca os limpava, e a
@@ -496,6 +512,12 @@ async function main() {
     // que precisa sobreviver à limpeza para provar o portão de papel.
     "owner-captacao@e2e.test",
     "corretor-captacao@e2e.test",
+    // Fase 25 — Organização I (ciclo de acesso). A dona e o corretor que
+    // esquece a senha precisam sobreviver à limpeza.
+    "owner-acesso@e2e.test",
+    "corretor-acesso@e2e.test",
+    // Identidade do cenário "convidar quem já tem conta" (Fase 25).
+    "ja-tem-conta@e2e.test",
   ];
 
   // Correção completa do acúmulo (a da Fase 8 cobria só o prefixo
@@ -561,6 +583,11 @@ async function main() {
       where: { organizationMemberId: { in: idsMembros } },
     });
     await prisma.organizationMember.deleteMany({ where: { id: { in: idsMembros } } });
+    // Fase 25 — os tokens têm FK RESTRICT para User: sem apagá-los
+    // antes, o delete abaixo esbarra na constraint. Sai por userId
+    // porque recuperação de senha não tem organização (senha é global).
+    await prisma.inviteToken.deleteMany({ where: { userId: { in: idsUsuarios } } });
+    await prisma.passwordResetToken.deleteMany({ where: { userId: { in: idsUsuarios } } });
     await prisma.user.deleteMany({ where: { id: { in: idsUsuarios } } });
   }
 
@@ -569,6 +596,10 @@ async function main() {
   // aqui sai por cascade: sem esta linha a fila de identificação
   // cresceria a cada execução e o spec passaria a ver captações antigas.
   await prisma.leadCapture.deleteMany({ where: { organizationId: { in: idsOrgs } } });
+  // Fase 25 — convites e recuperações de rodadas anteriores. Sem isto, um
+  // convite pendente sobreviveria entre execuções e o spec veria "convite
+  // pendente" numa pessoa que ele acabou de criar do zero.
+  await prisma.inviteToken.deleteMany({ where: { organizationId: { in: idsOrgs } } });
   // Eventos digitais (Fase 6) — apagados explicitamente: os imóveis de id
   // fixo sobrevivem ao deleteMany abaixo, então o cascade deles não
   // limparia nada e as contagens do funil cresceriam a cada rodada.
@@ -1494,6 +1525,113 @@ async function main() {
     },
   });
 
+  // =====================================================================
+  // Fase 25 — corretor da Organização I
+  // =====================================================================
+  // Identidade ATIVA e vínculo ATIVO, com senha conhecida: é quem
+  // "esquece a senha" no spec de recuperação. Precisa ser dedicado
+  // porque o spec TROCA a senha dele — usar qualquer dono de outra
+  // organização quebraria todos os logins seguintes.
+  const usuarioCorretorAcesso = await prisma.user.upsert({
+    where: { email: "corretor-acesso@e2e.test" },
+    update: {
+      // Rodada nova sempre restaura a senha do seed: o spec anterior a
+      // trocou, e o seed é quem devolve o mundo ao estado determinístico.
+      passwordHash: await bcrypt.hash(senha, 10),
+      active: true,
+      passwordChangedAt: null,
+    },
+    create: {
+      name: "Corretor Acesso",
+      email: "corretor-acesso@e2e.test",
+      passwordHash: await bcrypt.hash(senha, 10),
+    },
+    select: { id: true },
+  });
+  await prisma.organizationMember.upsert({
+    where: {
+      organizationId_userId: {
+        organizationId: orgAcesso.organization.id,
+        userId: usuarioCorretorAcesso.id,
+      },
+    },
+    update: { role: "BROKER", status: "ACTIVE" },
+    create: {
+      organizationId: orgAcesso.organization.id,
+      userId: usuarioCorretorAcesso.id,
+      role: "BROKER",
+      status: "ACTIVE",
+    },
+  });
+  // Tokens de rodadas anteriores desta identidade saem por userId
+  // (recuperação não tem organizationId — senha é global).
+  await prisma.passwordResetToken.deleteMany({
+    where: { userId: usuarioCorretorAcesso.id },
+  });
+
+  // Identidade que JÁ TEM CONTA, para o cenário "convidar alguém que já
+  // existe". Vive na Organização H de propósito: ela precisa ter conta
+  // ativa em ALGUMA organização que não seja a I (que é justamente a
+  // que o convite vai criar).
+  //
+  // Dedicada, e não um dono fixo reaproveitado: aceitar o convite dá a
+  // essa identidade um SEGUNDO vínculo ativo, e fazer isso com um dono
+  // compartilhado contamina toda spec que loga com ele — foi exatamente
+  // o que aconteceu quando o spec usava owner-a.
+  const usuarioJaTemConta = await prisma.user.upsert({
+    where: { email: "ja-tem-conta@e2e.test" },
+    update: { passwordHash: await bcrypt.hash(senha, 10), active: true, passwordChangedAt: null },
+    create: {
+      name: "Pessoa Que Ja Tem Conta",
+      email: "ja-tem-conta@e2e.test",
+      passwordHash: await bcrypt.hash(senha, 10),
+    },
+    select: { id: true },
+  });
+  await prisma.organizationMember.upsert({
+    where: {
+      organizationId_userId: {
+        organizationId: orgCaptacao.organization.id,
+        userId: usuarioJaTemConta.id,
+      },
+    },
+    update: { role: "BROKER", status: "ACTIVE" },
+    create: {
+      organizationId: orgCaptacao.organization.id,
+      userId: usuarioJaTemConta.id,
+      role: "BROKER",
+      status: "ACTIVE",
+    },
+  });
+
+  // O spec "usuário que já existe" convida um DONO FIXO de outra
+  // organização (owner-a) para a Organização I. Esse vínculo sobrevive à
+  // limpeza de membros descartáveis justamente por ser de um dono fixo —
+  // e na rodada seguinte o convite seria recusado com "já existe um
+  // convite pendente", que é o comportamento CERTO do produto e um teste
+  // não determinístico. O seed desfaz o vínculo, devolvendo o mundo ao
+  // estado de antes.
+  const forasteirosNaOrgAcesso = await prisma.organizationMember.findMany({
+    where: {
+      organizationId: orgAcesso.organization.id,
+      user: {
+        email: { notIn: ["owner-acesso@e2e.test", "corretor-acesso@e2e.test"] },
+      },
+    },
+    select: { id: true, userId: true },
+  });
+  if (forasteirosNaOrgAcesso.length > 0) {
+    await prisma.inviteToken.deleteMany({
+      where: {
+        organizationId: orgAcesso.organization.id,
+        userId: { in: forasteirosNaOrgAcesso.map((m) => m.userId) },
+      },
+    });
+    await prisma.organizationMember.deleteMany({
+      where: { id: { in: forasteirosNaOrgAcesso.map((m) => m.id) } },
+    });
+  }
+
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);
   console.log(
@@ -1504,7 +1642,8 @@ async function main() {
     `  Org E (dedicada à Central de trabalho): slug=${orgCentral.organization.slug} login=owner-central@e2e.test`,
     `  Org F (dedicada ao fuso, America/Sao_Paulo): slug=${orgFuso.organization.slug} login=owner-fuso@e2e.test`,
     `  Org G (dedicada à visibilidade restrita): slug=${orgRestrita.organization.slug} login=owner-restrita@e2e.test`,
-    `  Org H (dedicada à captação ambígua): slug=${orgCaptacao.organization.slug} login=owner-captacao@e2e.test`
+    `  Org H (dedicada à captação ambígua): slug=${orgCaptacao.organization.slug} login=owner-captacao@e2e.test`,
+    `  Org I (dedicada ao ciclo de acesso): slug=${orgAcesso.organization.slug} login=owner-acesso@e2e.test`
   );
 }
 

@@ -18,15 +18,27 @@ const { auth: authPlatform } = NextAuth(platformAuthConfig);
 const appMiddleware = authApp((req) => {
   const isLoggedIn = !!req.auth;
   const isLoginPage = req.nextUrl.pathname === "/app/login";
-  // Página pública de aceitação de convite do OWNER — isenta de sessão,
-  // mesmo tratamento que /app/login já recebe.
-  const isConvitePage = req.nextUrl.pathname.startsWith("/app/convite/");
+  // Páginas públicas do ciclo de acesso — isentas de sessão, mesmo
+  // tratamento que /app/login já recebe. São, por definição, as telas de
+  // quem AINDA NÃO consegue entrar: exigir sessão nelas seria exigir que
+  // a pessoa já tivesse aquilo que veio buscar.
+  const caminho = req.nextUrl.pathname;
+  const isPublicaDeAcesso =
+    caminho.startsWith("/app/convite/") ||
+    caminho === "/app/recuperar-senha" ||
+    caminho.startsWith("/app/redefinir-senha/");
 
-  if (!isLoggedIn && !isLoginPage && !isConvitePage) {
+  if (!isLoggedIn && !isLoginPage && !isPublicaDeAcesso) {
     const loginUrl = new URL("/app/login", req.nextUrl.origin);
     return NextResponse.redirect(loginUrl);
   }
 
+  // Sessão ativa NÃO expulsa dessas telas (diferente de /app/login):
+  // quem está logado e clicou num link de recuperação — porque esqueceu
+  // a senha em outro dispositivo, ou porque desconfia de acesso
+  // indevido — precisa conseguir concluir. Redirecionar para /app aqui
+  // criaria o comportamento contraditório de mandar a pessoa para
+  // dentro justamente quando ela quer trocar a chave.
   if (isLoggedIn && isLoginPage) {
     return NextResponse.redirect(new URL("/app", req.nextUrl.origin));
   }
@@ -43,6 +55,12 @@ const platformMiddleware = authPlatform((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Sessão ativa NÃO expulsa dessas telas (diferente de /app/login):
+  // quem está logado e clicou num link de recuperação — porque esqueceu
+  // a senha em outro dispositivo, ou porque desconfia de acesso
+  // indevido — precisa conseguir concluir. Redirecionar para /app aqui
+  // criaria o comportamento contraditório de mandar a pessoa para
+  // dentro justamente quando ela quer trocar a chave.
   if (isLoggedIn && isLoginPage) {
     return NextResponse.redirect(new URL("/platform", req.nextUrl.origin));
   }

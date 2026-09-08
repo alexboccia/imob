@@ -75,6 +75,7 @@ export const usuarioColumns: DataTableColumn<UsuarioRow>[] = [
       <UsuarioAcoesCell
         membershipId={row.original.id}
         ativo={row.original.ativo}
+        status={row.original.status}
         ehVoceMesmo={row.original.ehVoceMesmo}
         podeGerenciar={row.original.podeGerenciar}
       />

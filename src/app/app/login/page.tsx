@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { AvisoAcesso } from "./AvisoAcesso";
 import { siteConfig } from "@/lib/site-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,16 +60,37 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="email">E-mail</Label>
-              <Input id="email" name="email" type="email" required />
+              <Input id="email" name="email" type="email" required autoComplete="email" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="senha">Senha</Label>
-              <Input id="senha" name="senha" type="password" required />
+              <Input
+                id="senha"
+                name="senha"
+                type="password"
+                required
+                autoComplete="current-password"
+              />
             </div>
-            {erro && <p className="text-destructive text-sm">{erro}</p>}
+            <Suspense fallback={null}>
+              <AvisoAcesso />
+            </Suspense>
+            {erro && (
+              <p role="alert" className="text-destructive text-sm">
+                {erro}
+              </p>
+            )}
             <Button type="submit" disabled={carregando} className="w-full">
               {carregando ? "Entrando..." : "Entrar"}
             </Button>
+            {/* Sem esta saída, esquecer a senha significava telefonar
+                para alguém. É a razão de existir da fase. */}
+            <Link
+              href="/app/recuperar-senha"
+              className="block text-center text-sm text-primary underline-offset-4 hover:underline"
+            >
+              Esqueci minha senha
+            </Link>
           </form>
         </CardContent>
       </Card>

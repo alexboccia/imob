@@ -191,3 +191,44 @@ describe("limparEventoSentry — dados não sensíveis permanecem intactos", () 
     expect(e.tags).toEqual(original);
   });
 });
+
+// =======================================================================
+// Fase 25 — segredo no CAMINHO da URL, não na query string
+// =======================================================================
+describe("token em URL", () => {
+  test("o token do convite não vaza no request.url", () => {
+    const evento = limparEventoSentry({
+      request: { url: "https://app.test/app/convite/TOKEN-SUPER-SECRETO-123" },
+    } as Parameters<typeof limparEventoSentry>[0]);
+
+    expect(evento.request?.url).not.toContain("TOKEN-SUPER-SECRETO-123");
+    expect(evento.request?.url).toContain("/app/convite/[filtrado]");
+  });
+
+  test("o token de redefinição de senha também não vaza", () => {
+    const evento = limparEventoSentry({
+      request: { url: "https://app.test/app/redefinir-senha/OUTRO-SEGREDO-456?x=1" },
+    } as Parameters<typeof limparEventoSentry>[0]);
+
+    expect(evento.request?.url).not.toContain("OUTRO-SEGREDO-456");
+  });
+
+  test("caminho relativo (sem host) também é limpo", () => {
+    const evento = limparEventoSentry({
+      request: { url: "/app/redefinir-senha/RELATIVO-789" },
+    } as Parameters<typeof limparEventoSentry>[0]);
+
+    expect(evento.request?.url).not.toContain("RELATIVO-789");
+  });
+
+  test("URLs comuns continuam legíveis — a limpeza é cirúrgica, não cega", () => {
+    const evento = limparEventoSentry({
+      request: { url: "https://app.test/app/imoveis/abc123" },
+    } as Parameters<typeof limparEventoSentry>[0]);
+
+    // Um id de imóvel não é segredo, e apagá-lo tornaria o erro inútil
+    // para depurar.
+    expect(evento.request?.url).toContain("/app/imoveis/abc123");
+  });
+});
+

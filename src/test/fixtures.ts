@@ -350,7 +350,10 @@ export async function limparOrganizacao(
   await prisma.propertyTypeOption.deleteMany({ where: { organizationId } });
   // FK restrict pra Organization, precisa sair antes do delete (mesmo
   // motivo do organizationLimitOverride acima).
-  await prisma.ownerInviteToken.deleteMany({ where: { organizationId } });
+  await prisma.inviteToken.deleteMany({ where: { organizationId } });
+  // Fase 25 — tokens de recuperação são por USUÁRIO (não por
+  // organização, porque senha é identidade global), então saem pelos
+  // userIds do cenário, mais abaixo.
   // Fase P.10 — mesmo motivo.
   await prisma.organizationDomain.deleteMany({ where: { organizationId } });
   await prisma.organizationEmailDomain.deleteMany({ where: { organizationId } });
@@ -361,6 +364,8 @@ export async function limparOrganizacao(
   await prisma.organization.delete({ where: { id: organizationId } });
 
   if (opcoes.userIds?.length) {
+    await prisma.passwordResetToken.deleteMany({ where: { userId: { in: opcoes.userIds } } });
+    await prisma.inviteToken.deleteMany({ where: { userId: { in: opcoes.userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: opcoes.userIds } } });
   }
   if (opcoes.planId) {

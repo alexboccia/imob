@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ORG_A, login } from "./helpers";
+import { ORG_A, login, obterTokenDeAcesso } from "./helpers";
 
 // Redesenho de Usuários — roda em ORG_A (owner OWNER, já seedado):
 // diferente da Agenda/Pipeline, esta tela não toca em PropertyInterest/
@@ -25,17 +25,18 @@ test.describe("Usuários", () => {
     await expect(page.getByText("Corretores", { exact: true })).toBeVisible();
     await expect(page.getByText("Ativos", { exact: true })).toBeVisible();
 
-    // Cadastro real — mesmo fluxo do produto (Sheet -> criarUsuario).
+    // Cadastro real — mesmo fluxo do produto (Sheet -> convidarUsuario).
+    // Fase 25: não há mais campo de senha. Quem administra convida; a
+    // pessoa convidada é quem cria a própria senha.
     await page.getByRole("button", { name: "Novo usuário" }).click();
     await page.getByPlaceholder("Nome", { exact: true }).fill(nomeUnico);
     await page.getByPlaceholder("E-mail", { exact: true }).fill(emailUnico);
-    await page.getByPlaceholder("Senha (mín. 6 caracteres)").fill("senha123456");
     // Papel default do form já é "Corretor" (BROKER) — mantém o default,
     // exercitando o caminho mais comum sem precisar abrir o Select.
-    await page.getByRole("button", { name: "Cadastrar" }).click();
+    await page.getByRole("button", { name: "Enviar convite" }).click();
 
     // Sheet fecha sozinho (onSuccess) — o próprio fechamento já prova que
-    // criarUsuario devolveu sucesso (não redireciona mais, ver actions.ts).
+    // a action devolveu sucesso (não redireciona, ver actions.ts).
     await expect(page.getByRole("heading", { name: "Novo usuário" })).not.toBeVisible();
     await expect(page.getByText(nomeUnico).first()).toBeVisible();
     await expect(page.getByText(emailUnico).first()).toBeVisible();
@@ -63,8 +64,29 @@ test.describe("Usuários", () => {
     await page.waitForTimeout(500);
     await expect(page.getByText(nomeUnico).first()).toBeVisible();
 
-    // Status inicial é Ativo — alterna pra Suspenso pela ação rápida da
-    // linha (alternarStatusUsuario), sem passar pelo formulário completo.
+    // Fase 25 — quem acabou de ser convidado nasce "Convite pendente",
+    // não "Ativo": ninguém mais cria conta com senha digitada por
+    // terceiro. A ação da linha, nesse estado, é reenviar o convite.
+    const linhaConvidada = page.getByRole("row", { name: new RegExp(nomeUnico) });
+    await expect(linhaConvidada.getByText("Convite pendente", { exact: true })).toBeVisible();
+    await expect(linhaConvidada.getByRole("button", { name: "Reenviar convite" })).toBeVisible();
+
+    // A pessoa aceita o convite — é isto que a torna ACTIVE, e só a
+    // partir daí faz sentido falar em ativar/desativar.
+    const token = obterTokenDeAcesso("convite", emailUnico);
+    await page.context().clearCookies();
+    await page.goto(`/app/convite/${token}`);
+    await page.locator("#senha").fill("senha-do-convidado-1");
+    await page.getByRole("button", { name: "Ativar minha conta" }).click();
+    await page.waitForURL(/\/app\/login/);
+
+    await login(page, ORG_A);
+    await page.goto("/app/usuarios");
+    await page.getByPlaceholder("Buscar por nome ou e-mail...").fill(nomeUnico);
+    await page.waitForTimeout(500);
+
+    // Agora sim: alterna pra Suspenso pela ação rápida da linha
+    // (alternarStatusUsuario), sem passar pelo formulário completo.
     const linha = page.getByRole("row", { name: new RegExp(nomeUnico) });
     await expect(linha.getByText("Ativo", { exact: true })).toBeVisible();
     await linha.getByRole("button", { name: "Desativar" }).click();
@@ -169,8 +191,7 @@ test.describe("Usuários", () => {
       await page.getByRole("button", { name: "Novo usuário" }).click();
       await page.getByPlaceholder("Nome", { exact: true }).fill(u.nome);
       await page.getByPlaceholder("E-mail", { exact: true }).fill(u.email);
-      await page.getByPlaceholder("Senha (mín. 6 caracteres)").fill("senha123456");
-      await page.getByRole("button", { name: "Cadastrar" }).click();
+      await page.getByRole("button", { name: "Enviar convite" }).click();
       await expect(page.getByRole("heading", { name: "Novo usuário" })).not.toBeVisible();
     }
 

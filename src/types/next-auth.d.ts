@@ -14,6 +14,12 @@ declare module "next-auth" {
       organizationId?: string;
       organizationMemberId?: string;
       role?: string;
+      // Fase 25 — `iat` do JWT (segundos desde a época), exposto na
+      // sessão para que o servidor possa comparar a idade da sessão com
+      // User.passwordChangedAt. Sem sessão persistida, é o único jeito
+      // de saber se este token foi emitido ANTES da última troca de
+      // senha.
+      emitidaEm?: number;
       platformOperatorId?: string;
       platformRole?: string;
     } & DefaultSession["user"];

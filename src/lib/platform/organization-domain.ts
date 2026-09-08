@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { normalizarHostname, hostnameReservado } from "@/lib/platform/hostname";
 
-// Mesmo padrão de gerarTokenConvite (src/lib/platform/invite.ts) — 192
+// Mesmo padrão de gerarTokenAcesso (src/lib/platform/invite.ts) — 192
 // bits de entropia, nunca reaproveitado como segredo de sessão. V1 não
 // verifica nada automaticamente com isto (ver P.10.3.3), só guarda uma
 // base pronta pra uma futura verificação por DNS TXT sem precisar de
@@ -18,7 +18,7 @@ const STATUS_RESOLVAVEIS = new Set(["VERIFIED", "ACTIVE"]);
 // Resolve um hostname JÁ NORMALIZADO (normalizarHostname) pro slug da
 // Organization dona dele — usado pelo tenant resolver (src/proxy.ts) ANTES
 // de qualquer contexto de tenant existir, exatamente como
-// verificarConvite (src/lib/platform/invite.ts) faz pra OwnerInviteToken:
+// verificarConvite (src/lib/acesso-token.ts) faz pra InviteToken:
 // usa o `prisma` normal (OrganizationDomain está deliberadamente FORA de
 // TENANT_SCOPED_MODELS, ver comentário no schema), sem bypass.
 //

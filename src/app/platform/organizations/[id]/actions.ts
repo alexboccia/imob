@@ -8,7 +8,7 @@ import { PAPEIS_PLATAFORMA_TUDO, temPapelPlataforma } from "@/lib/platform/autho
 import { logPlatformActivity } from "@/lib/platform/audit";
 import { limiteEfetivoDoCatalogo, contarUsoAtual, hasModule } from "@/lib/entitlements";
 import { centavosDeReais, parseLimiteForm, FEATURES_EDITAVEIS_PLANO } from "@/lib/plan-schema";
-import { gerarTokenConvite, hashToken, expiracaoConvite } from "@/lib/platform/invite";
+import { gerarTokenAcesso, hashToken, expiracaoConvite } from "@/lib/acesso-token";
 import { enviarEmailConviteOwner } from "@/lib/email";
 import { logger } from "@/lib/logger";
 import { type ActionState, erroAcessoNegado, erroGenerico, erroValidacao, sucesso } from "@/lib/action-result";
@@ -435,7 +435,7 @@ export async function deletarOrganization(
       await tx.person.deleteMany({ where: { organizationId } });
       await tx.featureOption.deleteMany({ where: { organizationId } });
       await tx.propertyTypeOption.deleteMany({ where: { organizationId } });
-      await tx.ownerInviteToken.deleteMany({ where: { organizationId } });
+      await tx.inviteToken.deleteMany({ where: { organizationId } });
       // Fase P.10 — mesmo motivo (FK restrict pra Organization).
       await tx.organizationDomain.deleteMany({ where: { organizationId } });
       await tx.organizationEmailDomain.deleteMany({ where: { organizationId } });
@@ -521,14 +521,14 @@ export async function reenviarConvite(
 
   // Sai antes de criar o novo — nunca dois links válidos ao mesmo tempo
   // pro mesmo convite.
-  await prisma.ownerInviteToken.deleteMany({
+  await prisma.inviteToken.deleteMany({
     where: { userId: membroOwner.userId, organizationId, usedAt: null },
   });
 
-  const token = gerarTokenConvite();
+  const token = gerarTokenAcesso();
   const tokenHash = hashToken(token);
   const expiresAt = expiracaoConvite();
-  await prisma.ownerInviteToken.create({
+  await prisma.inviteToken.create({
     data: { userId: membroOwner.userId, organizationId, tokenHash, expiresAt },
   });
 

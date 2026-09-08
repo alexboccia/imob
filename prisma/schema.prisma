@@ -1123,13 +1123,23 @@ model User {
   name         String
   email        String   @unique
   passwordHash String
+  // Fase 25 — INSTANTE DA ÚLTIMA TROCA DE SENHA. Existe por um motivo
+  // só: a sessão é JWT (stateless, src/lib/auth.config.ts), então não há
+  // tabela de sessões para apagar depois de um reset. Comparar este
+  // instante com o `iat` do token é o equivalente stateless — quem
+  // trocou a senha derruba as sessões emitidas ANTES da troca.
+  //
+  // NULL para todo usuário existente, de propósito: null significa
+  // "nunca trocou", e nenhuma sessão em curso é invalidada pelo deploy.
+  passwordChangedAt DateTime?
   active       Boolean  @default(true)
   avatarUrl    String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships       OrganizationMember[]
-  ownerInviteTokens OwnerInviteToken[]
+  memberships         OrganizationMember[]
+  inviteTokens        InviteToken[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
 }
@@ -1288,7 +1298,7 @@ model Organization {
   portalListings                      PortalListing[]
   featureOptions                      FeatureOption[]
   propertyTypeOptions                 PropertyTypeOption[]
-  ownerInviteTokens                   OwnerInviteToken[]
+  inviteTokens                        InviteToken[]
   domains                             OrganizationDomain[]
   emailDomain                         OrganizationEmailDomain?
   propertyInterestParticipants        PropertyInterestParticipant[]
@@ -1708,19 +1718,74 @@ model PlatformAuditLog {
 // decisão #6. Deliberadamente FORA de TENANT_SCOPED_MODELS: o lookup no
 // momento de aceitar o convite é só por tokenHash, sem contexto de tenant
 // estabelecido ainda (usuário nem logou).
-model OwnerInviteToken {
+// =====================================================================
+// Convite de acesso a uma organização (Fase 25)
+// =====================================================================
+// Era OwnerInviteToken: existia só para o primeiro OWNER criado pelo
+// Platform Admin. O mecanismo, porém, nunca teve nada de "owner" — é
+// "esta pessoa foi convidada para esta organização e prova isso com um
+// segredo de uso único". Renomear foi a alternativa a duplicar uma
+// tabela de forma idêntica só para os demais papéis, o que criaria duas
+// páginas de aceitação e duas semânticas para o mesmo fato.
+//
+// O papel do convidado NÃO mora aqui: mora no OrganizationMember
+// (status INVITED). O token prova identidade, não autorização.
+//
+// FORA de TENANT_SCOPED_MODELS de propósito: é consumido pela página
+// pública de aceitação, ANTES de existir qualquer contexto de tenant —
+// o usuário nem logou ainda. Mesmo racional de OrganizationDomain.
+model InviteToken {
   id             String       @id @default(cuid())
   userId         String
   user           User         @relation(fields: [userId], references: [id])
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
-  tokenHash      String       @unique // sha256 completo (64 hex) do token bruto — o token bruto NUNCA é persistido
+  // sha256 completo (64 hex) do token bruto — o token bruto NUNCA é
+  // persistido. @unique é o índice de consulta E a garantia de que dois
+  // convites não colidem.
+  tokenHash      String       @unique
   expiresAt      DateTime
+  // Consumo de uso único. Preenchido por updateMany com guarda
+  // `usedAt: null` dentro de transaction — nunca por leitura seguida de
+  // escrita, que deixaria janela de replay.
   usedAt         DateTime?
   createdAt      DateTime     @default(now())
 
   @@index([userId])
-  @@map("owner_invite_tokens")
+  @@map("invite_tokens")
+}
+
+// =====================================================================
+// Recuperação de senha (Fase 25)
+// =====================================================================
+// SEPARADO de InviteToken de propósito, e não por economia de tabela.
+// A diferença não é de forma, é de domínio:
+//
+//   convite  = AUTORIZAÇÃO. Pertence a uma organização, ativa um
+//              vínculo, e só faz sentido dentro dela.
+//   reset    = AUTENTICAÇÃO. A senha é do User, global, atravessa
+//              organizações. Um reset NÃO pertence a organização
+//              nenhuma.
+//
+// Fundir os dois obrigaria organizationId a ser nulo em metade das
+// linhas e convidaria alguém, um dia, a escopar um reset por tenant —
+// que é exatamente confundir autenticação com autorização.
+//
+// Redefinir a senha NUNCA reativa vínculo: um membro suspenso que
+// recupera a senha continua sem conseguir entrar naquela organização
+// (auth.ts exige membership ACTIVE), e isso está certo — ele pode ter
+// acesso legítimo a OUTRA organização com a mesma identidade.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 // =====================================================================
@@ -1761,7 +1826,7 @@ enum OrganizationDomainStatus {
 // resolução/unicidade em dois lugares).
 //
 // Deliberadamente FORA de TENANT_SCOPED_MODELS (src/lib/prisma.ts) — MESMO
-// motivo de OwnerInviteToken: é resolvido pelo proxy (src/proxy.ts) A
+// motivo de InviteToken: é resolvido pelo proxy (src/proxy.ts) A
 // PARTIR do hostname da requisição, ANTES de qualquer contexto de tenant
 // existir (é o próprio dado que estabelece qual é o tenant).
 

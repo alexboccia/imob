@@ -94,15 +94,36 @@ function mascararQueryParams<T extends string | Record<string, string> | Array<[
   return saida as T;
 }
 
+// Fase 25 — rotas cujo SEGREDO viaja no CAMINHO, não na query string.
+// A limpeza de query não as alcançava: um erro em /app/convite/<token>
+// mandava o token bruto para a Sentry dentro de event.request.url, e
+// com ele qualquer pessoa com acesso ao painel de erros poderia ativar
+// a conta alheia ou redefinir a senha dela.
+//
+// A lista é explícita em vez de uma heurística de "segmento longo":
+// heurística erra nos dois sentidos, e estes são os únicos caminhos do
+// produto que carregam segredo.
+const ROTAS_COM_SEGREDO_NO_CAMINHO = [/^\/app\/convite\//, /^\/app\/redefinir-senha\//];
+
+function mascararCaminho(caminho: string): string {
+  for (const rota of ROTAS_COM_SEGREDO_NO_CAMINHO) {
+    const prefixo = caminho.match(rota);
+    if (prefixo) return `${prefixo[0]}[filtrado]`;
+  }
+  return caminho;
+}
+
 function mascararUrl(url: string): string {
   try {
     const parsed = new URL(url);
     if (parsed.search) parsed.search = mascararQueryString(parsed.search);
+    parsed.pathname = mascararCaminho(parsed.pathname);
     return parsed.toString();
   } catch {
     // URL relativa ou inválida — tenta só na parte depois do "?".
     const [caminho, query] = url.split("?");
-    return query ? `${caminho}?${mascararQueryString(query)}` : url;
+    const caminhoLimpo = mascararCaminho(caminho);
+    return query ? `${caminhoLimpo}?${mascararQueryString(query)}` : caminhoLimpo;
   }
 }
 

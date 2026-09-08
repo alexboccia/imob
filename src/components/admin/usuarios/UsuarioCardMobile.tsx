@@ -57,6 +57,7 @@ export function UsuarioCardMobile({ usuario }: { usuario: UsuarioRow }) {
       <UsuarioAcoesCell
         membershipId={usuario.id}
         ativo={usuario.ativo}
+        status={usuario.status}
         ehVoceMesmo={usuario.ehVoceMesmo}
         podeGerenciar={usuario.podeGerenciar}
       />

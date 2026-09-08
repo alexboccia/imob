@@ -386,11 +386,28 @@ export async function cancelarAgendamentoVisita(
       return erroGenerico("Não é possível cancelar uma visita já concluída.");
     }
 
-    await prisma.scheduledActivity.update({
-      where: { id: atividade.id, organizationId },
+    // GUARDA ATÔMICA `status: "SCHEDULED"` — a mesma que a conclusão já
+    // usava. Sem ela, cancelar e concluir simultaneamente produzia
+    // estado MISTO: a conclusão gravava completedAt, o cancelamento
+    // sobrescrevia o status por cima, e a visita terminava CANCELLED
+    // com data de conclusão. Achado por um teste de concorrência já
+    // existente que falhava de forma intermitente (Fase 25).
+    const cancelado = await prisma.scheduledActivity.updateMany({
+      where: { id: atividade.id, organizationId, status: "SCHEDULED" },
       // completedAt permanece null — não tocado.
       data: { status: "CANCELLED", cancelledAt: new Date() },
     });
+    // count 0 = outra requisição chegou primeiro. Reflete o desfecho
+    // dela em vez de mentir que cancelou.
+    if (cancelado.count === 0) {
+      const atual = await prisma.scheduledActivity.findFirst({
+        where: { id: atividade.id, organizationId },
+        select: { status: true },
+      });
+      return atual?.status === "COMPLETED"
+        ? erroGenerico("Não é possível cancelar uma visita já concluída.")
+        : sucesso("Visita já estava cancelada.");
+    }
 
     await logActivity({
       organizationId,
@@ -1015,10 +1032,20 @@ export async function cancelarFollowUp(
       return erroGenerico("Não é possível cancelar um follow-up já concluído.");
     }
 
-    await prisma.scheduledActivity.update({
-      where: { id: atividade.id, organizationId },
+    // Mesma guarda atômica da visita, pelo mesmo motivo.
+    const cancelado = await prisma.scheduledActivity.updateMany({
+      where: { id: atividade.id, organizationId, status: "SCHEDULED" },
       data: { status: "CANCELLED", cancelledAt: new Date() },
     });
+    if (cancelado.count === 0) {
+      const atual = await prisma.scheduledActivity.findFirst({
+        where: { id: atividade.id, organizationId },
+        select: { status: true },
+      });
+      return atual?.status === "COMPLETED"
+        ? erroGenerico("Não é possível cancelar um follow-up já concluído.")
+        : sucesso("Follow-up já estava cancelado.");
+    }
 
     await logActivity({
       organizationId,

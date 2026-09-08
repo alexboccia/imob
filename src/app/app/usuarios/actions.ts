@@ -3,12 +3,22 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { verificarLimiteUsuarios, LimiteDoPlanoError } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
+import { normalizarEmail } from "@/lib/rate-limit";
+import { CUSTO_BCRYPT, senhaSchema } from "@/lib/senha";
+import {
+  gerarTokenAcesso,
+  hashToken,
+  expiracaoConvite,
+  linkConvite,
+} from "@/lib/acesso-token";
+import { enviarEmailConviteMembro } from "@/lib/email";
 import { temPapel, PAPEIS_GESTAO_USUARIOS } from "@/lib/authorization";
 import { LIMITE_BIO_PUBLICA, LIMITE_CRECI } from "@/lib/perfil-publico-limites";
 import { urlDeUploadValida } from "@/lib/upload-url";
@@ -24,16 +34,183 @@ const ROLES = ["OWNER", "ADMIN", "MANAGER", "BROKER", "ASSISTANT"] as const;
 
 const booleanCheckbox = z.preprocess((v) => v === "on", z.boolean());
 
-const criarUsuarioSchema = z.object({
+const convidarUsuarioSchema = z.object({
   nome: z.string().min(2, "Informe o nome."),
   email: z.string().email("E-mail inválido."),
-  senha: z.string().min(6, "A senha precisa ter ao menos 6 caracteres."),
   papel: z.enum(ROLES),
 });
 
-export async function criarUsuario(
+// =======================================================================
+// Convidar membro (Fase 25) — era criarUsuario
+// =======================================================================
+// O que mudou, e por quê: antes, quem administrava DIGITAVA a senha do
+// novo usuário e precisava transmiti-la por WhatsApp, papel ou voz. Isso
+// significa que a senha inicial de toda conta do produto existia em
+// texto claro fora do sistema, e que ninguém entrava sem o
+// desenvolvedor ou o admin no meio.
+//
+// Agora o convidado recebe um segredo de uso único por e-mail e escolhe
+// a própria senha. Ninguém — nem o OWNER, nem o Super Admin — chega a
+// conhecê-la.
+export async function convidarUsuario(
   _prevState: ActionState,
   formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  // MESMO conjunto de papéis que já governava a criação de usuários
+  // (OWNER/ADMIN). Convidar não é uma capacidade nova que precise de um
+  // papel novo: é a mesma capacidade, exercida de forma segura. MANAGER
+  // continua fora — gerir equipe comercial não é administrar acessos.
+  if (!temPapel(session.user.role, PAPEIS_GESTAO_USUARIOS)) {
+    return erroAcessoNegado();
+  }
+
+  const parsed = convidarUsuarioSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!parsed.success) return erroValidacao(parsed.error);
+  const dados = parsed.data;
+  const email = normalizarEmail(dados.email) ?? dados.email;
+
+  // Regra preservada: só quem já é OWNER concede o papel de OWNER.
+  if (dados.papel === "OWNER" && session.user.role !== "OWNER") {
+    return erroAcessoNegado("Apenas o proprietário pode conceder o papel de proprietário.");
+  }
+
+  const organizationId = await requireOrganizationId();
+
+  const usuarioExistente = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, name: true, active: true },
+  });
+
+  // Vínculo NESTA organização. É a única coisa sobre a qual esta tela
+  // pode falar: a existência do e-mail em OUTRA imobiliária não é
+  // assunto de quem administra esta — dizer "já existe um usuário com
+  // esse e-mail", como antes, entregava a um admin qualquer um oráculo
+  // de quem tem conta no produto inteiro.
+  const vinculoExistente = usuarioExistente
+    ? await prisma.organizationMember.findFirst({
+        where: { organizationId, userId: usuarioExistente.id },
+        select: { id: true, status: true },
+      })
+    : null;
+
+  if (vinculoExistente?.status === "ACTIVE") {
+    return erroGenerico("Esta pessoa já faz parte da sua equipe.");
+  }
+  if (vinculoExistente?.status === "SUSPENDED") {
+    // Nunca reativar por convite: reativar um acesso suspenso é uma
+    // decisão deliberada, e ela já tem lugar próprio na listagem.
+    return erroGenerico(
+      "Esta pessoa já teve acesso e está suspensa. Reative o acesso pela lista de usuários."
+    );
+  }
+  if (vinculoExistente?.status === "INVITED") {
+    return erroGenerico("Já existe um convite pendente para esta pessoa. Use “Reenviar convite”.");
+  }
+
+  try {
+    await verificarLimiteUsuarios(organizationId);
+  } catch (erro) {
+    if (erro instanceof LimiteDoPlanoError) return erroGenerico(erro.message);
+    throw erro;
+  }
+
+  const token = gerarTokenAcesso();
+  const tokenHash = hashToken(token);
+  const expiresAt = expiracaoConvite();
+
+  const criado = await prisma.$transaction(async (tx) => {
+    let userId = usuarioExistente?.id ?? null;
+
+    if (!userId) {
+      // Senha SENTINELA: hash de um valor aleatório que ninguém digitou
+      // e ninguém conhece. Não é "senha temporária" — não existe valor
+      // recuperável em lugar nenhum. A barreira real é active:false,
+      // que auth.ts já recusa.
+      const sentinela = await bcrypt.hash(randomUUID(), CUSTO_BCRYPT);
+      const novo = await tx.user.create({
+        data: { name: dados.nome, email, passwordHash: sentinela, active: false },
+        select: { id: true },
+      });
+      userId = novo.id;
+    }
+    // Para um User que JÁ existe, o nome digitado por quem convida é
+    // ignorado de propósito: o nome é da identidade global da pessoa, e
+    // um admin de uma imobiliária não renomeia alguém em todas as
+    // outras.
+
+    await tx.organizationMember.create({
+      data: { organizationId, userId, role: dados.papel, status: "INVITED" },
+    });
+    await tx.inviteToken.create({
+      data: { userId, organizationId, tokenHash, expiresAt },
+    });
+    return { userId };
+  });
+
+  await logActivity({
+    organizationId,
+    userId: session.user.id,
+    entity: "OrganizationMember",
+    entityId: criado.userId,
+    action: "member_invited",
+    // Papel entra (é decisão administrativa auditável); e-mail não.
+    payload: { role: dados.papel },
+  });
+
+  // ENVIO FORA DA TRANSACTION, sempre. Manter uma transaction aberta
+  // enquanto se espera uma API externa prende conexão do pool pelo tempo
+  // de rede de terceiro. E a ordem importa: o convite já está PERSISTIDO
+  // quando o envio é tentado, então uma falha do Resend deixa um convite
+  // válido e reenviável — nunca um estado incoerente.
+  const { enviado } = await enviarConviteDoMembro(organizationId, email, token, session.user.name);
+
+  revalidatePath("/app/usuarios");
+  return sucesso(
+    enviado
+      ? "Convite enviado."
+      : "Convite criado, mas o e-mail não pôde ser enviado agora. Use “Reenviar convite”."
+  );
+}
+
+// Compartilhado por convidarUsuario e reenviarConviteUsuario.
+async function enviarConviteDoMembro(
+  organizationId: string,
+  email: string,
+  token: string,
+  nomeQuemConvidou: string | null | undefined
+): Promise<{ enviado: boolean }> {
+  const [organizacao, usuario] = await Promise.all([
+    prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true },
+    }),
+    prisma.user.findUnique({ where: { email }, select: { active: true } }),
+  ]);
+  return enviarEmailConviteMembro({
+    organizationId,
+    para: email,
+    nomeOrganizacao: organizacao?.name ?? "sua imobiliária",
+    nomeQuemConvidou: nomeQuemConvidou || "A administração",
+    linkConvite: linkConvite(token),
+    jaTemConta: Boolean(usuario?.active),
+  });
+}
+
+// =======================================================================
+// Reenviar convite (Fase 25)
+// =======================================================================
+// Semântica EXPLÍCITA, a mesma já provada no convite do Platform Admin:
+// os convites não usados desta pessoa nesta organização são APAGADOS
+// antes de o novo nascer. Nunca dois links válidos ao mesmo tempo —
+// se existissem, revogar um convite deixaria de significar alguma coisa.
+export async function reenviarConviteUsuario(
+  membershipId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
 ): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
@@ -41,67 +218,56 @@ export async function criarUsuario(
     return erroAcessoNegado();
   }
 
-  const parsed = criarUsuarioSchema.safeParse(Object.fromEntries(formData.entries()));
-  if (!parsed.success) return erroValidacao(parsed.error);
-  const dados = parsed.data;
-
-  // Só quem já é OWNER pode conceder o papel de OWNER a alguém — um ADMIN
-  // não pode criar um usuário já nascendo com o papel mais alto.
-  if (dados.papel === "OWNER" && session.user.role !== "OWNER") {
-    return erroAcessoNegado(
-      "Apenas o proprietário pode conceder o papel de proprietário."
-    );
-  }
-
-  const existente = await prisma.user.findUnique({
-    where: { email: dados.email },
-  });
-  if (existente) {
-    return erroGenerico("Já existe um usuário com esse e-mail.");
-  }
-
   const organizationId = await requireOrganizationId();
-  try {
-    await verificarLimiteUsuarios(organizationId);
-  } catch (erro) {
-    if (erro instanceof LimiteDoPlanoError) {
-      return erroGenerico(erro.message);
-    }
-    throw erro;
+  // O vínculo precisa ser DESTA organização — id de outro tenant
+  // simplesmente não é encontrado, com a mesma mensagem de sempre.
+  const vinculo = await prisma.organizationMember.findFirst({
+    where: { id: membershipId, organizationId, status: "INVITED" },
+    select: { userId: true, user: { select: { email: true } } },
+  });
+  if (!vinculo) {
+    return erroGenerico("Não há convite pendente para este usuário.");
   }
 
-  const senhaHash = await bcrypt.hash(dados.senha, 10);
+  const token = gerarTokenAcesso();
+  const tokenHash = hashToken(token);
+  const expiresAt = expiracaoConvite();
 
-  const user = await prisma.user.create({
-    data: {
-      name: dados.nome,
-      email: dados.email,
-      passwordHash: senhaHash,
-    },
-  });
-
-  await prisma.organizationMember.create({
-    data: { organizationId, userId: user.id, role: dados.papel },
+  await prisma.$transaction(async (tx) => {
+    // LOCK DE LINHA no vínculo antes de mexer nos tokens. Sem ele, dois
+    // reenvios simultâneos não enxergam as escritas um do outro (cada
+    // transaction apaga o que via ANTES e insere o seu), e a organização
+    // termina com DOIS convites válidos — o que faz "revogar o anterior"
+    // deixar de significar alguma coisa. O vínculo é o mutex natural:
+    // é exatamente o recurso que os dois pedidos disputam.
+    await tx.$queryRaw`SELECT id FROM organization_members WHERE id = ${membershipId} FOR UPDATE`;
+    await tx.inviteToken.deleteMany({
+      where: { userId: vinculo.userId, organizationId, usedAt: null },
+    });
+    await tx.inviteToken.create({
+      data: { userId: vinculo.userId, organizationId, tokenHash, expiresAt },
+    });
   });
 
   await logActivity({
     organizationId,
     userId: session.user.id,
-    entity: "User",
-    entityId: user.id,
-    action: "created",
-    payload: { email: user.email, role: dados.papel },
+    entity: "OrganizationMember",
+    entityId: membershipId,
+    action: "member_invite_resent",
   });
 
-  // Redesenho de Usuários — não redireciona mais (era redirect("/app/usuarios"),
-  // que forçava uma navegação de página inteira mesmo quando o formulário
-  // agora abre dentro de um Sheet lateral, NovoUsuarioSheet). Mesmo padrão já
-  // adotado em criarPessoa (Fase de redesenho de Clientes): devolve sucesso
-  // e deixa o componente cliente decidir o que fazer (fechar o Sheet), a
-  // revalidação de path continua garantindo que a listagem reflita o novo
-  // usuário assim que a página for revisitada/revalidada.
+  const { enviado } = await enviarConviteDoMembro(
+    organizationId,
+    vinculo.user.email,
+    token,
+    session.user.name
+  );
+
   revalidatePath("/app/usuarios");
-  return sucesso("Usuário cadastrado.");
+  return enviado
+    ? sucesso("Convite reenviado.")
+    : erroGenerico("O e-mail não pôde ser enviado agora. Tente novamente em instantes.");
 }
 
 // Compartilhado entre atualizarUsuario e alternarStatusUsuario — nunca
@@ -137,11 +303,9 @@ const atualizarUsuarioSchema = z.object({
     .email("E-mail de contato inválido.")
     .optional()
     .or(z.literal("")),
-  novaSenha: z
-    .string()
-    .min(6, "A nova senha precisa ter ao menos 6 caracteres.")
-    .optional()
-    .or(z.literal("")),
+  // Mesma política de senha do convite e da recuperação (@/lib/senha) —
+  // um único lugar decide o que é uma senha aceitável no produto.
+  novaSenha: senhaSchema.optional().or(z.literal("")),
   // Perfil público do profissional. Aceita os campos SEMPRE (mesmo com a
   // exibição desmarcada) de propósito: dá pra montar o perfil antes de
   // publicar, e desmarcar depois não apaga nada. Quem decide o que vai ao
@@ -236,8 +400,16 @@ export async function atualizarUsuario(
     data: {
       name: dados.nome,
       avatarUrl: dados.foto || null,
+      // Fase 25 — trocar a senha de alguém DERRUBA as sessões daquela
+      // pessoa (passwordChangedAt, ver requireOrganizationId). É o
+      // ponto: se um administrador precisou redefinir a senha de um
+      // membro, quem estava usando a senha antiga tem de sair. Vale
+      // inclusive para quem edita a si mesmo — que volta ao login.
       ...(dados.novaSenha
-        ? { passwordHash: await bcrypt.hash(dados.novaSenha, 10) }
+        ? {
+            passwordHash: await bcrypt.hash(dados.novaSenha, CUSTO_BCRYPT),
+            passwordChangedAt: new Date(),
+          }
         : {}),
     },
   });

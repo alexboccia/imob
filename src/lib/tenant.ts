@@ -14,6 +14,30 @@ const buscarStatusOrganization = cache(async (organizationId: string) => {
   });
 });
 
+// Fase 25 — estado VIVO da identidade e do vínculo, uma vez por request.
+//
+// A sessão é JWT (src/lib/auth.config.ts): nada é persistido, então o
+// token continua válido até expirar mesmo que, no meio do caminho, o
+// vínculo tenha sido suspenso ou a senha trocada. Sem esta checagem:
+//
+//   - suspender um membro NÃO o expulsava. Ele seguia trabalhando com o
+//     token que já tinha, até 30 dias;
+//   - redefinir a senha não derrubava a sessão de quem a roubou — a
+//     vítima trocava a chave e o invasor continuava dentro.
+//
+// Aqui é o lugar certo porque já é o portão por onde toda página e toda
+// action autenticada de /app passa, e ele já revalida no banco (org
+// ativa, trial). cache() por request mantém o custo em UMA consulta.
+const buscarEstadoDaSessao = cache(
+  async (organizationId: string, userId: string) => {
+    const membership = await prisma.organizationMember.findFirst({
+      where: { organizationId, userId },
+      select: { status: true, user: { select: { active: true, passwordChangedAt: true } } },
+    });
+    return membership;
+  }
+);
+
 // Resolve o tenant da sessão autenticada (área /app). Redireciona pro
 // login se não houver sessão, pra /app/suspenso se a organização foi
 // suspensa pelo Super Admin (/platform), e pra /app/trial-expirado (Fase
@@ -33,6 +57,21 @@ export async function requireOrganizationId(): Promise<string> {
 
   const organization = await buscarStatusOrganization(session.user.organizationId);
   if (!organization || !organization.active) redirect("/app/suspenso");
+
+  const estado = await buscarEstadoDaSessao(session.user.organizationId, session.user.id);
+  // Vínculo que deixou de ser ACTIVE (suspenso, ou removido) e identidade
+  // desativada acabam a sessão imediatamente, na próxima navegação.
+  if (!estado || estado.status !== "ACTIVE" || !estado.user.active) {
+    redirect("/app/login");
+  }
+  // Sessão emitida ANTES da última troca de senha não vale mais. null em
+  // passwordChangedAt significa "nunca trocou": todo usuário existente no
+  // dia do deploy cai neste caso e NENHUMA sessão em curso é derrubada.
+  // A comparação é em segundos porque `iat` do JWT é em segundos.
+  if (estado.user.passwordChangedAt && session.user.emitidaEm !== undefined) {
+    const trocadaEm = Math.floor(estado.user.passwordChangedAt.getTime() / 1000);
+    if (session.user.emitidaEm < trocadaEm) redirect("/app/login");
+  }
 
   const estadoAcesso = await resolverEstadoAcessoOrganizacao(session.user.organizationId);
   if (estadoAcesso.bloqueado && estadoAcesso.motivo === "TRIAL_EXPIRADO") {

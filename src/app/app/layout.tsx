@@ -10,7 +10,11 @@ import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
 import { hasModule } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
-import { temPapel, PAPEIS_RESOLUCAO_IDENTIDADE } from "@/lib/authorization";
+import {
+  temPapel,
+  PAPEIS_RESOLUCAO_IDENTIDADE,
+  PAPEIS_GESTAO_CONFIGURACOES,
+} from "@/lib/authorization";
 
 const TODOS_NAV_LINKS: {
   href: string;
@@ -43,7 +47,17 @@ const TODOS_NAV_LINKS: {
   { href: "/app/caracteristicas", label: "Características" },
   { href: "/app/tipos-imovel", label: "Tipos de imóvel" },
   { href: "/app/usuarios", label: "Usuários" },
-  { href: "/app/configuracoes", label: "Configurações" },
+  // Fase 25 — fecha a dívida que a Fase 24 deixou registrada ao criar o
+  // recorte por papel. /app/configuracoes JÁ recusa quem não é
+  // OWNER/ADMIN (gate de página da Fase 23), mas o item continuava no
+  // menu: um corretor clicava e recebia "apenas administradores podem
+  // alterar". Oferecer uma porta e negá-la na entrada é pior que não
+  // mostrar a porta.
+  //
+  // Só esta entrada muda. /app/usuarios e /app/manutencao continuam
+  // visíveis para todos DE PROPÓSITO: as duas telas renderizam conteúdo
+  // real e útil em modo somente-leitura, não uma recusa.
+  { href: "/app/configuracoes", label: "Configurações", papeis: PAPEIS_GESTAO_CONFIGURACOES },
   { href: "/app/manutencao", label: "Manutenção" },
 ];
 

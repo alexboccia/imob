@@ -40,10 +40,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const senhaValida = await bcrypt.compare(senha, user.passwordHash);
         if (!senhaValida) return falhou();
 
-        // Um usuário pode pertencer a várias organizações no futuro; por
-        // enquanto, usamos o primeiro vínculo ativo.
+        // Um usuário PODE pertencer a várias organizações — e, desde a
+        // Fase 25, isso deixou de ser hipótese: convidar alguém que já
+        // tem conta cria um segundo vínculo de verdade.
+        //
+        // orderBy EXPLÍCITO por isso. Sem ele, `findFirst` devolvia um
+        // vínculo qualquer entre os ativos, e a MESMA pessoa podia cair
+        // em organizações diferentes a cada login — sem nada na tela
+        // explicando por quê. Foi reproduzido: uma suíte inteira passou
+        // a falhar porque o login de um usuário com dois vínculos
+        // aterrissou no tenant errado.
+        //
+        // O critério é o vínculo MAIS ANTIGO: a organização onde a
+        // pessoa já trabalhava continua sendo a casa dela, e aceitar um
+        // convite novo não muda para onde ela entra. Escolher o mais
+        // recente faria um convite mudar silenciosamente o destino do
+        // login de alguém.
+        //
+        // Isto é determinismo, não seleção de tenant: um seletor de
+        // organização de verdade (trocar de imobiliária dentro do
+        // produto) continua sendo trabalho futuro — ver relatório.
         const membership = await prisma.organizationMember.findFirst({
           where: { userId: user.id, status: "ACTIVE" },
+          orderBy: { createdAt: "asc" },
           include: { organization: { select: { active: true } } },
         });
         // Checagem é da organização DESTE vínculo específico, não global —

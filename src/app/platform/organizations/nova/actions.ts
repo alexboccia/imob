@@ -6,7 +6,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformOperator } from "@/lib/platform/auth";
 import { logPlatformActivity } from "@/lib/platform/audit";
-import { gerarTokenConvite, hashToken, expiracaoConvite } from "@/lib/platform/invite";
+import { gerarTokenAcesso, hashToken, expiracaoConvite } from "@/lib/acesso-token";
 import { enviarEmailConviteOwner } from "@/lib/email";
 import { logger } from "@/lib/logger";
 import { type ActionState, erroGenerico, erroValidacao } from "@/lib/action-result";
@@ -60,7 +60,7 @@ export async function criarOrganization(
   // Gerado ANTES da transação (função pura, não bate no banco) — só o
   // hash é persistido; o token bruto só existe em memória até o e-mail
   // ser montado logo abaixo, nunca é logado nem gravado em lugar nenhum.
-  const token = gerarTokenConvite();
+  const token = gerarTokenAcesso();
   const tokenHash = hashToken(token);
   const expiresAt = expiracaoConvite();
 
@@ -129,7 +129,7 @@ export async function criarOrganization(
         },
       });
 
-      await tx.ownerInviteToken.create({
+      await tx.inviteToken.create({
         data: {
           userId: user.id,
           organizationId: organization.id,

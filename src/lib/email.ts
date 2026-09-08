@@ -164,3 +164,136 @@ export async function enviarEmailConviteOwner({
     return { enviado: false };
   }
 }
+
+// =======================================================================
+// Convite de membro (Fase 25)
+// =======================================================================
+// Separado de enviarEmailConviteOwner porque a mensagem é outra: aqui
+// existe quem convidou e existe um papel na equipe, e o destinatário
+// pode já ter conta. O que os dois compartilham é o essencial:
+// NENHUMA SENHA no corpo, link de uso único, prazo declarado.
+export async function enviarEmailConviteMembro({
+  organizationId,
+  para,
+  nomeOrganizacao,
+  nomeQuemConvidou,
+  linkConvite,
+  jaTemConta,
+}: {
+  organizationId: string;
+  para: string;
+  nomeOrganizacao: string;
+  // Quem convidou aparece porque um convite sem remetente humano parece
+  // phishing — é a informação que permite ao destinatário reconhecer
+  // que o e-mail era esperado.
+  nomeQuemConvidou: string;
+  linkConvite: string;
+  jaTemConta: boolean;
+}): Promise<{ enviado: boolean }> {
+  const cliente = obterCliente();
+  if (!cliente) {
+    logger.warn("RESEND_API_KEY não configurada — convite de membro não foi enviado", {
+      organizationId,
+      modulo: "email",
+    });
+    return { enviado: false };
+  }
+
+  const remetente = await resolverRemetente(organizationId);
+  if (!remetente) {
+    logger.warn("RESEND_FROM_EMAIL não configurado — convite de membro não foi enviado", {
+      organizationId,
+      modulo: "email",
+    });
+    return { enviado: false };
+  }
+
+  const linhas = [
+    `${nomeQuemConvidou} convidou você para a equipe de "${nomeOrganizacao}" no EasyMob.`,
+    "",
+    jaTemConta
+      ? "Você já tem uma conta no EasyMob. Aceite o convite pelo link abaixo — sua senha continua a mesma:"
+      : "Crie sua senha e ative sua conta pelo link abaixo:",
+    linkConvite,
+    "",
+    "Este link expira em 7 dias e só pode ser usado uma vez.",
+  ];
+
+  try {
+    await cliente.emails.send({
+      from: remetente,
+      to: para,
+      subject: `Convite para a equipe de ${nomeOrganizacao} — EasyMob`,
+      text: linhas.join("\n"),
+    });
+    return { enviado: true };
+  } catch (erro) {
+    // NUNCA logar linkConvite: ele contém o token bruto.
+    logger.error("Falha ao enviar convite de membro", erro, {
+      organizationId,
+      modulo: "email",
+    });
+    return { enviado: false };
+  }
+}
+
+// =======================================================================
+// Recuperação de senha (Fase 25)
+// =======================================================================
+// Sem organizationId: a senha é do User, global. Usar o remetente de uma
+// organização aqui criaria uma dependência perigosa — a recuperação de
+// quem é membro de duas imobiliárias passaria a depender de qual delas
+// foi escolhida, e o e-mail revelaria ao destinatário de qual conta se
+// trata antes mesmo de ele provar identidade. Remetente global, sempre.
+export async function enviarEmailRecuperacaoSenha({
+  para,
+  linkRedefinicao,
+}: {
+  para: string;
+  linkRedefinicao: string;
+}): Promise<{ enviado: boolean }> {
+  const cliente = obterCliente();
+  if (!cliente) {
+    // Sem e-mail do destinatário no log: quem pediu recuperação é PII, e
+    // este aviso é sobre CONFIGURAÇÃO, não sobre a pessoa.
+    logger.warn("RESEND_API_KEY não configurada — recuperação de senha não foi enviada", {
+      modulo: "email",
+    });
+    return { enviado: false };
+  }
+
+  const remetente = process.env.RESEND_FROM_EMAIL ?? null;
+  if (!remetente) {
+    logger.warn("RESEND_FROM_EMAIL não configurado — recuperação de senha não foi enviada", {
+      modulo: "email",
+    });
+    return { enviado: false };
+  }
+
+  const linhas = [
+    "Recebemos um pedido para redefinir a senha da sua conta no EasyMob.",
+    "",
+    "Escolha uma nova senha pelo link abaixo:",
+    linkRedefinicao,
+    "",
+    "Este link expira em 60 minutos e só pode ser usado uma vez.",
+    "",
+    "Se você não pediu isso, ignore este e-mail: sua senha continua a mesma.",
+  ];
+
+  try {
+    await cliente.emails.send({
+      from: remetente,
+      to: para,
+      subject: "Redefinir sua senha — EasyMob",
+      text: linhas.join("\n"),
+    });
+    return { enviado: true };
+  } catch (erro) {
+    // NUNCA logar linkRedefinicao nem o e-mail do destinatário.
+    logger.error("Falha ao enviar e-mail de recuperação de senha", erro, {
+      modulo: "email",
+    });
+    return { enviado: false };
+  }
+}

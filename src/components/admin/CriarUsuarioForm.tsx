@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef } from "react";
-import { criarUsuario } from "@/app/app/usuarios/actions";
+import { convidarUsuario } from "@/app/app/usuarios/actions";
 import { FormDisclosure } from "@/components/admin/FormDisclosure";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,9 +20,11 @@ import {
 // (inline, sempre montado na página) usava <FormDisclosure> como moldura;
 // o redesenho de Usuários passou a abrir este mesmo formulário dentro de
 // um Sheet (NovoUsuarioSheet) — moldura diferente, mesmos campos/
-// validação/action. `criarUsuario` não redireciona mais (ver comentário
-// na action) — só devolve sucesso, e é este componente que reage (reseta
-// o form, avisa o Sheet pra fechar).
+// validação/action. A action não redireciona — só devolve sucesso, e é
+// este componente que reage (reseta o form, avisa o Sheet pra fechar).
+//
+// Fase 25 — o campo de SENHA saiu. Quem administra não escolhe mais a
+// senha de ninguém: a pessoa convidada recebe um link e cria a dela.
 export function CriarUsuarioForm({
   envolverEmDisclosure = true,
   onSuccess,
@@ -31,7 +33,7 @@ export function CriarUsuarioForm({
   onSuccess?: () => void;
 } = {}) {
   const [estado, formAction, pendente] = useActionState(
-    criarUsuario,
+    convidarUsuario,
     ESTADO_INICIAL_ACAO
   );
   const formRef = useRef<HTMLFormElement>(null);
@@ -54,16 +56,6 @@ export function CriarUsuarioForm({
         <Input name="email" type="email" placeholder="E-mail" required />
         <ErroCampo erros={estado.fieldErrors?.email} />
       </div>
-      <div>
-        <Input
-          name="senha"
-          type="password"
-          placeholder="Senha (mín. 6 caracteres)"
-          required
-          minLength={6}
-        />
-        <ErroCampo erros={estado.fieldErrors?.senha} />
-      </div>
       <Select name="papel" defaultValue="BROKER">
         <SelectTrigger className="w-full">
           <SelectValue />
@@ -75,15 +67,20 @@ export function CriarUsuarioForm({
           <SelectItem value="ASSISTANT">Assistente</SelectItem>
         </SelectContent>
       </Select>
+      <p className="col-span-2 text-xs text-muted-foreground">
+        A pessoa recebe um e-mail para criar a própria senha. O convite vale por 7 dias.
+      </p>
       {!estado.success && estado.message && (
-        <p className="col-span-2 text-sm text-destructive">{estado.message}</p>
+        <p role="alert" className="col-span-2 text-sm text-destructive">
+          {estado.message}
+        </p>
       )}
       <Button
         type="submit"
         disabled={pendente}
         className="col-span-2 justify-self-start"
       >
-        {pendente ? "Cadastrando..." : "Cadastrar"}
+        {pendente ? "Enviando convite..." : "Enviar convite"}
       </Button>
     </form>
   );

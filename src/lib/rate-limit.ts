@@ -28,6 +28,17 @@ export const LIMITES = {
   //
   // Balde por organização também: protege UM tenant de ter as métricas
   // inundadas, sem que o abuso contra ele afete os outros.
+  // Recuperação de senha (Fase 25). Endpoint público e abusável de duas
+  // formas distintas, por isso dois baldes:
+  //   por IP    — impede alguém de varrer uma lista de e-mails para
+  //               descobrir quais existem (ainda que a resposta seja
+  //               genérica, o volume em si é o ataque);
+  //   por e-mail — impede usar o produto como máquina de spam contra uma
+  //               vítima específica, inundando a caixa dela.
+  // A chave de e-mail é HASH (hashCurto), nunca o endereço: PII não entra
+  // no armazenamento de limite.
+  recuperacaoPorIp: { limite: 10, janelaSegundos: 60 * 60 },
+  recuperacaoPorEmail: { limite: 5, janelaSegundos: 60 * 60 },
   analyticsPorIp: { limite: 300, janelaSegundos: 10 * 60 },
   analyticsPorOrganizacao: { limite: 5000, janelaSegundos: 10 * 60 },
 } as const;
@@ -195,6 +206,30 @@ async function aplicarChecagens(store: KvStore, checagens: ChecagemLimite[]): Pr
   }
   if (motivo) return { permitido: false, motivo, retryAfterSegundos };
   return { permitido: true };
+}
+
+// Recuperação de senha (Fase 25). Fail-open como todo o resto: sem
+// Upstash configurado, quem chama simplesmente segue — a ausência de
+// rate limit nunca pode impedir alguém de recuperar a própria conta.
+export async function verificarLimiteRecuperacaoSenha(
+  store: KvStore,
+  params: { ip: string; emailNormalizado: string | null }
+): Promise<ResultadoLimite> {
+  const { limite: limiteIp, janelaSegundos: janelaIp } = LIMITES.recuperacaoPorIp;
+  const { limite: limiteEmail, janelaSegundos: janelaEmail } = LIMITES.recuperacaoPorEmail;
+
+  const checagens: ChecagemLimite[] = [
+    { chave: `rl:reset:ip:${params.ip}`, limite: limiteIp, janelaSegundos: janelaIp, motivo: "ip" },
+  ];
+  if (params.emailNormalizado) {
+    checagens.push({
+      chave: `rl:reset:email:${hashCurto(params.emailNormalizado)}`,
+      limite: limiteEmail,
+      janelaSegundos: janelaEmail,
+      motivo: "email",
+    });
+  }
+  return aplicarChecagens(store, checagens);
 }
 
 export async function verificarLimiteFormulario(
