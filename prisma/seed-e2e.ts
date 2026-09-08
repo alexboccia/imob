@@ -431,6 +431,22 @@ async function main() {
     data: { commercialVisibility: "RESTRICTED" },
   });
 
+  // Fase 24 — Organização H: dedicada à CAPTAÇÃO AMBÍGUA, pelo mesmo
+  // motivo estrutural das organizações C-G. Ela carrega duas pessoas que
+  // colidem de propósito (uma dona do e-mail, outra do telefone), e é
+  // isso que faz o formulário público cair no conflito de identidade.
+  // Plantar essa colisão em qualquer organização existente mudaria a
+  // contagem de clientes que outros specs afirmam.
+  const orgCaptacao = await garantirOrganizacaoComDono({
+    slug: "e2e-org-captacao",
+    timezone: "UTC",
+    name: "Organização E2E Captação",
+    planId: planoCompleto.id,
+    email: "owner-captacao@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+
   // Specs como "criar imóvel" e "formulário público cria lead" criam dados
   // novos a cada rodada — sem isso o banco de teste acumularia lixo entre
   // execuções do Playwright. Person cascateia Interaction ao ser apagada;
@@ -443,6 +459,7 @@ async function main() {
     orgCentral.organization.id,
     orgFuso.organization.id,
     orgRestrita.organization.id,
+    orgCaptacao.organization.id,
   ];
   // Usuários criados por usuarios.spec.ts a cada rodada (Fase 8 — correção
   // de causa raiz de um flake real): o seed nunca os limpava, e a
@@ -475,6 +492,10 @@ async function main() {
     "owner-restrita@e2e.test",
     "ana-restrita@e2e.test",
     "bruno-restrita@e2e.test",
+    // Fase 24 — Organização H (captação ambígua): a dona e o corretor,
+    // que precisa sobreviver à limpeza para provar o portão de papel.
+    "owner-captacao@e2e.test",
+    "corretor-captacao@e2e.test",
   ];
 
   // Correção completa do acúmulo (a da Fase 8 cobria só o prefixo
@@ -543,6 +564,11 @@ async function main() {
     await prisma.user.deleteMany({ where: { id: { in: idsUsuarios } } });
   }
 
+  // Fase 24 — captações pendentes de rodadas anteriores. Person.delete
+  // apenas ANULA resolvedPersonId (FK opcional, SET NULL), então nada
+  // aqui sai por cascade: sem esta linha a fila de identificação
+  // cresceria a cada execução e o spec passaria a ver captações antigas.
+  await prisma.leadCapture.deleteMany({ where: { organizationId: { in: idsOrgs } } });
   // Eventos digitais (Fase 6) — apagados explicitamente: os imóveis de id
   // fixo sobrevivem ao deleteMany abaixo, então o cascade deles não
   // limparia nada e as contagens do funil cresceriam a cada rodada.
@@ -1411,6 +1437,63 @@ async function main() {
     },
   });
 
+  // =====================================================================
+  // Fase 24 — colisão de identidade da Organização H
+  // =====================================================================
+  // Duas pessoas distintas, cada uma dona de UM dos dados de contato. Um
+  // visitante que envia os dois ao mesmo tempo não é nenhuma das duas com
+  // certeza — e o sistema, em vez de escolher, guarda o contato.
+  //
+  // Os valores normalizados são escritos explicitamente porque é por eles
+  // que o dedupe procura; deixá-los ao acaso tornaria o conflito
+  // dependente de detalhe de implementação em vez de fixture.
+  await prisma.person.create({
+    data: {
+      organizationId: orgCaptacao.organization.id,
+      name: "Cliente do E-mail",
+      email: "colisao@e2e.test",
+      emailNormalized: "colisao@e2e.test",
+      roles: ["LEAD"],
+    },
+  });
+  // Um BROKER desta mesma organização: é ele que prova o outro lado do
+  // portão — a fila é gerencial, e quem não decide identidade não vê a
+  // tela nem o item de menu.
+  const usuarioCorretorCaptacao = await prisma.user.upsert({
+    where: { email: "corretor-captacao@e2e.test" },
+    update: { passwordHash: await bcrypt.hash(senha, 10) },
+    create: {
+      name: "Corretor Captação",
+      email: "corretor-captacao@e2e.test",
+      passwordHash: await bcrypt.hash(senha, 10),
+    },
+    select: { id: true },
+  });
+  await prisma.organizationMember.upsert({
+    where: {
+      organizationId_userId: {
+        organizationId: orgCaptacao.organization.id,
+        userId: usuarioCorretorCaptacao.id,
+      },
+    },
+    update: { role: "BROKER" },
+    create: {
+      organizationId: orgCaptacao.organization.id,
+      userId: usuarioCorretorCaptacao.id,
+      role: "BROKER",
+    },
+  });
+
+  await prisma.person.create({
+    data: {
+      organizationId: orgCaptacao.organization.id,
+      name: "Cliente do Telefone",
+      phone: "(11) 94444-0001",
+      phoneNormalized: "11944440001",
+      roles: ["LEAD"],
+    },
+  });
+
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);
   console.log(
@@ -1419,7 +1502,9 @@ async function main() {
   console.log(
     `  Org D (dedicada ao Analytics, CRM habilitado): slug=${orgAnalytics.organization.slug} login=owner-analytics@e2e.test`,
     `  Org E (dedicada à Central de trabalho): slug=${orgCentral.organization.slug} login=owner-central@e2e.test`,
-    `  Org F (dedicada ao fuso, America/Sao_Paulo): slug=${orgFuso.organization.slug} login=owner-fuso@e2e.test`
+    `  Org F (dedicada ao fuso, America/Sao_Paulo): slug=${orgFuso.organization.slug} login=owner-fuso@e2e.test`,
+    `  Org G (dedicada à visibilidade restrita): slug=${orgRestrita.organization.slug} login=owner-restrita@e2e.test`,
+    `  Org H (dedicada à captação ambígua): slug=${orgCaptacao.organization.slug} login=owner-captacao@e2e.test`
   );
 }
 

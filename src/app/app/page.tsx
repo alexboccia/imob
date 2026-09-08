@@ -11,6 +11,12 @@ import { CentralTrabalho } from "@/components/admin/CentralTrabalho";
 import { buscarVisaoEquipe, resolverVisaoCentral } from "@/lib/central-equipe";
 import { CentralEquipe } from "@/components/admin/CentralEquipe";
 import { AlternadorVisaoCentral } from "@/components/admin/AlternadorVisaoCentral";
+import { temPapel, PAPEIS_RESOLUCAO_IDENTIDADE } from "@/lib/authorization";
+import {
+  buscarCaptacoesPendentes,
+  contarCaptacoesPendentes,
+} from "@/lib/captacao-pendente";
+import { CaptacoesPendentes } from "@/components/admin/CaptacoesPendentes";
 import { buscarMetricasDashboard } from "@/lib/dashboard";
 import { contarAgenda } from "@/lib/agenda";
 import { DashboardKpiCards } from "@/components/admin/DashboardKpiCards";
@@ -73,6 +79,24 @@ export default async function DashboardPage({
       : null;
   const equipe = verEquipe ? await buscarVisaoEquipe(organizationId, fuso) : null;
 
+  // Fase 24 — contatos que o site aceitou mas cuja identidade ficou
+  // ambígua. Aparece na Home porque é trabalho ATRASADO por definição: o
+  // cliente já escreveu e ninguém respondeu ainda. Some por completo
+  // quando a fila está vazia (o caso normal) — um card permanente de
+  // "nenhum contato pendente" seria ruído diário.
+  //
+  // Só para quem pode resolver: para um BROKER a Home continua idêntica.
+  const podeIdentificar = temCrm && temPapel(session?.user.role, PAPEIS_RESOLUCAO_IDENTIDADE);
+  const captacoesPendentes = podeIdentificar
+    ? await contarCaptacoesPendentes(organizationId)
+    : 0;
+  // A contagem vem primeiro e a lista só é buscada se houver algo: no
+  // caso normal (fila vazia) isso custa um COUNT e nada mais.
+  const captacoes =
+    captacoesPendentes > 0
+      ? await buscarCaptacoesPendentes(organizationId, { limite: 3 })
+      : [];
+
   const [metricas, agenda] = await Promise.all([
     buscarMetricasDashboard(organizationId, fuso),
     // Reaproveita contarAgenda (já existente, já testado via H.4/H.5) só
@@ -119,6 +143,15 @@ export default async function DashboardPage({
           um BROKER a Home continua sendo, literalmente, a mesma tela de
           antes — nenhum controle novo, nenhum aviso de acesso negado. */}
       {podeVerEquipe && <AlternadorVisaoCentral visaoAtual={visao} />}
+
+      {captacoes.length > 0 && (
+        <CaptacoesPendentes
+          captacoes={captacoes}
+          total={captacoesPendentes}
+          fuso={fuso}
+          href="/app/captacoes"
+        />
+      )}
 
       {central && <CentralTrabalho dados={central} fuso={fuso} />}
       {equipe && <CentralEquipe dados={equipe} fuso={fuso} />}

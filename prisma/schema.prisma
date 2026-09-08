@@ -171,6 +171,7 @@ model Person {
 
   ownedProperties     Property[]          @relation("PropertyOwner")
   interactions        Interaction[]
+  leadCapturesResolvidas LeadCapture[]    @relation("LeadCaptureResolvedPerson")
   deals               DealPerson[]
   preference          PersonPreference?
   propertyInterests   PropertyInterest[]
@@ -310,6 +311,7 @@ model Property {
   owner   Person? @relation("PropertyOwner", fields: [ownerId], references: [id])
 
   media               Media[]
+  leadCaptures        LeadCapture[]
   statusHistory       PropertyStatusHistory[]
   interactions        Interaction[]
   analyticsEvents     PropertyAnalyticsEvent[]
@@ -415,6 +417,7 @@ model Interaction {
 
   // Fase 8 — oportunidades criadas explicitamente a partir deste contato.
   originatedInterests PropertyInterest[] @relation("PropertyInterestSourceInteraction")
+  leadCapture         LeadCapture?       @relation("LeadCaptureResolvedInteraction")
 
   @@index([personId])
   @@map("interactions")
@@ -1193,6 +1196,7 @@ model OrganizationMember {
   registeredPayments         PropertyInterestParticipantPayment[] @relation("PaymentCreatedByMember")
   cancelledPayments          PropertyInterestParticipantPayment[] @relation("PaymentCancelledByMember")
   assignedPeople             Person[]                             @relation("PersonAssignedMember")
+  leadCapturesResolvidas     LeadCapture[]                        @relation("LeadCaptureResolvedByMember")
   interactions               Interaction[]                        @relation("InteractionMember")
   deals                      Deal[]                               @relation("DealMember")
   createdScheduledActivities ScheduledActivity[]                  @relation("ScheduledActivityCreatedByMember")
@@ -1289,6 +1293,7 @@ model Organization {
   emailDomain                         OrganizationEmailDomain?
   propertyInterestParticipants        PropertyInterestParticipant[]
   propertyInterestParticipantPayments PropertyInterestParticipantPayment[]
+  leadCaptures                        LeadCapture[]
 
   @@map("organizations")
 }
@@ -1759,6 +1764,116 @@ enum OrganizationDomainStatus {
 // motivo de OwnerInviteToken: é resolvido pelo proxy (src/proxy.ts) A
 // PARTIR do hostname da requisição, ANTES de qualquer contexto de tenant
 // existir (é o próprio dado que estabelece qual é o tenant).
+
+// =====================================================================
+// Captação pública com identidade ambígua (Fase 24)
+// =====================================================================
+// O PROBLEMA: o dedupe público casa Person por e-mail OU por telefone.
+// Quando o e-mail bate numa Person e o telefone bate em OUTRA, não há
+// como saber quem é o visitante — e escolher qualquer uma seria
+// inventar identidade. Até aqui a resposta era não gravar nada: o lead
+// sumia do CRM e o visitante recebia "enviado com sucesso".
+//
+// A recusa em escolher está certa. A perda do fato comercial não.
+//
+// ESTE MODELO É UM FATO DE CAPTAÇÃO, NÃO UMA TERCEIRA IDENTIDADE.
+// Deliberadamente NÃO é uma Person: criar uma Person aqui produziria um
+// cadastro falso, com emailNormalized/phoneNormalized forçosamente
+// nulos (os valores pertencem às duas Person existentes), portanto
+// eternamente não-deduplicável — e contaminaria Clientes, Analytics,
+// matching e o próprio dedupe. Também não é uma Interaction: aquela
+// exige personId, que é justamente o que não sabemos.
+//
+// CANDIDATOS NÃO SÃO PERSISTIDOS. Guardar candidateEmailPersonId /
+// candidatePhonePersonId congelaria um palpite: entre a captação e a
+// resolução a Person pode ser editada, ter e-mail/telefone trocados ou
+// ser desativada, e o id salvo passaria a apontar para algo que já não
+// casa. Os candidatos são recalculados na hora de resolver, pelo MESMO
+// caminho que a captação usou — sempre atuais, nunca obsoletos.
+
+// Estado de uma captação pública cuja identidade ficou ambígua
+// (Fase 24). Só dois estados, de propósito: DISMISSED não foi criado
+// porque não há caso de uso comprovado, e um estado de descarte convida
+// a apagar lead real em silêncio — exatamente o dano que esta fase
+// existe para eliminar. Ver dívida registrada no relatório.
+enum LeadCaptureStatus {
+  PENDING
+  RESOLVED
+}
+
+model LeadCapture {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // O que o visitante enviou, exatamente como enviou. É PII e só é
+  // exposto a quem pode resolver (ver PAPEIS_RESOLUCAO_IDENTIDADE).
+  name    String
+  email   String?
+  phone   String?
+  // Mensagem do contato, ou a descrição do imóvel em /anuncie.
+  message String?
+
+  // Derivados NO SERVIDOR na captação, nunca do formulário: `origin`
+  // vem do imóvel já validado contra o tenant, e `role` distingue o
+  // visitante que procura imóvel (LEAD) do proprietário que quer
+  // anunciar (OWNER).
+  origin String
+  role   PersonRole
+
+  // Imóvel já validado contra esta organização na captação. SET NULL:
+  // se o imóvel for removido, a captação continua existindo — o
+  // contato aconteceu de qualquer forma.
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  // Atribuição first-party (Fase 7) — preservada para que a Interaction
+  // criada na resolução nasça com a mesma origem de tráfego do envio.
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  utmContent   String?
+  utmTerm      String?
+  referrerHost String?
+
+  // QUANDO O VISITANTE ENVIOU. É este instante que vai para
+  // Interaction.occurredAt na resolução — um contato de segunda-feira
+  // não pode virar quarta-feira no Analytics porque o gestor resolveu
+  // na quarta.
+  occurredAt DateTime @default(now())
+
+  status LeadCaptureStatus @default(PENDING)
+
+  resolvedAt DateTime?
+  // Quem RESOLVEU. Ator, nunca dono nem autor: a Interaction resultante
+  // continua com memberId null (Fase 15), e ninguém vira
+  // responsibleMemberId por resolver (Fase 11). SET NULL como todo ator.
+  resolvedByMemberId String?
+  resolvedByMember   OrganizationMember? @relation("LeadCaptureResolvedByMember", fields: [resolvedByMemberId], references: [id], onDelete: SetNull)
+  // Person escolhida. SET NULL (padrão de relação opcional, confirmado
+  // na migration): apagar um cliente é operação ordinária de CRM e não
+  // pode ser bloqueada por uma captação antiga. A captação continua
+  // RESOLVED, com resolvedAt e o registro no ActivityLog — o que se
+  // perde é só o ponteiro, junto com a Person que ele apontava.
+  resolvedPersonId String?
+  resolvedPerson   Person? @relation("LeadCaptureResolvedPerson", fields: [resolvedPersonId], references: [id])
+  // @unique é a GARANTIA ESTRUTURAL de que uma captação produz no
+  // máximo uma Interaction: mesmo sob duas resoluções simultâneas, o
+  // banco recusa a segunda. Se a Interaction for apagada depois, este
+  // campo volta a null (SET NULL) — mas `status` continua RESOLVED, que
+  // é o que a guarda de resolução consulta: a captação não reabre.
+  resolvedInteractionId String?      @unique
+  resolvedInteraction   Interaction? @relation("LeadCaptureResolvedInteraction", fields: [resolvedInteractionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // A fila operacional é exatamente (organização, status, mais antigo
+  // primeiro) — este índice é o padrão de acesso, não intuição.
+  @@index([organizationId, status, occurredAt])
+  @@map("lead_captures")
+}
+
 model OrganizationDomain {
   id                String                   @id @default(cuid())
   organizationId    String

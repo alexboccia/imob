@@ -66,6 +66,26 @@ export const ORG_FUSO = {
 // Fase 22 — Organização G, a única do seed com política RESTRITA. Ana e
 // Bruno são BROKER com carteiras separadas, e há um cliente
 // compartilhado entre os dois.
+// Fase 24 — Organização H: dedicada à captação de identidade ambígua.
+export const ORG_CAPTACAO = {
+  slug: "e2e-org-captacao",
+  email: "owner-captacao@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
+export const ORG_CAPTACAO_CORRETOR = {
+  slug: "e2e-org-captacao",
+  email: "corretor-captacao@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
+// Os dois dados que colidem no seed: o e-mail pertence a uma pessoa, o
+// telefone a outra. Enviá-los juntos é o que produz o conflito.
+export const COLISAO_CAPTACAO = {
+  email: "colisao@e2e.test",
+  telefone: "11944440001",
+};
+
 export const ORG_RESTRITA = {
   slug: "e2e-org-restrita",
   email: "owner-restrita@e2e.test",

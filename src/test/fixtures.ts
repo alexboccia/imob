@@ -327,6 +327,9 @@ export async function limparOrganizacao(
 
   // Deal (cascata: DealPerson) e Interaction têm FK restrict pra Property —
   // precisam sair antes do Property.
+  // Fase 24 — LeadCapture aponta para Interaction, Person, Property e
+  // OrganizationMember. Sai antes de todos eles.
+  await prisma.leadCapture.deleteMany({ where: { organizationId } });
   await prisma.deal.deleteMany({ where: { organizationId } });
   await prisma.interaction.deleteMany({ where: { organizationId } });
   // PropertyInterest.propertyId também é RESTRICT (Fase D) — mesma razão,

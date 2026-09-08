@@ -178,7 +178,27 @@ export async function enviarContato(
       source: "WEBSITE",
     });
 
-    if (resolucao.tipo !== "conflito") {
+    if (resolucao.tipo === "conflito") {
+      // Fase 24 — DURABILIDADE ANTES DE SUCESSO. O e-mail e o telefone
+      // apontam para Person diferentes: não dá para saber quem é, e
+      // escolher seria inventar identidade. Em vez de descartar o
+      // contato, o fato é persistido como captação pendente, com tudo
+      // que veio do formulário e o instante do envio. Se este create
+      // falhar, a exceção sobe e o visitante NÃO recebe sucesso.
+      await prisma.leadCapture.create({
+        data: {
+          organizationId,
+          name: nome,
+          email: email || null,
+          phone: telefone || null,
+          message: mensagem,
+          origin: origemDoContato(imovelIdValidado),
+          role: "LEAD",
+          propertyId: imovelIdValidado,
+          ...atribuicaoDoFormulario(formData),
+        },
+      });
+    } else {
       await prisma.interaction.create({
         data: {
           organizationId,
@@ -206,9 +226,11 @@ export async function enviarContato(
   const emailDestino = imovel?.responsibleMember?.contactEmail || configContato.email;
 
   if (emailDestino && (await hasModule(organizationId, "email"))) {
-    // O corretor continua sendo notificado mesmo em conflito de
-    // deduplicação — o contato não pode se perder, só não é vinculado
-    // automaticamente a nenhum Person/Interaction (ver comentário acima).
+    // Fase 24 — o e-mail é NOTIFICAÇÃO, não durabilidade. O contato já
+    // está salvo no banco antes desta linha; se o Resend estiver fora,
+    // o módulo desabilitado ou não houver destinatário, o lead continua
+    // recuperável na fila de contatos pendentes. Antes, este e-mail era
+    // a única chance de o contato sobreviver a um conflito.
     await enviarEmailContato({
       organizationId,
       para: emailDestino,
@@ -277,7 +299,23 @@ export async function enviarAnuncioProprietario(
     // a descrição e ela se perdia por completo — sem interação, sem
     // notes, sem e-mail. O corretor via um lead novo com papel de
     // proprietário e nenhuma pista do que a pessoa queria anunciar.
-    if (resolucao.tipo !== "conflito") {
+    if (resolucao.tipo === "conflito") {
+      // Fase 24 — mesma garantia do formulário de contato: o
+      // proprietário que quer anunciar não pode desaparecer porque o
+      // telefone dele já pertence a outro cadastro.
+      await prisma.leadCapture.create({
+        data: {
+          organizationId,
+          name: nome,
+          email: email || null,
+          phone: telefone,
+          message: `Quer anunciar imóvel: ${descricaoImovel}`,
+          origin: ORIGENS_CAPTACAO.ANUNCIE,
+          role: "OWNER",
+          ...atribuicaoDoFormulario(formData),
+        },
+      });
+    } else {
       await prisma.interaction.create({
         data: {
           organizationId,

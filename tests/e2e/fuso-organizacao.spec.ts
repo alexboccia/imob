@@ -203,10 +203,19 @@ test.describe.serial("trocar o fuso reinterpreta o calendário, sem tocar no dad
   }) => {
     await login(page, ORG_FUSO);
 
-    // Estado inicial: 23:30 local, dentro de HOJE.
+    const cardDe = (titulo: string) =>
+      page
+        .getByRole("heading", { name: titulo })
+        .locator("xpath=ancestor::*[@data-slot='card'][1]");
+
+    // Estado inicial: 23:30 local, dentro de HOJE — e a visita das 00:15
+    // do dia seguinte, em outro bloco. No calendário de São Paulo as duas
+    // são dias DIFERENTES.
     let texto = (await page.locator("main").innerText()).replace(/ /g, " ");
     expect(texto).toContain("23:30");
     expect(texto).toContain("1 compromisso agendado");
+    await expect(cardDe("Hoje")).toContainText("Fuso Fim Do Dia");
+    await expect(cardDe("Próximos compromissos")).toContainText("Fuso Comeco De Amanha");
 
     await salvarFuso(page, "UTC");
 
@@ -216,16 +225,27 @@ test.describe.serial("trocar o fuso reinterpreta o calendário, sem tocar no dad
     await expect(page.getByRole("heading", { name: "Hoje" })).toBeVisible();
     texto = (await page.locator("main").innerText()).replace(/ /g, " ");
 
-    // O INSTANTE não mudou — mas lido em UTC ele é 02:30 do dia seguinte.
+    // O INSTANTE não mudou — mas lido em UTC ele é 02:30.
     expect(texto).toContain("02:30");
     expect(texto).not.toContain("23:30");
 
-    // E por isso a visita deixou de pertencer a hoje: ela migrou para
-    // "Próximos compromissos". Nenhuma linha foi reescrita para isso.
-    const blocoProximos = page
-      .getByRole("heading", { name: "Próximos compromissos" })
-      .locator("xpath=ancestor::*[@data-slot='card'][1]");
-    await expect(blocoProximos).toContainText("Fuso Fim Do Dia");
-    expect(texto).toContain("0 compromissos agendados");
+    // E as duas visitas passam a ser o MESMO dia: 02:30 e 03:15 de um
+    // único dia UTC. É esta a afirmação da fase — o fuso reinterpreta o
+    // calendário, sem reescrever nenhuma linha.
+    //
+    // A asserção é "as duas no MESMO bloco", e não "no bloco Próximos":
+    // qual dos dois blocos as recebe depende da hora em que a suíte roda
+    // (entre 00:00 e 03:00 UTC, o dia UTC corrente já é o dia delas, e
+    // elas caem em "Hoje"). A versão anterior deste teste afirmava o
+    // bloco, e por isso falhava três horas por dia — falha real, achada
+    // rodando a suíte às 21:35 em São Paulo.
+    // Só os dois blocos de AGENDA entram na conta: "Minhas negociações"
+    // lista a mesma pessoa e não diz nada sobre dia do calendário.
+    const textoHoje = await cardDe("Hoje").innerText();
+    const textoProximos = await cardDe("Próximos compromissos").innerText();
+    const juntas = [textoHoje, textoProximos].filter(
+      (t) => t.includes("Fuso Fim Do Dia") && t.includes("Fuso Comeco De Amanha")
+    );
+    expect(juntas).toHaveLength(1);
   });
 });

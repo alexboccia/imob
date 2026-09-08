@@ -25,6 +25,11 @@ const ROTAS: { path: string; titulo: string }[] = [
   { path: "/app/caracteristicas", titulo: "Características" },
   { path: "/app/tipos-imovel", titulo: "Tipos de imóvel" },
   { path: "/app/usuarios", titulo: "Usuários" },
+  // Fase 24 — a fila de identificação entra na varredura estrutural como
+  // qualquer outra tela do painel. Na Org A ela está vazia (a colisão de
+  // identidade vive na Org H, dedicada), então o que se mede aqui é o
+  // estado vazio — que também precisa caber em 360px.
+  { path: "/app/captacoes", titulo: "Contatos a identificar" },
   { path: "/app/configuracoes", titulo: "Configurações" },
   { path: "/app/manutencao", titulo: "Manutenção" },
 ];

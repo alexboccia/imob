@@ -39,6 +39,10 @@ const TENANT_SCOPED_MODELS = new Set([
   "Subscription",
   "Invoice",
   "OrganizationLimitOverride",
+  // Fase 24 — captação pública com identidade ambígua. Contém PII
+  // (nome, e-mail, telefone, mensagem) e pertence a exatamente uma
+  // organização: entra na guarda como todo o resto.
+  "LeadCapture",
 ]);
 
 const WHERE_OPERATIONS = new Set([

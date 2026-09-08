@@ -10,8 +10,14 @@ import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
 import { hasModule } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
+import { temPapel, PAPEIS_RESOLUCAO_IDENTIDADE } from "@/lib/authorization";
 
-const NAV_LINKS = [
+const TODOS_NAV_LINKS: {
+  href: string;
+  label: string;
+  modulo?: string;
+  papeis?: ReadonlySet<string>;
+}[] = [
   { href: "/app", label: "Dashboard" },
   { href: "/app/imoveis", label: "Imóveis" },
   { href: "/app/clientes", label: "Clientes", modulo: "crm" },
@@ -23,6 +29,17 @@ const NAV_LINKS = [
   // delas, fechando o bloco de CRM, e nunca antes de Imóveis/Clientes
   // (que são o trabalho diário, não a leitura gerencial).
   { href: "/app/analytics", label: "Analytics", modulo: "crm" },
+  // Fase 24 — fila de identificação. Primeiro item do menu com recorte
+  // por PAPEL, e não só por módulo: um BROKER não decide a qual cliente
+  // pertence um contato ambíguo, então o item não existe para ele. Isso
+  // é higiene de interface — quem controla o acesso são a página e a
+  // action, que verificam o papel no servidor.
+  {
+    href: "/app/captacoes",
+    label: "Contatos a identificar",
+    modulo: "crm",
+    papeis: PAPEIS_RESOLUCAO_IDENTIDADE,
+  },
   { href: "/app/caracteristicas", label: "Características" },
   { href: "/app/tipos-imovel", label: "Tipos de imóvel" },
   { href: "/app/usuarios", label: "Usuários" },
@@ -42,6 +59,13 @@ export default async function AdminLayout({
   }
 
   const organizationId = session.user.organizationId;
+  // Links fora do alcance do papel são REMOVIDOS, não desabilitados: o
+  // cadeado "Pro" convida a assinar um plano, enquanto um item que este
+  // usuário jamais poderá abrir só anunciaria que existe uma tela que
+  // não é dele.
+  const NAV_LINKS = TODOS_NAV_LINKS.filter(
+    (link) => !link.papeis || temPapel(session.user?.role, link.papeis)
+  );
   const modulosHabilitados = new Map<string, boolean>();
   if (organizationId) {
     for (const link of NAV_LINKS) {

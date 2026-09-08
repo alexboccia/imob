@@ -6,6 +6,7 @@ import {
   PAPEIS_GESTAO_USUARIOS,
   PAPEIS_GESTAO_CATALOGOS,
   PAPEIS_LIQUIDACAO_COMISSAO,
+  PAPEIS_RESOLUCAO_IDENTIDADE,
 } from "./authorization";
 
 // ---------------------------------------------------------------------
@@ -113,5 +114,36 @@ describe("visão de equipe", () => {
     for (const valor of [undefined, "", "SUPER_ADMIN", "manager", "TEAM_LEAD"]) {
       expect(temPapel(valor, PAPEIS_VISAO_EQUIPE)).toBe(false);
     }
+  });
+});
+
+// =======================================================================
+// Fase 24 — resolução de identidade de captação pública
+// =======================================================================
+describe("PAPEIS_RESOLUCAO_IDENTIDADE", () => {
+  test("a camada gerencial identifica contatos ambíguos", () => {
+    expect(temPapel("OWNER", PAPEIS_RESOLUCAO_IDENTIDADE)).toBe(true);
+    expect(temPapel("ADMIN", PAPEIS_RESOLUCAO_IDENTIDADE)).toBe(true);
+    expect(temPapel("MANAGER", PAPEIS_RESOLUCAO_IDENTIDADE)).toBe(true);
+  });
+
+  test("BROKER e ASSISTANT não decidem a qual cliente um contato pertence", () => {
+    // A captação pendente NÃO tem responsável — não existe "meu lead"
+    // aqui que justificasse dar a decisão a um corretor.
+    expect(temPapel("BROKER", PAPEIS_RESOLUCAO_IDENTIDADE)).toBe(false);
+    expect(temPapel("ASSISTANT", PAPEIS_RESOLUCAO_IDENTIDADE)).toBe(false);
+  });
+
+  test("papel ausente ou desconhecido nunca resolve", () => {
+    expect(temPapel(undefined, PAPEIS_RESOLUCAO_IDENTIDADE)).toBe(false);
+    expect(temPapel("", PAPEIS_RESOLUCAO_IDENTIDADE)).toBe(false);
+    expect(temPapel("SUPER_ADMIN", PAPEIS_RESOLUCAO_IDENTIDADE)).toBe(false);
+  });
+
+  test("é um conjunto PRÓPRIO: mudar visão de equipe não pode mudar quem identifica", () => {
+    // Mesmo valor hoje, significados diferentes. O teste existe para que
+    // uma futura fusão dos dois conjuntos seja uma decisão consciente, e
+    // não um efeito colateral silencioso.
+    expect(PAPEIS_RESOLUCAO_IDENTIDADE).not.toBe(PAPEIS_VISAO_EQUIPE);
   });
 });

@@ -73,6 +73,28 @@ export const PAPEIS_MANUTENCAO: ReadonlySet<string> = new Set([
   "MANAGER",
 ]);
 
+// Fase 24 — RESOLUÇÃO DE IDENTIDADE de captação pública ambígua.
+//
+// Conjunto próprio, e não um reuso de PAPEIS_VISAO_EQUIPE: aquele
+// nomeia "quem acompanha o trabalho da equipe", e esta é outra
+// capacidade — decidir a QUAL cliente um contato pertence, o que liga
+// PII a um cadastro e é irreversível na prática. Que os dois conjuntos
+// tenham hoje os mesmos papéis é coincidência de valor, não de
+// significado; fundi-los faria uma mudança em um alterar o outro em
+// silêncio.
+//
+// Por que a camada gerencial: uma captação pendente NÃO tem
+// responsibleMemberId — ninguém conduz um contato cuja identidade é
+// desconhecida. Atribuí-la a um BROKER seria escolher dono para um lead
+// que ainda não é de ninguém, exatamente o tipo de arbitrariedade que
+// esta fase existe para evitar. É a mesma fila gerencial das
+// negociações sem responsável (Fase 21).
+export const PAPEIS_RESOLUCAO_IDENTIDADE: ReadonlySet<string> = new Set([
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+]);
+
 export function temPapel(
   role: string | undefined,
   permitidos: ReadonlySet<string>
