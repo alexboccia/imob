@@ -16,4 +16,9 @@ export const SLUGS_RESERVADOS = new Set([
   "contato",
   "anuncie",
   "vendidos",
+  // Fase 26 — /cadastro é uma rota REAL de topo (o self-service). Um
+  // segmento estático vence o dinâmico [orgSlug] no roteador, então uma
+  // organização com este slug ficaria permanentemente inacessível pelo
+  // próprio endereço.
+  "cadastro",
 ]);

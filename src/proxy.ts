@@ -55,12 +55,6 @@ const platformMiddleware = authPlatform((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Sessão ativa NÃO expulsa dessas telas (diferente de /app/login):
-  // quem está logado e clicou num link de recuperação — porque esqueceu
-  // a senha em outro dispositivo, ou porque desconfia de acesso
-  // indevido — precisa conseguir concluir. Redirecionar para /app aqui
-  // criaria o comportamento contraditório de mandar a pessoa para
-  // dentro justamente quando ela quer trocar a chave.
   if (isLoggedIn && isLoginPage) {
     return NextResponse.redirect(new URL("/platform", req.nextUrl.origin));
   }

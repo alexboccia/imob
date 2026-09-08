@@ -5,11 +5,19 @@ import { ORG_A, login } from "./helpers";
 test("login válido leva pro painel autenticado", async ({ page }) => {
   await login(page, ORG_A);
   await expect(page).toHaveURL("/app");
-  // Nav responsiva: "Painel" aparece tanto na sidebar desktop quanto no
+  // Fase 26 — a sidebar deixou de dizer "Painel" e passou a dizer QUAL
+  // imobiliária. Com multi-org isso deixou de ser detalhe estético: é a
+  // resposta para "em qual tenant eu estou?".
+  //
+  // Nav responsiva: o nome aparece tanto na sidebar desktop quanto no
   // header mobile (ambos no DOM, só um visível por vez via CSS) — escopo
   // explícito na sidebar, que é a visível no viewport padrão (desktop) em
   // que este teste roda.
-  await expect(page.locator("aside").getByText("Painel")).toBeVisible();
+  // getByTitle, e não getByText: o dono da Org A no seed se chama como a
+  // própria organização, então o nome aparece duas vezes na sidebar (o
+  // tenant no topo, a identidade no rodapé) e um getByText solto casaria
+  // com as duas.
+  await expect(page.locator("aside").getByTitle("Organização E2E A")).toBeVisible();
 });
 
 // 2. login inválido

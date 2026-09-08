@@ -17,6 +17,8 @@ import {
   contarCaptacoesPendentes,
 } from "@/lib/captacao-pendente";
 import { CaptacoesPendentes } from "@/components/admin/CaptacoesPendentes";
+import { buscarOnboarding } from "@/lib/onboarding";
+import { PrimeirosPassos } from "@/components/admin/PrimeirosPassos";
 import { buscarMetricasDashboard } from "@/lib/dashboard";
 import { contarAgenda } from "@/lib/agenda";
 import { DashboardKpiCards } from "@/components/admin/DashboardKpiCards";
@@ -97,6 +99,11 @@ export default async function DashboardPage({
       ? await buscarCaptacoesPendentes(organizationId, { limite: 3 })
       : [];
 
+  // Fase 26 — primeiros passos. Derivado de fatos, some quando não há
+  // pendência: para uma organização já operando, isto é uma consulta
+  // barata que não renderiza nada.
+  const onboarding = await buscarOnboarding(organizationId);
+
   const [metricas, agenda] = await Promise.all([
     buscarMetricasDashboard(organizationId, fuso),
     // Reaproveita contarAgenda (já existente, já testado via H.4/H.5) só
@@ -143,6 +150,11 @@ export default async function DashboardPage({
           um BROKER a Home continua sendo, literalmente, a mesma tela de
           antes — nenhum controle novo, nenhum aviso de acesso negado. */}
       {podeVerEquipe && <AlternadorVisaoCentral visaoAtual={visao} />}
+
+      {/* Acima da Central: para quem acabou de criar a conta, a Central
+          está vazia por definição, e a primeira coisa útil da tela tem
+          de ser o que fazer a seguir. */}
+      <PrimeirosPassos dados={onboarding} />
 
       {captacoes.length > 0 && (
         <CaptacoesPendentes

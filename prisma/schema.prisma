@@ -1756,6 +1756,47 @@ model InviteToken {
 }
 
 // =====================================================================
+// Cadastro de nova imobiliária (Fase 26)
+// =====================================================================
+// SEPARADO de InviteToken porque o convite exige organizationId e
+// userId — e aqui NENHUM DOS DOIS EXISTE AINDA. Este token representa
+// uma intenção de cadastro: alguém disse que quer uma imobiliária, e
+// ainda não provou ser dono do e-mail que digitou.
+//
+// A ORGANIZAÇÃO SÓ NASCE NA CONFIRMAÇÃO. Criá-la no envio do formulário
+// deixaria, para qualquer e-mail digitado por qualquer pessoa: um slug
+// público ocupado para sempre, um trial aberto e uma organização órfã
+// sem dono no backoffice. Guardar a intenção custa uma linha; criar o
+// tenant custa o inverso.
+//
+// Os dados ficam aqui porque precisam sobreviver entre o pedido e o
+// clique no e-mail. Nenhum deles é segredo: nome da imobiliária e nome
+// da pessoa são públicos por natureza, e o e-mail é o destinatário.
+//
+// FORA de TENANT_SCOPED_MODELS: por definição, não pertence a tenant
+// nenhum — é o que existe ANTES do primeiro tenant.
+model SignupToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  // Identidade declarada. Normalizada (minúscula, sem espaços) para
+  // casar com User.email no momento da confirmação.
+  email     String
+  // Dados da organização pretendida. O slug é derivado do nome NO
+  // SERVIDOR e só é verificado contra colisão aqui e de novo na
+  // confirmação — a unique constraint de Organization.slug é a última
+  // defesa, nunca a primeira.
+  orgName   String
+  orgSlug   String
+  ownerName String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@map("signup_tokens")
+}
+
+// =====================================================================
 // Recuperação de senha (Fase 25)
 // =====================================================================
 // SEPARADO de InviteToken de propósito, e não por economia de tabela.

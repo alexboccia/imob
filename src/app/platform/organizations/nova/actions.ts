@@ -1,7 +1,5 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
-import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requirePlatformOperator } from "@/lib/platform/auth";
@@ -11,6 +9,7 @@ import { enviarEmailConviteOwner } from "@/lib/email";
 import { logger } from "@/lib/logger";
 import { type ActionState, erroGenerico, erroValidacao } from "@/lib/action-result";
 import { SLUGS_RESERVADOS } from "@/lib/platform/reserved-words";
+import { bootstrapOrganizacao } from "@/lib/bootstrap-organizacao";
 
 const criarOrganizationSchema = z.object({
   name: z.string().min(2, "Informe o nome da organização."),
@@ -69,80 +68,35 @@ export async function criarOrganization(
 
   try {
     const resultado = await prisma.$transaction(async (tx) => {
-      const organization = await tx.organization.create({
-        data: {
-          name: dados.name,
-          slug: dados.slug,
-          cnpj: dados.cnpj || null,
-          planId: dados.planId,
-          active: true,
-        },
-      });
-
-      // Fase P.9: trial é server-side, nunca aceita data do formulário —
-      // início/fim sempre calculados aqui a partir de Plan.trialDays no
-      // exato momento da criação. Só cria Subscription quando o plano
-      // escolhido é de trial (plan.isTrial); planos pagos não geram
-      // nenhuma linha de Subscription nesta fase (zero lógica de
-      // cobrança real ainda, ver comentário do model no schema).
-      if (plano.isTrial && plano.trialDays !== null) {
-        const agora = new Date();
-        await tx.subscription.create({
-          data: {
-            organizationId: organization.id,
-            planId: dados.planId,
-            status: "TRIALING",
-            currentPeriodStart: agora,
-            currentPeriodEnd: new Date(agora.getTime() + plano.trialDays * 24 * 60 * 60 * 1000),
-          },
-        });
-      }
-
-      // E-mail já existe como User (ex: mesma pessoa convidada pra outra
-      // organização no futuro) -> reusa o User existente. A barreira real
-      // de "não pode logar ainda NESTA org" é o status INVITED do
-      // OrganizationMember criado abaixo — específico deste vínculo, nunca
-      // um `active:false` global no User, que travaria acesso dele a
-      // QUALQUER outra org onde já seja membro ativo.
-      let user = await tx.user.findUnique({ where: { email: dados.responsavelEmail } });
-      if (!user) {
-        // Hash de um UUID aleatório — nunca alcançável por senha real
-        // digitada por alguém. Defesa extra (auth.ts já barra
-        // !user.active), não a barreira principal.
-        const senhaSentinela = await bcrypt.hash(randomUUID(), 10);
-        user = await tx.user.create({
-          data: {
-            name: dados.responsavelNome,
-            email: dados.responsavelEmail,
-            passwordHash: senhaSentinela,
-            active: false,
-          },
-        });
-      }
-
-      const member = await tx.organizationMember.create({
-        data: {
-          organizationId: organization.id,
-          userId: user.id,
-          role: "OWNER",
-          status: "INVITED",
-        },
+      // Fase 26 — a criação em si saiu daqui para
+      // src/lib/bootstrap-organizacao.ts, compartilhada com o cadastro
+      // self-service. O que sobra aqui é o que é ESPECÍFICO do Super
+      // Admin: o vínculo nasce INVITED (o dono ainda não provou posse do
+      // e-mail) e um convite é emitido para que ele prove.
+      const criado = await bootstrapOrganizacao(tx, {
+        nomeOrganizacao: dados.name,
+        slug: dados.slug,
+        cnpj: dados.cnpj,
+        plano: { id: plano.id, isTrial: plano.isTrial, trialDays: plano.trialDays },
+        nomeResponsavel: dados.responsavelNome,
+        emailResponsavel: dados.responsavelEmail,
+        statusVinculo: "INVITED",
       });
 
       await tx.inviteToken.create({
         data: {
-          userId: user.id,
-          organizationId: organization.id,
+          userId: criado.userId,
+          organizationId: criado.organizationId,
           tokenHash,
           expiresAt,
         },
       });
 
-      return { organization, user, member };
+      return criado;
     });
 
-    organizationId = resultado.organization.id;
-    userId = resultado.user.id;
+    organizationId = resultado.organizationId;
+    userId = resultado.userId;
   } catch (erro) {
     logger.error("Falha ao criar Organization — transação revertida, nada foi salvo", erro, {
       platformOperatorId: operador.id,

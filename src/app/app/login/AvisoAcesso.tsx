@@ -12,7 +12,9 @@ import { useSearchParams } from "next/navigation";
 // e-mail nem estado de vínculo.
 export function AvisoAcesso() {
   const params = useSearchParams();
-  const texto = params.get("convite")
+  const texto = params.get("cadastro")
+    ? "Imobiliária criada. Entre com seu e-mail e a senha que você escolheu."
+    : params.get("convite")
     ? "Conta ativada. Entre com seu e-mail e a senha que você criou."
     : params.get("senha")
       ? "Senha redefinida. Entre com a nova senha."

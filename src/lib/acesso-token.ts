@@ -45,6 +45,18 @@ export function expiracaoReset(): Date {
   return new Date(Date.now() + EXPIRACAO_RESET_MINUTOS * 60 * 1000);
 }
 
+// Cadastro de imobiliária: 24 HORAS. Entre o do convite (7 dias) e o da
+// recuperação (60 min), e por um motivo próprio: o slug pretendido NÃO
+// fica reservado enquanto o token vive — quem confirmar primeiro leva.
+// Uma janela longa aumentaria a chance de alguém confirmar e descobrir
+// que o endereço foi tomado no meio do caminho; uma janela curta demais
+// puniria quem só lê e-mail à noite.
+const EXPIRACAO_CADASTRO_HORAS = 24;
+
+export function expiracaoCadastro(): Date {
+  return new Date(Date.now() + EXPIRACAO_CADASTRO_HORAS * 60 * 60 * 1000);
+}
+
 // Os links são montados a partir de NEXT_PUBLIC_SITE_URL (getSiteUrl),
 // NUNCA do Host/X-Forwarded-Host da requisição. É o que fecha
 // host-header poisoning: um atacante que force `Host: evil.test` num
@@ -56,6 +68,10 @@ export function linkConvite(token: string): string {
 
 export function linkRedefinicao(token: string): string {
   return getSiteUrl(`/app/redefinir-senha/${token}`);
+}
+
+export function linkCadastro(token: string): string {
+  return getSiteUrl(`/cadastro/${token}`);
 }
 
 export type ResultadoConvite =
@@ -105,7 +121,10 @@ export async function verificarTokenReset(token: string): Promise<ResultadoReset
 // linha casa, e a segunda chamada recebe count 0. Quem chama roda isto
 // DENTRO da transaction que faz o resto do trabalho, para que "consumir"
 // e "efetivar" sejam a mesma operação indivisível.
-type ClientePrisma = Pick<typeof prisma, "inviteToken" | "passwordResetToken">;
+type ClientePrisma = Pick<
+  typeof prisma,
+  "inviteToken" | "passwordResetToken" | "signupToken"
+>;
 
 export async function consumirConvite(tx: ClientePrisma, tokenId: string): Promise<boolean> {
   const { count } = await tx.inviteToken.updateMany({
@@ -117,6 +136,48 @@ export async function consumirConvite(tx: ClientePrisma, tokenId: string): Promi
 
 export async function consumirTokenReset(tx: ClientePrisma, tokenId: string): Promise<boolean> {
   const { count } = await tx.passwordResetToken.updateMany({
+    where: { id: tokenId, usedAt: null },
+    data: { usedAt: new Date() },
+  });
+  return count === 1;
+}
+
+export type ResultadoCadastro =
+  | {
+      valido: true;
+      tokenId: string;
+      email: string;
+      orgName: string;
+      orgSlug: string;
+      ownerName: string;
+    }
+  | { valido: false };
+
+// Mesma disciplina dos outros dois: inexistente, expirado e já usado
+// devolvem o MESMO "inválido". Distingui-los diria a quem tem o link se
+// ele já valeu um dia.
+export async function verificarCadastro(token: string): Promise<ResultadoCadastro> {
+  const registro = await prisma.signupToken.findUnique({
+    where: { tokenHash: hashToken(token) },
+  });
+  if (!registro || registro.usedAt || registro.expiresAt < new Date()) {
+    return { valido: false };
+  }
+  return {
+    valido: true,
+    tokenId: registro.id,
+    email: registro.email,
+    orgName: registro.orgName,
+    orgSlug: registro.orgSlug,
+    ownerName: registro.ownerName,
+  };
+}
+
+export async function consumirCadastro(
+  tx: ClientePrisma,
+  tokenId: string
+): Promise<boolean> {
+  const { count } = await tx.signupToken.updateMany({
     where: { id: tokenId, usedAt: null },
     data: { usedAt: new Date() },
   });

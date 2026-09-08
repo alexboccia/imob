@@ -37,6 +37,12 @@ export const LIMITES = {
   //               vítima específica, inundando a caixa dela.
   // A chave de e-mail é HASH (hashCurto), nunca o endereço: PII não entra
   // no armazenamento de limite.
+  // Cadastro de imobiliária (Fase 26). Mais apertado que a recuperação
+  // de senha porque o custo do abuso é maior: cada confirmação cria um
+  // TENANT com trial. Por IP corta a criação em massa; por e-mail corta
+  // usar o produto como máquina de spam contra uma pessoa.
+  cadastroPorIp: { limite: 5, janelaSegundos: 60 * 60 },
+  cadastroPorEmail: { limite: 3, janelaSegundos: 60 * 60 },
   recuperacaoPorIp: { limite: 10, janelaSegundos: 60 * 60 },
   recuperacaoPorEmail: { limite: 5, janelaSegundos: 60 * 60 },
   analyticsPorIp: { limite: 300, janelaSegundos: 10 * 60 },
@@ -224,6 +230,30 @@ export async function verificarLimiteRecuperacaoSenha(
   if (params.emailNormalizado) {
     checagens.push({
       chave: `rl:reset:email:${hashCurto(params.emailNormalizado)}`,
+      limite: limiteEmail,
+      janelaSegundos: janelaEmail,
+      motivo: "email",
+    });
+  }
+  return aplicarChecagens(store, checagens);
+}
+
+// Cadastro público (Fase 26). Fail-open como todo o resto.
+export async function verificarLimiteCadastro(
+  store: KvStore,
+  params: { ip: string; emailNormalizado: string | null }
+): Promise<ResultadoLimite> {
+  const { limite: limiteIp, janelaSegundos: janelaIp } = LIMITES.cadastroPorIp;
+  const { limite: limiteEmail, janelaSegundos: janelaEmail } = LIMITES.cadastroPorEmail;
+
+  const checagens: ChecagemLimite[] = [
+    { chave: `rl:signup:ip:${params.ip}`, limite: limiteIp, janelaSegundos: janelaIp, motivo: "ip" },
+  ];
+  if (params.emailNormalizado) {
+    checagens.push({
+      // hashCurto: o e-mail nunca vira chave em texto claro no
+      // armazenamento de limite.
+      chave: `rl:signup:email:${hashCurto(params.emailNormalizado)}`,
       limite: limiteEmail,
       janelaSegundos: janelaEmail,
       motivo: "email",

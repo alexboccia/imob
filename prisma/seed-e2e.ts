@@ -310,6 +310,21 @@ async function main() {
   // Organização B: plano básico (CRM desabilitado), usada só pra provar
   // isolamento entre tenants e bloqueio de módulo — nenhum spec faz login
   // nela.
+  // Fase 26 — plano do cadastro self-service, resolvido POR CÓDIGO pela
+  // action. Sem ele no banco de teste, a confirmação do cadastro
+  // simplesmente não teria plano para atribuir. Mesmos valores do plano
+  // de entrada real: gratuito, trial de 14 dias, um único usuário.
+  const planoStarter = await garantirPlano({
+    code: "STARTER",
+    name: "Starter",
+    modulosHabilitados: ["core", "properties", "crm"],
+    limites: { PROPERTIES: 10, USERS: 1, PHOTOS_PER_PROPERTY: 5, CRM_CLIENTS: 100 },
+  });
+  await prisma.plan.update({
+    where: { id: planoStarter.id },
+    data: { isTrial: true, trialDays: 14, priceMonthlyCents: 0, active: true },
+  });
+
   const planoBasico = await garantirPlano({
     code: "E2E-BASICO",
     name: "Plano E2E básico",
@@ -462,6 +477,37 @@ async function main() {
     role: "OWNER",
   });
 
+  // Fase 26 — Organizações J e K: dedicadas ao MULTI-ORG. A mesma
+  // identidade é OWNER numa e BROKER na outra, com fusos e políticas de
+  // visibilidade diferentes — é a matriz que prova que trocar de
+  // organização troca papel, calendário e escopo ao mesmo tempo.
+  //
+  // Dedicadas, e não um reuso das orgs F/G existentes: acrescentar um
+  // membro a uma organização que outras specs medem é a contaminação
+  // cross-spec que a Fase 25 já custou caro para descobrir.
+  const orgMultiA = await garantirOrganizacaoComDono({
+    slug: "e2e-org-multi-a",
+    timezone: "America/Sao_Paulo",
+    name: "Organização E2E Multi A",
+    planId: planoCompleto.id,
+    email: "multi-org@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+  const orgMultiB = await garantirOrganizacaoComDono({
+    slug: "e2e-org-multi-b",
+    timezone: "UTC",
+    name: "Organização E2E Multi B",
+    planId: planoCompleto.id,
+    email: "owner-multi-b@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+  await prisma.organization.update({
+    where: { id: orgMultiB.organization.id },
+    data: { commercialVisibility: "RESTRICTED" },
+  });
+
   // Specs como "criar imóvel" e "formulário público cria lead" criam dados
   // novos a cada rodada — sem isso o banco de teste acumularia lixo entre
   // execuções do Playwright. Person cascateia Interaction ao ser apagada;
@@ -476,6 +522,8 @@ async function main() {
     orgRestrita.organization.id,
     orgCaptacao.organization.id,
     orgAcesso.organization.id,
+    orgMultiA.organization.id,
+    orgMultiB.organization.id,
   ];
   // Usuários criados por usuarios.spec.ts a cada rodada (Fase 8 — correção
   // de causa raiz de um flake real): o seed nunca os limpava, e a
@@ -518,6 +566,9 @@ async function main() {
     "corretor-acesso@e2e.test",
     // Identidade do cenário "convidar quem já tem conta" (Fase 25).
     "ja-tem-conta@e2e.test",
+    // Fase 26 — identidade multi-org e a dona da segunda organização.
+    "multi-org@e2e.test",
+    "owner-multi-b@e2e.test",
   ];
 
   // Correção completa do acúmulo (a da Fase 8 cobria só o prefixo
@@ -1632,6 +1683,58 @@ async function main() {
     });
   }
 
+  // A identidade multi-org é OWNER na J (dona) e ganha um vínculo BROKER
+  // na K — dois papéis diferentes para a mesma pessoa, que é exatamente
+  // o que o seletor precisa provar.
+  const usuarioMultiOrg = await prisma.user.findUniqueOrThrow({
+    where: { email: "multi-org@e2e.test" },
+    select: { id: true },
+  });
+  await prisma.organizationMember.upsert({
+    where: {
+      organizationId_userId: {
+        organizationId: orgMultiB.organization.id,
+        userId: usuarioMultiOrg.id,
+      },
+    },
+    update: { role: "BROKER", status: "ACTIVE" },
+    create: {
+      organizationId: orgMultiB.organization.id,
+      userId: usuarioMultiOrg.id,
+      role: "BROKER",
+      status: "ACTIVE",
+    },
+  });
+
+  // Fase 26 — organizações criadas pelo spec de cadastro self-service.
+  // Cada execução cria uma nova (o fluxo é real, de ponta a ponta), e
+  // sem esta limpeza o banco de teste acumularia uma imobiliária por
+  // rodada, para sempre.
+  const criadasPeloSpec = await prisma.organization.findMany({
+    where: { slug: { startsWith: "e2e-cadastro-" } },
+    select: { id: true },
+  });
+  if (criadasPeloSpec.length > 0) {
+    const ids = criadasPeloSpec.map((o) => o.id);
+    const membros = await prisma.organizationMember.findMany({
+      where: { organizationId: { in: ids } },
+      select: { userId: true },
+    });
+    const userIds = membros.map((m) => m.userId);
+    await prisma.activityLog.deleteMany({ where: { organizationId: { in: ids } } });
+    await prisma.organizationMember.deleteMany({ where: { organizationId: { in: ids } } });
+    await prisma.subscription.deleteMany({ where: { organizationId: { in: ids } } });
+    await prisma.organization.deleteMany({ where: { id: { in: ids } } });
+    // As identidades criadas por esses cadastros só existem por causa
+    // deles — saem junto, com os tokens que apontam para elas.
+    await prisma.inviteToken.deleteMany({ where: { userId: { in: userIds } } });
+    await prisma.passwordResetToken.deleteMany({ where: { userId: { in: userIds } } });
+    await prisma.user.deleteMany({
+      where: { id: { in: userIds }, memberships: { none: {} } },
+    });
+  }
+  await prisma.signupToken.deleteMany({ where: { email: { startsWith: "cadastro-e2e-" } } });
+
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);
   console.log(
@@ -1643,7 +1746,8 @@ async function main() {
     `  Org F (dedicada ao fuso, America/Sao_Paulo): slug=${orgFuso.organization.slug} login=owner-fuso@e2e.test`,
     `  Org G (dedicada à visibilidade restrita): slug=${orgRestrita.organization.slug} login=owner-restrita@e2e.test`,
     `  Org H (dedicada à captação ambígua): slug=${orgCaptacao.organization.slug} login=owner-captacao@e2e.test`,
-    `  Org I (dedicada ao ciclo de acesso): slug=${orgAcesso.organization.slug} login=owner-acesso@e2e.test`
+    `  Org I (dedicada ao ciclo de acesso): slug=${orgAcesso.organization.slug} login=owner-acesso@e2e.test`,
+    `  Orgs J/K (multi-org): ${orgMultiA.organization.slug} + ${orgMultiB.organization.slug} login=multi-org@e2e.test`
   );
 }
 

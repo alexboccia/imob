@@ -49,17 +49,36 @@ function hashToken(token: string): string {
 async function main() {
   const [tipo, email, modo] = process.argv.slice(2);
   if (!tipo || !email) {
-    throw new Error("uso: tsx scripts/e2e-token.ts <convite|reset> <email> [expirado]");
+    throw new Error(
+      "uso: tsx scripts/e2e-token.ts <convite|reset|cadastro> <email> [expirado]"
+    );
   }
-
-  const usuario = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-  if (!usuario) throw new Error(`nenhum usuário com e-mail ${email}`);
 
   const token = randomBytes(32).toString("base64url");
   const tokenHash = hashToken(token);
   // "expirado" ajusta a validade para o passado, para que o E2E possa
   // exercitar o estado de link vencido sem esperar 60 minutos.
   const expiresAt = modo === "expirado" ? new Date(Date.now() - 60_000) : undefined;
+
+  // Cadastro de imobiliária (Fase 26): o token não pertence a nenhum
+  // User — a identidade pode nem existir ainda. A linha é encontrada
+  // pelo e-mail declarado no pedido.
+  if (tipo === "cadastro") {
+    const alvo = await prisma.signupToken.findFirst({
+      where: { email, usedAt: null },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!alvo) throw new Error("nenhum cadastro pendente");
+    await prisma.signupToken.update({
+      where: { id: alvo.id },
+      data: { tokenHash, ...(expiresAt ? { expiresAt } : {}) },
+    });
+    process.stdout.write(token);
+    return;
+  }
+
+  const usuario = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (!usuario) throw new Error(`nenhum usuário com e-mail ${email}`);
 
   if (tipo === "reset") {
     const alvo = await prisma.passwordResetToken.findFirst({

@@ -98,6 +98,17 @@ export const ORG_CAPTACAO_CORRETOR = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Fase 26 — identidade multi-org: OWNER na Organização J e BROKER na K,
+// que têm fusos e políticas de visibilidade diferentes. É a matriz que
+// prova que trocar de organização troca papel, calendário e escopo.
+export const MULTI_ORG = {
+  email: "multi-org@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
+export const ORG_MULTI_A = { slug: "e2e-org-multi-a", nome: "Organização E2E Multi A" };
+export const ORG_MULTI_B = { slug: "e2e-org-multi-b", nome: "Organização E2E Multi B" };
+
 // Identidade que já tem conta em OUTRA organização (a de captação) — é
 // quem prova que convidar alguém existente cria vínculo novo sem criar
 // segunda identidade. Dedicada de propósito: aceitar o convite lhe dá um
@@ -183,11 +194,20 @@ export async function entrarComo(page: Page, credenciais: { email: string; senha
   // então chamava login(), que navegava de novo — a segunda navegação
   // reintroduzia exatamente a corrida que a conferência tinha eliminado.
   // Nada aqui é timeout maior nem retry de teste.
-  for (let tentativa = 0; tentativa < 2; tentativa++) {
-    await page.context().clearCookies();
-    await page.goto("/app/login");
-    if (await page.locator("#email").count()) break;
-  }
+  //
+  // Fase 26 — a causa RAIZ da corrida, que a repetição só disfarçava:
+  // limpar cookies com uma página do app carregada não impede que uma
+  // resposta ainda em voo daquela página reescreva o cookie de sessão
+  // logo depois. Sair para about:blank primeiro aborta qualquer
+  // requisição pendente e não gera nenhuma nova — a partir daí não
+  // existe mais nada capaz de reautenticar o contexto.
+  //
+  // O flake era real e observado: ele saltava de teste em teste entre
+  // execuções da mesma spec, sempre com #email nunca aparecendo porque
+  // /app/login redirecionava para /app.
+  await page.goto("about:blank");
+  await page.context().clearCookies();
+  await page.goto("/app/login");
   await preencherLogin(page, credenciais);
 }
 
@@ -221,7 +241,7 @@ export async function esperarJanelaAntiSpam(page: Page) {
 // cabeçalho daquele arquivo: o que se testa depois é o consumo de
 // verdade — validação, expiração, uso único e replay.
 export function obterTokenDeAcesso(
-  tipo: "convite" | "reset",
+  tipo: "convite" | "reset" | "cadastro",
   email: string,
   modo?: "expirado"
 ): string {

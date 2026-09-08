@@ -10,6 +10,8 @@ import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
 import { hasModule } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
+import { listarOrganizacoesAcessiveis } from "@/lib/organizacoes-do-usuario";
+import { SeletorOrganizacao } from "@/components/admin/SeletorOrganizacao";
 import {
   temPapel,
   PAPEIS_RESOLUCAO_IDENTIDADE,
@@ -89,6 +91,12 @@ export default async function AdminLayout({
     }
   }
 
+  // Fase 26 — organizações acessíveis por esta identidade. UMA consulta
+  // por requisição (cache() dentro do helper), no layout, e não por
+  // componente: o seletor precisa da lista inteira e nenhuma outra tela
+  // precisa dela.
+  const organizacoes = await listarOrganizacoesAcessiveis(session.user.id);
+
   // "Ver site" precisa do slug da organização (a sessão só carrega
   // organizationId) — busca direta, Organization não é tenant-scoped.
   const organization = organizationId
@@ -130,7 +138,13 @@ export default async function AdminLayout({
           compacto + Sheet — desktop/tablet largo (>=768px) continua
           exatamente como antes, sem nenhuma mudança visual. */}
       <aside className="hidden md:flex min-w-0 w-56 border-r bg-gray-50 flex-col">
-        <div className="px-4 py-4 font-semibold border-b">Painel</div>
+        {/* O nome da imobiliária ATUAL no topo — antes havia só a
+            palavra "Painel", que não dizia em qual tenant a pessoa
+            estava. Com multi-org isso deixou de ser detalhe estético. */}
+        <SeletorOrganizacao
+          organizacoes={organizacoes}
+          organizationIdAtual={organizationId ?? undefined}
+        />
         {siteUrl && (
           <a
             href={siteUrl}
@@ -198,6 +212,8 @@ export default async function AdminLayout({
           userName={session.user?.name}
           userRoleLabel={PAPEL_USUARIO_LABEL[session.user?.role ?? ""] ?? session.user?.role ?? ""}
           logoutAction={logoutAction}
+          organizacoes={organizacoes}
+          organizationIdAtual={organizationId ?? undefined}
         />
         {/* p-4 md:p-6: mobile ganha um pouco mais de largura útil de volta
             (16px vs 24px de cada lado) — modesto, mas soma com a sidebar

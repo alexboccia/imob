@@ -297,3 +297,62 @@ export async function enviarEmailRecuperacaoSenha({
     return { enviado: false };
   }
 }
+
+// =======================================================================
+// Cadastro de imobiliária (Fase 26)
+// =======================================================================
+// Sem organizationId — a organização AINDA NÃO EXISTE, e é justamente
+// esse o ponto do fluxo: o link deste e-mail é o que prova posse da
+// identidade antes de qualquer tenant nascer. Remetente global, sempre.
+export async function enviarEmailCadastroImobiliaria({
+  para,
+  nomeImobiliaria,
+  linkCadastro,
+}: {
+  para: string;
+  nomeImobiliaria: string;
+  linkCadastro: string;
+}): Promise<{ enviado: boolean }> {
+  const cliente = obterCliente();
+  if (!cliente) {
+    logger.warn("RESEND_API_KEY não configurada — cadastro de imobiliária não foi enviado", {
+      modulo: "email",
+    });
+    return { enviado: false };
+  }
+
+  const remetente = process.env.RESEND_FROM_EMAIL ?? null;
+  if (!remetente) {
+    logger.warn("RESEND_FROM_EMAIL não configurado — cadastro de imobiliária não foi enviado", {
+      modulo: "email",
+    });
+    return { enviado: false };
+  }
+
+  const linhas = [
+    `Recebemos um pedido para criar a conta de "${nomeImobiliaria}" no EasyMob.`,
+    "",
+    "Confirme pelo link abaixo para ativar sua conta e entrar:",
+    linkCadastro,
+    "",
+    "Este link expira em 24 horas e só pode ser usado uma vez.",
+    "",
+    "Se você não pediu isso, ignore este e-mail: nada foi criado.",
+  ];
+
+  try {
+    await cliente.emails.send({
+      from: remetente,
+      to: para,
+      subject: "Confirme o cadastro da sua imobiliária — EasyMob",
+      text: linhas.join("\n"),
+    });
+    return { enviado: true };
+  } catch (erro) {
+    // NUNCA logar linkCadastro (contém o token bruto) nem o destinatário.
+    logger.error("Falha ao enviar e-mail de cadastro de imobiliária", erro, {
+      modulo: "email",
+    });
+    return { enviado: false };
+  }
+}

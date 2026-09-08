@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { SeletorOrganizacao } from "@/components/admin/SeletorOrganizacao";
+import type { OrganizacaoAcessivel } from "@/lib/organizacoes-do-usuario";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ExternalLink, Menu } from "lucide-react";
@@ -35,13 +37,24 @@ export function AdminMobileNav({
   userName,
   userRoleLabel,
   logoutAction,
+  // Fase 26 — nome da imobiliária ATUAL e as demais acessíveis. No
+  // celular o cabeçalho dizia só "Painel", que com multi-org deixou de
+  // responder à pergunta mais básica: em qual imobiliária eu estou?
+  organizacoes,
+  organizationIdAtual,
 }: {
   navLinks: { href: string; label: string; liberado: boolean }[];
   siteUrl: string | null;
   userName: string | null | undefined;
   userRoleLabel: string;
   logoutAction: () => Promise<void>;
+  organizacoes: OrganizacaoAcessivel[];
+  organizationIdAtual: string | undefined;
 }) {
+  const organizacaoAtual = organizacoes.find(
+    (o) => o.organizationId === organizationIdAtual
+  );
+  const nomeAtual = organizacaoAtual?.nome ?? "Painel";
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -60,8 +73,17 @@ export function AdminMobileNav({
             max-w-md/max-w-lg usados pelos formulários). */}
         <SheetContent className="max-w-72">
           <SheetHeader>
-            <SheetTitle>Painel</SheetTitle>
+            <SheetTitle>{nomeAtual}</SheetTitle>
           </SheetHeader>
+          {organizacoes.length > 1 && (
+            <div className="border-b pb-3">
+              <SeletorOrganizacao
+                organizacoes={organizacoes}
+                organizationIdAtual={organizationIdAtual}
+                apenasBotao
+              />
+            </div>
+          )}
           {siteUrl && (
             <a
               href={siteUrl}
@@ -118,7 +140,7 @@ export function AdminMobileNav({
           </div>
         </SheetContent>
       </Sheet>
-      <span className="font-semibold">Painel</span>
+      <span className="min-w-0 truncate font-semibold">{nomeAtual}</span>
     </header>
   );
 }

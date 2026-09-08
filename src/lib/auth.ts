@@ -8,7 +8,11 @@ import { obterIpCliente } from "@/lib/client-ip";
 import { obterKvStore } from "@/lib/kv-store";
 import { registrarFalhaLogin, registrarSucessoLogin } from "@/lib/rate-limit";
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+// unstable_update é o caminho suportado do Auth.js v5 para reemitir o
+// JWT com claims novas sem exigir novo login — é o que permite trocar de
+// organização sem sair e voltar. O nome carrega o aviso de instabilidade
+// da API; o uso é único e está isolado em uma action (Fase 26).
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
   providers: [
     Credentials({
