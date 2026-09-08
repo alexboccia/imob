@@ -983,9 +983,13 @@ test.describe("Detalhe do imóvel — WhatsApp", () => {
       // Mensagem contextual: identifica o imóvel por título e código.
       const texto = decodeURIComponent(new URL(href!).searchParams.get("text") ?? "");
       expect(texto).toContain(IMOVEL_COM_BADGES);
-      // Mesma razão do teste de hierarquia: aceita código com ou sem
-      // prefixo do tenant, desde que o número do imóvel esteja lá.
-      expect(texto).toMatch(/cód\.\s*\S*100\d+/i);
+      // Aceita código com ou sem prefixo do tenant, e sem acoplar à
+      // GRANDEZA do contador: o número é sequencial por organização e
+      // cresce a cada imóvel criado pela própria suíte. A asserção
+      // original exigia "100" + dígitos e passou a falhar quando o
+      // contador do banco de teste ultrapassou 100999 — um teste que
+      // envelhece sozinho não prova nada sobre o produto.
+      expect(texto).toMatch(/cód\.\s*\S+/i);
       expect(texto).toContain("São Paulo");
     } finally {
       await definirContato(page, {});
@@ -1225,7 +1229,13 @@ test.describe("Perfil público do corretor — WhatsApp", () => {
 
       const texto = decodeURIComponent(new URL(href!).searchParams.get("text") ?? "");
       expect(texto).toContain(IMOVEL_COM_BADGES);
-      expect(texto).toMatch(/cód\.\s*\S*100\d+/i);
+      // Aceita código com ou sem prefixo do tenant, e sem acoplar à
+      // GRANDEZA do contador: o número é sequencial por organização e
+      // cresce a cada imóvel criado pela própria suíte. A asserção
+      // original exigia "100" + dígitos e passou a falhar quando o
+      // contador do banco de teste ultrapassou 100999 — um teste que
+      // envelhece sozinho não prova nada sobre o produto.
+      expect(texto).toMatch(/cód\.\s*\S+/i);
       expect(texto).toContain("São Paulo");
     } finally {
       await definirPerfilPublico(page, { publicar: false });

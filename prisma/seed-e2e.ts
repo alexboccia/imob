@@ -518,11 +518,31 @@ async function main() {
   // Dedicadas porque o spec manipula o período de trial: mexer nisso em
   // qualquer organização existente bloquearia a operação dela e
   // derrubaria toda spec que depende de navegar no painel.
+  // Plano de trial PRÓPRIO destas duas organizações — nunca o STARTER.
+  //
+  // O STARTER é uma linha de catálogo GLOBAL que a suíte
+  // tests/integration/bootstrap-starter-p9.test.ts apaga e recria para
+  // testar o script que o cria. Prender uma organização do seed a ele
+  // deixaria aquele DELETE impossível (violação de chave estrangeira)
+  // em qualquer banco onde este seed tenha rodado — que é o caso de
+  // toda máquina de desenvolvimento. Catálogo global não pertence a
+  // quem só precisa de um plano de trial.
+  const planoTrialE2E = await garantirPlano({
+    code: "E2E-TRIAL",
+    name: "Trial E2E",
+    modulosHabilitados: ["core", "properties", "crm"],
+    limites: { PROPERTIES: 10, USERS: 1, PHOTOS_PER_PROPERTY: 5, CRM_CLIENTS: 100 },
+  });
+  await prisma.plan.update({
+    where: { id: planoTrialE2E.id },
+    data: { isTrial: true, trialDays: 14, priceMonthlyCents: 0, active: true },
+  });
+
   const orgTrial = await garantirOrganizacaoComDono({
     slug: "e2e-org-trial",
     timezone: "UTC",
     name: "Organização E2E Trial",
-    planId: planoStarter.id,
+    planId: planoTrialE2E.id,
     email: "owner-trial@e2e.test",
     senha,
     role: "OWNER",
@@ -531,7 +551,7 @@ async function main() {
     slug: "e2e-org-vencida",
     timezone: "UTC",
     name: "Organização E2E Vencida",
-    planId: planoStarter.id,
+    planId: planoTrialE2E.id,
     email: "owner-vencida@e2e.test",
     senha,
     role: "OWNER",
@@ -1798,7 +1818,7 @@ async function main() {
     await prisma.subscription.create({
       data: {
         organizationId: org.organization.id,
-        planId: planoStarter.id,
+        planId: planoTrialE2E.id,
         status: "TRIALING",
         currentPeriodStart: new Date(agoraTrial.getTime() - 24 * 60 * 60 * 1000),
         currentPeriodEnd: fim,

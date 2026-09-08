@@ -51,6 +51,25 @@ async function buscarStarterCompleto() {
 async function limparStarter(): Promise<void> {
   const plano = await prisma.plan.findUnique({ where: { code: "STARTER" } });
   if (!plano) return;
+
+  // PROPRIEDADE, não força bruta (Fase 27). STARTER é uma linha de
+  // CATÁLOGO GLOBAL, e este arquivo só pode apagá-la enquanto for de
+  // fato o dono dela. Outras superfícies do produto criam organizações
+  // nesse plano — o cadastro self-service resolve exatamente
+  // `code: "STARTER"` —, e uma organização alheia presa a ele significa
+  // que a linha não é nossa para remover.
+  //
+  // Sem esta checagem, o delete estourava violação de chave estrangeira
+  // DENTRO de um afterEach, e um hook que falha derruba TODOS os testes
+  // do arquivo, inclusive os puros que nem tocam o banco. Foi
+  // exatamente isso que aconteceu no CI.
+  //
+  // Isto não afrouxa nenhuma asserção: os testes continuam provando o
+  // que bootstrapStarter faz. O que muda é a limpeza deixar de destruir
+  // o que pertence a outro.
+  const organizacoesUsando = await prisma.organization.count({ where: { planId: plano.id } });
+  if (organizacoesUsando > 0) return;
+
   await prisma.planLimit.deleteMany({ where: { planId: plano.id } });
   await prisma.planModule.deleteMany({ where: { planId: plano.id } });
   await prisma.plan.delete({ where: { id: plano.id } });
