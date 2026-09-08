@@ -38,6 +38,14 @@ export function normalizarSlug(valor: string): string {
 
 // Reservados comparados JÁ NORMALIZADOS, dos dois lados.
 //
+// EFEITO COLATERAL CONSCIENTE: "_next" normaliza para "next", então
+// "next" também fica indisponível como slug puro. É uma reserva a mais
+// do que o estritamente necessário (não existe rota /next), e ela é
+// aceita de propósito — comparar no MESMO espaço normalizado imuniza a
+// classe inteira do problema, e o custo é um nome incomum. Um nome
+// legítimo que apenas contenha a palavra ("Next Imóveis") continua
+// valendo, porque o slug dele é "next-imoveis".
+//
 // A lista original é escrita para o slug digitado à mão no /platform e
 // contém "_next", que a derivação transforma em "next" — comparar sem
 // normalizar deixava "next" passar. O caso é inofensivo (a rota real é

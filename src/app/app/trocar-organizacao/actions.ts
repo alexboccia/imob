@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { auth, unstable_update } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { logActivity } from "@/lib/activity-log";
-import { erroAcessoNegado, type ActionState } from "@/lib/action-result";
+import { erroAcessoNegado, erroGenerico, type ActionState } from "@/lib/action-result";
 
 // =======================================================================
 // Trocar de organização (Fase 26)
@@ -52,7 +52,7 @@ export async function trocarOrganizacao(
 
   // Os três campos são reescritos JUNTOS. É o que impede o papel do
   // tenant anterior de sobreviver no tenant novo.
-  await unstable_update({
+  const sessaoAtualizada = await unstable_update({
     user: {
       organizationId: alvo.organizationId,
       organizationMemberId: alvo.id,
@@ -60,6 +60,22 @@ export async function trocarOrganizacao(
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
+
+  // AUSÊNCIA DE EXCEÇÃO NÃO É SUCESSO — e isto não é zelo teórico, é a
+  // cicatriz de um bug real desta fase: as claims chegam dentro de
+  // `user`, o callback do JWT lia a raiz, e a troca simplesmente não
+  // acontecia. Nada lançava. A action redirecionava, a tela recarregava
+  // e voltava calada para a organização anterior, como se o clique não
+  // tivesse existido.
+  //
+  // A verificação é sobre o CONTEXTO EFETIVO: a sessão reemitida precisa
+  // dizer que agora é a organização pedida. Se não disser, o usuário vê
+  // um erro factual em vez de um sucesso silencioso.
+  if (sessaoAtualizada?.user?.organizationId !== alvo.organizationId) {
+    return erroGenerico(
+      "Não foi possível trocar de imobiliária agora. Tente novamente em alguns instantes."
+    );
+  }
 
   await logActivity({
     organizationId: alvo.organizationId,

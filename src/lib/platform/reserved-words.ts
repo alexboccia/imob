@@ -4,6 +4,29 @@
 // src/lib/platform/hostname.ts (hostnameReservado): um slug reservado
 // nunca pode virar "<slug>.{PUBLIC_ORG_SUBDOMAIN_BASE}" por consistência
 // — mesma lista, um único lugar.
+// AUDITORIA DA ÁRVORE DE ROTAS (Fase 26) — feita lendo src/app/, não
+// copiada de convenção. Um slug só precisa ser reservado quando existe
+// um caminho de PRIMEIRO NÍVEL capaz de sombrear /{orgSlug}:
+//
+//   api, app, cadastro, platform  -> diretórios estáticos reais. Segmento
+//                                    estático vence o dinâmico no
+//                                    roteador, então a organização
+//                                    ficaria inacessível pelo próprio
+//                                    endereço. RESERVADOS.
+//   imoveis, contato, anuncie,
+//   vendidos                      -> não são diretórios de topo, mas os
+//                                    rewrites de next.config.ts mapeiam
+//                                    /imoveis, /contato, /anuncie e
+//                                    /vendidos para a organização padrão.
+//                                    O efeito é o mesmo. RESERVADOS.
+//   favicon.ico, robots.txt,
+//   sitemap.xml                   -> têm extensão, e o normalizador de
+//                                    slug transforma "." em hífen: nenhum
+//                                    slug consegue produzi-los. NÃO
+//                                    precisam de reserva.
+//   _next, admin, www, convite    -> mantidos por serem compartilhados
+//                                    com hostnameReservado (subdomínios),
+//                                    onde a semântica é outra.
 export const SLUGS_RESERVADOS = new Set([
   "app",
   "api",

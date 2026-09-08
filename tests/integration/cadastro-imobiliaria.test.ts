@@ -338,6 +338,44 @@ describe("confirmação: a organização nasce aqui", () => {
     usuariosCriados.push(membro.userId);
   });
 
+  test("duas confirmações CONCORRENTES do mesmo slug criam UMA organização", async () => {
+    const nome = `Imobiliaria Simultanea ${Date.now()}`;
+    const emailA = `simult-a-${Date.now()}@e2e.test`;
+    const emailB = `simult-b-${Date.now()}@e2e.test`;
+
+    // Dois pedidos com o MESMO nome: no instante de cada pedido o slug
+    // ainda não existia, então os dois foram aceitos.
+    await pedir(nome, emailA);
+    const tokenA = tokenDoLink(emailsEnviados[0].link);
+    await pedir(nome, emailB);
+    const tokenB = tokenDoLink(emailsEnviados[1].link);
+
+    // Confirmadas ao mesmo tempo. Duas verificações prévias não bastam:
+    // quem decide é a unique constraint do slug.
+    const resultados = await Promise.allSettled([
+      confirmar(tokenA, "senha-do-dono-1"),
+      confirmar(tokenB, "senha-do-dono-2"),
+    ]);
+    expect(resultados).toHaveLength(2);
+
+    const orgs = await prisma.organization.findMany({ where: { name: nome } });
+    expect(orgs).toHaveLength(1);
+    organizacoesCriadas.push(orgs[0].id);
+
+    // Exatamente um OWNER, e o perdedor não deixou identidade órfã.
+    const membros = await prisma.organizationMember.findMany({
+      where: { organizationId: orgs[0].id },
+    });
+    expect(membros).toHaveLength(1);
+    expect(membros[0].role).toBe("OWNER");
+    usuariosCriados.push(membros[0].userId);
+
+    const usuarioA = await prisma.user.findUnique({ where: { email: emailA } });
+    const usuarioB = await prisma.user.findUnique({ where: { email: emailB } });
+    const criados = [usuarioA, usuarioB].filter(Boolean);
+    expect(criados).toHaveLength(1);
+  });
+
   test("rollback: slug tomado no meio do caminho não deixa lixo", async () => {
     const nome = `Imobiliaria Corrida ${Date.now()}`;
     const emailA = `corrida-a-${Date.now()}@e2e.test`;

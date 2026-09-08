@@ -26,12 +26,19 @@ vi.mock("next/navigation", () => ({
 // claims a sessão passa a carregar.
 const atualizacoes: { organizationId?: string; organizationMemberId?: string; role?: string }[] =
   [];
+// Quando ligado, o mock devolve uma sessão que NÃO reflete a troca — é a
+// simulação exata do bug C desta fase: unstable_update não lança, mas o
+// contexto continua o anterior.
+let simularTrocaSemEfeito = false;
 vi.mock("@/lib/auth", () => ({
   auth: vi.fn(),
+  // O real devolve a Sessão REEMITIDA. O mock devolve o mesmo formato,
+  // porque é sobre esse retorno que a action decide se a troca valeu.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   unstable_update: vi.fn(async (dados: any) => {
     atualizacoes.push(dados.user);
-    return null;
+    if (simularTrocaSemEfeito) return { user: { organizationId: "organizacao-anterior" } };
+    return { user: { ...dados.user } };
   }),
 }));
 
@@ -52,6 +59,7 @@ const usuariosAvulsos: string[] = [];
 
 afterEach(async () => {
   atualizacoes.length = 0;
+  simularTrocaSemEfeito = false;
   vi.mocked(auth).mockReset();
   for (const id of usuariosAvulsos.splice(0)) {
     await prisma.organizationMember.deleteMany({ where: { userId: id } });
@@ -281,6 +289,66 @@ describe("troca de organização", () => {
     // Distinguir os casos contaria a quem tentou se a organização existe
     // e se ele já teve acesso a ela.
     expect(suspensa.message).toBe(inexistente.message);
+  });
+
+  test("troca sem efeito real NÃO é reportada como sucesso", async () => {
+    // REGRESSÃO do bug mais perigoso desta fase: as claims chegam dentro
+    // de `user` e o callback lia a raiz. Nada lançava — a action
+    // redirecionava e a tela voltava calada para a organização anterior,
+    // como se o clique não tivesse existido.
+    //
+    // A partir daqui, ausência de exceção não basta: a sessão reemitida
+    // precisa dizer que agora é a organização pedida.
+    const { orgA, orgB, usuario, membroA } = await comDuasOrganizacoes();
+    sessaoDe(orgA, usuario.id, membroA.id, "OWNER");
+    simularTrocaSemEfeito = true;
+
+    const estado = await trocar(orgB.organization.id);
+
+    expect(estado.success).toBe(false);
+    expect(estado.destino).toBeUndefined();
+    // E a pessoa vê um erro factual em vez de um sucesso silencioso.
+    expect(estado.message).toBeTruthy();
+  });
+
+  test("switch RECUSADO não atualiza o JWT nem parcialmente", async () => {
+    const { orgA, orgB, usuario, membroA, membroB } = await comDuasOrganizacoes();
+    sessaoDe(orgA, usuario.id, membroA.id, "OWNER");
+
+    // Quatro formas de recusa, uma a uma. Nenhuma pode deixar a sessão
+    // meio trocada — apontando para B com o papel de A, por exemplo.
+    const alheia = await novoCenario();
+    await trocar(alheia.organization.id);
+    await trocar("id-que-nunca-existiu");
+
+    await prisma.organizationMember.update({
+      where: { id: membroB.id },
+      data: { status: "INVITED" },
+    });
+    await trocar(orgB.organization.id);
+
+    await prisma.organizationMember.update({
+      where: { id: membroB.id },
+      data: { status: "SUSPENDED" },
+    });
+    await trocar(orgB.organization.id);
+
+    // NENHUMA escrita de sessão aconteceu em nenhuma das quatro.
+    expect(atualizacoes).toHaveLength(0);
+  });
+
+  test("membership INVITED não é destino de troca", async () => {
+    const { orgA, orgB, usuario, membroA, membroB } = await comDuasOrganizacoes();
+    await prisma.organizationMember.update({
+      where: { id: membroB.id },
+      data: { status: "INVITED" },
+    });
+    sessaoDe(orgA, usuario.id, membroA.id, "OWNER");
+
+    // Convite pendente é uma organização que a pessoa ainda não aceitou:
+    // não é acesso, é promessa de acesso.
+    expect((await trocar(orgB.organization.id)).success).toBe(false);
+    expect(atualizacoes).toHaveLength(0);
   });
 
   test("o vínculo do outro tenant não vaza: cada organização tem o seu", async () => {

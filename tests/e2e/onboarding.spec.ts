@@ -172,6 +172,12 @@ test.describe("troca de organização", () => {
     // O PAPEL mudou junto: como BROKER, Configurações some do menu.
     await expect(page.getByRole("link", { name: "Configurações" })).toHaveCount(0);
 
+    // E as CONSULTAS passaram a usar B. Sem isto, "trocou" e "não
+    // trocou" teriam a mesma aparência: só o rótulo no menu mudaria.
+    await page.goto("/app/imoveis");
+    await expect(page.getByText("Imovel Exclusivo Multi B").first()).toBeVisible();
+    await expect(page.getByText("Imovel Exclusivo Multi A")).toHaveCount(0);
+
     // E volta.
     await page.getByRole("button", { name: "Trocar imobiliária" }).click();
     await page
@@ -181,6 +187,16 @@ test.describe("troca de organização", () => {
     await page.waitForURL(/\/app$/);
     await expect(page.getByText(ORG_MULTI_A.nome).first()).toBeVisible();
     await expect(page.getByRole("link", { name: "Configurações" })).toBeVisible();
+
+    // A reversão também é completa: os dados de B somem e os de A voltam.
+    await page.goto("/app/imoveis");
+    await expect(page.getByText("Imovel Exclusivo Multi A").first()).toBeVisible();
+    await expect(page.getByText("Imovel Exclusivo Multi B")).toHaveCount(0);
+
+    // E o fuso operacional é o de A: Configurações — que só o OWNER de A
+    // abre — mostra o fuso desta organização, não o da outra.
+    await page.goto("/app/configuracoes");
+    await expect(page.locator("#timezone")).toHaveValue("America/Sao_Paulo");
   });
 
   test("quem pertence a uma única imobiliária não vê seletor nenhum", async ({ page }) => {

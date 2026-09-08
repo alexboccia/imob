@@ -79,4 +79,64 @@ describe("derivação de slug", () => {
     expect(derivarSlug("Next Imóveis")).toEqual({ valido: true, slug: "next-imoveis" });
     expect(derivarSlug("App Imóveis")).toEqual({ valido: true, slug: "app-imoveis" });
   });
+
+  // =====================================================================
+  // REGRESSÃO — a classe de problema que "_next" revelou
+  // =====================================================================
+  // O bug: a comparação acontecia entre o candidato JÁ normalizado e a
+  // lista CRUA. "_next" normaliza para "next", que não estava na lista
+  // crua, e passava. Qualquer entrada futura com maiúscula, acento,
+  // ponto ou underscore escaparia do mesmo jeito.
+  //
+  // A correção não foi acrescentar "next" à lista: foi comparar os dois
+  // lados no MESMO espaço normalizado. Estes casos existem para que
+  // ninguém volte atrás.
+  test("nenhuma grafia que normalize para um namespace reservado é aceita", () => {
+    const variantes = [
+      "_next",
+      "NEXT",
+      "Next",
+      "  next  ",
+      "-next-",
+      "n-e-x-t".replace(/-/g, ""),
+      "APP",
+      " App ",
+      "a p p".replace(/ /g, ""),
+      "PLATFORM",
+      "Platform",
+      "plátform".normalize("NFC"),
+      "API",
+      "Cadastro",
+      "CADASTRO",
+      "cadastró",
+      "Imóveis".replace("ó", "o"),
+      "IMOVEIS",
+      "Contato",
+      "ANUNCIE",
+      "Vendidos",
+    ];
+
+    for (const variante of variantes) {
+      const resultado = derivarSlug(variante);
+      expect(
+        resultado.valido,
+        `"${variante}" normalizou para "${normalizarSlug(variante)}" e foi aceito`
+      ).toBe(false);
+    }
+  });
+
+  test("acentos são removidos ANTES da comparação, não depois", () => {
+    // "imóveis" e "IMÓVEIS" viram "imoveis", que é reservado porque
+    // /imoveis é um rewrite para a organização padrão.
+    expect(normalizarSlug("imóveis")).toBe("imoveis");
+    expect(derivarSlug("imóveis").valido).toBe(false);
+    expect(derivarSlug("IMÓVEIS").valido).toBe(false);
+  });
+
+  test("underscore e hífens repetidos não criam brechas", () => {
+    expect(normalizarSlug("_app_")).toBe("app");
+    expect(derivarSlug("_app_").valido).toBe(false);
+    expect(normalizarSlug("--api--")).toBe("api");
+    expect(derivarSlug("--api--").valido).toBe(false);
+  });
 });

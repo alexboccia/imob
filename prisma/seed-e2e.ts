@@ -684,6 +684,9 @@ async function main() {
           IDS_E2E.imovelTopOrgAnalytics,
           IDS_E2E.imovelSecundarioOrgAnalytics,
           IDS_E2E.imovelSemContatoOrgAnalytics,
+          // Fase 26 — imóveis fixos das organizações multi-org.
+          "e2e-imovel-multi-a",
+          "e2e-imovel-multi-b",
         ],
       },
     },
@@ -1704,6 +1707,21 @@ async function main() {
       role: "BROKER",
       status: "ACTIVE",
     },
+  });
+
+  // Um imóvel EXCLUSIVO de cada organização multi-org. É o que torna a
+  // troca observável de verdade: não basta o nome no menu mudar — as
+  // consultas precisam passar a usar o outro tenant. Sem dado
+  // distinguível, "trocou" e "não trocou" têm a mesma aparência.
+  await garantirImovel({
+    id: "e2e-imovel-multi-a",
+    organizationId: orgMultiA.organization.id,
+    title: "Imovel Exclusivo Multi A",
+  });
+  await garantirImovel({
+    id: "e2e-imovel-multi-b",
+    organizationId: orgMultiB.organization.id,
+    title: "Imovel Exclusivo Multi B",
   });
 
   // Fase 26 — organizações criadas pelo spec de cadastro self-service.
