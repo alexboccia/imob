@@ -148,23 +148,36 @@ test.describe("Site público — Home (Proposta 2)", () => {
     }
   });
 
-  test("Lançamentos, Destaques e Oportunidades mostram o imóvel com os 3 badges; 'Ver tudo' aponta pro filtro certo", async ({
+  test("a Home tem UMA vitrine editorial — as três seções por rótulo não existem mais", async ({
     page,
   }) => {
     await page.goto("/");
 
-    for (const { titulo, hrefParte } of [
-      { titulo: "Lançamentos", hrefParte: "lancamento=1" },
-      { titulo: "Destaques", hrefParte: "destaque=1" },
-      { titulo: "Oportunidades", hrefParte: "oportunidade=1" },
-    ]) {
-      const secao = page.locator("section").filter({ has: page.getByRole("heading", { level: 2, name: titulo }) });
-      await expect(secao.getByText(IMOVEL_COM_BADGES, { exact: true })).toBeVisible();
-      // role="button" (não "link"): Button com render={<Link/>} preserva
-      // role="button" mesmo composto sobre uma <a> de verdade — mesmo
-      // achado documentado em imoveis.spec.ts pro botão "+ Novo imóvel".
-      await expect(secao.getByRole("button", { name: "Ver tudo" })).toHaveAttribute("href", new RegExp(hrefParte));
+    // As antigas Lançamentos/Destaques/Oportunidades eram recortes
+    // automáticos por rótulo comercial. Foram substituídas por uma
+    // seleção editorial única.
+    //
+    // A asserção é sobre HEADINGS de seção, não sobre substring da
+    // página: as palavras continuam existindo legitimamente no menu
+    // ("Lançamentos") e nos badges dos cards, e um teste por substring
+    // acusaria falso.
+    for (const removida of ["Lançamentos", "Destaques", "Oportunidades"]) {
+      await expect(
+        page.getByRole("heading", { level: 2, name: removida, exact: true })
+      ).toHaveCount(0);
     }
+
+    const vitrine = page.locator("section").filter({
+      has: page.getByRole("heading", { level: 2, name: "Imóveis em destaque" }),
+    });
+    await expect(vitrine).toBeVisible();
+    // "Ver todos" leva à listagem completa desta organização — sem
+    // filtro por rótulo, porque a vitrine não é um recorte por rótulo.
+    // role="button": Button com render={<Link/>} preserva o role.
+    await expect(vitrine.getByRole("button", { name: "Ver todos" })).toHaveAttribute(
+      "href",
+      /\/imoveis$/
+    );
   });
 
   test("Comprar leva pra listagem filtrada por venda", async ({ page }) => {

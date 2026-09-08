@@ -13,6 +13,7 @@ import { ErroCampo } from "@/components/admin/ErroCampo";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { MAX_DESTAQUES_HOME, type OcupacaoVitrine } from "@/lib/vitrine-home";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -55,6 +56,7 @@ type ImovelFormValues = {
   lancamento: boolean;
   destaque: boolean;
   oportunidade: boolean;
+  posicaoDestaqueHome: number | null;
   slideshow: boolean;
   estagioObra: string | null;
   previsaoEntrega: Date | null;
@@ -75,6 +77,7 @@ export function ImovelForm({
   opcoesCaracteristicasCondominio = [],
   opcoesTiposResidencial = [],
   opcoesTiposComercial = [],
+  ocupacaoVitrine = [],
 }: {
   action: (prevState: ActionState, formData: FormData) => Promise<ActionState>;
   valoresIniciais?: Partial<ImovelFormValues>;
@@ -85,6 +88,8 @@ export function ImovelForm({
   opcoesCaracteristicasCondominio?: string[];
   opcoesTiposResidencial?: string[];
   opcoesTiposComercial?: string[];
+  /** Quem ocupa cada uma das quatro posições da vitrine da Home hoje. */
+  ocupacaoVitrine?: OcupacaoVitrine[];
 }) {
   const [estado, formAction] = useActionState(action, ESTADO_INICIAL_ACAO);
   const v = valoresIniciais ?? {};
@@ -199,6 +204,45 @@ export function ImovelForm({
       {/* "Lançamento" saiu deste grupo e virou seção própria (abaixo),
           junto dos campos que só existem por causa dele. Aqui ficam os
           rótulos que são só marcação comercial, sem campo associado. */}
+      {/* Vitrine editorial da Home — separada dos "Rótulos" abaixo de
+          propósito: aqueles marcam o imóvel (badge, filtro), este decide
+          o que a página inicial mostra. Um select, e não um checkbox,
+          porque a escolha carrega a ORDEM junto: selecionar e ordenar
+          numa interação só, sem arrastar nada. */}
+      <div>
+        <Label className="mb-2" htmlFor="posicaoDestaqueHome">
+          Página inicial
+        </Label>
+        <select
+          id="posicaoDestaqueHome"
+          name="posicaoDestaqueHome"
+          defaultValue={v.posicaoDestaqueHome ? String(v.posicaoDestaqueHome) : ""}
+          className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:max-w-sm"
+        >
+          <option value="">Não exibir na página inicial</option>
+          {ocupacaoVitrine.map(({ posicao, imovel }) => {
+            const ehEsteImovel = imovel !== null && imovel.id === propertyId;
+            // A ocupação é dita em texto: trocar a vitrine não pode
+            // derrubar o imóvel de outra pessoa sem que quem escolheu
+            // veja de quem era a vaga.
+            const sufixo = !imovel
+              ? "livre"
+              : ehEsteImovel
+                ? "atual"
+                : `ocupada por ${imovel.title}`;
+            return (
+              <option key={posicao} value={String(posicao)}>
+                {`${posicao}ª posição — ${sufixo}`}
+              </option>
+            );
+          })}
+        </select>
+        <p className="mt-1 text-xs text-muted-foreground">
+          A página inicial exibe até {MAX_DESTAQUES_HOME} imóveis em destaque, na ordem
+          escolhida aqui. Só aparecem os que estiverem disponíveis.
+        </p>
+      </div>
+
       <div>
         <Label className="mb-2">Rótulos</Label>
         <div className="flex flex-col gap-2">

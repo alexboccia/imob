@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
+import { interpretarPosicao } from "@/lib/vitrine-home";
 import { withOrganization } from "@/lib/tenant-context";
 import { verificarLimiteImoveis, verificarLimiteFotos, LimiteDoPlanoError } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
@@ -41,11 +42,17 @@ export async function criarImovel(
     throw erro;
   }
 
-  const imovel = await withOrganization(organizationId, () =>
-    prisma.property.create({
+  const destaque = await resolverPosicaoDestaque(organizationId, null, formData);
+  if (!destaque.ok) return destaque.estado;
+
+  let imovel: { id: string; title: string };
+  try {
+    imovel = await withOrganization(organizationId, () =>
+      prisma.property.create({
       data: {
         organizationId,
         ...camposImovel(dados),
+        homeHighlightPosition: destaque.posicao,
         // Só definido na criação: quem cadastra o imóvel vira o
         // responsável inicial. A edição não tem campo de UI para
         // reatribuir responsável, então não mexe nesse valor.
@@ -56,8 +63,17 @@ export async function criarImovel(
           create: { previousStatus: null, newStatus: dados.status, organizationId },
         },
       },
-    })
-  );
+      select: { id: true, title: true },
+      })
+    );
+  } catch (erro) {
+    if (ehColisaoDeDestaque(erro)) {
+      return erroGenerico(
+        "Outra pessoa acabou de usar essa posição na página inicial. Recarregue e escolha outra."
+      );
+    }
+    throw erro;
+  }
 
   await logActivity({
     organizationId,
@@ -77,6 +93,56 @@ export async function criarImovel(
   revalidatePath("/imoveis");
   revalidatePath("/");
   redirect(`/app/imoveis/${imovel.id}?salvo=1`);
+}
+
+// Aplica a escolha de vitrine junto do resto da edição. Devolve uma
+// mensagem factual quando a posição pedida já é de outro imóvel — nunca
+// remove o ocupante em silêncio, porque isso apagaria uma decisão
+// editorial que alguém tomou sem avisar quem tomou.
+async function resolverPosicaoDestaque(
+  organizationId: string,
+  imovelId: string | null,
+  formData: FormData
+): Promise<{ ok: true; posicao: number | null } | { ok: false; estado: ActionState }> {
+  const interpretado = interpretarPosicao(formData.get("posicaoDestaqueHome"));
+  if (!interpretado.valido) {
+    return { ok: false, estado: erroGenerico("Posição de destaque inválida.") };
+  }
+  if (interpretado.posicao === null) return { ok: true, posicao: null };
+
+  // Checagem para dar MENSAGEM boa. A garantia de verdade é o índice
+  // único (organizationId, homeHighlightPosition) — ver o catch de
+  // P2002 abaixo, que é quem decide sob concorrência.
+  const ocupante = await prisma.property.findFirst({
+    where: {
+      organizationId,
+      homeHighlightPosition: interpretado.posicao,
+      ...(imovelId ? { id: { not: imovelId } } : {}),
+    },
+    select: { title: true },
+  });
+  if (ocupante) {
+    return {
+      ok: false,
+      estado: erroGenerico(
+        `A posição ${interpretado.posicao} da página inicial já é do imóvel "${ocupante.title}". Escolha outra posição ou remova o destaque daquele imóvel.`
+      ),
+    };
+  }
+  return { ok: true, posicao: interpretado.posicao };
+}
+
+// A vitrine tem no máximo quatro posições e o banco garante isso com um
+// índice único. Uma corrida por posição chega aqui como P2002 — o
+// segundo a gravar perde, e recebe uma mensagem que explica o que
+// aconteceu em vez de um erro técnico.
+function ehColisaoDeDestaque(erro: unknown): boolean {
+  return (
+    typeof erro === "object" &&
+    erro !== null &&
+    "code" in erro &&
+    (erro as { code?: string }).code === "P2002"
+  );
 }
 
 export async function atualizarImovel(
@@ -100,6 +166,10 @@ export async function atualizarImovel(
     throw erro;
   }
 
+  const destaque = await resolverPosicaoDestaque(organizationId, imovelId, formData);
+  if (!destaque.ok) return destaque.estado;
+
+  try {
   await withOrganization(organizationId, async () => {
     const imovelAtual = await prisma.property.findUniqueOrThrow({
       where: { id: imovelId, organizationId },
@@ -114,6 +184,7 @@ export async function atualizarImovel(
         where: { id: imovelId, organizationId },
         data: {
           ...camposImovel(dados),
+          homeHighlightPosition: destaque.posicao,
           publishedAt:
             dados.status === "AVAILABLE" && !imovelAtual.publishedAt
               ? new Date()
@@ -134,6 +205,14 @@ export async function atualizarImovel(
       }),
     ]);
   });
+  } catch (erro) {
+    if (ehColisaoDeDestaque(erro)) {
+      return erroGenerico(
+        "Outra pessoa acabou de usar essa posição na página inicial. Recarregue e escolha outra."
+      );
+    }
+    throw erro;
+  }
 
   await logActivity({
     organizationId,

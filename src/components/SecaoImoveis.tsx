@@ -16,6 +16,14 @@ export function SecaoImoveis({
   descricao,
   imoveis,
   verTudoHref,
+  // Rótulo do link. Default "Ver tudo" — o texto que todas as seções já
+  // usam; a vitrine da Home pede "Ver todos" por concordância com
+  // "imóveis". Um parâmetro em vez de um componente novo.
+  verTudoRotulo = "Ver tudo",
+  // Colunas no desktop. As seções existentes mostram três; a vitrine
+  // mostra até quatro. Configurar o componente é melhor que duplicá-lo
+  // quase idêntico só por causa de uma coluna.
+  colunas = 3,
   basePath,
   id,
 }: {
@@ -23,6 +31,8 @@ export function SecaoImoveis({
   descricao?: string;
   imoveis: ReturnType<typeof paraImovelCard>[];
   verTudoHref?: string;
+  verTudoRotulo?: string;
+  colunas?: 3 | 4;
   basePath: string;
   id?: string;
 }) {
@@ -42,11 +52,22 @@ export function SecaoImoveis({
             nativeButton={false}
             render={<Link href={verTudoHref} />}
           >
-            Ver tudo
+            {verTudoRotulo}
           </Button>
         )}
       </div>
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Quatro cards lado a lado só a partir de xl: em lg (1024px) eles
+          ficariam estreitos demais para a foto dominante e os dados
+          essenciais caberem sem espremer. Abaixo disso a grade cai para
+          duas colunas e depois uma, que é o comportamento das outras
+          seções — nenhuma rolagem horizontal é introduzida. */}
+      <div
+        className={
+          colunas === 4
+            ? "grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4"
+            : "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+        }
+      >
         {imoveis.map((imovel) => (
           <ImovelCard key={imovel.id} imovel={imovel} basePath={basePath} />
         ))}

@@ -3,6 +3,7 @@ import { criarImovel } from "@/app/app/imoveis/actions";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
 import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
 import { requireOrganizationId } from "@/lib/tenant";
+import { buscarOcupacaoVitrine } from "@/lib/vitrine-home-consultas";
 import { withOrganization } from "@/lib/tenant-context";
 
 export default async function NovoImovelPage() {
@@ -14,6 +15,7 @@ export default async function NovoImovelPage() {
         buscarOpcoesTiposImovel(organizationId),
       ])
     );
+  const ocupacaoVitrine = await buscarOcupacaoVitrine(organizationId);
 
   return (
     <div>
@@ -24,6 +26,7 @@ export default async function NovoImovelPage() {
         opcoesCaracteristicasCondominio={opcoesCondominio}
         opcoesTiposResidencial={opcoesResidencial}
         opcoesTiposComercial={opcoesComercial}
+        ocupacaoVitrine={ocupacaoVitrine}
       />
     </div>
   );

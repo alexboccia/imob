@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ImovelForm } from "@/components/admin/ImovelForm";
+import { buscarOcupacaoVitrine } from "@/lib/vitrine-home-consultas";
 import { atualizarImovel } from "@/app/app/imoveis/actions";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
 import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
@@ -37,6 +38,9 @@ export default async function EditarImovelPage({
   // Fuso comercial da organização (Fase 18) — uma resolução por
   // carregamento, repassada a todos os itens da ficha.
   const fuso = await buscarFusoOrganizacao(organizationId);
+  // Ocupação das quatro posições da vitrine — uma consulta, usada só
+  // para rotular as opções do seletor.
+  const ocupacaoVitrine = await buscarOcupacaoVitrine(organizationId);
 
   const [
     [imovel, { opcoesImovel, opcoesCondominio }, { opcoesResidencial, opcoesComercial }, interesses],
@@ -134,6 +138,7 @@ export default async function EditarImovelPage({
           caracteristicasCondominio: imovel.condoFeatures,
           lancamento: imovel.isLaunch,
           destaque: imovel.isFeatured,
+          posicaoDestaqueHome: imovel.homeHighlightPosition,
           oportunidade: imovel.isOpportunity,
           slideshow: imovel.hasSlideshow,
           estagioObra: imovel.constructionStage,
@@ -149,6 +154,7 @@ export default async function EditarImovelPage({
         opcoesCaracteristicasCondominio={opcoesCondominio}
         opcoesTiposResidencial={opcoesResidencial}
         opcoesTiposComercial={opcoesComercial}
+        ocupacaoVitrine={ocupacaoVitrine}
       />
 
       <Card className="mt-6 max-w-3xl">

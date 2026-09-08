@@ -167,6 +167,8 @@ async function garantirImovel(opcoes: {
   isFeatured?: boolean;
   isLaunch?: boolean;
   hasSlideshow?: boolean;
+  // Vitrine editorial da Home: 1..4, ou ausente (fora da vitrine).
+  homeHighlightPosition?: number | null;
   // Busca do Hero — overrides opcionais, todos com o mesmo default de
   // sempre (nenhum call site existente muda de comportamento).
   type?: string;
@@ -207,6 +209,7 @@ async function garantirImovel(opcoes: {
     rentPrice: opcoes.rentPrice ?? null,
     isOpportunity: opcoes.isOpportunity ?? false,
     isFeatured: opcoes.isFeatured ?? false,
+    homeHighlightPosition: opcoes.homeHighlightPosition ?? null,
     isLaunch: opcoes.isLaunch ?? false,
     hasSlideshow: opcoes.hasSlideshow ?? false,
     constructionStage: opcoes.constructionStage ?? null,
@@ -783,6 +786,11 @@ async function main() {
   await garantirImovel({
     id: IDS_E2E.imovelComBadgesOrgA,
     organizationId: orgA.organization.id,
+    // Fase da vitrine — primeira posição da Home. O mesmo imóvel que
+    // carrega os três rótulos comerciais serve à vitrine, e é isso que
+    // permite provar que os conceitos são independentes: os rótulos
+    // continuam existindo na ficha e nos filtros, a vitrine é outra coisa.
+    homeHighlightPosition: 1,
     title: "Apartamento com 2 quartos à venda, 58m² – Santo Amaro",
     isOpportunity: true,
     isFeatured: true,
@@ -842,6 +850,10 @@ async function main() {
     neighborhood: "Cambuí",
     price: null,
     rentPrice: 2500,
+    // Segunda posição da vitrine: com dois imóveis a Home prova ORDEM,
+    // e não só presença. Um imóvel de aluguel em outra cidade também
+    // mostra que a vitrine não é um recorte por finalidade ou região.
+    homeHighlightPosition: 2,
   });
   // "Sala Comercial" já existe no CATÁLOGO (garantirTipoImovel acima),
   // mas buscarDadosFiltros só lista tipos que estão de fato EM USO por

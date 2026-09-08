@@ -269,6 +269,30 @@ model Property {
   isFeatured        Boolean            @default(false)
   isOpportunity     Boolean            @default(false)
   hasSlideshow      Boolean            @default(false)
+
+  // VITRINE EDITORIAL DA HOME — posição 1..4, ou null (não exibido).
+  //
+  // Um único campo carrega as DUAS informações que a vitrine precisa:
+  // se o imóvel foi escolhido (não-nulo) e em que ordem aparece (o
+  // valor). Dois campos — um booleano e um inteiro — permitiriam o
+  // estado incoerente "escolhido sem posição", que não significa nada.
+  //
+  // DELIBERADAMENTE SEPARADO de isFeatured. Aquele campo é um RÓTULO
+  // comercial: alimenta o badge "Destaque" na ficha, o filtro público
+  // ?destaque=1, o KPI do painel e o card — e uma imobiliária pode
+  // marcar dezenas de imóveis assim, legitimamente. A vitrine da Home é
+  // outra coisa: uma escolha editorial de no máximo quatro. Impor o
+  // teto ao isFeatured mudaria o significado dele em seis superfícies
+  // que não pediram nada.
+  //
+  // O @@unique abaixo é o que torna "no máximo 4" uma garantia
+  // ESTRUTURAL, e não uma contagem em memória: com posições restritas a
+  // 1..4 na validação, o banco não aceita um quinto. É também o que
+  // resolve concorrência — duas requisições disputando a mesma posição
+  // terminam com uma violação de unicidade, nunca com duas linhas.
+  // Postgres permite múltiplos NULL num índice único, então imóveis
+  // fora da vitrine não colidem entre si.
+  homeHighlightPosition Int?
   constructionStage ConstructionStage?
   deliveryForecast  DateTime?
   developer         String?
@@ -321,6 +345,7 @@ model Property {
   scheduledActivities ScheduledActivity[]
 
   @@unique([organizationId, code])
+  @@unique([organizationId, homeHighlightPosition])
   @@index([organizationId, status])
   @@index([organizationId, city, neighborhood])
   @@index([organizationId, purpose, type])

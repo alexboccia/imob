@@ -8,6 +8,7 @@ import { FaixaConfianca } from "@/components/FaixaConfianca";
 import { SecaoCaptacao } from "@/components/SecaoCaptacao";
 import { BlocoInstitucional } from "@/components/BlocoInstitucional";
 import { paraImovelCard } from "@/lib/imovel-card";
+import { MAX_DESTAQUES_HOME } from "@/lib/vitrine-home";
 import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
 import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
@@ -83,34 +84,32 @@ export default async function HomePage({
   if (!organization) notFound();
   const organizationId = organization.id;
   const basePath = resolverBasePath(orgSlug);
-  const ultimosCadastrados = { createdAt: "desc" } as const;
 
-  const [lancamentos, destaques, oportunidades, dadosFiltros, config, branding] =
-    await withOrganization(organizationId, () =>
+  // VITRINE EDITORIAL — uma consulta só, no lugar das três seções
+  // anteriores (Lançamentos, Destaques, Oportunidades), que eram
+  // recortes automáticos por rótulo comercial ordenados por data.
+  //
+  // Aqui não há heurística: são os imóveis que a imobiliária escolheu,
+  // na ordem que ela definiu. O filtro combina tenant + seleção +
+  // elegibilidade pública, ordena pela posição e limita no BANCO — nunca
+  // busca tudo para cortar em JavaScript. As fotos vêm no mesmo include
+  // de sempre, então a seção não acrescenta uma cadeia de consultas por
+  // card.
+  const [destaques, dadosFiltros, config, branding] = await withOrganization(
+    organizationId,
+    () =>
       Promise.all([
         buscarImoveis(
           organizationId,
-          { status: "AVAILABLE", isLaunch: true },
-          3,
-          ultimosCadastrados
-        ),
-        buscarImoveis(
-          organizationId,
-          { status: "AVAILABLE", isFeatured: true },
-          3,
-          ultimosCadastrados
-        ),
-        buscarImoveis(
-          organizationId,
-          { status: "AVAILABLE", isOpportunity: true },
-          3,
-          ultimosCadastrados
+          { homeHighlightPosition: { not: null }, status: "AVAILABLE" },
+          MAX_DESTAQUES_HOME,
+          { homeHighlightPosition: "asc" }
         ),
         buscarDadosFiltros(organizationId),
         buscarConfiguracaoContato(organizationId),
         buscarBranding(organizationId),
       ])
-    );
+  );
 
   // Mesmo nome público que o header/footer e o <title> já usam (ver
   // [orgSlug]/layout.tsx): displayName quando configurado, senão o nome
@@ -118,10 +117,13 @@ export default async function HomePage({
   // código — o texto dos blocos comerciais é montado a partir daqui.
   const nomePublico = branding.displayName ?? organization.name;
 
-  const temRotulos =
-    lancamentos.length > 0 || destaques.length > 0 || oportunidades.length > 0;
+  // Sem NENHUM destaque elegível, a seção simplesmente não existe — e a
+  // Home cai no bloco geral que já existia. Nada é preenchido
+  // automaticamente com imóveis aleatórios para "encher" a vitrine:
+  // vitrine é escolha, e escolha vazia é escolha.
+  const temVitrine = destaques.length > 0;
 
-  const geral = temRotulos
+  const geral = temVitrine
     ? []
     : await withOrganization(organizationId, () =>
         buscarImoveis(organizationId, { status: "AVAILABLE" }, 6)
@@ -149,25 +151,17 @@ export default async function HomePage({
       <FaixaConfianca />
 
       <SecaoImoveis
-        titulo="Lançamentos"
-        imoveis={lancamentos.map(paraImovelCard)}
-        verTudoHref={`${basePath}/imoveis?lancamento=1`}
-        basePath={basePath}
-      />
-      <SecaoImoveis
-        titulo="Destaques"
+        titulo="Imóveis em destaque"
         imoveis={destaques.map(paraImovelCard)}
-        verTudoHref={`${basePath}/imoveis?destaque=1`}
-        basePath={basePath}
-      />
-      <SecaoImoveis
-        titulo="Oportunidades"
-        imoveis={oportunidades.map(paraImovelCard)}
-        verTudoHref={`${basePath}/imoveis?oportunidade=1`}
+        // "Ver todos" leva à listagem completa desta organização, com o
+        // basePath multi-tenant já resolvido — nunca um slug fixo.
+        verTudoHref={`${basePath}/imoveis`}
+        verTudoRotulo="Ver todos"
+        colunas={4}
         basePath={basePath}
       />
 
-      {temRotulos ? null : geral.length === 0 ? (
+      {temVitrine ? null : geral.length === 0 ? (
         <section className="mx-auto max-w-6xl px-4 py-12">
           <h2 className={`${TITULO_SECAO} mb-6`}>Imóveis disponíveis</h2>
           <p className="text-gray-500">
