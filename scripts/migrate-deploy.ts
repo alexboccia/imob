@@ -1,12 +1,27 @@
-// Wrapper de release pra aplicar migrations Prisma em produção com
-// segurança — pensado pra rodar como o comando de um Job component
-// "Pre-Deploy" na DigitalOcean App Platform (ver
-// docs/operations/deployment-runbook.md, seção 3), antes da nova versão
-// da aplicação começar a servir tráfego. Também serve pro passo manual
-// documentado no mesmo runbook, quando/se a automação da DO ainda não
-// estiver configurada.
+// Wrapper de release, versionado, para aplicar migrations Prisma em
+// produção com segurança. Roda `prisma migrate deploy` — e só isso:
+// nunca `prisma migrate dev`, nunca `prisma db push`, nunca
+// `prisma migrate reset`, que não têm lugar nenhum neste fluxo.
 //
 //   npx tsx scripts/migrate-deploy.ts
+//
+// QUEM CHAMA ISTO, NO FLUXO NORMAL: o Job de pre-deploy da DigitalOcean
+// App Platform, antes de a versão nova da aplicação começar a servir
+// tráfego. Deploy com migration nova não tem passo humano.
+//
+// Nota de evidência, para este comentário não afirmar mais do que se
+// sabe: ESTE ARQUIVO é versionado; a configuração do Job (nome, tipo,
+// run command) vive no painel da DigitalOcean e não está no
+// repositório. O que sustenta a frase acima é observação operacional —
+// ver docs/operations/deployment-runbook.md, seções 3.2 e 3.2.1, que é
+// a fonte operacional atual sobre migrations em produção.
+//
+// EXECUÇÃO MANUAL É EXCEÇÃO: só faz sentido para recuperação ou
+// diagnóstico, diante de falha comprovada do pre-deploy ou de drift de
+// schema (runbook, seção 3.3). Rodar "por garantia" depois de todo
+// deploy é contraproducente — sendo idempotente, isso torna
+// indistinguível "o pipeline aplicou" de "o pipeline falhou e alguém
+// encobriu".
 //
 // Por que este wrapper em vez de chamar `npx prisma migrate deploy`
 // direto no Run/Build Command da DO:
@@ -15,10 +30,12 @@
 //     texto livre editável só no painel da DO;
 //   - nunca engole o código de saída: se a migration falhar, o processo
 //     sai != 0 e propaga pro Job/step que chamou (sem `|| true` em
-//     lugar nenhum) — é isso que faz uma migration com erro BLOQUEAR o
-//     release em vez de deixar a versão nova subir contra um schema
-//     incompatível (a causa raiz dos dois incidentes documentados no
-//     runbook);
+//     lugar nenhum). É o que a plataforma precisa para tratar a
+//     migration com erro como deployment falho, em vez de deixar a
+//     versão nova subir contra um schema incompatível (a causa raiz dos
+//     dois incidentes documentados no runbook). A DigitalOcean documenta
+//     que um Job PRE_DEPLOY com saída != 0 bloqueia o release; isso
+//     ainda não foi observado neste projeto — ver runbook, 3.3.1;
 //   - nunca imprime DATABASE_URL nem qualquer outra credencial — só
 //     repassa a variável de ambiente já presente pro processo filho
 //     (nunca interpolada em uma string de log).
