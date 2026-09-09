@@ -27,8 +27,10 @@ provedor, novo secret, nova dependência externa).
       fase, localmente — ver `database-restore-runbook.md`, seção 3;
       revalidar contra uma branch Neon de verdade quando houver acesso).
 - [ ] `npx prisma migrate status` limpo em produção.
-- [ ] Confirmado se migrations são aplicadas automaticamente no deploy
-      ou manualmente — ver `deployment-runbook.md`, seção 3.
+- [x] Confirmado **como** migrations chegam a produção: o Job de
+      pre-deploy `imob2` roda `scripts/migrate-deploy.ts` no deploy —
+      ver `deployment-runbook.md`, seções 3.2 e 3.2.1 (a evidência é
+      operacional; a configuração do Job não é versionada aqui).
 
 ## Armazenamento de mídia (R2)
 
