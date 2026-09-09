@@ -5,13 +5,16 @@ import { IDS_E2E } from "./helpers";
 // origem é capturada da URL/referrer, sobrevive à navegação interna e
 // viaja junto do evento.
 //
-// Roda contra o site público da organização de Analytics. Todo teste
-// INTERCEPTA a rota de tracking, então nenhum evento chega ao banco e os
-// números que analytics.spec.ts afirma continuam determinísticos.
+// Roda contra o site público da organização de TRACKING, dedicada a esta
+// spec e à de tracking. Todo teste intercepta a rota para LER o payload,
+// mas a interceptação não é o que protege os números de
+// analytics.spec.ts: o evento sai por navigator.sendBeacon, que
+// page.route/context.route não capturam de forma confiável. Quem protege
+// é a organização — nenhuma contagem absoluta é afirmada sobre esta.
 
-const BASE = "/e2e-org-analytics";
-const URL_IMOVEL = `${BASE}/imoveis/${IDS_E2E.imovelTopOrgAnalytics}`;
-const URL_OUTRO = `${BASE}/imoveis/${IDS_E2E.imovelSecundarioOrgAnalytics}`;
+const BASE = "/e2e-org-tracking";
+const URL_IMOVEL = `${BASE}/imoveis/${IDS_E2E.imovelTopOrgTracking}`;
+const URL_OUTRO = `${BASE}/imoveis/${IDS_E2E.imovelSecundarioOrgTracking}`;
 const ROTA_EVENTO = "**/api/analytics/evento";
 
 type Atribuicao = {
@@ -106,10 +109,10 @@ test.describe("Atribuição — jornada", () => {
     await expect.poll(() => eventos.length).toBeGreaterThan(0);
 
     await page.goto(`${URL_OUTRO}?utm_source=instagram&utm_campaign=nova`);
-    await expect.poll(() => eventos.filter((e) => e.propertyId === IDS_E2E.imovelSecundarioOrgAnalytics).length)
+    await expect.poll(() => eventos.filter((e) => e.propertyId === IDS_E2E.imovelSecundarioOrgTracking).length)
       .toBeGreaterThan(0);
 
-    const segundo = eventos.find((e) => e.propertyId === IDS_E2E.imovelSecundarioOrgAnalytics)!;
+    const segundo = eventos.find((e) => e.propertyId === IDS_E2E.imovelSecundarioOrgTracking)!;
     expect(segundo.atribuicao).toMatchObject({ utmSource: "instagram", utmCampaign: "nova" });
   });
 

@@ -9,35 +9,34 @@ import { IDS_E2E } from "./helpers";
 // funciona, e — a parte inegociável — o CTA de conversão continua
 // funcionando mesmo quando o tracking quebra.
 //
-// Roda contra o site público da Organização de Analytics, que tem
-// WhatsApp próprio no seed (a Org A liga/desliga o dela durante
-// site-publico.spec.ts, o que tornaria esta spec refém da ordem de
-// execução).
+// Roda contra o site público da Organização de TRACKING, dedicada a esta
+// spec e à de atribuição (a Org A liga/desliga o WhatsApp dela durante
+// site-publico.spec.ts; a Org de Analytics afirma contagens absolutas).
 //
-// Isso NÃO contamina os números que analytics.spec.ts afirma: em todo
-// teste daqui a rota de tracking é interceptada, abortada ou o
-// localStorage está bloqueado — nenhum evento chega ao banco. Os únicos
-// POSTs reais ao endpoint são os de payload INVÁLIDO do último bloco,
-// que por definição não gravam nada.
+// POR QUE UMA ORGANIZAÇÃO SÓ PRA ISTO — e por que a interceptação de
+// rota não bastava: o evento sai do cliente por `navigator.sendBeacon`
+// (src/lib/analytics-client.ts), e beacon NÃO é capturado de forma
+// confiável por page.route nem por context.route. Enquanto esta spec
+// dirigia o site da Organização de Analytics, uma visualização real
+// escapava de vez em quando e "20 visualizações" virava 21, derrubando
+// analytics.spec.ts no CI. Interceptar continua sendo o certo para LER o
+// payload; o que mudou é que um vazamento agora cai numa organização
+// cujos totais ninguém afirma.
 
-const BASE_PUBLICA = "/e2e-org-analytics";
-const URL_IMOVEL = `${BASE_PUBLICA}/imoveis/${IDS_E2E.imovelTopOrgAnalytics}`;
-const URL_OUTRO_IMOVEL = `${BASE_PUBLICA}/imoveis/${IDS_E2E.imovelSecundarioOrgAnalytics}`;
+const BASE_PUBLICA = "/e2e-org-tracking";
+const URL_IMOVEL = `${BASE_PUBLICA}/imoveis/${IDS_E2E.imovelTopOrgTracking}`;
+const URL_OUTRO_IMOVEL = `${BASE_PUBLICA}/imoveis/${IDS_E2E.imovelSecundarioOrgTracking}`;
 const ROTA_EVENTO = "**/api/analytics/evento";
 
-// BARREIRA DE CONTEXTO (Fase 17). Esta spec dirige o site público da
-// Organização de Analytics, e analytics.spec.ts — que roda logo em
-// seguida — afirma CONTAGENS ABSOLUTAS dessa mesma organização. Um único
-// evento de tracking que escape para o servidor faz "20 visualizações"
-// virar 21 e derruba a outra spec (achado real, reproduzido no CI: o
-// funil apareceu com 21).
+// BARREIRA DE CONTEXTO. Cada teste registra a sua própria interceptação
+// em `page.route`, que cobre só a página do fixture: navegação fora dela
+// (contexto criado à mão, aba nova) passaria direto. A rota de CONTEXTO
+// fecha essa parte — rotas de página têm precedência, então os coletores
+// de cada teste continuam funcionando exatamente como antes.
 //
-// Cada teste já registra a sua própria interceptação em `page.route`,
-// mas isso cobre só a página do fixture: qualquer navegação fora dela
-// (contexto criado à mão, aba nova) passaria direto. Esta rota de
-// CONTEXTO fecha a classe inteira do problema — rotas de página têm
-// precedência, então os coletores de cada teste continuam funcionando
-// exatamente como antes.
+// O que ela NÃO fecha, e por isso não é mais a única proteção: beacon.
+// Ver o cabeçalho do arquivo — a garantia de verdade é a organização
+// dedicada.
 test.beforeEach(async ({ context }) => {
   await context.route(ROTA_EVENTO, (rota) =>
     rota.fulfill({ status: 202, body: JSON.stringify({ ok: true }) })
@@ -65,7 +64,7 @@ test.describe("Tracking — visualização", () => {
 
     const view = eventos.find((e) => e.type === "PROPERTY_VIEW");
     expect(view).toBeDefined();
-    expect(view!.propertyId).toBe(IDS_E2E.imovelTopOrgAnalytics);
+    expect(view!.propertyId).toBe(IDS_E2E.imovelTopOrgTracking);
     // O identificador é um UUID sorteado pelo próprio navegador — nunca
     // e-mail, telefone ou qualquer atributo de device.
     expect(view!.visitorId).toMatch(
@@ -118,7 +117,7 @@ test.describe("Tracking — visualização", () => {
     // depois de um reload, o par (visitante, imóvel) é idêntico, que é
     // exatamente o que a janela de 30 min do servidor deduplica.
     const doMesmoImovel = vistos.filter(
-      (e) => e.type === "PROPERTY_VIEW" && e.propertyId === IDS_E2E.imovelTopOrgAnalytics
+      (e) => e.type === "PROPERTY_VIEW" && e.propertyId === IDS_E2E.imovelTopOrgTracking
     );
     for (const evento of doMesmoImovel) {
       expect(evento.visitorId).toBe(doMesmoImovel[0].visitorId);
@@ -157,7 +156,7 @@ test.describe("Tracking — intenção via WhatsApp", () => {
 
     await expect.poll(() => eventos.filter((e) => e.type === "WHATSAPP_CLICK").length).toBe(1);
     const clique = eventos.find((e) => e.type === "WHATSAPP_CLICK")!;
-    expect(clique.propertyId).toBe(IDS_E2E.imovelTopOrgAnalytics);
+    expect(clique.propertyId).toBe(IDS_E2E.imovelTopOrgTracking);
     expect(clique.placement).toBe("SIDEBAR");
   });
 
@@ -284,10 +283,10 @@ test.describe("Tracking — endpoint público", () => {
     request,
   }) => {
     const casos = [
-      { descricao: "tipo fora do catálogo", corpo: { orgSlug: "e2e-org-analytics", propertyId: IDS_E2E.imovelTopOrgAnalytics, type: "CONTACT_SUBMIT", visitorId: "3f8a1c2e-5b6d-4a7f-9c1e-2d3b4a5c6d7e" } },
-      { descricao: "visitorId forjado", corpo: { orgSlug: "e2e-org-analytics", propertyId: IDS_E2E.imovelTopOrgAnalytics, type: "PROPERTY_VIEW", visitorId: "pessoa@exemplo.com" } },
-      { descricao: "imóvel inexistente", corpo: { orgSlug: "e2e-org-analytics", propertyId: "nao-existe", type: "PROPERTY_VIEW", visitorId: "3f8a1c2e-5b6d-4a7f-9c1e-2d3b4a5c6d7e" } },
-      { descricao: "imóvel de OUTRA organização", corpo: { orgSlug: "e2e-org-analytics", propertyId: IDS_E2E.imovelOrgB, type: "PROPERTY_VIEW", visitorId: "3f8a1c2e-5b6d-4a7f-9c1e-2d3b4a5c6d7e" } },
+      { descricao: "tipo fora do catálogo", corpo: { orgSlug: "e2e-org-tracking", propertyId: IDS_E2E.imovelTopOrgTracking, type: "CONTACT_SUBMIT", visitorId: "3f8a1c2e-5b6d-4a7f-9c1e-2d3b4a5c6d7e" } },
+      { descricao: "visitorId forjado", corpo: { orgSlug: "e2e-org-tracking", propertyId: IDS_E2E.imovelTopOrgTracking, type: "PROPERTY_VIEW", visitorId: "pessoa@exemplo.com" } },
+      { descricao: "imóvel inexistente", corpo: { orgSlug: "e2e-org-tracking", propertyId: "nao-existe", type: "PROPERTY_VIEW", visitorId: "3f8a1c2e-5b6d-4a7f-9c1e-2d3b4a5c6d7e" } },
+      { descricao: "imóvel de OUTRA organização", corpo: { orgSlug: "e2e-org-tracking", propertyId: IDS_E2E.imovelOrgB, type: "PROPERTY_VIEW", visitorId: "3f8a1c2e-5b6d-4a7f-9c1e-2d3b4a5c6d7e" } },
       { descricao: "organização inexistente", corpo: { orgSlug: "nao-existe", propertyId: IDS_E2E.imovelComBadgesOrgA, type: "PROPERTY_VIEW", visitorId: "3f8a1c2e-5b6d-4a7f-9c1e-2d3b4a5c6d7e" } },
       { descricao: "corpo vazio", corpo: {} },
     ];

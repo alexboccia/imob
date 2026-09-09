@@ -59,6 +59,12 @@ export const IDS_E2E = {
   imovelTopOrgAnalytics: "e2e-imovel-analytics-top",
   imovelSecundarioOrgAnalytics: "e2e-imovel-analytics-2",
   imovelSemContatoOrgAnalytics: "e2e-imovel-analytics-sem-contato",
+  // Organização N — tracking/atribuição dirigidos por navegador. Ver o
+  // comentário do bloco no seed: existe porque o evento sai por
+  // navigator.sendBeacon, que a interceptação de rota do Playwright NÃO
+  // captura de forma confiável.
+  imovelTopOrgTracking: "e2e-imovel-tracking-top",
+  imovelSecundarioOrgTracking: "e2e-imovel-tracking-2",
 };
 
 // Fase P.10 — hostname fixo, custom domain ATIVO da Organização B, usado
@@ -432,6 +438,33 @@ async function main() {
     role: "OWNER",
   });
 
+  // Organização N — TRACKING E ATRIBUIÇÃO dirigidos por navegador.
+  //
+  // Existe por uma razão que nenhuma barreira de teste resolve: o evento
+  // de analytics sai do cliente por `navigator.sendBeacon`
+  // (src/lib/analytics-client.ts), e a interceptação de rota do
+  // Playwright — de página OU de contexto — não captura beacon de forma
+  // confiável. Enquanto analytics-tracking.spec.ts e atribuicao.spec.ts
+  // dirigiam o site público da Organização de Analytics, uma
+  // visualização real escapava de vez em quando e "20 visualizações"
+  // virava 21, derrubando analytics.spec.ts — que afirma CONTAGENS
+  // ABSOLUTAS daquela organização. Aconteceu no CI mais de uma vez.
+  //
+  // A correção é estrutural, e é a mesma doutrina das Organizações C, D e
+  // E: quem dirige um navegador contra um site público não pode ser a
+  // mesma organização de quem afirma números absolutos. Aqui, um beacon
+  // que escape cai numa organização cujos totais ninguém afirma — o
+  // vazamento deixa de ter consequência em vez de depender de sorte.
+  const orgTracking = await garantirOrganizacaoComDono({
+    slug: "e2e-org-tracking",
+    timezone: "UTC",
+    name: "Organização E2E Tracking",
+    planId: planoCompleto.id,
+    email: "owner-tracking@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+
   // Fase 17 — Organização E: dedicada à CENTRAL DE TRABALHO, pelo mesmo
   // motivo estrutural das organizações C e D. A Home é pessoal e afirma
   // números absolutos ("1 visita atrasada", "2 negociações"); colocá-la
@@ -607,6 +640,7 @@ async function main() {
     orgB.organization.id,
     orgAgenda.organization.id,
     orgAnalytics.organization.id,
+    orgTracking.organization.id,
     orgCentral.organization.id,
     orgFuso.organization.id,
     orgRestrita.organization.id,
@@ -1081,6 +1115,31 @@ async function main() {
       organizationId: orgAnalytics.organization.id,
       whatsapp: "11999990000",
       email: "contato@analytics.e2e.test",
+    },
+  });
+
+  // Site público da Organização de Tracking: dois imóveis (a spec prova
+  // que o visitante é o MESMO entre páginas diferentes) e WhatsApp
+  // próprio, que é o que faz os três CTAs existirem na ficha.
+  await garantirTipoImovel({ organizationId: orgTracking.organization.id, name: "Apartamento" });
+  await garantirImovel({
+    id: IDS_E2E.imovelTopOrgTracking,
+    organizationId: orgTracking.organization.id,
+    title: "Cobertura Tracking mais procurada",
+    neighborhood: "Moema",
+  });
+  await garantirImovel({
+    id: IDS_E2E.imovelSecundarioOrgTracking,
+    organizationId: orgTracking.organization.id,
+    title: "Studio Tracking segundo colocado",
+  });
+  await prisma.organizationSettings.upsert({
+    where: { organizationId: orgTracking.organization.id },
+    update: { whatsapp: "11999990000" },
+    create: {
+      organizationId: orgTracking.organization.id,
+      whatsapp: "11999990000",
+      email: "contato@tracking.e2e.test",
     },
   });
 

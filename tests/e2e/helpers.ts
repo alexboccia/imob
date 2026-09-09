@@ -182,6 +182,12 @@ export const IDS_E2E = {
   imovelTopOrgAnalytics: "e2e-imovel-analytics-top",
   imovelSecundarioOrgAnalytics: "e2e-imovel-analytics-2",
   imovelSemContatoOrgAnalytics: "e2e-imovel-analytics-sem-contato",
+  // Organização N — tracking/atribuição dirigidos por navegador. Separada
+  // da de Analytics porque o evento sai por navigator.sendBeacon, que a
+  // interceptação de rota do Playwright não captura de forma confiável:
+  // um vazamento tem de cair onde nenhum número absoluto é afirmado.
+  imovelTopOrgTracking: "e2e-imovel-tracking-top",
+  imovelSecundarioOrgTracking: "e2e-imovel-tracking-2",
 };
 
 // Fase P.10 — mesmo valor de prisma/seed-e2e.ts (duplicado de propósito,
