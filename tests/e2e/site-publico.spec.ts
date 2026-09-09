@@ -1096,7 +1096,13 @@ test.describe("Detalhe do imóvel — responsividade e isolamento", () => {
   // navegador — mede o que foi realmente aplicado, não a classe escrita.
   // As larguras de 1024 caem em 2 colunas de propósito: a partir de lg a
   // ficha vira duas colunas e este bloco ocupa 2/3 de um container de
-  // 1152px, ou seja ~618px — 4 colunas ali seriam ~140px cada.
+  // 1152px — 4 colunas ali seriam ~140px cada.
+  //
+  // Junto vão as invariantes estruturais da grade, medidas e não
+  // chutadas em pixel: ícone visível em todo item, texto de todos os
+  // itens começando na mesma coluna (é a caixa de 24px do ícone que
+  // reserva esse espaço), nada cortado e nenhum overflow. Característica
+  // de nome longo quebra em duas linhas — o que não pode é sumir.
   for (const [largura, colunas] of [
     [375, 1],
     [390, 1],
@@ -1106,20 +1112,74 @@ test.describe("Detalhe do imóvel — responsividade e isolamento", () => {
     [1280, 4],
     [1440, 4],
   ] as const) {
-    test(`${largura}px: grade de características em ${colunas} coluna(s), sem overflow`, async ({
+    test(`${largura}px: características em ${colunas} coluna(s), ícones alinhados, nada cortado`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: largura, height: 900 });
       await page.goto(URL_IMOVEL);
-      const grade = page.locator('section[data-caracteristicas="unidade"] ul');
-      await expect(grade).toBeVisible();
-      const aplicadas = await grade.evaluate(
-        (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length
-      );
-      expect(aplicadas, `colunas @ ${largura}px`).toBe(colunas);
+
+      for (const secao of ["unidade", "condominio"]) {
+        const grade = page.locator(`section[data-caracteristicas="${secao}"] ul`);
+        await expect(grade).toBeVisible();
+        const medida = await grade.evaluate((ul) => {
+          const itens = [...ul.querySelectorAll("li")];
+          return {
+            colunas: getComputedStyle(ul).gridTemplateColumns.split(" ").length,
+            iconesVisiveis: itens.every((li) => {
+              const r = li.querySelector("span[aria-hidden] svg")!.getBoundingClientRect();
+              return r.width > 0 && r.height > 0;
+            }),
+            xDoTexto: new Set(
+              itens.map((li) =>
+                Math.round(li.querySelector("span:last-child")!.getBoundingClientRect().left)
+              )
+            ).size,
+            cortado: itens.some((li) => {
+              const texto = li.querySelector("span:last-child")!;
+              const estilo = getComputedStyle(texto);
+              return (
+                li.scrollWidth > li.clientWidth + 1 ||
+                estilo.webkitLineClamp !== "none" ||
+                estilo.textOverflow === "ellipsis"
+              );
+            }),
+          };
+        });
+        expect(medida.colunas, `colunas de ${secao} @ ${largura}px`).toBe(colunas);
+        expect(medida.iconesVisiveis, `ícones de ${secao} @ ${largura}px`).toBe(true);
+        // Uma posição de início de texto por coluna da grade: nenhum
+        // ícone empurra um texto mais que o outro.
+        expect(medida.xDoTexto, `alinhamento de ${secao} @ ${largura}px`).toBeLessThanOrEqual(
+          colunas
+        );
+        expect(medida.cortado, `texto cortado em ${secao} @ ${largura}px`).toBe(false);
+      }
+
       expect(await semOverflow(page), `Características @ ${largura}px`).toBe(true);
     });
   }
+
+  test("a transição unidade -> condomínio respira mais que a distância entre blocos vizinhos", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(URL_IMOVEL);
+    // Relação, não pixel: o que precisa continuar verdadeiro é que as
+    // duas grades — que têm a mesma aparência — fiquem MAIS separadas
+    // entre si do que do bloco anterior da ficha.
+    const { entreSecoes, antesDaPrimeira } = await page.evaluate(() => {
+      const secoes = [...document.querySelectorAll("section[data-caracteristicas]")];
+      const descricao = [...document.querySelectorAll("h2")]
+        .find((h) => h.textContent === "Descrição")!
+        .closest("section")!;
+      return {
+        entreSecoes: secoes[1].getBoundingClientRect().top - secoes[0].getBoundingClientRect().bottom,
+        antesDaPrimeira:
+          secoes[0].getBoundingClientRect().top - descricao.getBoundingClientRect().bottom,
+      };
+    });
+    expect(entreSecoes).toBeGreaterThan(antesDaPrimeira);
+  });
 
   test("acima de lg a barra fixa não existe (o card lateral fica visível)", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });

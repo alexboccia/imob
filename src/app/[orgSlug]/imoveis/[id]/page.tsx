@@ -30,10 +30,7 @@ import { BotaoCompartilhar } from "@/components/BotaoCompartilhar";
 import { EvolucaoObra } from "@/components/EvolucaoObra";
 import { CarrosselPlantas } from "@/components/CarrosselPlantas";
 import { ImovelCard } from "@/components/ImovelCard";
-import {
-  CaracteristicasUnidade,
-  CaracteristicasCondominio,
-} from "@/components/imovel/Caracteristicas";
+import { CaracteristicasDoImovel } from "@/components/imovel/Caracteristicas";
 import { CardContatoImovel } from "@/components/imovel/CardContatoImovel";
 import { RastreioVisualizacaoImovel } from "@/components/analytics/RastreioVisualizacaoImovel";
 import { ResumoComercialImovel } from "@/components/imovel/ResumoComercialImovel";
@@ -403,7 +400,11 @@ export default async function DetalheImovelPage({
           curtíssimas. Abaixo de lg tudo empilha e a barra fixa do rodapé
           cobre a conversão. */}
       <div className="mt-10 grid grid-cols-1 gap-8 lg:grid-cols-3">
-        <div className="space-y-8 lg:col-span-2">
+        {/* space-y-10 (era 8): mais respiro entre os blocos da ficha —
+            descrição, características, obra, plantas e localização
+            passam a ser percebidos como blocos próprios, sem alongar a
+            página com áreas vazias. */}
+        <div className="space-y-10 lg:col-span-2">
           {/* Com obra em andamento, a evolução vem ANTES da descrição:
               é a pergunta que o visitante faz primeiro num imóvel que
               ainda está sendo construído. Pronto (ou sem estágio
@@ -429,9 +430,7 @@ export default async function DetalheImovelPage({
               </p>
             </section>
           )}
-          <CaracteristicasUnidade imovel={imovel} />
-
-          <CaracteristicasCondominio itens={imovel.condoFeatures} />
+          <CaracteristicasDoImovel imovel={imovel} />
 
           {!emObra && (
             <EvolucaoObra
