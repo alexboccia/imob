@@ -5,6 +5,7 @@ import {
   bootstrapStarter,
   bootstrapStarterComRetry,
   modulosObrigatoriosFaltando,
+  CODIGO_PADRAO,
 } from "../../scripts/bootstrap-starter-p9";
 import {
   criarPlano,
@@ -16,12 +17,26 @@ import {
   limparOrganizacao,
 } from "@/test/fixtures";
 
-// Plan.code é catálogo global único ("STARTER" literal, não sufixado como
-// as fixtures normais) — por isso, diferente do resto da suíte, este
-// arquivo limpa e recria o STARTER a cada teste em vez de usar
-// identificadores únicos por teste. Module é global e nunca é apagado
-// (outros testes dependem dele existir) — os testes aqui só leem/criam
-// módulos, nunca deletam.
+// PROPRIEDADE DO DADO: cada teste daqui cria e destrói um Plan COM CÓDIGO
+// SÓ DELE (bootstrapStarter recebe o código; o padrão continua sendo
+// "STARTER" e é o que a execução real usa).
+//
+// Antes este arquivo operava sobre a linha global "STARTER" e exigia a
+// AUSÊNCIA dela. Isso deixou de ser verdade quando o cadastro
+// self-service (Fase 26) passou a criar organizações reais nesse plano:
+// depois de qualquer rodada de E2E o banco de teste fica com
+// organizações legítimas presas ao STARTER, `limparStarter` — que se
+// recusa, corretamente, a apagar o que não é seu — preserva a linha, e
+// três testes daqui passavam a falhar PARA SEMPRE naquele banco. No CI
+// isso nunca aparecia porque lá o Vitest roda antes do E2E, em banco
+// recém-criado.
+//
+// A correção é de posse, não de asserção: nenhum teste disputa mais uma
+// linha de catálogo global. O que o produto realmente cria continua
+// preso por uma asserção sobre CODIGO_PADRAO.
+//
+// Module é global e nunca é apagado (outros testes dependem dele
+// existir) — os testes aqui só leem/criam módulos, nunca deletam.
 //
 // `bootstrapStarter`/`bootstrapStarterComRetry` são tipados pro client
 // Prisma cru (uso real do script, standalone) — o client tenant-scoped
@@ -37,8 +52,16 @@ async function garantirModulosObrigatorios(): Promise<void> {
   }
 }
 
-async function buscarStarterCompleto() {
-  const plano = await prisma.plan.findUnique({ where: { code: "STARTER" } });
+// Um código por teste, no formato do resto da suíte (sufixo único).
+const codigosCriados = new Set<string>();
+function codigoDeTeste(): string {
+  const codigo = `STARTER-TEST-${Math.random().toString(36).slice(2, 10)}`;
+  codigosCriados.add(codigo);
+  return codigo;
+}
+
+async function buscarStarterCompleto(codigo: string) {
+  const plano = await prisma.plan.findUnique({ where: { code: codigo } });
   if (!plano) return null;
   const limits = await prisma.planLimit.findMany({ where: { planId: plano.id } });
   const modules = await prisma.planModule.findMany({
@@ -48,25 +71,15 @@ async function buscarStarterCompleto() {
   return { plano, limits, modules };
 }
 
-async function limparStarter(): Promise<void> {
-  const plano = await prisma.plan.findUnique({ where: { code: "STARTER" } });
+async function limparPlanoDoTeste(codigo: string): Promise<void> {
+  const plano = await prisma.plan.findUnique({ where: { code: codigo } });
   if (!plano) return;
 
-  // PROPRIEDADE, não força bruta (Fase 27). STARTER é uma linha de
-  // CATÁLOGO GLOBAL, e este arquivo só pode apagá-la enquanto for de
-  // fato o dono dela. Outras superfícies do produto criam organizações
-  // nesse plano — o cadastro self-service resolve exatamente
-  // `code: "STARTER"` —, e uma organização alheia presa a ele significa
-  // que a linha não é nossa para remover.
-  //
-  // Sem esta checagem, o delete estourava violação de chave estrangeira
-  // DENTRO de um afterEach, e um hook que falha derruba TODOS os testes
-  // do arquivo, inclusive os puros que nem tocam o banco. Foi
-  // exatamente isso que aconteceu no CI.
-  //
-  // Isto não afrouxa nenhuma asserção: os testes continuam provando o
-  // que bootstrapStarter faz. O que muda é a limpeza deixar de destruir
-  // o que pertence a outro.
+  // A guarda de posse continua aqui como rede: o plano é do teste, então
+  // ninguém deveria estar usando — se alguém estiver, o delete estouraria
+  // violação de chave estrangeira DENTRO de um afterEach, e um hook que
+  // falha derruba TODOS os testes do arquivo, inclusive os puros que nem
+  // tocam o banco.
   const organizacoesUsando = await prisma.organization.count({ where: { planId: plano.id } });
   if (organizacoesUsando > 0) return;
 
@@ -76,7 +89,10 @@ async function limparStarter(): Promise<void> {
 }
 
 afterEach(async () => {
-  await limparStarter();
+  for (const codigo of codigosCriados) {
+    await limparPlanoDoTeste(codigo);
+  }
+  codigosCriados.clear();
 });
 
 describe("bootstrapStarter — pura", () => {
@@ -92,14 +108,15 @@ describe("bootstrapStarter — pura", () => {
 });
 
 describe("bootstrapStarter — banco real", () => {
-  test("A/B/C/D) cria STARTER ausente com valores e limites e módulos corretos", async () => {
+  test("A/B/C/D) cria o plano ausente com valores e limites e módulos corretos", async () => {
+    const codigo = codigoDeTeste();
     await garantirModulosObrigatorios();
-    await bootstrapStarter(db);
+    await bootstrapStarter(db, { codigo });
 
-    const resultado = await buscarStarterCompleto();
+    const resultado = await buscarStarterCompleto(codigo);
     expect(resultado).not.toBeNull();
     expect(resultado!.plano).toMatchObject({
-      code: "STARTER",
+      code: codigo,
       name: "Starter",
       priceMonthlyCents: 0,
       isTrial: true,
@@ -125,10 +142,11 @@ describe("bootstrapStarter — banco real", () => {
   });
 
   test("E/F) rerun preserva customização feita depois da primeira execução", async () => {
+    const codigo = codigoDeTeste();
     await garantirModulosObrigatorios();
-    await bootstrapStarter(db);
+    await bootstrapStarter(db, { codigo });
 
-    const antes = await buscarStarterCompleto();
+    const antes = await buscarStarterCompleto(codigo);
     // Simula edição via Platform Admin depois do bootstrap inicial.
     await prisma.plan.update({ where: { id: antes!.plano.id }, data: { priceMonthlyCents: 1234 } });
     await prisma.planLimit.update({
@@ -138,9 +156,9 @@ describe("bootstrapStarter — banco real", () => {
     const crmModule = antes!.modules.find((m) => m.module.code === "crm")!;
     await prisma.planModule.update({ where: { id: crmModule.id }, data: { enabled: false } });
 
-    await bootstrapStarter(db);
+    await bootstrapStarter(db, { codigo });
 
-    const depois = await buscarStarterCompleto();
+    const depois = await buscarStarterCompleto(codigo);
     expect(depois!.plano.priceMonthlyCents).toBe(1234);
     const limitesPorFeature = Object.fromEntries(depois!.limits.map((l) => [l.feature, l.limit]));
     expect(limitesPorFeature.PROPERTIES).toBe(99);
@@ -148,7 +166,8 @@ describe("bootstrapStarter — banco real", () => {
     expect(crmDepois.enabled).toBe(false);
   });
 
-  test("G) módulo obrigatório ausente aborta sem criar STARTER parcial (via helper puro, catálogo real preservado)", async () => {
+  test("G) módulo obrigatório ausente aborta sem criar plano parcial (via helper puro, catálogo real preservado)", async () => {
+    const codigo = codigoDeTeste();
     // Não apaga `crm` do catálogo real e compartilhado — testa a mesma
     // checagem que a transação usa, via o helper puro exportado (ver
     // suite "pura" acima), e confirma que a falha ocorre ANTES de
@@ -160,22 +179,23 @@ describe("bootstrapStarter — banco real", () => {
     // Plan e de qualquer create).
     expect(modulosObrigatoriosFaltando([{ code: "core" }])).toEqual(["properties", "crm"]);
 
-    const existeAntes = await prisma.plan.findUnique({ where: { code: "STARTER" } });
+    const existeAntes = await prisma.plan.findUnique({ where: { code: codigo } });
     expect(existeAntes).toBeNull();
   });
 
   test("H) duas execuções concorrentes terminam sem duplicata e sem erro não tratado", async () => {
+    const codigo = codigoDeTeste();
     await garantirModulosObrigatorios();
 
     await Promise.all([
-      bootstrapStarterComRetry(db),
-      bootstrapStarterComRetry(db),
+      bootstrapStarterComRetry(db, { codigo }),
+      bootstrapStarterComRetry(db, { codigo }),
     ]);
 
-    const planos = await prisma.plan.findMany({ where: { code: "STARTER" } });
+    const planos = await prisma.plan.findMany({ where: { code: codigo } });
     expect(planos).toHaveLength(1);
 
-    const resultado = await buscarStarterCompleto();
+    const resultado = await buscarStarterCompleto(codigo);
     expect(resultado!.limits).toHaveLength(4);
     const totalModulosCatalogo = await prisma.module.count();
     expect(resultado!.modules).toHaveLength(totalModulosCatalogo);
@@ -189,6 +209,7 @@ describe("bootstrapStarter — banco real", () => {
     // fixamos registros específicos por ID antes/depois — prova
     // equivalente (nenhuma dessas linhas específicas foi tocada) e
     // robusta sob paralelismo.
+    const codigo = codigoDeTeste();
     await garantirModulosObrigatorios();
     const outroPlano = await criarPlano({ priceMonthlyCents: 55500, limites: { PROPERTIES: 7 } });
     const org = await criarOrganizacao({ planId: outroPlano.id });
@@ -214,7 +235,7 @@ describe("bootstrapStarter — banco real", () => {
       operador: await prisma.platformOperator.findUniqueOrThrow({ where: { id: operador.id } }),
     };
 
-    await bootstrapStarter(db);
+    await bootstrapStarter(db, { codigo });
 
     const depois = {
       organization: await prisma.organization.findUniqueOrThrow({ where: { id: org.id } }),
@@ -239,9 +260,18 @@ describe("bootstrapStarter — banco real", () => {
   });
 
   test("dry-run não escreve nada", async () => {
+    const codigo = codigoDeTeste();
     await garantirModulosObrigatorios();
-    await bootstrapStarter(db, { dryRun: true });
-    const existe = await prisma.plan.findUnique({ where: { code: "STARTER" } });
+    await bootstrapStarter(db, { dryRun: true, codigo });
+    const existe = await prisma.plan.findUnique({ where: { code: codigo } });
     expect(existe).toBeNull();
+  });
+
+  // O que a execução REAL cria continua preso: o código padrão do script
+  // é o literal que o cadastro self-service resolve. Sem esta asserção, a
+  // parametrização acima poderia mudar o plano de produção sem nenhum
+  // teste reclamar.
+  test("o código padrão do script continua sendo STARTER", () => {
+    expect(CODIGO_PADRAO).toBe("STARTER");
   });
 });

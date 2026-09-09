@@ -36,6 +36,22 @@ const STARTER = {
 } as const;
 
 const MODULOS_OBRIGATORIOS = ["core", "properties", "crm"];
+
+// O código do plano é parâmetro, com "STARTER" como padrão — a execução
+// real (CLI, abaixo) nunca passa nada e continua criando exatamente o
+// STARTER de sempre.
+//
+// A razão de existir do parâmetro é de PROPRIEDADE, não de configuração:
+// Plan.code é catálogo GLOBAL e a linha "STARTER" é usada de verdade
+// pelo cadastro self-service (que a resolve por código) e pelo seed de
+// E2E. Um teste de integração que exigisse a AUSÊNCIA da linha "STARTER"
+// estaria disputando a posse dela com o resto do produto: bastava um
+// E2E de cadastro ter rodado antes, deixando uma organização legítima
+// presa ao plano, pra esse teste falhar pelo resto da vida daquele
+// banco. Com o código parametrizado, o teste cria e destrói uma linha
+// SÓ DELE e não depende mais do estado global (ver
+// bootstrap-starter-p9.test.ts).
+export const CODIGO_PADRAO = STARTER.code;
 const MAX_TENTATIVAS = 3;
 
 function isUniqueViolation(erro: unknown): boolean {
@@ -53,9 +69,10 @@ export function modulosObrigatoriosFaltando(todosModulos: { code: string }[]): s
 // do STARTER, ou nada. Nunca deixa um STARTER parcialmente configurado.
 export async function bootstrapStarter(
   prisma: PrismaClient,
-  options: { dryRun?: boolean } = {}
+  options: { dryRun?: boolean; codigo?: string } = {}
 ): Promise<void> {
   const dryRun = options.dryRun ?? false;
+  const codigo = options.codigo ?? CODIGO_PADRAO;
 
   await prisma.$transaction(async (tx) => {
     const todosModulos = await tx.module.findMany({ select: { id: true, code: true } });
@@ -66,11 +83,11 @@ export async function bootstrapStarter(
       );
     }
 
-    const planoExistente = await tx.plan.findUnique({ where: { code: STARTER.code } });
+    const planoExistente = await tx.plan.findUnique({ where: { code: codigo } });
 
     if (!planoExistente) {
       if (dryRun) {
-        console.log("[dry-run] STARTER seria criado.");
+        console.log(`[dry-run] ${codigo} seria criado.`);
         for (const feature of Object.keys(STARTER.limites)) {
           console.log(`[dry-run] PlanLimit ${feature} seria criado.`);
         }
@@ -83,14 +100,14 @@ export async function bootstrapStarter(
 
       const plano = await tx.plan.create({
         data: {
-          code: STARTER.code,
+          code: codigo,
           name: STARTER.name,
           priceMonthlyCents: STARTER.priceMonthlyCents,
           isTrial: STARTER.isTrial,
           trialDays: STARTER.trialDays,
         },
       });
-      console.log("STARTER criado.");
+      console.log(`${codigo} criado.`);
 
       for (const [feature, limit] of Object.entries(STARTER.limites)) {
         await tx.planLimit.create({ data: { planId: plano.id, feature, limit } });
@@ -105,7 +122,7 @@ export async function bootstrapStarter(
       return;
     }
 
-    console.log("STARTER já existe; preservando configuração.");
+    console.log(`${codigo} já existe; preservando configuração.`);
 
     for (const feature of Object.keys(STARTER.limites)) {
       const existente = await tx.planLimit.findUnique({
@@ -143,7 +160,7 @@ export async function bootstrapStarter(
 // obrigatório ausente) propaga e aborta imediatamente, sem retry.
 export async function bootstrapStarterComRetry(
   prisma: PrismaClient,
-  options: { dryRun?: boolean } = {}
+  options: { dryRun?: boolean; codigo?: string } = {}
 ): Promise<void> {
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
     try {
