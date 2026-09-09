@@ -197,6 +197,8 @@ export default async function ListaImoveisPage({
           price: true,
           rentPrice: true,
           bedrooms: true,
+          totalArea: true,
+          bathrooms: true,
           parkingSpots: true,
           isLaunch: true,
           isFeatured: true,

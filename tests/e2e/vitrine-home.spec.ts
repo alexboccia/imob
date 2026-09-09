@@ -146,3 +146,78 @@ test.describe("responsivo", () => {
     });
   }
 });
+
+// =======================================================================
+// Card público — estrutura visual
+// =======================================================================
+// Estes testes são sobre COMPOSIÇÃO, não sobre pixels: provam que o card
+// entrega foto, informação essencial, preço destacado e atributos na
+// base — e que quatro deles cabem lado a lado em desktop, que é o
+// requisito estrutural da faixa.
+
+test.describe("card do imóvel", () => {
+  test("mostra foto, categoria, título, localização, preço e atributos", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const card = vitrine(page)
+      .locator("a")
+      .filter({ hasText: IMOVEL_POSICAO_1 })
+      .first();
+
+    // Os imóveis do seed não têm foto, e o card cai no fallback que já
+    // existia — comportamento real preservado, não uma imagem
+    // artificial inventada para a vitrine.
+    await expect(card.getByText("Sem foto")).toBeVisible();
+    // Categoria: TIPO · OPERAÇÃO, na terminologia real do produto.
+    await expect(card.getByText(/Apartamento · Comprar/i)).toBeVisible();
+    await expect(card.getByText(IMOVEL_POSICAO_1, { exact: true })).toBeVisible();
+    await expect(card.getByText(/Santo Amaro/)).toBeVisible();
+    await expect(card.getByText(/^R\$/)).toBeVisible();
+    // Atributos com a unidade em TEXTO — quem não enxerga o ícone
+    // continua sabendo do que se trata.
+    await expect(card.getByText(/58 m²/)).toBeVisible();
+
+    // Badge comercial legítimo preservado; nenhum badge novo foi criado
+    // a partir da vitrine.
+    await expect(card.getByText("Destaque", { exact: true })).toBeVisible();
+  });
+
+  test("não existe coração/favorito — o produto não tem favoritos", async ({ page }) => {
+    await page.goto("/");
+    const secao = vitrine(page);
+    await expect(secao.getByRole("button", { name: /favorit/i })).toHaveCount(0);
+    await expect(secao.locator("[aria-label*='avorit']")).toHaveCount(0);
+  });
+
+  test("o card inteiro é um link crawlável para a ficha", async ({ page }) => {
+    await page.goto("/");
+    const card = vitrine(page).locator("a").filter({ hasText: IMOVEL_POSICAO_1 }).first();
+    // href de verdade, não botão JS: o buscador precisa seguir.
+    await expect(card).toHaveAttribute("href", /\/imoveis\/.+/);
+  });
+
+  for (const largura of [1280, 1440]) {
+    test(`${largura}px: os quatro cards ficam na mesma linha`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 1000 });
+      await page.goto("/");
+
+      const cards = vitrine(page).locator("a[href*='/imoveis/']");
+      await expect(cards).toHaveCount(4);
+
+      const caixas = await cards.evaluateAll((nos) =>
+        nos.map((no) => {
+          const r = no.getBoundingClientRect();
+          return { top: Math.round(r.top), largura: Math.round(r.width) };
+        })
+      );
+
+      // Mesmo topo = mesma linha. Se o quarto card quebrasse, o topo
+      // dele seria diferente dos demais.
+      const topos = new Set(caixas.map((c) => c.top));
+      expect(topos.size, `cards em ${topos.size} linhas em ${largura}px`).toBe(1);
+      // E nenhum card colapsado.
+      expect(caixas.every((c) => c.largura > 0)).toBe(true);
+    });
+  }
+});

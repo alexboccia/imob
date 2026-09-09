@@ -14,7 +14,9 @@ import {
 import {
   IconeChevronEsquerdo,
   IconeChevronDireito,
+  IconeArea,
   IconeQuartos,
+  IconeBanheiro,
   IconeVaga,
 } from "@/components/icons";
 import { TITULO_CARD } from "@/lib/site-typography";
@@ -33,6 +35,8 @@ type ImovelCardProps = {
     preco: unknown;
     precoAluguel?: unknown;
     quartos: number | null;
+    areaTotal?: number | null;
+    banheiros?: number | null;
     vagasGaragem: number | null;
     lancamento: boolean;
     destaque: boolean;
@@ -64,7 +68,11 @@ export function ImovelCard({
   return (
     <Link
       href={`${basePath}/imoveis/${imovel.id}`}
-      className="block overflow-hidden rounded-xl border border-gray-200 bg-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
+      // flex-col + h-full: numa grade de quatro colunas os cards
+      // precisam terminar na mesma linha mesmo com títulos de tamanhos
+      // diferentes. A altura NÃO é fixa (cortaria conteúdo) — o bloco de
+      // preço/atributos é empurrado para baixo com mt-auto.
+      className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
     >
       <div className="relative aspect-[4/3] bg-gray-100 group">
         {fotos.length > 0 ? (
@@ -147,40 +155,77 @@ export function ImovelCard({
           </>
         )}
       </div>
-      <div className="p-4">
+      {/* flex-1 + flex-col: o conteúdo cresce e o rodapé (preço +
+          atributos) desce para a base, alinhando os cards da faixa. */}
+      <div className="flex flex-1 flex-col p-5">
         <p className="text-xs font-medium tracking-wide text-gray-500 uppercase">
           {imovel.tipo} ·{" "}
           {FINALIDADE_LABEL[imovel.finalidade] ?? imovel.finalidade}
         </p>
-        <h3 className={`mt-1.5 line-clamp-1 ${TITULO_CARD}`}>{imovel.titulo}</h3>
-        <p className="mt-0.5 text-sm text-gray-500">
+        {/* Duas linhas no máximo: um título longo não pode esticar o card
+            indefinidamente, e cortar em uma linha perdia informação útil
+            de imóveis com endereço no título. */}
+        <h3 className={`mt-2 line-clamp-2 ${TITULO_CARD}`}>{imovel.titulo}</h3>
+        <p className="mt-1 line-clamp-1 text-sm text-gray-500">
           {imovel.bairro}, {imovel.cidade} - {imovel.estado}
         </p>
-        <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3">
-          <span className="text-lg font-bold text-gray-900">
-            {imovel.preco != null
-              ? formatarPreco(imovel.preco)
-              : imovel.precoAluguel != null
-                ? `${formatarPreco(imovel.precoAluguel)}/mês`
-                : formatarPreco(null)}
-          </span>
-          {(imovel.quartos || imovel.vagasGaragem) && (
-            <span className="flex items-center gap-3 text-sm text-gray-500">
-              {imovel.quartos ? (
-                <span className="flex items-center gap-1">
-                  <IconeQuartos className="size-4" />
-                  {imovel.quartos}
+
+        {/* mt-auto: o preço encosta na base do card, não logo abaixo do
+            título — é o que mantém a faixa alinhada. */}
+        <p className="mt-auto pt-4 text-xl font-bold text-gray-900">
+          {imovel.preco != null
+            ? formatarPreco(imovel.preco)
+            : imovel.precoAluguel != null
+              ? `${formatarPreco(imovel.precoAluguel)}/mês`
+              : formatarPreco(null)}
+        </p>
+
+        {/* Atributos só aparecem quando existem — mesma regra da ficha do
+            imóvel (CaracteristicasImovel): nulo e zero são ausência, e
+            "0 banheiros" seria uma afirmação que o cadastro não fez.
+            Se nenhum existir, a linha e o divisor somem junto. */}
+        {(!!imovel.areaTotal ||
+          !!imovel.quartos ||
+          !!imovel.banheiros ||
+          !!imovel.vagasGaragem) && (
+          <ul className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-100 pt-3 text-sm text-gray-500">
+            {!!imovel.areaTotal && (
+              <li className="flex items-center gap-1.5">
+                <IconeArea className="size-4 shrink-0" aria-hidden />
+                {/* O valor traz a unidade em texto: quem não enxerga o
+                    ícone continua sabendo do que se trata. */}
+                {imovel.areaTotal} m²
+              </li>
+            )}
+            {!!imovel.quartos && (
+              <li className="flex items-center gap-1.5">
+                <IconeQuartos className="size-4 shrink-0" aria-hidden />
+                {imovel.quartos}
+                <span className="sr-only">
+                  {imovel.quartos === 1 ? "quarto" : "quartos"}
                 </span>
-              ) : null}
-              {imovel.vagasGaragem ? (
-                <span className="flex items-center gap-1">
-                  <IconeVaga className="size-4" />
-                  {imovel.vagasGaragem}
+              </li>
+            )}
+            {!!imovel.banheiros && (
+              <li className="flex items-center gap-1.5">
+                <IconeBanheiro className="size-4 shrink-0" aria-hidden />
+                {imovel.banheiros}
+                <span className="sr-only">
+                  {imovel.banheiros === 1 ? "banheiro" : "banheiros"}
                 </span>
-              ) : null}
-            </span>
-          )}
-        </div>
+              </li>
+            )}
+            {!!imovel.vagasGaragem && (
+              <li className="flex items-center gap-1.5">
+                <IconeVaga className="size-4 shrink-0" aria-hidden />
+                {imovel.vagasGaragem}
+                <span className="sr-only">
+                  {imovel.vagasGaragem === 1 ? "vaga" : "vagas"}
+                </span>
+              </li>
+            )}
+          </ul>
+        )}
       </div>
     </Link>
   );

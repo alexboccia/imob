@@ -778,6 +778,10 @@ async function main() {
     id: IDS_E2E.imovelParaEditarOrgA,
     organizationId: orgA.organization.id,
     title: "Apartamento E2E para edição",
+    // Terceira posição da vitrine: com QUATRO destaques a Home pode
+    // provar a faixa de quatro colunas em desktop, que é o requisito
+    // estrutural do card novo.
+    homeHighlightPosition: 3,
   });
   // Redesenho de Imóveis — fixture dedicada, nunca tocada por "editar
   // imóvel" (que reescreve imovelParaEditarOrgA e resetaria os badges a
@@ -864,6 +868,7 @@ async function main() {
     organizationId: orgA.organization.id,
     title: "Sala comercial para alugar, 32m² – Centro",
     type: "Sala Comercial",
+    homeHighlightPosition: 4,
     // Fase 3 — lançamento MÍNIMO: tem o rótulo comercial e nada mais
     // (sem estágio de obra, sem previsão de entrega, sem construtora,
     // sem planta, sem características). É o contraponto do imóvel de

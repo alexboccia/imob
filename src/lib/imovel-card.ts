@@ -9,6 +9,12 @@ type ImovelParaCard = {
   price: { toString(): string } | null;
   rentPrice: { toString(): string } | null;
   bedrooms: number | null;
+  // Área e banheiros entram no DTO para a linha de atributos do card.
+  // Não é consulta nova: a Home já trazia a linha inteira do imóvel
+  // (include sem select), e a listagem só precisou de duas colunas
+  // escalares a mais no select que já existia.
+  totalArea: number | null;
+  bathrooms: number | null;
   parkingSpots: number | null;
   isLaunch: boolean;
   isFeatured: boolean;
@@ -28,6 +34,8 @@ export function paraImovelCard(imovel: ImovelParaCard) {
     preco: imovel.price ? imovel.price.toString() : null,
     precoAluguel: imovel.rentPrice ? imovel.rentPrice.toString() : null,
     quartos: imovel.bedrooms,
+    areaTotal: imovel.totalArea,
+    banheiros: imovel.bathrooms,
     vagasGaragem: imovel.parkingSpots,
     lancamento: imovel.isLaunch,
     destaque: imovel.isFeatured,
