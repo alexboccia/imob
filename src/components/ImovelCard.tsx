@@ -181,7 +181,7 @@ export function ImovelCard({
         </p>
 
         {/* Atributos só aparecem quando existem — mesma regra da ficha do
-            imóvel (CaracteristicasImovel): nulo e zero são ausência, e
+            imóvel (caracteristicas-ficha.ts): nulo e zero são ausência, e
             "0 banheiros" seria uma afirmação que o cadastro não fez.
             Se nenhum existir, a linha e o divisor somem junto. */}
         {(!!imovel.areaTotal ||

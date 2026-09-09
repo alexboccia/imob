@@ -31,9 +31,9 @@ import { EvolucaoObra } from "@/components/EvolucaoObra";
 import { CarrosselPlantas } from "@/components/CarrosselPlantas";
 import { ImovelCard } from "@/components/ImovelCard";
 import {
-  CaracteristicasImovel,
+  CaracteristicasUnidade,
   CaracteristicasCondominio,
-} from "@/components/imovel/CaracteristicasImovel";
+} from "@/components/imovel/Caracteristicas";
 import { CardContatoImovel } from "@/components/imovel/CardContatoImovel";
 import { RastreioVisualizacaoImovel } from "@/components/analytics/RastreioVisualizacaoImovel";
 import { ResumoComercialImovel } from "@/components/imovel/ResumoComercialImovel";
@@ -429,7 +429,7 @@ export default async function DetalheImovelPage({
               </p>
             </section>
           )}
-          <CaracteristicasImovel imovel={imovel} />
+          <CaracteristicasUnidade imovel={imovel} />
 
           <CaracteristicasCondominio itens={imovel.condoFeatures} />
 

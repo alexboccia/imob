@@ -834,29 +834,54 @@ test.describe("Detalhe do imóvel — conteúdo real", () => {
     await expect(descricao).toHaveCSS("white-space", "pre-line");
   });
 
-  test("características reais aparecem; contador em zero NÃO vira item", async ({ page }) => {
+  test("características da unidade: atributos estruturais, plural correto e zero ausente", async ({
+    page,
+  }) => {
     await page.goto(URL_IMOVEL);
-    const bloco = page
-      .locator("section")
-      .filter({ has: page.getByRole("heading", { name: "Características do imóvel" }) });
+    const bloco = page.locator('section[data-caracteristicas="unidade"]');
+    await expect(
+      bloco.getByRole("heading", { name: "Características da unidade" })
+    ).toBeVisible();
+
     await expect(bloco.getByText("Área total: 58 m²")).toBeVisible();
-    await expect(bloco.getByText("Quartos: 2")).toBeVisible();
-    await expect(bloco.getByText("Banheiros: 2")).toBeVisible();
-    await expect(bloco.getByText("Vagas de garagem: 1")).toBeVisible();
+    await expect(bloco.getByText("Área privativa: 52 m²")).toBeVisible();
+    // O seed dá 2 quartos, 2 banheiros e 1 vaga: a mesma ficha prova o
+    // plural e o singular, sem depender de dois imóveis diferentes.
+    await expect(bloco.getByText("2 quartos", { exact: true })).toBeVisible();
+    await expect(bloco.getByText("2 banheiros", { exact: true })).toBeVisible();
+    await expect(bloco.getByText("1 vaga de garagem", { exact: true })).toBeVisible();
     await expect(bloco.getByText("Aceita pet")).toBeVisible();
 
-    // suites = 0 no seed: zero não é característica, e numa lista com
-    // ícone de confirmação verde lido rápido vira o oposto do dado.
-    await expect(page.getByText(/Suítes:\s*0/)).toHaveCount(0);
+    // suites = 0 no seed: zero não é característica. Nem "0 suíte" nem
+    // "0 suítes" — nenhuma linha de suíte existe nesta ficha.
+    await expect(bloco.getByText(/su[ií]te/i)).toHaveCount(0);
+  });
+
+  test("a seção de uma característica vem do dado, não do nome dela", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    // "Piscina" está cadastrada no seed como característica da UNIDADE.
+    // Qualquer classificação por nome/regex a jogaria no condomínio —
+    // quem decide é o array da Property (propertyFeatures), espelho de
+    // FeatureOption.category.
+    await expect(
+      page.locator('section[data-caracteristicas="unidade"]').getByText("Piscina")
+    ).toBeVisible();
+    await expect(
+      page.locator('section[data-caracteristicas="condominio"]').getByText("Piscina")
+    ).toHaveCount(0);
   });
 
   test("características do condomínio aparecem quando existem", async ({ page }) => {
     await page.goto(URL_IMOVEL);
-    const bloco = page
-      .locator("section")
-      .filter({ has: page.getByRole("heading", { name: "Características do condomínio" }) });
+    const bloco = page.locator('section[data-caracteristicas="condominio"]');
+    await expect(
+      bloco.getByRole("heading", { name: "Características do condomínio" })
+    ).toBeVisible();
     await expect(bloco.getByText("Portaria 24 horas")).toBeVisible();
     await expect(bloco.getByText("Salão de festas")).toBeVisible();
+    // Ordem determinística: pt-BR, a mesma ordem em que o catálogo
+    // oferece — e não a ordem em que as caixas foram marcadas.
+    await expect(bloco.locator("li")).toHaveText(["Portaria 24 horas", "Salão de festas"]);
   });
 
   test("imóvel sem condomínio não renderiza o título do bloco", async ({ page }) => {
@@ -1063,6 +1088,36 @@ test.describe("Detalhe do imóvel — responsividade e isolamento", () => {
       await page.goto(URL_IMOVEL);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       expect(await semOverflow(page)).toBe(true);
+    });
+  }
+
+  // Grade de características: 1 coluna no mobile, 2 no tablet, até 4 no
+  // desktop largo. A contagem sai do gridTemplateColumns resolvido pelo
+  // navegador — mede o que foi realmente aplicado, não a classe escrita.
+  // As larguras de 1024 caem em 2 colunas de propósito: a partir de lg a
+  // ficha vira duas colunas e este bloco ocupa 2/3 de um container de
+  // 1152px, ou seja ~618px — 4 colunas ali seriam ~140px cada.
+  for (const [largura, colunas] of [
+    [375, 1],
+    [390, 1],
+    [430, 1],
+    [768, 2],
+    [1024, 2],
+    [1280, 4],
+    [1440, 4],
+  ] as const) {
+    test(`${largura}px: grade de características em ${colunas} coluna(s), sem overflow`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.goto(URL_IMOVEL);
+      const grade = page.locator('section[data-caracteristicas="unidade"] ul');
+      await expect(grade).toBeVisible();
+      const aplicadas = await grade.evaluate(
+        (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length
+      );
+      expect(aplicadas, `colunas @ ${largura}px`).toBe(colunas);
+      expect(await semOverflow(page), `Características @ ${largura}px`).toBe(true);
     });
   }
 

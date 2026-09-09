@@ -1,8 +1,5 @@
 import { prisma } from "@/lib/prisma";
-
-function ordenarPtBr(nomes: string[]) {
-  return [...nomes].sort((a, b) => a.localeCompare(b, "pt-BR"));
-}
+import { ordenarPtBr } from "@/lib/texto";
 
 export async function buscarOpcoesCaracteristicas(organizationId: string) {
   const opcoes = await prisma.featureOption.findMany({ where: { organizationId } });
