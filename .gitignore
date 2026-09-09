@@ -58,3 +58,34 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# claude — estado LOCAL do agente, nunca configuração compartilhada.
+#
+# `.claude/settings.json` (config do projeto) e `.claude/skills/`
+# continuam versionados DE PROPÓSITO: são compartilháveis e é assim que
+# outra pessoa clona o repositório com a mesma configuração. O que entra
+# aqui é só o que pertence a uma máquina:
+#
+#   - `settings.local.json` é o slot pessoal, o par local de
+#     `settings.json`. Ele não existe hoje neste clone, e a regra é
+#     preventiva: é ali que deve morar qualquer ajuste específico da
+#     máquina — inclusive permissão que carregue string de conexão —
+#     em vez de acabar no arquivo versionado. Repositório público:
+#     o que for pessoal não pode ter como ser commitado por acidente.
+#   - o resto são artefatos de runtime (locks, fila de tarefas,
+#     checkpoints, worktrees, registro de agentes) que só fazem sentido
+#     na sessão que os criou.
+#
+# Estas regras já existiam em `.git/info/exclude`, que é local do clone e
+# por isso não protegia mais ninguém — versioná-las aqui é o ponto.
+.claude/settings.local.json
+**/.claude/scheduled_tasks.lock
+**/.claude/scheduled_tasks.json
+**/.claude/routines/.state/
+**/.claude/worktrees/
+**/.claude/checkpoints/
+**/.claude/mailbox/
+**/.claude/agent-registry.json
+**/.claude/agent-memory-local
+**/.claude/first-run
+**/.claude/assistant-daemon-state.json
