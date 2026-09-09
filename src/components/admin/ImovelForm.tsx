@@ -4,6 +4,10 @@ import { useActionState } from "react";
 import { FINALIDADE_LABEL, STATUS_IMOVEL_LABEL } from "@/lib/format";
 import { ESTADO_INICIAL_ACAO, type ActionState } from "@/lib/action-result";
 import { MediaUploader, type MidiaItem } from "@/components/admin/MediaUploader";
+import {
+  MateriaisUploader,
+  type MaterialItem,
+} from "@/components/admin/MateriaisUploader";
 import { CamposEndereco } from "@/components/admin/CamposEndereco";
 import { SeletorCaracteristicas } from "@/components/admin/SeletorCaracteristicas";
 import { SecaoLancamentoFields } from "@/components/admin/SecaoLancamentoFields";
@@ -72,6 +76,7 @@ export function ImovelForm({
   action,
   valoresIniciais,
   midiasIniciais,
+  materiaisIniciais,
   propertyId,
   opcoesCaracteristicasImovel = [],
   opcoesCaracteristicasCondominio = [],
@@ -82,6 +87,7 @@ export function ImovelForm({
   action: (prevState: ActionState, formData: FormData) => Promise<ActionState>;
   valoresIniciais?: Partial<ImovelFormValues>;
   midiasIniciais?: MidiaItem[];
+  materiaisIniciais?: MaterialItem[];
   /** Id do imóvel sendo editado, se já existir (imóvel novo ainda não tem id). */
   propertyId?: string;
   opcoesCaracteristicasImovel?: string[];
@@ -408,6 +414,13 @@ export function ImovelForm({
 
       <div className="border-t pt-6">
         <MediaUploader midiasIniciais={midiasIniciais} propertyId={propertyId} />
+      </div>
+
+      <div className="border-t pt-6">
+        <MateriaisUploader
+          materiaisIniciais={materiaisIniciais}
+          propertyId={propertyId}
+        />
       </div>
 
       <BotaoSalvarImovel />

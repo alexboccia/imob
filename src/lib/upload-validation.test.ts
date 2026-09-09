@@ -58,9 +58,17 @@ describe("validarArquivo — tipo inválido", () => {
     expect(r.ok).toBe(false);
   });
 
-  test("recusa PDF (categoria não habilitada nesta fase)", async () => {
+  // PDF passou a existir com os materiais de apresentação, e SÓ na pasta
+  // deles: em "imoveis" (galeria) continua recusado, porque aquela pasta
+  // aceita apenas a categoria imagem.
+  test("recusa PDF na pasta de imagens do imóvel", async () => {
     const pdf = arquivo(Buffer.from("%PDF-1.4"), "contrato.pdf", "application/pdf");
     const r = await validarArquivo(pdf, "imoveis");
+    expect(r.ok).toBe(false);
+  });
+
+  test("recusa imagem na pasta de materiais (que só aceita documento)", async () => {
+    const r = await validarArquivo(arquivo(CABECALHO_PNG, "foto.png", "image/png"), "materiais");
     expect(r.ok).toBe(false);
   });
 
@@ -95,6 +103,53 @@ describe("validarArquivo — tipo inválido", () => {
   test("recusa pasta de destino fora da allowlist", async () => {
     const r = await validarArquivo(arquivo(CABECALHO_PNG, "foto.png", "image/png"), "../etc");
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("validarArquivo — materiais de apresentação (PDF)", () => {
+  const CABECALHO_PDF = Buffer.from("%PDF-1.7\n%\xe2\xe3\xcf\xd3", "binary");
+
+  test("aceita PDF com assinatura e extensão corretas", async () => {
+    const r = await validarArquivo(
+      arquivo(CABECALHO_PDF, "Book do empreendimento.pdf", "application/pdf"),
+      "materiais"
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.extensao).toBe("pdf");
+      expect(r.mime).toBe("application/pdf");
+    }
+  });
+
+  test("recusa executável renomeado para .pdf com MIME de PDF", async () => {
+    const exe = arquivo(Buffer.from([0x4d, 0x5a, 0x90, 0x00]), "book.pdf", "application/pdf");
+    const r = await validarArquivo(exe, "materiais");
+    expect(r.ok).toBe(false);
+  });
+
+  test("recusa HTML declarado como PDF", async () => {
+    const html = arquivo(Buffer.from("<html><script>"), "book.pdf", "application/pdf");
+    const r = await validarArquivo(html, "materiais");
+    expect(r.ok).toBe(false);
+  });
+
+  test("recusa PDF acima de 20MB com status 413", async () => {
+    const grande = Buffer.concat([
+      CABECALHO_PDF,
+      Buffer.alloc(LIMITE_TAMANHO_BYTES.documento + 1 - CABECALHO_PDF.length),
+    ]);
+    const r = await validarArquivo(arquivo(grande, "book.pdf", "application/pdf"), "materiais");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.status).toBe(413);
+  });
+
+  test("aceita PDF exatamente no limite", async () => {
+    const noLimite = Buffer.concat([
+      CABECALHO_PDF,
+      Buffer.alloc(LIMITE_TAMANHO_BYTES.documento - CABECALHO_PDF.length),
+    ]);
+    const r = await validarArquivo(arquivo(noLimite, "book.pdf", "application/pdf"), "materiais");
+    expect(r.ok).toBe(true);
   });
 });
 

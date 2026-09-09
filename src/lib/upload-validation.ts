@@ -12,7 +12,11 @@
 // MediaUploader.tsx), então não há o que aceitar ainda.
 export const LIMITE_TAMANHO_BYTES = {
   imagem: 10 * 1024 * 1024, // 10 MB
-  documento: 20 * 1024 * 1024, // 20 MB — reservado, nenhum tipo habilitado
+  // 20 MB, o valor que já estava reservado aqui: cabe folgado um book de
+  // empreendimento com plantas em alta resolução, e continua sendo um
+  // teto que o R2 aguenta sem drama. Vale para os materiais de
+  // apresentação (única categoria de documento existente hoje).
+  documento: 20 * 1024 * 1024,
   video: 100 * 1024 * 1024, // reservado, nenhum tipo habilitado
 } as const;
 
@@ -37,6 +41,12 @@ function assinaturaPng(b: Uint8Array): boolean {
   return b.length >= PNG.length && PNG.every((byte, i) => b[i] === byte);
 }
 
+// %PDF- nos primeiros bytes. Vale para todas as versões do formato.
+function assinaturaPdf(b: Uint8Array): boolean {
+  const PDF = [0x25, 0x50, 0x44, 0x46, 0x2d];
+  return b.length >= PDF.length && PDF.every((byte, i) => b[i] === byte);
+}
+
 function assinaturaWebp(b: Uint8Array): boolean {
   // RIFF <4 bytes de tamanho> WEBP
   return (
@@ -53,16 +63,20 @@ function assinaturaWebp(b: Uint8Array): boolean {
 }
 
 // Allowlist estrita: só entra aqui o que o produto realmente usa hoje (ver
-// MediaUploader/LogoUpload/FotoCorretorUpload — todos só aceitam imagem).
-// SVG, HTML, JS, executáveis, compactados etc. nunca precisam de checagem
-// explícita de bloqueio — por não estarem na lista, já são recusados.
-// PDF e vídeo (`application/pdf`, `video/mp4`, `video/webm`) ficam de fora
-// de propósito: habilitar só quando existir um fluxo de verdade no produto
-// que os use (mesmo raciocínio do limite de tamanho acima).
+// MediaUploader/LogoUpload/FotoCorretorUpload — todos só aceitam imagem —
+// e MateriaisUploader, que aceita PDF). SVG, HTML, JS, executáveis,
+// compactados etc. nunca precisam de checagem explícita de bloqueio — por
+// não estarem na lista, já são recusados.
+//
+// `application/pdf` entrou quando os materiais de apresentação passaram a
+// existir de verdade — exatamente a condição que este comentário exigia.
+// Vídeo (`video/mp4`, `video/webm`) continua fora: vídeo no produto é
+// link de embed, não upload.
 export const TIPOS_PERMITIDOS: Record<string, TipoPermitido> = {
   "image/jpeg": { categoria: "imagem", extensoes: ["jpg", "jpeg"], assinatura: assinaturaJpeg },
   "image/png": { categoria: "imagem", extensoes: ["png"], assinatura: assinaturaPng },
   "image/webp": { categoria: "imagem", extensoes: ["webp"], assinatura: assinaturaWebp },
+  "application/pdf": { categoria: "documento", extensoes: ["pdf"], assinatura: assinaturaPdf },
 };
 
 // Pastas de destino válidas no bucket e quais categorias de arquivo cada
@@ -78,6 +92,10 @@ export const PASTAS_PERMITIDAS: Record<string, { categorias: readonly Categoria[
   // hero-image-processar.ts (chamado só pela rota de upload quando
   // pasta === "hero").
   hero: { categorias: ["imagem"] },
+  // Materiais de apresentação do imóvel (book, plantas, tabela de
+  // preços). SÓ documento: uma imagem enviada aqui seria recusada, do
+  // mesmo jeito que um PDF é recusado em "imoveis".
+  materiais: { categorias: ["documento"] },
 };
 
 export function extrairExtensao(nomeArquivo: string): string | null {

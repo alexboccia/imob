@@ -54,6 +54,10 @@ export const imovelSchema = z.object({
   previsaoEntrega: z.string().optional(),
   construtora: z.string().optional(),
   midiasJson: z.string().optional(),
+  // Lista de materiais de apresentação, mesmo padrão de midiasJson. O
+  // conteúdo é validado em materiais-imovel.ts (URL do próprio bucket e
+  // do próprio tenant) — aqui só se garante que é texto.
+  materiaisJson: z.string().optional(),
 });
 
 export type DadosImovelFormulario = z.infer<typeof imovelSchema> & {

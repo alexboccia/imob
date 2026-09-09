@@ -236,6 +236,44 @@ async function garantirImovel(opcoes: {
   });
 }
 
+// Materiais de apresentação (book, plantas, tabela). Idempotente por
+// (imóvel, nome): o seed roda quantas vezes for.
+//
+// A URL aponta para um CDN fictício no MESMO formato que o upload real
+// emite ({base}/{organizationId}/materiais/{uuid}.pdf). Em teste não há
+// R2 (R2_PUBLIC_URL vazio em .env.test), e nada aqui depende de o byte
+// existir: a validação de URL acontece na ESCRITA pelo painel — provada
+// na suíte de integração, que configura a base — e a ficha pública só
+// entrega o link.
+async function garantirMaterial(opcoes: {
+  organizationId: string;
+  propertyId: string;
+  name: string;
+  uuid: string;
+  sortOrder: number;
+  active?: boolean;
+}) {
+  const url = `https://cdn-e2e.local/${opcoes.organizationId}/materiais/${opcoes.uuid}.pdf`;
+  const existente = await prisma.propertyPresentationMaterial.findFirst({
+    where: { propertyId: opcoes.propertyId, name: opcoes.name },
+    select: { id: true },
+  });
+  const dados = {
+    organizationId: opcoes.organizationId,
+    propertyId: opcoes.propertyId,
+    name: opcoes.name,
+    url,
+    mimeType: "application/pdf",
+    sortOrder: opcoes.sortOrder,
+    active: opcoes.active ?? true,
+  };
+  if (existente) {
+    await prisma.propertyPresentationMaterial.update({ where: { id: existente.id }, data: dados });
+  } else {
+    await prisma.propertyPresentationMaterial.create({ data: dados });
+  }
+}
+
 async function garantirTipoImovel(opcoes: {
   organizationId: string;
   name: string;
@@ -834,6 +872,34 @@ async function main() {
     // publica ninguém no site. O caso publicado é montado pelos próprios
     // testes, pelo painel, e desfeito no fim.
     responsibleMemberId: orgA.membro.id,
+  });
+  // Materiais de apresentação: o imóvel de badges é LANÇAMENTO, então é
+  // ele que exercita o bloco público inteiro (título de empreendimento,
+  // lista real, captação e entrega). O terceiro material entra
+  // DESATIVADO de propósito — prova que desativar tira da ficha sem
+  // apagar o cadastro. A ordem semeada é deliberadamente diferente da
+  // alfabética e da de criação, pra que o teste veja a ordem EXPLÍCITA.
+  await garantirMaterial({
+    organizationId: orgA.organization.id,
+    propertyId: IDS_E2E.imovelComBadgesOrgA,
+    name: "Book do empreendimento",
+    uuid: "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa",
+    sortOrder: 0,
+  });
+  await garantirMaterial({
+    organizationId: orgA.organization.id,
+    propertyId: IDS_E2E.imovelComBadgesOrgA,
+    name: "Plantas e metragens",
+    uuid: "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb",
+    sortOrder: 1,
+  });
+  await garantirMaterial({
+    organizationId: orgA.organization.id,
+    propertyId: IDS_E2E.imovelComBadgesOrgA,
+    name: "Tabela de precos (desativada)",
+    uuid: "cccccccc-3333-4333-8333-cccccccccccc",
+    sortOrder: 2,
+    active: false,
   });
   await garantirImovel({
     id: "e2e-imovel-org-b",

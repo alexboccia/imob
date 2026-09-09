@@ -22,6 +22,8 @@ import {
   Car,
   Search,
   SlidersHorizontal,
+  FileText,
+  Download,
 } from "lucide-react";
 
 export function IconeChevronEsquerdo(props: { className?: string }) {
@@ -133,6 +135,15 @@ export function IconeBanheiro(props: { className?: string }) {
 
 export function IconeVaga(props: { className?: string }) {
   return <Car className={props.className} />;
+}
+
+// Documento e download — materiais de apresentação do imóvel.
+export function IconeDocumento(props: { className?: string }) {
+  return <FileText className={props.className} />;
+}
+
+export function IconeDownload(props: { className?: string }) {
+  return <Download className={props.className} />;
 }
 
 export function IconeBusca(props: { className?: string }) {

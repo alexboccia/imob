@@ -9,8 +9,14 @@
 // Comparação por `origin` via URL, não `startsWith` na string crua: evita
 // falso positivo do tipo "https://pub-xxx.r2.dev.attacker.com/..." bater
 // com um prefixo ingênuo "https://pub-xxx.r2.dev".
-const PADRAO_ARQUIVO =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpe?g|webp)$/i;
+const EXTENSOES_IMAGEM = ["png", "jpg", "jpeg", "webp"] as const;
+
+function padraoArquivo(extensoes: readonly string[]): RegExp {
+  return new RegExp(
+    `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(${extensoes.join("|")})$`,
+    "i"
+  );
+}
 
 // Mesma checagem usada por validarFaviconUrl abaixo, generalizada pra
 // qualquer asset de qualquer pasta de mídia do tenant (logo do
@@ -22,10 +28,16 @@ const PADRAO_ARQUIVO =
 // próprio bucket R2, no prefixo da organização do chamador). `pasta`
 // tem "site" como padrão — todo call site existente (favicon, logo do
 // cabeçalho/rodapé) continua com o comportamento exato de antes.
+//
+// `extensoes` existe porque nem toda pasta guarda imagem: os materiais de
+// apresentação do imóvel (pasta "materiais") são PDF. O padrão continua
+// sendo o conjunto de imagem, então todo call site anterior segue
+// idêntico.
 export function validarUrlMidiaOrganizacao(
   url: string,
   organizationId: string,
-  pasta: string = "site"
+  pasta: string = "site",
+  extensoes: readonly string[] = EXTENSOES_IMAGEM
 ): boolean {
   const publicUrlBruta = process.env.R2_PUBLIC_URL;
   if (!publicUrlBruta) return false;
@@ -46,7 +58,7 @@ export function validarUrlMidiaOrganizacao(
   if (!mediaUrl.pathname.startsWith(prefixoEsperado)) return false;
 
   const resto = mediaUrl.pathname.slice(prefixoEsperado.length);
-  return PADRAO_ARQUIVO.test(resto);
+  return padraoArquivo(extensoes).test(resto);
 }
 
 export function validarFaviconUrl(url: string, organizationId: string): boolean {

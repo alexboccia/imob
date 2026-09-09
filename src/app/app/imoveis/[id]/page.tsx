@@ -51,7 +51,13 @@ export default async function EditarImovelPage({
       Promise.all([
         prisma.property.findUnique({
           where: { id, organizationId },
-          include: { media: { orderBy: [{ isCover: "desc" }, { order: "asc" }] } },
+          include: {
+            media: { orderBy: [{ isCover: "desc" }, { order: "asc" }] },
+            // Todos os materiais, ativos ou não: a edição precisa ver o
+            // que está desativado pra poder reativar. Quem filtra por
+            // `active` é a ficha pública.
+            presentationMaterials: { orderBy: { sortOrder: "asc" } },
+          },
         }),
         buscarOpcoesCaracteristicas(organizationId),
         buscarOpcoesTiposImovel(organizationId),
@@ -149,6 +155,11 @@ export default async function EditarImovelPage({
           tipo: MEDIA_TYPE_PARA_TIPO_MIDIA[m.type],
           url: m.url,
           ehCapa: m.isCover,
+        }))}
+        materiaisIniciais={imovel.presentationMaterials.map((m) => ({
+          name: m.name,
+          url: m.url,
+          active: m.active,
         }))}
         opcoesCaracteristicasImovel={opcoesImovel}
         opcoesCaracteristicasCondominio={opcoesCondominio}

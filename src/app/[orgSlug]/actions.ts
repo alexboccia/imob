@@ -5,7 +5,7 @@ import { sanearAtribuicaoRecebida } from "@/lib/atribuicao";
 import { prisma } from "@/lib/prisma";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { enviarEmailContato } from "@/lib/email";
-import { contatoSchema, anuncieSchema } from "@/lib/contato-schema";
+import { contatoSchema, anuncieSchema, materiaisSchema } from "@/lib/contato-schema";
 import { getOrganizationBySlug } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
@@ -16,6 +16,7 @@ import { registrarAbuso } from "@/lib/abuse-log";
 import { hashCurto } from "@/lib/hash";
 import { resolverPessoaParaFormularioPublico } from "@/lib/person-dedup";
 import { ORIGENS_CAPTACAO, origemDoContato } from "@/lib/captacao";
+import type { MaterialPublico } from "@/lib/materiais-imovel";
 
 // orgSlug chega via .bind(null, orgSlug) nos Client Components que chamam
 // estas actions (ContatoForm/AnuncieForm/FormularioContato) — é input do
@@ -352,4 +353,169 @@ export async function enviarAnuncioProprietario(
   }
 
   return { sucesso: true };
+}
+
+
+// =====================================================================
+// Materiais de apresentação — CTA "Receber materiais" da ficha
+// =====================================================================
+//
+// Mesmo pipeline de captação do formulário de contato, sem nenhuma
+// estrutura paralela: mesmas proteções anti-spam, mesma resolução de
+// Person (com o mesmo desfecho para conflito de identidade, Fase 24) e
+// mesma Interaction. O que muda é a ORIGEM (MATERIAIS, não IMOVEL) e o
+// fato de a resposta devolver os arquivos.
+//
+// ENTREGA NÃO DEPENDE DE E-MAIL. Os materiais voltam na própria resposta
+// da action, para download imediato. O e-mail que sai depois é
+// notificação para a imobiliária — exatamente como no formulário de
+// contato — e já engole o próprio erro internamente (ver email.ts), de
+// modo que provedor fora do ar não tem como transformar uma captação
+// bem-sucedida em falha.
+//
+// Nenhum id de material vem do cliente: a lista é derivada no servidor a
+// partir do imóvel já validado contra esta organização. Um propertyId de
+// outro tenant não encontra imóvel e não entrega nada.
+export type ResultadoMateriais = {
+  sucesso: boolean;
+  erro?: string;
+  materiais?: MaterialPublico[];
+};
+
+export async function solicitarMateriais(
+  orgSlug: string,
+  _prevState: unknown,
+  formData: FormData
+): Promise<ResultadoMateriais> {
+  const parsed = materiaisSchema.safeParse({
+    nome: formData.get("nome"),
+    email: formData.get("email"),
+    telefone: formData.get("telefone"),
+    imovelId: formData.get("imovelId"),
+  });
+
+  if (!parsed.success) {
+    return { sucesso: false, erro: "Preencha nome e e-mail ou telefone." };
+  }
+
+  const { nome, email, telefone, imovelId } = parsed.data;
+
+  const org = await resolverOrganizacaoAtiva(orgSlug);
+  if ("erro" in org) return { sucesso: false, erro: org.erro };
+  const { organizationId } = org;
+
+  const protecao = await protecoesAntiSpam({
+    formulario: "materiais",
+    formData,
+    organizationId,
+    contatoNormalizado: normalizarContato(email, telefone),
+  });
+  if (protecao.bloqueado) {
+    // Honeypot devolve "sucesso" sem materiais: o bot não recebe arquivo
+    // nenhum e também não aprende que foi detectado.
+    return protecao.erro ? { sucesso: false, erro: protecao.erro } : { sucesso: true, materiais: [] };
+  }
+
+  const resultado = await withOrganization(organizationId, async () => {
+    // O imovelId vem do formulário (input não confiável): precisa ser
+    // desta organização antes de virar propertyId de qualquer registro —
+    // e é dele, e só dele, que sai a lista de materiais entregues.
+    const imovel = await prisma.property.findUnique({
+      where: { id: imovelId, organizationId },
+      select: {
+        title: true,
+        responsibleMember: { select: { contactEmail: true } },
+        presentationMaterials: {
+          where: { active: true },
+          orderBy: { sortOrder: "asc" },
+          select: { id: true, name: true, url: true },
+        },
+      },
+    });
+
+    // Sem imóvel válido ou sem material ativo não há o que entregar — e,
+    // não havendo entrega, não se cria lead nenhum. Registrar um pedido
+    // de material que não existe seria inventar um evento comercial.
+    if (!imovel || imovel.presentationMaterials.length === 0) {
+      return { erro: "Materiais indisponíveis para este imóvel." as const };
+    }
+
+    const resolucao = await resolverPessoaParaFormularioPublico({
+      organizationId,
+      nome,
+      email: email || null,
+      telefone: telefone || null,
+      role: "LEAD",
+      source: "WEBSITE",
+    });
+
+    if (resolucao.tipo === "conflito") {
+      // Fase 24 — o fato é persistido antes de qualquer sucesso. A
+      // ambiguidade é de IDENTIDADE, não de direito: o visitante recebe
+      // os materiais de qualquer forma, e a imobiliária resolve depois
+      // a quem aquele pedido pertence.
+      await prisma.leadCapture.create({
+        data: {
+          organizationId,
+          name: nome,
+          email: email || null,
+          phone: telefone || null,
+          // Sem mensagem: o visitante não escreveu nada. O que ele
+          // pediu está em `origin`, que é campo estruturado, em vez de
+          // uma frase fabricada por nós dentro de um campo de texto do
+          // corretor.
+          message: null,
+          origin: ORIGENS_CAPTACAO.MATERIAIS,
+          role: "LEAD",
+          propertyId: imovelId,
+          ...atribuicaoDoFormulario(formData),
+        },
+      });
+    } else {
+      await prisma.interaction.create({
+        data: {
+          organizationId,
+          personId: resolucao.personId,
+          propertyId: imovelId,
+          type: "MESSAGE",
+          // notes fica nulo de propósito: é o histórico comercial escrito
+          // por gente. O que aconteceu aqui está em origin + propertyId.
+          notes: null,
+          ...atribuicaoDoFormulario(formData),
+          origin: ORIGENS_CAPTACAO.MATERIAIS,
+        },
+      });
+    }
+
+    const configContato = await buscarConfiguracaoContato(organizationId);
+
+    return {
+      materiais: imovel.presentationMaterials,
+      tituloImovel: imovel.title,
+      emailResponsavel: imovel.responsibleMember?.contactEmail ?? null,
+      configContato,
+      conflitoDedup: resolucao.tipo === "conflito",
+    };
+  });
+
+  if ("erro" in resultado) return { sucesso: false, erro: resultado.erro };
+
+  const emailDestino = resultado.emailResponsavel || resultado.configContato.email;
+  if (emailDestino && (await hasModule(organizationId, "email"))) {
+    // Notificação para a imobiliária, fora de qualquer transação e
+    // depois de o lead já estar salvo. A frase abaixo descreve o evento
+    // para quem lê o e-mail; ela não é gravada em lugar nenhum.
+    await enviarEmailContato({
+      organizationId,
+      para: emailDestino,
+      nomeLead: nome,
+      emailLead: email || null,
+      telefoneLead: telefone || null,
+      mensagem: "Solicitou os materiais de apresentação deste imóvel pelo site.",
+      imovelTitulo: resultado.tituloImovel,
+      avisoConflitoDedup: resultado.conflitoDedup,
+    });
+  }
+
+  return { sucesso: true, materiais: resultado.materiais };
 }

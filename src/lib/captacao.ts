@@ -26,6 +26,14 @@ export const ORIGENS_CAPTACAO = {
   // Página /anuncie — proprietário oferecendo imóvel. É o oposto
   // comercial dos outros dois: não quer comprar, quer vender.
   ANUNCIE: "ANUNCIE",
+  // Bloco de materiais de apresentação da ficha do imóvel: o visitante
+  // pediu book/plantas/tabela. Sempre acompanhado do propertyId, como
+  // IMOVEL — o que muda é a INTENÇÃO. Quem preenche o formulário lateral
+  // quer falar com alguém; quem pede material quer estudar o imóvel
+  // antes de falar. Para o corretor que abre o registro, são conversas
+  // diferentes, e é exatamente por isso que esta origem existe em vez de
+  // reaproveitar IMOVEL.
+  MATERIAIS: "MATERIAIS",
 } as const;
 
 export type OrigemCaptacao =
@@ -35,6 +43,7 @@ export const LABEL_ORIGEM_CAPTACAO: Record<string, string> = {
   IMOVEL: "Página do imóvel",
   CONTATO: "Página de contato",
   ANUNCIE: "Anuncie seu imóvel",
+  MATERIAIS: "Materiais do imóvel",
 };
 
 // Só grava origem que o produto conhece. Um valor fora do catálogo (vindo

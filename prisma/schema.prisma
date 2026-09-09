@@ -169,13 +169,13 @@ model Person {
   assignedMemberId String?
   assignedMember   OrganizationMember? @relation("PersonAssignedMember", fields: [assignedMemberId], references: [id])
 
-  ownedProperties     Property[]          @relation("PropertyOwner")
-  interactions        Interaction[]
-  leadCapturesResolvidas LeadCapture[]    @relation("LeadCaptureResolvedPerson")
-  deals               DealPerson[]
-  preference          PersonPreference?
-  propertyInterests   PropertyInterest[]
-  scheduledActivities ScheduledActivity[]
+  ownedProperties        Property[]          @relation("PropertyOwner")
+  interactions           Interaction[]
+  leadCapturesResolvidas LeadCapture[]       @relation("LeadCaptureResolvedPerson")
+  deals                  DealPerson[]
+  preference             PersonPreference?
+  propertyInterests      PropertyInterest[]
+  scheduledActivities    ScheduledActivity[]
 
   @@unique([organizationId, emailNormalized])
   @@unique([organizationId, phoneNormalized])
@@ -256,19 +256,19 @@ model PersonPreference {
 }
 
 model Property {
-  id                String             @id @default(cuid())
-  organizationId    String
-  organization      Organization       @relation(fields: [organizationId], references: [id])
-  code              Int                @default(autoincrement())
-  title             String
-  description       String?
-  type              String
-  purpose           PropertyPurpose
-  status            PropertyStatus     @default(DRAFT)
-  isLaunch          Boolean            @default(false)
-  isFeatured        Boolean            @default(false)
-  isOpportunity     Boolean            @default(false)
-  hasSlideshow      Boolean            @default(false)
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  code           Int             @default(autoincrement())
+  title          String
+  description    String?
+  type           String
+  purpose        PropertyPurpose
+  status         PropertyStatus  @default(DRAFT)
+  isLaunch       Boolean         @default(false)
+  isFeatured     Boolean         @default(false)
+  isOpportunity  Boolean         @default(false)
+  hasSlideshow   Boolean         @default(false)
 
   // VITRINE EDITORIAL DA HOME — posição 1..4, ou null (não exibido).
   //
@@ -293,9 +293,9 @@ model Property {
   // Postgres permite múltiplos NULL num índice único, então imóveis
   // fora da vitrine não colidem entre si.
   homeHighlightPosition Int?
-  constructionStage ConstructionStage?
-  deliveryForecast  DateTime?
-  developer         String?
+  constructionStage     ConstructionStage?
+  deliveryForecast      DateTime?
+  developer             String?
 
   // Endereço
   zipCode      String?
@@ -334,15 +334,16 @@ model Property {
   ownerId String?
   owner   Person? @relation("PropertyOwner", fields: [ownerId], references: [id])
 
-  media               Media[]
-  leadCaptures        LeadCapture[]
-  statusHistory       PropertyStatusHistory[]
-  interactions        Interaction[]
-  analyticsEvents     PropertyAnalyticsEvent[]
-  deals               Deal[]
-  portalListings      PortalListing[]
-  interests           PropertyInterest[]
-  scheduledActivities ScheduledActivity[]
+  media                 Media[]
+  presentationMaterials PropertyPresentationMaterial[]
+  leadCaptures          LeadCapture[]
+  statusHistory         PropertyStatusHistory[]
+  interactions          Interaction[]
+  analyticsEvents       PropertyAnalyticsEvent[]
+  deals                 Deal[]
+  portalListings        PortalListing[]
+  interests             PropertyInterest[]
+  scheduledActivities   ScheduledActivity[]
 
   @@unique([organizationId, code])
   @@unique([organizationId, homeHighlightPosition])
@@ -375,6 +376,56 @@ model Media {
 
   @@index([propertyId])
   @@map("media")
+}
+
+model PropertyPresentationMaterial {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  propertyId     String
+  property       Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // MODELO PRÓPRIO, e não um quarto MediaType. Media é mídia VISUAL do
+  // imóvel — foto, vídeo e planta — e tudo que entra lá é renderizado na
+  // ficha pública sem nenhuma condição. Material de apresentação é o
+  // oposto em três pontos que importam: só existe atrás de uma captação
+  // de lead, pode ficar desativado sem ser removido e tem nome
+  // editorial escolhido pelo corretor. Enfiar isso em Media significaria
+  // que TODA consulta de mídia já existente (galeria, capa, plantas,
+  // slideshow, contagem do limite de fotos do plano) passaria a precisar
+  // de um filtro novo pra não vazar um PDF comercial dentro da galeria —
+  // e bastaria esquecer um pra expor o material sem captura nenhuma.
+  // Tabela separada torna esse vazamento impossível por construção.
+  name String
+
+  // URL pública do objeto no R2, no MESMO formato dos outros uploads:
+  // {R2_PUBLIC_URL}/{organizationId}/materiais/{uuid}.pdf. Validada no
+  // servidor contra a base do bucket E contra o prefixo desta
+  // organização antes de ser gravada (ver materiais-imovel.ts) — o
+  // formulário nunca consegue apontar um material pra um objeto de
+  // outro tenant nem pra um domínio externo.
+  url String
+
+  // Derivado no servidor da extensão da URL já validada, nunca do que o
+  // formulário declarou. Hoje só existe um valor possível
+  // (application/pdf); a coluna existe pra quando houver outro.
+  mimeType String
+
+  // Ordem EXPLÍCITA, definida pelo corretor — nunca createdAt.
+  sortOrder Int @default(0)
+
+  // Desativar não é apagar: o material sai da ficha pública e continua
+  // no cadastro, do mesmo jeito que um imóvel INACTIVE continua no
+  // painel.
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // A consulta pública é sempre "materiais ativos deste imóvel, na
+  // ordem" — o índice cobre exatamente isso.
+  @@index([propertyId, active, sortOrder])
+  @@map("property_presentation_materials")
 }
 
 model PropertyStatusHistory {
@@ -1144,10 +1195,10 @@ enum MemberStatus {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
+  id                String    @id @default(cuid())
+  name              String
+  email             String    @unique
+  passwordHash      String
   // Fase 25 — INSTANTE DA ÚLTIMA TROCA DE SENHA. Existe por um motivo
   // só: a sessão é JWT (stateless, src/lib/auth.config.ts), então não há
   // tabela de sessões para apagar depois de um reset. Comparar este
@@ -1157,10 +1208,10 @@ model User {
   // NULL para todo usuário existente, de propósito: null significa
   // "nunca trocou", e nenhuma sessão em curso é invalidada pelo deploy.
   passwordChangedAt DateTime?
-  active       Boolean  @default(true)
-  avatarUrl    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  active            Boolean   @default(true)
+  avatarUrl         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   memberships         OrganizationMember[]
   inviteTokens        InviteToken[]
@@ -1274,7 +1325,7 @@ model Organization {
   // Só interpreta CALENDÁRIO (hoje/atrasadas/próximas, períodos do
   // Analytics, exibição). Nenhum instante persistido depende deste campo:
   // mudar o fuso não reescreve scheduledAt/occurredAt/closedAt/paidAt.
-  timezone     String?
+  timezone String?
 
   // Fase 22 — POLÍTICA DE VISIBILIDADE COMERCIAL.
   //
@@ -1322,6 +1373,7 @@ model Organization {
   deals                               Deal[]
   portalListings                      PortalListing[]
   featureOptions                      FeatureOption[]
+  presentationMaterials               PropertyPresentationMaterial[]
   propertyTypeOptions                 PropertyTypeOption[]
   inviteTokens                        InviteToken[]
   domains                             OrganizationDomain[]
@@ -1801,8 +1853,8 @@ model InviteToken {
 // FORA de TENANT_SCOPED_MODELS: por definição, não pertence a tenant
 // nenhum — é o que existe ANTES do primeiro tenant.
 model SignupToken {
-  id        String   @id @default(cuid())
-  tokenHash String   @unique
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
   // Identidade declarada. Normalizada (minúscula, sem espaços) para
   // casar com User.email no momento da confirmação.
   email     String
@@ -1815,7 +1867,7 @@ model SignupToken {
   ownerName String
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([email])
   @@map("signup_tokens")
@@ -1842,13 +1894,13 @@ model SignupToken {
 // (auth.ts exige membership ACTIVE), e isso está certo — ele pode ter
 // acesso legítimo a OUTRA organização com a mesma identidade.
 model PasswordResetToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  tokenHash String   @unique
+  user      User      @relation(fields: [userId], references: [id])
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([userId])
   @@map("password_reset_tokens")
@@ -1975,26 +2027,26 @@ model LeadCapture {
 
   status LeadCaptureStatus @default(PENDING)
 
-  resolvedAt DateTime?
+  resolvedAt            DateTime?
   // Quem RESOLVEU. Ator, nunca dono nem autor: a Interaction resultante
   // continua com memberId null (Fase 15), e ninguém vira
   // responsibleMemberId por resolver (Fase 11). SET NULL como todo ator.
-  resolvedByMemberId String?
-  resolvedByMember   OrganizationMember? @relation("LeadCaptureResolvedByMember", fields: [resolvedByMemberId], references: [id], onDelete: SetNull)
+  resolvedByMemberId    String?
+  resolvedByMember      OrganizationMember? @relation("LeadCaptureResolvedByMember", fields: [resolvedByMemberId], references: [id], onDelete: SetNull)
   // Person escolhida. SET NULL (padrão de relação opcional, confirmado
   // na migration): apagar um cliente é operação ordinária de CRM e não
   // pode ser bloqueada por uma captação antiga. A captação continua
   // RESOLVED, com resolvedAt e o registro no ActivityLog — o que se
   // perde é só o ponteiro, junto com a Person que ele apontava.
-  resolvedPersonId String?
-  resolvedPerson   Person? @relation("LeadCaptureResolvedPerson", fields: [resolvedPersonId], references: [id])
+  resolvedPersonId      String?
+  resolvedPerson        Person?             @relation("LeadCaptureResolvedPerson", fields: [resolvedPersonId], references: [id])
   // @unique é a GARANTIA ESTRUTURAL de que uma captação produz no
   // máximo uma Interaction: mesmo sob duas resoluções simultâneas, o
   // banco recusa a segunda. Se a Interaction for apagada depois, este
   // campo volta a null (SET NULL) — mas `status` continua RESOLVED, que
   // é o que a guarda de resolução consulta: a captação não reabre.
-  resolvedInteractionId String?      @unique
-  resolvedInteraction   Interaction? @relation("LeadCaptureResolvedInteraction", fields: [resolvedInteractionId], references: [id])
+  resolvedInteractionId String?             @unique
+  resolvedInteraction   Interaction?        @relation("LeadCaptureResolvedInteraction", fields: [resolvedInteractionId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

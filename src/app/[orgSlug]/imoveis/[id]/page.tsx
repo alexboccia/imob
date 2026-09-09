@@ -32,6 +32,7 @@ import { CarrosselPlantas } from "@/components/CarrosselPlantas";
 import { ImovelCard } from "@/components/ImovelCard";
 import { CaracteristicasDoImovel } from "@/components/imovel/Caracteristicas";
 import { CardContatoImovel } from "@/components/imovel/CardContatoImovel";
+import { MateriaisImovel } from "@/components/imovel/MateriaisImovel";
 import { RastreioVisualizacaoImovel } from "@/components/analytics/RastreioVisualizacaoImovel";
 import { ResumoComercialImovel } from "@/components/imovel/ResumoComercialImovel";
 import { BarraCtaImovel } from "@/components/imovel/BarraCtaImovel";
@@ -43,6 +44,8 @@ import {
 } from "@/lib/imovel-lancamento";
 import { Badge } from "@/components/ui/badge";
 import { TITULO_DETALHE, TITULO_BLOCO, TITULO_SECAO } from "@/lib/site-typography";
+import { blocoDeMateriaisVisivel } from "@/lib/materiais-imovel";
+import { buscarMateriaisAtivos } from "@/lib/materiais-consultas";
 
 // Página de detalhe não tem tag de invalidação própria (preço/status
 // mudam por edição de imóvel, sem updateTag associado) — sem
@@ -194,7 +197,7 @@ export default async function DetalheImovelPage({
   const organizationId = organization.id;
   const basePath = resolverBasePath(orgSlug);
 
-  const { imovel, configContato, imoveisProximos } = await withOrganization(
+  const { imovel, configContato, imoveisProximos, materiais } = await withOrganization(
     organizationId,
     async () => {
       const imovel = await buscarImovel(id, organizationId);
@@ -203,12 +206,15 @@ export default async function DetalheImovelPage({
         notFound();
       }
 
-      const [configContato, imoveisProximos] = await Promise.all([
+      const [configContato, imoveisProximos, materiais] = await Promise.all([
         buscarConfiguracaoContato(organizationId),
         buscarImoveisProximos(organizationId, imovel),
+        // Em paralelo com o que a página já buscava — não acrescenta
+        // ida e volta à renderização.
+        buscarMateriaisAtivos(imovel.id, organizationId),
       ]);
 
-      return { imovel, configContato, imoveisProximos };
+      return { imovel, configContato, imoveisProximos, materiais };
     }
   );
 
@@ -443,6 +449,21 @@ export default async function DetalheImovelPage({
             <div>
               <CarrosselPlantas plantas={plantas} />
             </div>
+          )}
+
+          {/* Materiais vêm depois de descrição/características/plantas e
+              logo antes da Localização: a essa altura o visitante já sabe
+              o que é o imóvel e é aqui que ele quer se aprofundar. Só
+              existe quando há material ativo de verdade — lançamento sem
+              arquivo nenhum não ganha um CTA que promete o que não
+              existe. */}
+          {blocoDeMateriaisVisivel(materiais) && (
+            <MateriaisImovel
+              imovelId={imovel.id}
+              isLaunch={imovel.isLaunch}
+              materiais={materiais}
+              orgSlug={orgSlug}
+            />
           )}
 
           <section>

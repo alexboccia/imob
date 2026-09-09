@@ -11,8 +11,18 @@ import { useState } from "react";
 // - "renderizadoEm": marca quando o formulário apareceu pro usuário: uma
 //   submissão que chega poucos segundos depois disso quase certamente não
 //   foi um humano preenchendo o formulário.
-export function CamposAntiSpam() {
-  const [renderizadoEm] = useState(() => Date.now());
+//
+// `renderizadoEm` pode ser fornecido por quem chama, e existe por um
+// motivo concreto: num formulário que só é MONTADO depois de um clique
+// (o bloco de materiais do imóvel), o carimbo do próprio componente
+// nasceria no instante do clique, e alguém preenchendo com dados
+// salvos pelo navegador ouviria "envio muito rápido" sendo humano. O
+// valor certo, nesse caso, é o instante em que o BLOCO apareceu na
+// tela — que é o mesmo significado que o carimbo já tinha nos
+// formulários montados junto com a página. Sem o parâmetro, nada muda.
+export function CamposAntiSpam({ renderizadoEm: fornecido }: { renderizadoEm?: number } = {}) {
+  const [proprio] = useState(() => Date.now());
+  const renderizadoEm = fornecido ?? proprio;
 
   return (
     <>

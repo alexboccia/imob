@@ -17,6 +17,28 @@ import {
   midiasParaCriar,
 } from "@/lib/property-mapper";
 import { tagFacetas } from "@/lib/cache-tags";
+import { parseMateriais } from "@/lib/materiais-imovel";
+
+// SEM STORAGE CONFIGURADO, MATERIAL NÃO SE MEXE.
+//
+// A URL de cada material só pode ser conferida contra a base pública do
+// bucket (R2_PUBLIC_URL) — sem ela, toda URL é inválida e a lista
+// validada sairia vazia. Gravar esse vazio APAGARIA em silêncio os
+// materiais já cadastrados só porque falta uma variável de ambiente, que
+// é o pior desfecho possível: perda de dado por configuração. Então,
+// quando não há base, o cadastro do imóvel simplesmente não toca nos
+// materiais — nem cria, nem apaga.
+function storageConfigurado(): boolean {
+  return Boolean(process.env.R2_PUBLIC_URL);
+}
+
+function materiaisDoFormulario(
+  json: string | undefined,
+  organizationId: string
+): ReturnType<typeof parseMateriais> {
+  if (!storageConfigurado()) return [];
+  return parseMateriais(json, { organizationId });
+}
 
 export async function criarImovel(
   _prevState: ActionState,
@@ -59,6 +81,15 @@ export async function criarImovel(
         responsibleMemberId: session.user.organizationMemberId ?? null,
         publishedAt: dados.status === "AVAILABLE" ? new Date() : null,
         media: { create: midiasParaCriar(midias, organizationId) },
+        ...(storageConfigurado()
+          ? {
+              presentationMaterials: {
+                create: materiaisDoFormulario(dados.materiaisJson, organizationId).map(
+                  (material) => ({ ...material, organizationId })
+                ),
+              },
+            }
+          : {}),
         statusHistory: {
           create: { previousStatus: null, newStatus: dados.status, organizationId },
         },
@@ -178,8 +209,20 @@ export async function atualizarImovel(
 
     const statusMudou = imovelAtual.status !== dados.status;
 
+    // Materiais seguem o mesmo contrato das mídias: a submissão é sempre
+    // a lista COMPLETA, então apagar e recriar dentro da mesma transação
+    // é o que mantém banco e formulário idênticos. Remover um material
+    // aqui não apaga o objeto no R2 — exatamente como já acontece com
+    // foto removida (ver comentário do MediaUploader).
     await prisma.$transaction([
       prisma.media.deleteMany({ where: { propertyId: imovelId, organizationId } }),
+      ...(storageConfigurado()
+        ? [
+            prisma.propertyPresentationMaterial.deleteMany({
+              where: { propertyId: imovelId, organizationId },
+            }),
+          ]
+        : []),
       prisma.property.update({
         where: { id: imovelId, organizationId },
         data: {
@@ -190,6 +233,15 @@ export async function atualizarImovel(
               ? new Date()
               : undefined,
           media: { create: midiasParaCriar(midias, organizationId) },
+          ...(storageConfigurado()
+            ? {
+                presentationMaterials: {
+                  create: materiaisDoFormulario(dados.materiaisJson, organizationId).map(
+                    (material) => ({ ...material, organizationId })
+                  ),
+                },
+              }
+            : {}),
           ...(statusMudou
             ? {
                 statusHistory: {

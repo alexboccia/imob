@@ -29,6 +29,10 @@ import { logger } from "@/lib/logger";
 // o endpoint direto.
 const PAPEIS_POR_PASTA: Record<string, ReadonlySet<string> | null> = {
   imoveis: null,
+  // Material de apresentação é editado dentro do cadastro do imóvel, que
+  // não é restrito por papel — mesma regra de "imoveis", pelo mesmo
+  // motivo.
+  materiais: null,
   usuarios: PAPEIS_GESTAO_USUARIOS,
   site: PAPEIS_GESTAO_CONFIGURACOES,
   hero: PAPEIS_GESTAO_CONFIGURACOES,
