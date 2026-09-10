@@ -19,12 +19,17 @@ export function FotoCorretorUpload({
   label = "Foto",
   descricao,
   alt = "Foto do usuário",
+  // Pasta de destino no storage. "usuarios" é a da gestão de usuários
+  // (restrita por papel); a tela de autoatendimento passa "perfil", que
+  // qualquer membro ativo pode usar para a própria foto.
+  pasta = "usuarios",
 }: {
   fotoInicial: string | null;
   name?: string;
   label?: string;
   descricao?: string;
   alt?: string;
+  pasta?: "usuarios" | "perfil";
 }) {
   const [foto, setFoto] = useState(fotoInicial);
   const [enviando, setEnviando] = useState(false);
@@ -38,7 +43,7 @@ export function FotoCorretorUpload({
     setErro(null);
     const formData = new FormData();
     formData.append("arquivo", arquivo);
-    formData.append("pasta", "usuarios");
+    formData.append("pasta", pasta);
     const resposta = await fetch("/api/admin/upload", {
       method: "POST",
       body: formData,
@@ -58,7 +63,11 @@ export function FotoCorretorUpload({
       <Label>{label}</Label>
       {descricao && <p className="text-xs text-muted-foreground">{descricao}</p>}
       <input type="hidden" name={name} value={foto ?? ""} />
-      <div className="flex items-center gap-4">
+      {/* flex-wrap + min-w-0: em container estreito (a tela de
+          autoatendimento em 390px, por exemplo) a miniatura e os
+          controles não cabem lado a lado, e sem quebra a linha empurrava
+          a largura do formulário inteiro. */}
+      <div className="flex flex-wrap items-center gap-4">
         <div className="relative w-16 h-16 rounded-full overflow-hidden border bg-gray-100 shrink-0">
           {foto ? (
             <Image
@@ -73,7 +82,7 @@ export function FotoCorretorUpload({
             </div>
           )}
         </div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <input
             type="file"
             accept="image/*"

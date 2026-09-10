@@ -109,6 +109,26 @@ export const PAPEIS_RESOLUCAO_IDENTIDADE: ReadonlySet<string> = new Set([
 // outras capacidades.
 export const PAPEIS_FINANCEIRO: ReadonlySet<string> = new Set(["OWNER", "ADMIN"]);
 
+// Quem pode manter o PRÓPRIO perfil público. Não é gestão de usuários e
+// não deve virar: editar a si mesmo não dá acesso a papel, status,
+// vínculo, convite ou a qualquer outro membro — a action de
+// autoatendimento nem recebe um id de membro, resolve o vínculo pela
+// sessão.
+//
+// ASSISTANT fica de fora, e a razão é de conteúdo, não de risco técnico:
+// a página pública apresenta quem está publicado como "Corretor(a) de
+// imóveis", título de profissão regulamentada. Deixar alguém se
+// autodeclarar corretor seria o produto afirmando algo que não verificou.
+// Um assistente que precise aparecer continua podendo ser publicado por
+// um administrador pela tela de usuários — comportamento que já existia e
+// que esta fase não altera.
+export const PAPEIS_PERFIL_PUBLICO_PROPRIO: ReadonlySet<string> = new Set([
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+  "BROKER",
+]);
+
 export function temPapel(
   role: string | undefined,
   permitidos: ReadonlySet<string>

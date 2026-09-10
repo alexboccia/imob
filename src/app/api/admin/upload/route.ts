@@ -33,6 +33,11 @@ const PAPEIS_POR_PASTA: Record<string, ReadonlySet<string> | null> = {
   // não é restrito por papel — mesma regra de "imoveis", pelo mesmo
   // motivo.
   materiais: null,
+  // Qualquer membro ativo pode enviar a PRÓPRIA foto de perfil. O que
+  // ele não consegue é ligá-la a outra pessoa: a action de
+  // autoatendimento grava sempre no vínculo da sessão, e a de
+  // administração continua exigindo gestão de usuários.
+  perfil: null,
   usuarios: PAPEIS_GESTAO_USUARIOS,
   site: PAPEIS_GESTAO_CONFIGURACOES,
   hero: PAPEIS_GESTAO_CONFIGURACOES,

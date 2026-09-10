@@ -17,6 +17,7 @@ export function PerfilPublicoCorretorFields({
   valores,
   erros,
   perfilPublicoHref,
+  pastaDaFoto,
 }: {
   valores: {
     publicado: boolean;
@@ -35,9 +36,17 @@ export function PerfilPublicoCorretorFields({
    * página de erro.
    */
   perfilPublicoHref?: string | null;
+  /** Repassada ao upload: "perfil" na autogestão, "usuarios" na admin. */
+  pastaDaFoto?: "usuarios" | "perfil";
 }) {
   return (
-    <fieldset className="space-y-4 rounded-lg border p-4">
+    // min-w-0: o navegador dá a todo <fieldset> um min-width intrínseco
+    // (min-content), então ele se recusa a encolher e estoura a largura
+    // do container no mobile — o texto de privacidade, que é longo de
+    // propósito, define esse mínimo. Sem isto a seção vazava para fora da
+    // tela em 390px na autogestão, e vazava para dentro do scroll
+    // horizontal do painel na tela de administração.
+    <fieldset className="min-w-0 space-y-4 rounded-lg border p-4">
       <legend className="px-1 text-sm font-semibold">Perfil público</legend>
       <p className="text-xs text-muted-foreground">
         Identidade comercial exibida no site público: na página deste
@@ -75,6 +84,7 @@ export function PerfilPublicoCorretorFields({
 
       <FotoCorretorUpload
         fotoInicial={valores.foto}
+        pasta={pastaDaFoto}
         name="perfilPublicoFoto"
         label="Foto pública (opcional)"
         alt="Foto pública do profissional"

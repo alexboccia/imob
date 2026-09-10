@@ -17,6 +17,7 @@ import {
   PAPEIS_RESOLUCAO_IDENTIDADE,
   PAPEIS_GESTAO_CONFIGURACOES,
   PAPEIS_FINANCEIRO,
+  PAPEIS_PERFIL_PUBLICO_PROPRIO,
 } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
 
@@ -51,6 +52,16 @@ const TODOS_NAV_LINKS: {
   { href: "/app/caracteristicas", label: "Características" },
   { href: "/app/tipos-imovel", label: "Tipos de imóvel" },
   { href: "/app/usuarios", label: "Usuários" },
+  // Autoatendimento do próprio perfil público — separado de "Usuários"
+  // de propósito: manter a própria identidade no site não é gestão de
+  // pessoas. Só aparece para quem pode ter perfil público; um assistente
+  // não vê a porta, porque não pode entrar (ver
+  // PAPEIS_PERFIL_PUBLICO_PROPRIO).
+  {
+    href: "/app/meu-perfil",
+    label: "Meu perfil público",
+    papeis: PAPEIS_PERFIL_PUBLICO_PROPRIO,
+  },
   // Fase 25 — fecha a dívida que a Fase 24 deixou registrada ao criar o
   // recorte por papel. /app/configuracoes JÁ recusa quem não é
   // OWNER/ADMIN (gate de página da Fase 23), mas o item continuava no

@@ -8,7 +8,10 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
-import { normalizarTelefone, telefoneValido } from "@/lib/telefone";
+import {
+  camposDoPerfilPublico,
+  perfilPublicoSchema,
+} from "@/lib/perfil-publico-schema";
 import { verificarLimiteUsuarios, LimiteDoPlanoError } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
 import { normalizarEmail } from "@/lib/rate-limit";
@@ -22,11 +25,6 @@ import {
 import { enviarEmailConviteMembro } from "@/lib/email";
 import { temPapel, PAPEIS_GESTAO_USUARIOS } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
-import {
-  LIMITE_BIO_PUBLICA,
-  LIMITE_CRECI,
-  LIMITE_EMAIL_PUBLICO,
-} from "@/lib/perfil-publico-limites";
 import { urlDeUploadValida } from "@/lib/upload-url";
 import {
   type ActionState,
@@ -317,42 +315,7 @@ const atualizarUsuarioSchema = z.object({
   // publicar, e desmarcar depois não apaga nada. Quem decide o que vai ao
   // ar é só perfilPublicoAtivo, lido pelo site em
   // resolverCorretorPublico.
-  perfilPublicoAtivo: booleanCheckbox,
-  perfilPublicoCreci: z
-    .string()
-    .max(LIMITE_CRECI, `Use no máximo ${LIMITE_CRECI} caracteres.`)
-    .optional()
-    .or(z.literal("")),
-  perfilPublicoFoto: z.string().optional().or(z.literal("")),
-  perfilPublicoBio: z
-    .string()
-    .max(LIMITE_BIO_PUBLICA, `Use no máximo ${LIMITE_BIO_PUBLICA} caracteres.`)
-    .optional()
-    .or(z.literal("")),
-  perfilPublicoWhatsapp: z.string().optional().or(z.literal("")),
-  // Telefone público: validado como telefone brasileiro (10-11 dígitos,
-  // sem DDI) pelo MESMO utilitário que o CRM usa. Deliberadamente
-  // diferente do WhatsApp acima, que guarda DDI porque wa.me exige.
-  perfilPublicoTelefone: z
-    .string()
-    .refine((v) => v === "" || telefoneValido(v), "Telefone inválido.")
-    .optional()
-    .or(z.literal("")),
-  // E-mail público: mesmo padrão de validação do e-mail de contato
-  // operacional — um só critério de e-mail no produto.
-  perfilPublicoEmail: z
-    .string()
-    .max(LIMITE_EMAIL_PUBLICO, `Use no máximo ${LIMITE_EMAIL_PUBLICO} caracteres.`)
-    .email("E-mail público inválido.")
-    .optional()
-    .or(z.literal("")),
-});
-
-// "" e espaços viram null: um campo em branco é ausência de dado, não uma
-// string vazia que depois vira linha vazia no card do site.
-function textoOuNulo(valor: string | undefined): string | null {
-  return valor?.trim() || null;
-}
+}).extend(perfilPublicoSchema.shape);
 
 export async function atualizarUsuario(
   membershipId: string,
@@ -443,23 +406,9 @@ export async function atualizarUsuario(
       status: dados.ativo ? "ACTIVE" : "SUSPENDED",
       whatsapp: dados.whatsapp ? dados.whatsapp.replace(/\D/g, "") : null,
       contactEmail: dados.emailContato || null,
-      publicProfileEnabled: dados.perfilPublicoAtivo,
-      publicCreci: textoOuNulo(dados.perfilPublicoCreci),
-      publicPhotoUrl: textoOuNulo(dados.perfilPublicoFoto),
-      publicBio: textoOuNulo(dados.perfilPublicoBio),
-      // Só dígitos, como o CRM guarda. Vazio vira null: campo em branco
-      // é ausência de contato, e é o null que apaga o botão no site.
-      publicPhone: dados.perfilPublicoTelefone
-        ? normalizarTelefone(dados.perfilPublicoTelefone)
-        : null,
-      // Trim apenas — sem baixar caixa. O produto guarda e-mail como
-      // digitado (ver contactEmail logo acima); minúsculas só existem em
-      // normalizarEmail, que é chave de deduplicação, não formato de
-      // armazenamento.
-      publicEmail: textoOuNulo(dados.perfilPublicoEmail),
-      publicWhatsapp: dados.perfilPublicoWhatsapp
-        ? dados.perfilPublicoWhatsapp.replace(/\D/g, "") || null
-        : null,
+      // Mesmo mapeamento que a tela de autoatendimento usa — as duas não
+      // podem divergir sobre o que é um perfil válido.
+      ...camposDoPerfilPublico(dados),
     },
   });
 

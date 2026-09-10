@@ -96,6 +96,13 @@ export const PASTAS_PERMITIDAS: Record<string, { categorias: readonly Categoria[
   // preços). SÓ documento: uma imagem enviada aqui seria recusada, do
   // mesmo jeito que um PDF é recusado em "imoveis".
   materiais: { categorias: ["documento"] },
+  // Foto do próprio perfil público, enviada pela tela de
+  // autoatendimento. Pasta separada de "usuarios" de propósito: aquela
+  // é restrita à gestão de usuários, e reaproveitá-la aqui alargaria uma
+  // permissão administrativa para conseguir uma foto. A chave continua
+  // sendo {organizationId}/perfil/{uuid} — o prefixo vem da sessão, não
+  // do cliente, então não há como escrever no espaço de outro tenant.
+  perfil: { categorias: ["imagem"] },
 };
 
 export function extrairExtensao(nomeArquivo: string): string | null {
