@@ -16,6 +16,7 @@ import { LIMITE_BIO_PUBLICA } from "@/lib/perfil-publico-limites";
 export function PerfilPublicoCorretorFields({
   valores,
   erros,
+  perfilPublicoHref,
 }: {
   valores: {
     publicado: boolean;
@@ -23,18 +24,32 @@ export function PerfilPublicoCorretorFields({
     foto: string | null;
     bio: string | null;
     whatsapp: string | null;
+    telefone: string | null;
+    email: string | null;
   };
   erros?: Record<string, string[] | undefined>;
+  /**
+   * Endereço real do perfil no site — só chega preenchido quando o
+   * perfil está publicado. Com a exibição desmarcada a rota devolve 404,
+   * então não existe link para lugar nenhum: nada de CTA que termina em
+   * página de erro.
+   */
+  perfilPublicoHref?: string | null;
 }) {
   return (
     <fieldset className="space-y-4 rounded-lg border p-4">
       <legend className="px-1 text-sm font-semibold">Perfil público</legend>
       <p className="text-xs text-muted-foreground">
-        Identidade comercial exibida no site público, nos imóveis em que
-        esta pessoa é a responsável. Nada aqui aparece no site enquanto a
-        exibição não for marcada abaixo — e os dados internos do painel
-        (e-mail de acesso, WhatsApp e e-mail operacionais) nunca são
-        publicados.
+        Identidade comercial exibida no site público: na página deste
+        profissional e nos imóveis em que ele é o responsável. Nada aqui
+        aparece no site enquanto a exibição não for marcada abaixo — e os
+        dados internos do painel (e-mail de acesso, WhatsApp e e-mail
+        operacionais) nunca são publicados.
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Os contatos abaixo são separados dos operacionais: preencher um
+        deles significa publicá-lo no site. Deixar em branco é não ter
+        aquele contato público — e o botão correspondente deixa de existir.
       </p>
 
       {/* Checkbox envolvido pelo <label>, como o resto do formulário já
@@ -114,6 +129,58 @@ export function PerfilPublicoCorretorFields({
         </p>
         <ErroCampo erros={erros?.perfilPublicoWhatsapp} />
       </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="perfilPublicoTelefone">Telefone público (opcional)</Label>
+        <Input
+          id="perfilPublicoTelefone"
+          name="perfilPublicoTelefone"
+          defaultValue={valores.telefone ?? ""}
+          placeholder="(11) 99999-9999"
+          aria-describedby="perfilPublicoTelefone-ajuda"
+          aria-invalid={erros?.perfilPublicoTelefone ? true : undefined}
+        />
+        <p id="perfilPublicoTelefone-ajuda" className="text-xs text-muted-foreground">
+          Número para ligação, exibido no site. DDD + número. É separado do
+          WhatsApp acima e do telefone da imobiliária.
+        </p>
+        <ErroCampo erros={erros?.perfilPublicoTelefone} />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="perfilPublicoEmail">E-mail público (opcional)</Label>
+        <Input
+          id="perfilPublicoEmail"
+          name="perfilPublicoEmail"
+          type="email"
+          defaultValue={valores.email ?? ""}
+          placeholder="nome@imobiliaria.com.br"
+          aria-describedby="perfilPublicoEmail-ajuda"
+          aria-invalid={erros?.perfilPublicoEmail ? true : undefined}
+        />
+        <p id="perfilPublicoEmail-ajuda" className="text-xs text-muted-foreground">
+          Endereço exibido no site. Nunca é o e-mail de acesso ao painel,
+          que continua privado.
+        </p>
+        <ErroCampo erros={erros?.perfilPublicoEmail} />
+      </div>
+
+      {perfilPublicoHref && (
+        <p className="text-xs">
+          <a
+            href={perfilPublicoHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-link hover:underline"
+            data-testid="ver-perfil-publico"
+          >
+            Ver este perfil no site
+          </a>{" "}
+          <span className="text-muted-foreground">
+            — abre a página pública real, como o visitante a vê.
+          </span>
+        </p>
+      )}
     </fieldset>
   );
 }

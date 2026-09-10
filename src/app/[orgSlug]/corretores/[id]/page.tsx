@@ -10,14 +10,22 @@ import { resolverBasePath } from "@/lib/site-url";
 import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 import {
   caminhoPerfilCorretor,
+  contatosPublicosDoCorretor,
+  hrefEmail,
+  hrefTelefone,
   resolverCorretorPublico,
-  whatsappPublicoDoCorretor,
 } from "@/lib/perfil-publico-corretor";
+import { formatarTelefone } from "@/lib/telefone";
 import { linkWhatsApp } from "@/lib/whatsapp";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { SecaoImoveis } from "@/components/SecaoImoveis";
 import { buttonVariants } from "@/components/ui/button";
-import { IconePessoa, IconeWhatsApp } from "@/components/icons";
+import {
+  IconeEmail,
+  IconePessoa,
+  IconeTelefone,
+  IconeWhatsApp,
+} from "@/components/icons";
 import { TITULO_DETALHE, TITULO_SECAO } from "@/lib/site-typography";
 
 // Perfil público do corretor.
@@ -60,6 +68,8 @@ const buscarCorretor = cache(async (membroId: string, organizationId: string) =>
       publicPhotoUrl: true,
       publicBio: true,
       publicWhatsapp: true,
+      publicPhone: true,
+      publicEmail: true,
       user: { select: { name: true } },
     },
   });
@@ -165,7 +175,10 @@ export default async function PerfilCorretorPage({
       take: MAX_IMOVEIS_DO_CORRETOR,
     });
 
-    return { corretor: { ...corretor, id: membro.id, whatsapp: whatsappPublicoDoCorretor(membro) }, imoveis };
+    return {
+      corretor: { ...corretor, id: membro.id, contatos: contatosPublicosDoCorretor(membro) },
+      imoveis,
+    };
   });
 
   if (!corretor) notFound();
@@ -174,9 +187,11 @@ export default async function PerfilCorretorPage({
   // afirma, com nome e rosto, que o visitante vai falar com esta pessoa;
   // cair no número da imobiliária seria uma mentira educada.
   const whatsappHref = linkWhatsApp(
-    corretor.whatsapp,
+    corretor.contatos.whatsapp,
     `Olá, ${corretor.nome}! Vi seu perfil no site e gostaria de mais informações.`
   );
+  const telefoneHref = hrefTelefone(corretor.contatos.telefone);
+  const emailHref = hrefEmail(corretor.contatos.email);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
@@ -233,11 +248,15 @@ export default async function PerfilCorretorPage({
             </p>
           )}
 
-          {/* Sem rastreio de analytics: o evento exige propertyId e aqui
-              não há imóvel — ver analytics-eventos.ts. O link é o mesmo
-              de sempre, só não gera evento. */}
+          {/* Sem rastreio de analytics em nenhum destes: o evento exige
+              propertyId e aqui não há imóvel — ver analytics-eventos.ts.
+              Os links são os de sempre, só não geram evento.
+
+              Cada botão só existe se o profissional publicou aquele
+              contato. Nenhum deles cai no contato institucional. */}
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           {whatsappHref && (
-            <div className="mt-6">
+            <div>
               <a
                 href={whatsappHref}
                 target="_blank"
@@ -254,6 +273,37 @@ export default async function PerfilCorretorPage({
               </a>
             </div>
           )}
+
+          {telefoneHref && (
+            <a
+              href={telefoneHref}
+              aria-label={`Ligar para ${corretor.nome}`}
+              className={buttonVariants({
+                variant: "outline",
+                size: "lg",
+                className: "w-full sm:w-auto",
+              })}
+            >
+              <IconeTelefone className="size-5" aria-hidden />
+              {formatarTelefone(corretor.contatos.telefone!)}
+            </a>
+          )}
+
+          {emailHref && (
+            <a
+              href={emailHref}
+              aria-label={`Enviar e-mail para ${corretor.nome}`}
+              className={buttonVariants({
+                variant: "outline",
+                size: "lg",
+                className: "w-full sm:w-auto",
+              })}
+            >
+              <IconeEmail className="size-5" aria-hidden />
+              E-mail
+            </a>
+          )}
+          </div>
         </div>
       </div>
 

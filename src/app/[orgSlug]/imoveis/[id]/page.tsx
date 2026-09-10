@@ -10,6 +10,7 @@ import {
 } from "@/lib/format";
 import { linkWhatsApp } from "@/lib/whatsapp";
 import {
+  contatosPublicosDoCorretor,
   resolverCorretorPublico,
   resolverWhatsAppDoImovel,
   whatsappPublicoDoCorretor,
@@ -78,6 +79,8 @@ const buscarImovel = cache(async (id: string, organizationId: string) => {
           publicPhotoUrl: true,
           publicBio: true,
           publicWhatsapp: true,
+          publicPhone: true,
+          publicEmail: true,
           user: { select: { name: true } },
         },
       },
@@ -519,6 +522,7 @@ export default async function DetalheImovelPage({
               corretor={corretorPublico}
               membroId={imovel.responsibleMember!.id}
               basePath={basePath}
+              contatos={contatosPublicosDoCorretor(imovel.responsibleMember)}
               whatsappHref={whatsappCorretorHref}
               imovelId={imovel.id}
               orgSlug={orgSlug}

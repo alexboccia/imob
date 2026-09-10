@@ -14,6 +14,7 @@
 // perfil antes de publicar) mas o site se comporta como se o membro não
 // existisse: cai na identidade institucional da organização.
 import { temWhatsApp } from "@/lib/whatsapp";
+import { normalizarTelefone, telefoneValido } from "@/lib/telefone";
 
 // O que a página lê do banco. Espelha o `select` usado no detalhe do
 // imóvel — o e-mail de login e o contato operacional (whatsapp,
@@ -25,6 +26,8 @@ export type MembroResponsavel = {
   publicPhotoUrl: string | null;
   publicBio: string | null;
   publicWhatsapp: string | null;
+  publicPhone: string | null;
+  publicEmail: string | null;
   user: { name: string };
 } | null | undefined;
 
@@ -37,6 +40,18 @@ export type CorretorPublico = {
   creci: string | null;
   foto: string | null;
   bio: string | null;
+};
+
+// Contatos que o profissional publicou — e SÓ eles. Cada um é null
+// quando não foi preenchido, e o botão correspondente simplesmente não
+// existe. Nenhum deles cai no contato institucional: um botão ao lado do
+// rosto de alguém precisa falar com aquela pessoa (ver
+// whatsappPublicoDoCorretor, mesma doutrina).
+export type ContatosPublicosCorretor = {
+  /** Dígitos locais (10-11), como telefoneValido define. Sem DDI. */
+  telefone: string | null;
+  email: string | null;
+  whatsapp: string | null;
 };
 
 export function resolverCorretorPublico(membro: MembroResponsavel): CorretorPublico | null {
@@ -110,4 +125,49 @@ export function whatsappPublicoDoCorretor(membro: MembroResponsavel): string | n
 // membro de outra organização simplesmente não encontra ninguém.
 export function caminhoPerfilCorretor(basePath: string, membroId: string): string {
   return `${basePath}/corretores/${membroId}`;
+}
+
+/**
+ * Telefone público do corretor, em dígitos locais. Só com opt-in.
+ *
+ * A normalização é a do CRM (normalizarTelefone: dígitos, sem inventar
+ * DDI) e NÃO a do WhatsApp — os dois formatos são diferentes de
+ * propósito: wa.me exige DDI, um `tel:` brasileiro não. Reaproveitar a
+ * normalização de um no outro produziria link quebrado em um dos dois.
+ */
+export function telefonePublicoDoCorretor(membro: MembroResponsavel): string | null {
+  if (!membro?.publicProfileEnabled) return null;
+  const digitos = membro.publicPhone ? normalizarTelefone(membro.publicPhone) : null;
+  return digitos && telefoneValido(digitos) ? digitos : null;
+}
+
+/** E-mail público do corretor. Só com opt-in; nunca o e-mail de login. */
+export function emailPublicoDoCorretor(membro: MembroResponsavel): string | null {
+  if (!membro?.publicProfileEnabled) return null;
+  return membro.publicEmail?.trim() || null;
+}
+
+/**
+ * Os três contatos de uma vez, para quem renderiza botões. Não existe
+ * "contato do corretor" fora daqui: card e perfil leem a mesma função,
+ * então não há como um deles esquecer o portão de publicação.
+ */
+export function contatosPublicosDoCorretor(
+  membro: MembroResponsavel
+): ContatosPublicosCorretor {
+  return {
+    telefone: telefonePublicoDoCorretor(membro),
+    email: emailPublicoDoCorretor(membro),
+    whatsapp: whatsappPublicoDoCorretor(membro),
+  };
+}
+
+/** href de discagem. Sem DDI inventado — o campo guarda número local. */
+export function hrefTelefone(digitos: string | null): string | null {
+  return digitos ? `tel:${digitos}` : null;
+}
+
+/** href de e-mail. Sem assunto/corpo: nada sensível em query string. */
+export function hrefEmail(email: string | null): string | null {
+  return email ? `mailto:${email}` : null;
 }

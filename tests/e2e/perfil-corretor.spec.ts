@@ -37,12 +37,21 @@ async function abrirEdicaoDoOwner(page: import("@playwright/test").Page) {
 
 async function definirPerfilPublico(
   page: import("@playwright/test").Page,
-  valores: { publicar: boolean; creci?: string; bio?: string; whatsapp?: string }
+  valores: {
+    publicar: boolean;
+    creci?: string;
+    bio?: string;
+    whatsapp?: string;
+    telefone?: string;
+    email?: string;
+  }
 ) {
   await abrirEdicaoDoOwner(page);
   await page.locator("#perfilPublicoCreci").fill(valores.creci ?? "");
   await page.locator("#perfilPublicoBio").fill(valores.bio ?? "");
   await page.locator("#perfilPublicoWhatsapp").fill(valores.whatsapp ?? "");
+  await page.locator("#perfilPublicoTelefone").fill(valores.telefone ?? "");
+  await page.locator("#perfilPublicoEmail").fill(valores.email ?? "");
   const marcado =
     (await page
       .getByTestId("perfil-publico-ativo")
@@ -272,6 +281,210 @@ test.describe("Perfil público do corretor — página", () => {
         );
         expect(medida.nomeVisivel).toBe(true);
         expect(medida.alturaBotao, `botão @ ${largura}px`).toBeGreaterThanOrEqual(36);
+      } finally {
+        await restaurarPerfilDespublicado(() => definirPerfilPublico(page, { publicar: false }));
+      }
+    });
+  }
+});
+
+// =======================================================================
+// Contatos públicos — telefone e e-mail
+// =======================================================================
+const TELEFONE = "11933332222";
+const EMAIL_PUBLICO = "corretor.publico@imobiliaria.test";
+
+test.describe("contatos públicos do corretor", () => {
+  test("gestão: os campos existem, são rotulados e explicam a consequência", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    await abrirEdicaoDoOwner(page);
+
+    await expect(page.getByLabel("Telefone público (opcional)")).toBeVisible();
+    await expect(page.getByLabel("E-mail público (opcional)")).toBeVisible();
+    // O texto precisa dizer o que acontece ao preencher.
+    await expect(
+      page.getByText(/preencher um deles significa publicá-lo no site/i)
+    ).toBeVisible();
+  });
+
+  test("com telefone e e-mail publicados, o perfil oferece as três ações", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, {
+        publicar: true,
+        creci: CRECI,
+        whatsapp: "11955551111",
+        telefone: TELEFONE,
+        email: EMAIL_PUBLICO,
+      });
+      const url = await urlDoPerfil(page);
+      await page.goto(url);
+
+      const ligar = page.getByRole("link", { name: /Ligar para/i });
+      await expect(ligar).toBeVisible();
+      // tel: com os dígitos locais, sem DDI inventado.
+      await expect(ligar).toHaveAttribute("href", `tel:${TELEFONE}`);
+      // O número aparece formatado para leitura humana.
+      await expect(ligar).toContainText("(11) 93333-2222");
+
+      const email = page.getByRole("link", { name: /Enviar e-mail para/i });
+      await expect(email).toBeVisible();
+      // mailto: sem query string — nada de assunto/corpo na URL.
+      await expect(email).toHaveAttribute("href", `mailto:${EMAIL_PUBLICO}`);
+
+      await expect(page.getByRole("link", { name: /Falar no WhatsApp com/i })).toBeVisible();
+    } finally {
+      await restaurarPerfilDespublicado(() => definirPerfilPublico(page, { publicar: false }));
+    }
+  });
+
+  test("limpar o telefone tira o botão de ligar, e o resto continua", async ({ page }) => {
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, {
+        publicar: true,
+        telefone: TELEFONE,
+        email: EMAIL_PUBLICO,
+      });
+      let url = await urlDoPerfil(page);
+      await page.goto(url);
+      await expect(page.getByRole("link", { name: /Ligar para/i })).toBeVisible();
+
+      await definirPerfilPublico(page, { publicar: true, email: EMAIL_PUBLICO });
+      url = await urlDoPerfil(page);
+      await page.goto(url);
+      await expect(page.getByRole("link", { name: /Ligar para/i })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: /Enviar e-mail para/i })).toBeVisible();
+    } finally {
+      await restaurarPerfilDespublicado(() => definirPerfilPublico(page, { publicar: false }));
+    }
+  });
+
+  test("o card do imóvel mostra os mesmos contatos, e só eles", async ({ page }) => {
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, {
+        publicar: true,
+        creci: CRECI,
+        telefone: TELEFONE,
+        // Sem e-mail e sem WhatsApp próprios de propósito.
+      });
+      await page.goto(URL_IMOVEL);
+      const card = page.locator("[data-card-corretor]");
+      await expect(card.getByRole("link", { name: "Ver perfil completo" })).toBeVisible();
+      await expect(card.getByRole("link", { name: /Ligar para/i })).toHaveAttribute(
+        "href",
+        `tel:${TELEFONE}`
+      );
+      await expect(card.getByRole("link", { name: /Enviar e-mail para/i })).toHaveCount(0);
+      // Sem WhatsApp PRÓPRIO, nenhum botão de WhatsApp no card — mesmo
+      // com a imobiliária tendo número institucional configurado.
+      await expect(card.getByRole("link", { name: /WhatsApp/i })).toHaveCount(0);
+    } finally {
+      await restaurarPerfilDespublicado(() => definirPerfilPublico(page, { publicar: false }));
+    }
+  });
+
+  test("nenhum contato publicado: card e perfil seguem válidos, sem botões pessoais", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, { publicar: true, creci: CRECI });
+      await page.goto(URL_IMOVEL);
+      const card = page.locator("[data-card-corretor]");
+      await expect(card).toBeVisible();
+      await expect(card.getByRole("link", { name: "Ver perfil completo" })).toBeVisible();
+      for (const acao of [/Ligar para/i, /Enviar e-mail para/i, /WhatsApp/i]) {
+        await expect(card.getByRole("link", { name: acao })).toHaveCount(0);
+      }
+    } finally {
+      await restaurarPerfilDespublicado(() => definirPerfilPublico(page, { publicar: false }));
+    }
+  });
+
+  test("dados privados do painel nunca aparecem no site", async ({ page }) => {
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, {
+        publicar: true,
+        telefone: TELEFONE,
+        email: EMAIL_PUBLICO,
+      });
+      const url = await urlDoPerfil(page);
+      await page.goto(url);
+      const html = await page.content();
+      // O e-mail de LOGIN continua fora, mesmo com e-mail público
+      // preenchido — são campos diferentes e só um deles é publicável.
+      expect(html).not.toContain(ORG_A.email);
+      expect(html).toContain(EMAIL_PUBLICO);
+    } finally {
+      await restaurarPerfilDespublicado(() => definirPerfilPublico(page, { publicar: false }));
+    }
+  });
+
+  test('o painel oferece "Ver este perfil no site" só quando publicado', async ({ page }) => {
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, { publicar: false });
+      await abrirEdicaoDoOwner(page);
+      await expect(page.getByTestId("ver-perfil-publico")).toHaveCount(0);
+
+      await definirPerfilPublico(page, { publicar: true });
+      await abrirEdicaoDoOwner(page);
+      const link = page.getByTestId("ver-perfil-publico");
+      await expect(link).toBeVisible();
+      const href = await link.getAttribute("href");
+      expect(href).toContain("/corretores/");
+      // O link precisa levar a uma página real, não a um 404.
+      const destino = await page.goto(href!);
+      expect(destino?.status()).toBe(200);
+    } finally {
+      await restaurarPerfilDespublicado(() => definirPerfilPublico(page, { publicar: false }));
+    }
+  });
+
+  for (const largura of [320, 390, 768, 1280]) {
+    test(`${largura}px: quatro ações no card sem overflow e com alvo de toque`, async ({
+      page,
+    }) => {
+      await login(page, ORG_A);
+      try {
+        await definirPerfilPublico(page, {
+          publicar: true,
+          creci: CRECI,
+          whatsapp: "11955551111",
+          telefone: TELEFONE,
+          email: EMAIL_PUBLICO,
+        });
+        await page.setViewportSize({ width: largura, height: 900 });
+        await page.goto(URL_IMOVEL);
+
+        const medida = await page.locator("[data-card-corretor]").evaluate((card) => {
+          const acoes = [...card.querySelectorAll("a")];
+          return {
+            quantidade: acoes.length,
+            alturaMinima: Math.min(...acoes.map((a) => a.getBoundingClientRect().height)),
+            cabemNoCard: acoes.every(
+              (a) => a.getBoundingClientRect().right <= card.getBoundingClientRect().right + 1
+            ),
+            semOverflow: card.scrollWidth <= card.clientWidth + 1,
+          };
+        });
+        expect(medida.quantidade, `ações @ ${largura}px`).toBe(4);
+        expect(medida.alturaMinima, `alvo de toque @ ${largura}px`).toBeGreaterThanOrEqual(36);
+        expect(medida.cabemNoCard, `ações fora do card @ ${largura}px`).toBe(true);
+        expect(medida.semOverflow, `overflow @ ${largura}px`).toBe(true);
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth + 1
+          ),
+          `overflow da página @ ${largura}px`
+        ).toBe(true);
       } finally {
         await restaurarPerfilDespublicado(() => definirPerfilPublico(page, { publicar: false }));
       }

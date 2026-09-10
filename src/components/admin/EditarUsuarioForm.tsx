@@ -24,6 +24,7 @@ export function EditarUsuarioForm({
   usuario,
   ehVoceMesmo,
   podeGerenciarOwner,
+  perfilPublicoHref,
 }: {
   usuario: {
     id: string;
@@ -40,10 +41,14 @@ export function EditarUsuarioForm({
       foto: string | null;
       bio: string | null;
       whatsapp: string | null;
+      telefone: string | null;
+      email: string | null;
     };
   };
   ehVoceMesmo: boolean;
   podeGerenciarOwner: boolean;
+  /** Endereço público do perfil — null quando ele não está publicado. */
+  perfilPublicoHref?: string | null;
 }) {
   const atualizarComId = atualizarUsuario.bind(null, usuario.id);
   const [estado, formAction, pendente] = useActionState(
@@ -108,6 +113,7 @@ export function EditarUsuarioForm({
           <PerfilPublicoCorretorFields
             valores={usuario.perfilPublico}
             erros={estado.fieldErrors}
+            perfilPublicoHref={perfilPublicoHref}
           />
 
           {ehVoceMesmo ? (

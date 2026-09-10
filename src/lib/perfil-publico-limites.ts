@@ -11,3 +11,8 @@ export const LIMITE_BIO_PUBLICA = 600;
 // "CRECI-SP 000000", número puro). A aplicação não valida a legislação
 // do CRECI: só impede um campo desproporcional.
 export const LIMITE_CRECI = 40;
+
+// E-mail público: teto de sanidade, não regra de RFC. Quem valida o
+// formato é o mesmo `z.string().email()` que o e-mail de contato
+// operacional já usa — um só padrão de e-mail no produto.
+export const LIMITE_EMAIL_PUBLICO = 120;

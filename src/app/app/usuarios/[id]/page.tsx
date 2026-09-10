@@ -5,6 +5,8 @@ import { requireOrganizationId } from "@/lib/tenant";
 import { temPapel, PAPEIS_GESTAO_USUARIOS } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
 import { EditarUsuarioForm } from "@/components/admin/EditarUsuarioForm";
+import { caminhoPerfilCorretor } from "@/lib/perfil-publico-corretor";
+import { resolverBasePath } from "@/lib/site-url";
 
 export default async function EditarUsuarioPage({
   params,
@@ -17,9 +19,16 @@ export default async function EditarUsuarioPage({
 
   const membro = await prisma.organizationMember.findFirst({
     where: { id, organizationId },
-    include: { user: true },
+    include: { user: true, organization: { select: { slug: true } } },
   });
   if (!membro) notFound();
+
+  // Link para a página pública real — e só quando ela existe de fato. Com
+  // a exibição desmarcada a rota devolve 404, então não há CTA nenhum:
+  // preview que termina em erro é pior que preview nenhum.
+  const perfilPublicoHref = membro.publicProfileEnabled
+    ? caminhoPerfilCorretor(resolverBasePath(membro.organization.slug), membro.id)
+    : null;
 
   if (!temPapel(await papelAtual(), PAPEIS_GESTAO_USUARIOS)) {
     return (
@@ -50,8 +59,11 @@ export default async function EditarUsuarioPage({
             foto: membro.publicPhotoUrl,
             bio: membro.publicBio,
             whatsapp: membro.publicWhatsapp,
+            telefone: membro.publicPhone,
+            email: membro.publicEmail,
           },
         }}
+        perfilPublicoHref={perfilPublicoHref}
         ehVoceMesmo={membro.id === session?.user.organizationMemberId}
         podeGerenciarOwner={session?.user.role === "OWNER"}
       />

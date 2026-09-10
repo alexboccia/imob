@@ -1259,6 +1259,26 @@ model OrganizationMember {
   // número de trabalho do membro nunca é publicado por conveniência.
   publicWhatsapp       String?
 
+  // Telefone e e-mail PÚBLICOS — campos próprios, e essa é a única razão
+  // de existirem. `whatsapp` e `contactEmail` acima são operacionais:
+  // foram cadastrados para a equipe usar internamente, e transformá-los
+  // em contato de site seria publicar um dado que ninguém consentiu em
+  // publicar. Nenhum deles é copiado para cá — nem por backfill, nem por
+  // padrão do formulário.
+  //
+  // Preencher = publicar. Não há flag por campo: o portão continua sendo
+  // publicProfileEnabled, e dentro dele o valor nulo é a ausência. Um
+  // par de toggles extras (publicPhoneEnabled/publicEmailEnabled)
+  // criaria o estado ambíguo "tem valor mas não publica", que é
+  // exatamente o que o campo nulo já expressa sem ambiguidade.
+  //
+  // Formato: telefone guarda só dígitos LOCAIS (10 ou 11, sem DDI),
+  // mesma regra de telefoneValido/normalizarTelefone usada no CRM —
+  // deliberadamente diferente de publicWhatsapp, que guarda DDI junto
+  // porque é isso que wa.me exige.
+  publicPhone String?
+  publicEmail String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

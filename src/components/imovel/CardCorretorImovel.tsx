@@ -2,13 +2,22 @@ import Image from "next/image";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
-import { IconePessoa, IconeWhatsApp } from "@/components/icons";
+import {
+  IconeEmail,
+  IconePessoa,
+  IconeTelefone,
+  IconeWhatsApp,
+} from "@/components/icons";
 import { RastreioCliqueWhatsApp } from "@/components/analytics/RastreioCliqueWhatsApp";
 import { TITULO_BLOCO } from "@/lib/site-typography";
 import {
   caminhoPerfilCorretor,
+  hrefEmail,
+  hrefTelefone,
+  type ContatosPublicosCorretor,
   type CorretorPublico,
 } from "@/lib/perfil-publico-corretor";
+import { formatarTelefone } from "@/lib/telefone";
 
 // Card do corretor responsável, na coluna de conteúdo da ficha.
 //
@@ -31,16 +40,18 @@ import {
 //     seja, a marca está permanentemente na tela enquanto se rola a
 //     ficha. Repeti-la dentro do card não acrescentaria informação — e
 //     custaria uma consulta a mais nesta página.
-//   - Telefone e e-mail do profissional. O domínio não tem campo público
-//     para nenhum dos dois: `OrganizationMember.whatsapp` e
-//     `contactEmail` são operacionais — cadastrados para a equipe usar
-//     internamente — e publicar um deles seria transformar dado interno
-//     em consentimento que ninguém deu.
+//
+// CONTATOS: só os que o profissional publicou, cada um no seu campo
+// próprio (publicPhone/publicEmail/publicWhatsapp). Nenhum deles cai no
+// contato institucional — um botão ao lado de um rosto precisa falar com
+// aquela pessoa. Sem nada publicado, o card continua válido: identidade
+// e link do perfil, sem botão de contato nenhum.
 
 export function CardCorretorImovel({
   corretor,
   membroId,
   basePath,
+  contatos,
   whatsappHref,
   imovelId,
   orgSlug,
@@ -49,11 +60,15 @@ export function CardCorretorImovel({
   /** Id do membro — o destino do perfil público, montado pelo helper central. */
   membroId: string;
   basePath: string;
-  /** Número PESSOAL do corretor, já publicado por ele. null = sem botão. */
+  /** Contatos publicados por ele. Cada null apaga o botão correspondente. */
+  contatos: ContatosPublicosCorretor;
+  /** Link de WhatsApp já montado com a mensagem do imóvel. null = sem botão. */
   whatsappHref: string | null;
   imovelId: string;
   orgSlug: string;
 }) {
+  const telefoneHref = hrefTelefone(contatos.telefone);
+  const emailHref = hrefEmail(contatos.email);
   return (
     <Card data-card-corretor>
       <CardContent>
@@ -105,13 +120,31 @@ export function CardCorretorImovel({
             ele. Por isso o CTA não precisa de condição própria — e não
             há como ele apontar para uma página inexistente. O caminho sai
             do helper central; nenhum componente concatena rota à mão. */}
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+        {/* Até quatro ações: empilham no mobile e quebram em linha a
+            partir de sm, em vez de virarem quatro botões ilegíveis lado a
+            lado numa tela estreita. */}
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Link
             href={caminhoPerfilCorretor(basePath, membroId)}
             className={buttonVariants({ size: "lg", className: "w-full sm:w-auto" })}
           >
             Ver perfil completo
           </Link>
+
+          {telefoneHref && (
+            <a
+              href={telefoneHref}
+              aria-label={`Ligar para ${corretor.nome}`}
+              className={buttonVariants({
+                variant: "outline",
+                size: "lg",
+                className: "w-full sm:w-auto",
+              })}
+            >
+              <IconeTelefone className="size-5" aria-hidden />
+              {formatarTelefone(contatos.telefone!)}
+            </a>
+          )}
 
           {whatsappHref && (
             <>
@@ -146,6 +179,21 @@ export function CardCorretorImovel({
               </a>
             </RastreioCliqueWhatsApp>
             </>
+          )}
+
+          {emailHref && (
+            <a
+              href={emailHref}
+              aria-label={`Enviar e-mail para ${corretor.nome}`}
+              className={buttonVariants({
+                variant: "outline",
+                size: "lg",
+                className: "w-full sm:w-auto",
+              })}
+            >
+              <IconeEmail className="size-5" aria-hidden />
+              E-mail
+            </a>
           )}
         </div>
       </CardContent>

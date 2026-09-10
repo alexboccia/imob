@@ -1,8 +1,13 @@
 import { describe, expect, test } from "vitest";
 import {
   caminhoPerfilCorretor,
+  contatosPublicosDoCorretor,
+  emailPublicoDoCorretor,
+  hrefEmail,
+  hrefTelefone,
   resolverCorretorPublico,
   resolverWhatsAppDoImovel,
+  telefonePublicoDoCorretor,
   whatsappPublicoDoCorretor,
   type MembroResponsavel,
 } from "./perfil-publico-corretor";
@@ -16,6 +21,8 @@ const MEMBRO_COMPLETO_SEM_OPTIN: MembroResponsavel = {
   publicPhotoUrl: "https://cdn.example/foto.jpg",
   publicBio: "Atuo na região há anos.",
   publicWhatsapp: "11977776666",
+  publicPhone: "11933332222",
+  publicEmail: "maria@imobiliaria.test",
   user: { name: "Maria Silva" },
 };
 
@@ -49,6 +56,8 @@ describe("resolverCorretorPublico — publicação é opt-in", () => {
       publicPhotoUrl: null,
       publicBio: null,
       publicWhatsapp: null,
+      publicPhone: null,
+      publicEmail: null,
       user: { name: "João Souza" },
     })!;
     expect(c.nome).toBe("João Souza");
@@ -172,5 +181,76 @@ describe("caminhoPerfilCorretor — um lugar só monta a URL do perfil", () => {
     expect(caminhoPerfilCorretor("/org-a", "id-de-outra-org")).toBe(
       "/org-a/corretores/id-de-outra-org"
     );
+  });
+});
+
+// =====================================================================
+// Contatos públicos — telefone e e-mail
+// =====================================================================
+describe("telefone e e-mail públicos exigem o mesmo opt-in", () => {
+  test("publicado: devolve os dois", () => {
+    expect(telefonePublicoDoCorretor(MEMBRO_PUBLICADO)).toBe("11933332222");
+    expect(emailPublicoDoCorretor(MEMBRO_PUBLICADO)).toBe("maria@imobiliaria.test");
+  });
+
+  test("sem opt-in não devolve nada, mesmo com os campos preenchidos", () => {
+    expect(telefonePublicoDoCorretor(MEMBRO_COMPLETO_SEM_OPTIN)).toBeNull();
+    expect(emailPublicoDoCorretor(MEMBRO_COMPLETO_SEM_OPTIN)).toBeNull();
+  });
+
+  test("campo vazio é ausência — é o que apaga o botão", () => {
+    const semContatos = { ...MEMBRO_PUBLICADO!, publicPhone: null, publicEmail: null };
+    expect(telefonePublicoDoCorretor(semContatos)).toBeNull();
+    expect(emailPublicoDoCorretor(semContatos)).toBeNull();
+    expect(emailPublicoDoCorretor({ ...MEMBRO_PUBLICADO!, publicEmail: "   " })).toBeNull();
+  });
+
+  test("telefone inválido é tratado como ausente, não vira link quebrado", () => {
+    for (const invalido of ["", "123", "abc", "119999"]) {
+      expect(
+        telefonePublicoDoCorretor({ ...MEMBRO_PUBLICADO!, publicPhone: invalido })
+      ).toBeNull();
+    }
+  });
+
+  test("telefone aceita formatação e devolve só dígitos locais", () => {
+    expect(
+      telefonePublicoDoCorretor({ ...MEMBRO_PUBLICADO!, publicPhone: "(11) 93333-2222" })
+    ).toBe("11933332222");
+  });
+
+  test("telefone e WhatsApp têm normalizações DIFERENTES, de propósito", () => {
+    // O WhatsApp guarda DDI porque wa.me exige; o telefone guarda o
+    // número local porque é o que telefoneValido define. Misturar os dois
+    // produziria link quebrado em um dos lados.
+    const membro = {
+      ...MEMBRO_PUBLICADO!,
+      publicWhatsapp: "5511977776666",
+      publicPhone: "11933332222",
+    };
+    expect(whatsappPublicoDoCorretor(membro)).toBe("5511977776666");
+    expect(telefonePublicoDoCorretor(membro)).toBe("11933332222");
+  });
+
+  test("contatosPublicosDoCorretor entrega os três de uma vez", () => {
+    expect(contatosPublicosDoCorretor(MEMBRO_PUBLICADO)).toEqual({
+      telefone: "11933332222",
+      email: "maria@imobiliaria.test",
+      whatsapp: "11977776666",
+    });
+    expect(contatosPublicosDoCorretor(MEMBRO_COMPLETO_SEM_OPTIN)).toEqual({
+      telefone: null,
+      email: null,
+      whatsapp: null,
+    });
+  });
+
+  test("hrefs: tel: sem DDI inventado e mailto: sem query string", () => {
+    expect(hrefTelefone("11933332222")).toBe("tel:11933332222");
+    expect(hrefTelefone(null)).toBeNull();
+    // Nada de ?subject=/?body=: query de mailto é lugar público demais
+    // para qualquer conteúdo.
+    expect(hrefEmail("maria@imobiliaria.test")).toBe("mailto:maria@imobiliaria.test");
+    expect(hrefEmail(null)).toBeNull();
   });
 });
