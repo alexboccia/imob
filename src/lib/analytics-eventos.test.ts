@@ -41,6 +41,7 @@ describe("placement", () => {
     expect(placementValido("SIDEBAR")).toBe(true);
     expect(placementValido("MOBILE_BAR")).toBe(true);
     expect(placementValido("GALLERY")).toBe(true);
+    expect(placementValido("BROKER_CARD")).toBe(true);
     expect(placementValido("QUALQUER_OUTRO")).toBe(false);
     expect(placementValido(undefined)).toBe(false);
   });

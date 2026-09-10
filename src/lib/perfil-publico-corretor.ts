@@ -74,3 +74,20 @@ export function resolverWhatsAppDoImovel(
   if (temWhatsApp(whatsappOrganizacao)) return whatsappOrganizacao!;
   return null;
 }
+
+// WhatsApp DO CORRETOR — deliberadamente diferente de
+// resolverWhatsAppDoImovel acima, e a diferença é de honestidade, não de
+// implementação.
+//
+// Aquela função responde "qual número o CTA do IMÓVEL deve usar" e, por
+// isso, cai no número institucional quando o corretor não tem um. Aqui a
+// pergunta é outra: "este profissional, cujo rosto e nome estão neste
+// card, pode ser contatado diretamente?". Um botão ao lado da foto de uma
+// pessoa que abre conversa com o número da imobiliária afirmaria que o
+// visitante está falando com ELA — e não estaria. Sem número próprio
+// publicado, o botão simplesmente não existe, e o CTA institucional do
+// card lateral continua sendo o caminho.
+export function whatsappPublicoDoCorretor(membro: MembroResponsavel): string | null {
+  if (!membro?.publicProfileEnabled) return null;
+  return temWhatsApp(membro.publicWhatsapp) ? membro.publicWhatsapp!.trim() : null;
+}

@@ -1,12 +1,10 @@
-import Image from "next/image";
 import { FormularioContato } from "@/components/FormularioContato";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
-import { IconePessoa, IconeWhatsApp } from "@/components/icons";
+import { IconeWhatsApp } from "@/components/icons";
 import { RastreioCliqueWhatsApp } from "@/components/analytics/RastreioCliqueWhatsApp";
 import { formatarPreco } from "@/lib/format";
-import type { CorretorPublico } from "@/lib/perfil-publico-corretor";
 
 // Card lateral de conversão do detalhe do imóvel. A hierarquia é
 // deliberada — preço, CTA de WhatsApp, divisor, formulário — porque é
@@ -15,6 +13,12 @@ import type { CorretorPublico } from "@/lib/perfil-publico-corretor";
 //
 // Extraído do detalhe porque a página de lançamento precisa do mesmo
 // card, com os mesmos dois modos (com e sem WhatsApp configurado).
+//
+// A identidade do corretor MOROU aqui, entre o CTA e o formulário. Saiu
+// para CardCorretorImovel, na coluna de conteúdo: ali ela tem largura
+// para respirar e aqui a hierarquia de conversão volta a ser só preço →
+// CTA → formulário. Não é duplicação removida, é mudança de lugar — ver
+// o cabeçalho daquele arquivo.
 
 export type ValoresImovel = {
   price: unknown;
@@ -77,60 +81,12 @@ export function ValoresDoImovel({ imovel }: { imovel: ValoresImovel }) {
   );
 }
 
-// Apresentação compacta: foto, nome, CRECI e o papel. A apresentação
-// (bio) entra em texto pequeno e limitado a três linhas — o imóvel
-// continua sendo o produto da página, e uma bio longa aqui empurraria o
-// formulário pra fora da tela.
-function IdentidadeCorretor({ corretor }: { corretor: CorretorPublico }) {
-  return (
-    <div className="border-t pt-4">
-      <div className="flex items-center gap-3">
-        <span className="relative size-11 shrink-0 overflow-hidden rounded-full border bg-secondary">
-          {corretor.foto ? (
-            <Image
-              src={corretor.foto}
-              alt={`Foto de ${corretor.nome}`}
-              fill
-              sizes="44px"
-              className="object-cover"
-            />
-          ) : (
-            // Placeholder neutro, nunca as iniciais do usuário interno:
-            // sem foto pública enviada, não há foto pra mostrar.
-            <span
-              aria-hidden
-              className="flex size-full items-center justify-center text-primary"
-            >
-              <IconePessoa className="size-5" />
-            </span>
-          )}
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-medium text-gray-900">
-            {corretor.nome}
-          </span>
-          <span className="block text-xs text-gray-500">
-            {corretor.creci ? `${corretor.creci} · ` : ""}Corretor(a)
-            responsável
-          </span>
-        </span>
-      </div>
-      {corretor.bio && (
-        <p className="mt-3 line-clamp-3 text-xs leading-relaxed text-gray-600">
-          {corretor.bio}
-        </p>
-      )}
-    </div>
-  );
-}
-
 export function CardContatoImovel({
   imovel,
   imovelId,
   orgSlug,
   whatsappHref,
   mensagemFormulario,
-  corretor,
   idFormulario,
 }: {
   imovel: ValoresImovel;
@@ -142,10 +98,6 @@ export function CardContatoImovel({
   // pra baixo.
   whatsappHref: string | null;
   mensagemFormulario: string;
-  // null = nenhum profissional autorizado a aparecer (ver
-  // resolverCorretorPublico). O card degrada pra identidade
-  // institucional simplesmente omitindo o bloco.
-  corretor: CorretorPublico | null;
   idFormulario: string;
 }) {
   return (
@@ -172,15 +124,6 @@ export function CardContatoImovel({
             </a>
           </RastreioCliqueWhatsApp>
         )}
-
-        {/* Identidade comercial do profissional — só quando resolverCorretorPublico
-            devolveu alguém, ou seja, só com opt-in explícito. Sem perfil
-            publicado este bloco inteiro não existe e o card mostra apenas
-            preço, CTA e formulário, que já são a identidade da própria
-            imobiliária (logo e nome estão no cabeçalho e no rodapé do
-            site). Antes daqui, o nome do usuário administrativo era
-            publicado automaticamente por ser responsável pelo imóvel. */}
-        {corretor && <IdentidadeCorretor corretor={corretor} />}
 
         <div id={idFormulario} className="space-y-3 border-t pt-4 scroll-mt-24">
           <p className="text-sm font-medium">Enviar mensagem</p>

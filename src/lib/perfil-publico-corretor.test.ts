@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   resolverCorretorPublico,
   resolverWhatsAppDoImovel,
+  whatsappPublicoDoCorretor,
   type MembroResponsavel,
 } from "./perfil-publico-corretor";
 
@@ -113,5 +114,43 @@ describe("resolverWhatsAppDoImovel — profissional, institucional ou nenhum", (
     expect(
       resolverWhatsAppDoImovel({ ...MEMBRO_PUBLICADO!, publicWhatsapp: "119" }, INSTITUCIONAL)
     ).toBe(INSTITUCIONAL);
+  });
+});
+
+// =====================================================================
+// whatsappPublicoDoCorretor — o botão que fica ao lado do rosto
+// =====================================================================
+// A diferença entre esta função e resolverWhatsAppDoImovel é a razão de
+// ela existir: aquela pode cair no número institucional, esta nunca.
+describe("whatsappPublicoDoCorretor — número da PESSOA, nunca da imobiliária", () => {
+  test("perfil publicado com número próprio: devolve o número dele", () => {
+    expect(whatsappPublicoDoCorretor(MEMBRO_PUBLICADO)).toBe("11977776666");
+  });
+
+  test("sem opt-in não devolve nada, mesmo com número preenchido", () => {
+    expect(whatsappPublicoDoCorretor(MEMBRO_COMPLETO_SEM_OPTIN)).toBeNull();
+  });
+
+  test("publicado SEM número próprio: null — e é isso que apaga o botão", () => {
+    // O contraste com resolverWhatsAppDoImovel é o ponto do teste: lá o
+    // mesmo membro cairia no número institucional; aqui, não. Um botão
+    // ao lado da foto de alguém que abre conversa com outro número
+    // afirmaria uma coisa que não é verdade.
+    const semNumero = { ...MEMBRO_PUBLICADO!, publicWhatsapp: null };
+    expect(whatsappPublicoDoCorretor(semNumero)).toBeNull();
+    expect(resolverWhatsAppDoImovel(semNumero, "11988887777")).toBe("11988887777");
+  });
+
+  test("número inválido é tratado como ausente", () => {
+    for (const invalido of ["", "   ", "123", "abc"]) {
+      expect(
+        whatsappPublicoDoCorretor({ ...MEMBRO_PUBLICADO!, publicWhatsapp: invalido })
+      ).toBeNull();
+    }
+  });
+
+  test("membro ausente ou nulo não quebra", () => {
+    expect(whatsappPublicoDoCorretor(null)).toBeNull();
+    expect(whatsappPublicoDoCorretor(undefined)).toBeNull();
   });
 });

@@ -73,6 +73,12 @@ export const PLACEMENTS_ANALYTICS = {
   SIDEBAR: "SIDEBAR",
   MOBILE_BAR: "MOBILE_BAR",
   GALLERY: "GALLERY",
+  // Card do corretor responsável, na coluna de conteúdo da ficha. É o
+  // único CTA de WhatsApp da página que fala com o número PESSOAL do
+  // profissional (os outros três usam o institucional quando ele não tem
+  // um) — separar o placement é o que permite comparar as duas conversas
+  // sem inventar um tipo de evento novo.
+  BROKER_CARD: "BROKER_CARD",
 } as const;
 
 export type PlacementAnalytics =
@@ -82,6 +88,7 @@ export const LABEL_PLACEMENT: Record<string, string> = {
   SIDEBAR: "Card lateral",
   MOBILE_BAR: "Barra fixa (mobile)",
   GALLERY: "Galeria de fotos",
+  BROKER_CARD: "Card do corretor",
 };
 
 export function placementValido(valor: unknown): valor is PlacementAnalytics {

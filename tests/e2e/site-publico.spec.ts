@@ -1334,6 +1334,182 @@ test.describe("Perfil público do corretor — privacidade", () => {
   });
 });
 
+test.describe("Card do corretor responsável", () => {
+  const CRECI = "CRECI 33.221-J";
+  const BIO = "Atendo a zona sul ha dez anos, com foco em apartamentos de familia.";
+
+  test("publicado: card aparece com nome, CRECI e bio, na coluna de conteúdo", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, { publicar: true, creci: CRECI, bio: BIO });
+
+      await page.goto(URL_IMOVEL);
+      const card = page.locator("[data-card-corretor]");
+      await expect(card).toBeVisible();
+      await expect(
+        card.getByRole("heading", { name: "Corretor(a) responsável" })
+      ).toBeVisible();
+      await expect(card.getByText(CRECI)).toBeVisible();
+      await expect(card.getByText(BIO)).toBeVisible();
+      // Uma identidade só na página: ela saiu do card lateral.
+      await expect(page.getByText(CRECI)).toHaveCount(1);
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+    }
+  });
+
+  test("sem opt-in o card não existe", async ({ page }) => {
+    await page.goto(URL_IMOVEL);
+    await expect(page.locator("[data-card-corretor]")).toHaveCount(0);
+  });
+
+  test("campos opcionais vazios não deixam rótulo solto nem quebram o card", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    try {
+      // Publicado com o MÍNIMO: sem CRECI, sem bio, sem WhatsApp, sem foto.
+      await definirPerfilPublico(page, { publicar: true });
+
+      await page.goto(URL_IMOVEL);
+      const card = page.locator("[data-card-corretor]");
+      await expect(card).toBeVisible();
+      await expect(
+        card.getByRole("heading", { name: "Corretor(a) responsável" })
+      ).toBeVisible();
+      // Sem número próprio publicado, nenhum botão de WhatsApp no card —
+      // mesmo com a organização tendo WhatsApp institucional configurado.
+      await expect(card.getByRole("link", { name: /WhatsApp/i })).toHaveCount(0);
+      await expect(card.locator("img")).toHaveCount(0);
+      // E o card não vira uma caixa com um título e nada dentro.
+      expect(await card.textContent()).toContain("Corretor");
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+    }
+  });
+
+  test("com número próprio publicado, o botão usa o número DELE e a mensagem do imóvel", async ({
+    page,
+  }) => {
+    const numero = "11955553333";
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, { publicar: true, creci: CRECI, whatsapp: numero });
+
+      await page.goto(URL_IMOVEL);
+      const botao = page
+        .locator("[data-card-corretor]")
+        .getByRole("link", { name: /Falar no WhatsApp com/i });
+      await expect(botao).toBeVisible();
+      const href = await botao.getAttribute("href");
+      // Dígitos como o produto os monta (linkWhatsApp não prefixa país).
+      expect(href).toContain(`wa.me/${numero}`);
+      // Mesma mensagem contextual dos outros CTAs — nada de lógica nova.
+      expect(href).toContain("text=");
+      expect(decodeURIComponent(href!)).toContain(IMOVEL_COM_BADGES);
+
+      // A distinção entre o número da PESSOA e o institucional é provada
+      // de forma determinística no unitário (whatsappPublicoDoCorretor vs
+      // resolverWhatsAppDoImovel). Aqui não se compara com o CTA lateral
+      // de propósito: o WhatsApp institucional da Org A é ligado e
+      // desligado por outros testes deste mesmo arquivo, e depender dele
+      // tornaria esta asserção refém da ordem de execução.
+      // Ícone sozinho não carrega a informação: há texto e aria-label.
+      await expect(botao).toContainText("Falar no WhatsApp");
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+    }
+  });
+
+  test("não existe CTA de perfil completo — o produto não tem essa página", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, { publicar: true, creci: CRECI });
+      await page.goto(URL_IMOVEL);
+      const card = page.locator("[data-card-corretor]");
+      await expect(card.getByRole("link", { name: /perfil/i })).toHaveCount(0);
+      // Nenhum link quebrado saindo do card.
+      const hrefs = await card.locator("a").evaluateAll((as) =>
+        as.map((a) => (a as HTMLAnchorElement).getAttribute("href") ?? "")
+      );
+      expect(hrefs.every((h) => h.startsWith("https://wa.me/"))).toBe(true);
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+    }
+  });
+
+  test("o card é alcançável e focável por teclado", async ({ page }) => {
+    const numero = "11955553333";
+    await login(page, ORG_A);
+    try {
+      await definirPerfilPublico(page, { publicar: true, whatsapp: numero });
+      await page.goto(URL_IMOVEL);
+      const botao = page
+        .locator("[data-card-corretor]")
+        .getByRole("link", { name: /Falar no WhatsApp com/i });
+      await botao.focus();
+      await expect(botao).toBeFocused();
+      // Foco visível: o design system aplica anel de foco via :focus-visible.
+      const temAnel = await botao.evaluate((el) => {
+        el.classList.add("focus-visible");
+        const s = getComputedStyle(el);
+        return s.outlineStyle !== "none" || s.boxShadow !== "none" || !!s.getPropertyValue("--tw-ring-color");
+      });
+      expect(temAnel).toBe(true);
+    } finally {
+      await definirPerfilPublico(page, { publicar: false });
+    }
+  });
+
+  for (const largura of [320, 390, 768, 1280, 1440]) {
+    test(`${largura}px: card sem overflow, foto e texto alinhados`, async ({ page }) => {
+      await login(page, ORG_A);
+      try {
+        await definirPerfilPublico(page, {
+          publicar: true,
+          creci: CRECI,
+          bio: BIO,
+          whatsapp: "11955553333",
+        });
+        await page.setViewportSize({ width: largura, height: 900 });
+        await page.goto(URL_IMOVEL);
+
+        const card = page.locator("[data-card-corretor]");
+        await expect(card).toBeVisible();
+        const medida = await card.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const foto = el.querySelector("span.rounded-full")!.getBoundingClientRect();
+          const botao = el.querySelector("a");
+          return {
+            estoura: el.scrollWidth > el.clientWidth + 1,
+            cabeNaTela: r.right <= document.documentElement.clientWidth + 1,
+            fotoQuadrada: Math.abs(foto.width - foto.height) < 2,
+            fotoNaoEsmagada: foto.width >= 40,
+            alturaBotao: botao ? botao.getBoundingClientRect().height : 0,
+          };
+        });
+        expect(medida.estoura, `overflow interno @ ${largura}px`).toBe(false);
+        expect(medida.cabeNaTela, `card fora da viewport @ ${largura}px`).toBe(true);
+        expect(medida.fotoQuadrada && medida.fotoNaoEsmagada, `foto @ ${largura}px`).toBe(true);
+        // Alvo de toque confortável no mobile.
+        expect(medida.alturaBotao, `altura do botão @ ${largura}px`).toBeGreaterThanOrEqual(36);
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth + 1
+          ),
+          `overflow da página @ ${largura}px`
+        ).toBe(true);
+      } finally {
+        await definirPerfilPublico(page, { publicar: false });
+      }
+    });
+  }
+});
+
 test.describe("Perfil público do corretor — WhatsApp", () => {
   const WA_ORG = "+55 (11) 98888-7777";
   const WA_CORRETOR = "11977776666";

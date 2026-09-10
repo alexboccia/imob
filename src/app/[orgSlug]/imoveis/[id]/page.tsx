@@ -12,6 +12,7 @@ import { linkWhatsApp } from "@/lib/whatsapp";
 import {
   resolverCorretorPublico,
   resolverWhatsAppDoImovel,
+  whatsappPublicoDoCorretor,
 } from "@/lib/perfil-publico-corretor";
 import {
   enderecoPublico,
@@ -32,6 +33,7 @@ import { CarrosselPlantas } from "@/components/CarrosselPlantas";
 import { ImovelCard } from "@/components/ImovelCard";
 import { CaracteristicasDoImovel } from "@/components/imovel/Caracteristicas";
 import { CardContatoImovel } from "@/components/imovel/CardContatoImovel";
+import { CardCorretorImovel } from "@/components/imovel/CardCorretorImovel";
 import { MateriaisImovel } from "@/components/imovel/MateriaisImovel";
 import { RastreioVisualizacaoImovel } from "@/components/analytics/RastreioVisualizacaoImovel";
 import { ResumoComercialImovel } from "@/components/imovel/ResumoComercialImovel";
@@ -239,6 +241,17 @@ export default async function DetalheImovelPage({
 
   const whatsappHref = linkWhatsApp(
     whatsappNumero,
+    mensagemWhatsAppImovel(imovel, configContato.codigoImovelPrefixo)
+  );
+
+  // Botão do card do corretor: número PESSOAL dele, sem o fallback
+  // institucional que os outros três CTAs usam. Ao lado do rosto e do
+  // nome de alguém, um botão que abre conversa com o número da
+  // imobiliária afirmaria que o visitante está falando com aquela pessoa
+  // — ver whatsappPublicoDoCorretor. Mesma mensagem contextual dos
+  // demais CTAs: nenhuma lógica de normalização duplicada.
+  const whatsappCorretorHref = linkWhatsApp(
+    whatsappPublicoDoCorretor(imovel.responsibleMember),
     mensagemWhatsAppImovel(imovel, configContato.codigoImovelPrefixo)
   );
 
@@ -490,6 +503,20 @@ export default async function DetalheImovelPage({
               Ver no Google Maps
             </a>
           </section>
+
+          {/* Fecha a coluna de conteúdo: o visitante já viu o imóvel
+              inteiro, e aqui fica quem pode mostrá-lo. No mobile esta é
+              também a última coisa antes do card de contato, o que
+              encadeia "quem atende" com "falar com a imobiliária". Só
+              existe com opt-in do profissional. */}
+          {corretorPublico && (
+            <CardCorretorImovel
+              corretor={corretorPublico}
+              whatsappHref={whatsappCorretorHref}
+              imovelId={imovel.id}
+              orgSlug={orgSlug}
+            />
+          )}
         </div>
 
         <CardContatoImovel
@@ -498,7 +525,6 @@ export default async function DetalheImovelPage({
           orgSlug={orgSlug}
           whatsappHref={whatsappHref}
           mensagemFormulario={mensagemContato}
-          corretor={corretorPublico}
           idFormulario={idFormulario}
         />
       </div>
