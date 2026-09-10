@@ -19,6 +19,36 @@ name: CI
 # teto, que é requisito operacional. A proteção real contra código
 # quebrado em main continua sendo branch protection exigindo os dois
 # checks (ver README, seção CI/CD).
+#
+# ---------------------------------------------------------------------
+# SHARDING DO E2E — mesmo princípio, um nível abaixo
+# ---------------------------------------------------------------------
+# A suíte E2E cresceu de 476 para 566 testes e o job passou a consumir
+# 716s de um run de 719s: medido por passo, 611s eram os TESTES e ~103s
+# todo o preparo (containers 12s, npm ci 27s, build 46s, banco 2s, seed
+# 4s, resto ~12s). O `verify` roda em 281s em paralelo e não influencia o
+# relógio.
+#
+# A suíte roda com workers:1 e fullyParallel:false — decisão consciente,
+# porque os specs compartilham um servidor Next, um Postgres e um seed de
+# IDs fixos, e já houve contaminação real de fixture. Subir `workers`
+# atacaria justamente essa premissa.
+#
+# O sharding não ataca: cada shard é um JOB, e um job do GitHub Actions
+# tem o seu próprio container de Postgres, o seu próprio checkout, o seu
+# próprio build e o seu próprio seed. Não é paralelismo por esperança, é
+# paralelismo por isolamento — exatamente o mesmo argumento que já
+# permite `verify` e `e2e` correrem juntos.
+#
+# Medido localmente, cada shard contra um banco recém-semeado:
+#   shard 1/2 -> 284 testes, 205s / 208s / 205s (três execuções)
+#   shard 2/2 -> 282 testes, 165s / 164s
+# A soma (370s) é a mesma da suíte inteira (372s): nenhum teste foi
+# removido nem duplicado. O que muda é o relógio, que passa a ser o
+# shard mais longo.
+#
+# Nenhum spec é dividido entre shards (verificado com `--list`), então a
+# ordem interna de cada arquivo continua idêntica.
 on:
   pull_request:
     branches: [main]
@@ -128,10 +158,19 @@ jobs:
     # ao final (container de "services" não sobrevive além do job) — não
     # precisa de um passo de teardown manual.
 
-  e2e:
-    name: E2E (Playwright)
+  e2e-shard:
+    name: E2E shard ${{ matrix.shard }}/2
     runs-on: ubuntu-latest
+    # 18 min continua sendo o teto de CADA shard — nenhum deles deve
+    # chegar perto (o mais longo mediu ~7 min de job no CI).
     timeout-minutes: 18
+    strategy:
+      # fail-fast desligado de propósito: quando um shard quebra, quero o
+      # resultado do outro no mesmo run em vez de um cancelamento que
+      # esconde se a falha era local àquele recorte.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     services:
       postgres:
         image: postgres:16-alpine
@@ -287,14 +326,44 @@ jobs:
           NODE_ENV: test
 
       - name: "Testes E2E (fluxos críticos: login, CRUD de imóvel, isolamento de tenant, bloqueio de módulo, formulário público, mobile)"
-        run: npm run test:e2e
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/2
 
       - name: Anexar relatório do Playwright (só quando falha)
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-report
+          # Nome por shard: dois legs subindo o mesmo nome colidem e o
+          # segundo upload falha, escondendo o relatório justo quando ele
+          # é necessário.
+          name: playwright-report-shard-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
           retention-days: 7
+
+  # Nome e id estáveis, de propósito: a proteção de branch exige o check
+  # "E2E (Playwright)" (ver README, seção CI/CD), e uma matriz publica um
+  # check por leg ("E2E shard 1/2"). Sem este agregador, renomear o job
+  # faria a proteção passar a exigir um check que não existe mais — que é
+  # como uma suíte inteira deixa de bloquear merge sem ninguém perceber.
+  #
+  # `if: always()` com checagem explícita do resultado: sem isso, um
+  # shard cancelado ou pulado deixaria este job verde por omissão. O
+  # resultado de um job de matriz só é "success" quando TODOS os legs
+  # passaram.
+  e2e:
+    name: E2E (Playwright)
+    needs: [e2e-shard]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Consolidar resultado dos shards
+        run: |
+          resultado="${{ needs.e2e-shard.result }}"
+          if [ "$resultado" != "success" ]; then
+            echo "E2E reprovado — resultado agregado dos shards: $resultado"
+            echo "Veja os checks \"E2E shard 1/2\" e \"E2E shard 2/2\" para qual falhou."
+            exit 1
+          fi
+          echo "Todos os shards do E2E passaram."
