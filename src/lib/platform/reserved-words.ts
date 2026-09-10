@@ -39,6 +39,14 @@ export const SLUGS_RESERVADOS = new Set([
   "contato",
   "anuncie",
   "vendidos",
+  // Toda família de rota pública precisa estar aqui: o rewrite da
+  // organização principal vence a rota dinâmica [orgSlug], então uma
+  // organização com um destes slugs perderia os próprios caminhos. Isto
+  // não é mais mantido de memória — rotas-publicas.test.ts falha se uma
+  // rota nova aparecer em src/app/[orgSlug]/ sem entrar nesta lista.
+  // "corretores" entrou justamente assim: a rota foi criada na fase
+  // anterior e ninguém lembrou daqui.
+  "corretores",
   // Fase 26 — /cadastro é uma rota REAL de topo (o self-service). Um
   // segmento estático vence o dinâmico [orgSlug] no roteador, então uma
   // organização com este slug ficaria permanentemente inacessível pelo

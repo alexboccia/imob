@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 import { construirHeadersSeguranca, R2_IMAGE_HOST } from "@/lib/security-headers";
 import { PUBLIC_ORG_SLUG } from "@/lib/site-url";
+import { rewritesDoSitePublico } from "@/lib/rotas-publicas";
 
 const nextConfig: NextConfig = {
   images: {
@@ -22,23 +23,20 @@ const nextConfig: NextConfig = {
   // então não há conteúdo duplicado do ponto de vista do Google mesmo com
   // as duas formas de URL tecnicamente respondendo. Ver plano, decisões
   // #3 e #4.
+  //
+  // A lista é DERIVADA do próprio sistema de arquivos (ver
+  // src/lib/rotas-publicas.ts), não escrita à mão: enquanto era manual,
+  // criar uma rota pública nova exigia lembrar de vir aqui, e quem
+  // esquecesse publicava um 404 na organização principal — foi o que
+  // aconteceu com /corretores/[id]. Agora a rota é servida por existir.
+  //
+  // Continua sendo uma entrada por família (e não um rewrite genérico)
+  // porque a ordem do Next não permite outra coisa: a forma em array é
+  // `afterFiles`, checada ANTES das rotas dinâmicas, então `/:path*`
+  // sequestraria `/{outraOrg}/...`. O raciocínio completo está no
+  // cabeçalho de rotas-publicas.ts.
   async rewrites() {
-    return [
-      { source: "/", destination: `/${PUBLIC_ORG_SLUG}` },
-      { source: "/imoveis", destination: `/${PUBLIC_ORG_SLUG}/imoveis` },
-      { source: "/imoveis/:id", destination: `/${PUBLIC_ORG_SLUG}/imoveis/:id` },
-      { source: "/vendidos", destination: `/${PUBLIC_ORG_SLUG}/vendidos` },
-      { source: "/contato", destination: `/${PUBLIC_ORG_SLUG}/contato` },
-      { source: "/anuncie", destination: `/${PUBLIC_ORG_SLUG}/anuncie` },
-      // Perfil público do corretor. Sem esta linha a página existe em
-      // /{orgSlug}/corretores/{id} mas responde 404 na organização
-      // principal, que é justamente onde ela é servida na raiz — o link
-      // do card do imóvel apontaria para lugar nenhum.
-      {
-        source: "/corretores/:id",
-        destination: `/${PUBLIC_ORG_SLUG}/corretores/:id`,
-      },
-    ];
+    return rewritesDoSitePublico(PUBLIC_ORG_SLUG);
   },
 };
 
