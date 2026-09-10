@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  caminhoPerfilCorretor,
   resolverCorretorPublico,
   resolverWhatsAppDoImovel,
   whatsappPublicoDoCorretor,
@@ -152,5 +153,24 @@ describe("whatsappPublicoDoCorretor — número da PESSOA, nunca da imobiliária
   test("membro ausente ou nulo não quebra", () => {
     expect(whatsappPublicoDoCorretor(null)).toBeNull();
     expect(whatsappPublicoDoCorretor(undefined)).toBeNull();
+  });
+});
+
+describe("caminhoPerfilCorretor — um lugar só monta a URL do perfil", () => {
+  test("organização com prefixo de caminho", () => {
+    expect(caminhoPerfilCorretor("/imob-abc", "cmb123")).toBe("/imob-abc/corretores/cmb123");
+  });
+
+  test("organização principal (basePath vazio) não gera barra dupla", () => {
+    expect(caminhoPerfilCorretor("", "cmb123")).toBe("/corretores/cmb123");
+  });
+
+  test("o identificador entra como veio — quem valida o tenant é a query da rota", () => {
+    // O caminho é só texto: a garantia de isolamento não está aqui e sim
+    // no `where` da página, que casa id E organizationId. Fixar isso
+    // evita alguém "endurecer" o helper e achar que fechou o IDOR.
+    expect(caminhoPerfilCorretor("/org-a", "id-de-outra-org")).toBe(
+      "/org-a/corretores/id-de-outra-org"
+    );
   });
 });

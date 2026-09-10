@@ -91,3 +91,23 @@ export function whatsappPublicoDoCorretor(membro: MembroResponsavel): string | n
   if (!membro?.publicProfileEnabled) return null;
   return temWhatsApp(membro.publicWhatsapp) ? membro.publicWhatsapp!.trim() : null;
 }
+
+// URL pública do perfil de um corretor. Um lugar só: a ficha do imóvel
+// monta o link do card e a própria página monta o canonical e a entrada
+// de sitemap — se cada um concatenasse o caminho, uma mudança de rota
+// quebraria silenciosamente os outros dois.
+//
+// O identificador é o `OrganizationMember.id` (cuid), e não um slug novo,
+// porque é exatamente a convenção que este produto já usa em URL pública:
+// /imoveis/{Property.id} é um cuid desde sempre. Um slug legível seria
+// melhor para SEO, mas exigiria coluna nova, unicidade por organização,
+// regeneração ao renomear e uma tela para administrar isso — schema e
+// painel que esta fase não pediu. Fica registrado como dívida.
+//
+// O id não é dado privado: não é e-mail, não é credencial e não revela
+// nada sobre a pessoa. E ele sozinho não abre nada — a página busca o
+// membro SEMPRE escopada pela organização do orgSlug, então o id de um
+// membro de outra organização simplesmente não encontra ninguém.
+export function caminhoPerfilCorretor(basePath: string, membroId: string): string {
+  return `${basePath}/corretores/${membroId}`;
+}

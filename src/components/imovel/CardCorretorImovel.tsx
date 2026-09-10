@@ -1,10 +1,14 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { IconePessoa, IconeWhatsApp } from "@/components/icons";
 import { RastreioCliqueWhatsApp } from "@/components/analytics/RastreioCliqueWhatsApp";
 import { TITULO_BLOCO } from "@/lib/site-typography";
-import type { CorretorPublico } from "@/lib/perfil-publico-corretor";
+import {
+  caminhoPerfilCorretor,
+  type CorretorPublico,
+} from "@/lib/perfil-publico-corretor";
 
 // Card do corretor responsável, na coluna de conteúdo da ficha.
 //
@@ -27,10 +31,6 @@ import type { CorretorPublico } from "@/lib/perfil-publico-corretor";
 //     seja, a marca está permanentemente na tela enquanto se rola a
 //     ficha. Repeti-la dentro do card não acrescentaria informação — e
 //     custaria uma consulta a mais nesta página.
-//   - "Ver perfil completo". Não existe página pública de perfil de
-//     corretor neste produto (as rotas públicas são home, listagem,
-//     detalhe, contato, anuncie e vendidos). Um botão sem destino é pior
-//     que botão nenhum, então ele não é renderizado.
 //   - Telefone e e-mail do profissional. O domínio não tem campo público
 //     para nenhum dos dois: `OrganizationMember.whatsapp` e
 //     `contactEmail` são operacionais — cadastrados para a equipe usar
@@ -39,11 +39,16 @@ import type { CorretorPublico } from "@/lib/perfil-publico-corretor";
 
 export function CardCorretorImovel({
   corretor,
+  membroId,
+  basePath,
   whatsappHref,
   imovelId,
   orgSlug,
 }: {
   corretor: CorretorPublico;
+  /** Id do membro — o destino do perfil público, montado pelo helper central. */
+  membroId: string;
+  basePath: string;
   /** Número PESSOAL do corretor, já publicado por ele. null = sem botão. */
   whatsappHref: string | null;
   imovelId: string;
@@ -95,8 +100,21 @@ export function CardCorretorImovel({
           </p>
         )}
 
-        {whatsappHref && (
-          <div className="mt-5">
+        {/* O perfil público existe exatamente quando este card existe:
+            os dois exigem publicProfileEnabled, e a rota devolve 404 sem
+            ele. Por isso o CTA não precisa de condição própria — e não
+            há como ele apontar para uma página inexistente. O caminho sai
+            do helper central; nenhum componente concatena rota à mão. */}
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+          <Link
+            href={caminhoPerfilCorretor(basePath, membroId)}
+            className={buttonVariants({ size: "lg", className: "w-full sm:w-auto" })}
+          >
+            Ver perfil completo
+          </Link>
+
+          {whatsappHref && (
+            <>
             <RastreioCliqueWhatsApp
               orgSlug={orgSlug}
               imovelId={imovelId}
@@ -127,8 +145,9 @@ export function CardCorretorImovel({
                 Falar no WhatsApp
               </a>
             </RastreioCliqueWhatsApp>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

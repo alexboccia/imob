@@ -68,6 +68,11 @@ const buscarImovel = cache(async (id: string, organizationId: string) => {
       // caminho por onde vazem pra renderização, mesmo por engano.
       responsibleMember: {
         select: {
+          // Id só para montar a URL do perfil público — o mesmo
+          // identificador que a rota /corretores/[id] usa, e que ela
+          // valida contra a organização antes de renderizar qualquer
+          // coisa.
+          id: true,
           publicProfileEnabled: true,
           publicCreci: true,
           publicPhotoUrl: true,
@@ -512,6 +517,8 @@ export default async function DetalheImovelPage({
           {corretorPublico && (
             <CardCorretorImovel
               corretor={corretorPublico}
+              membroId={imovel.responsibleMember!.id}
+              basePath={basePath}
               whatsappHref={whatsappCorretorHref}
               imovelId={imovel.id}
               orgSlug={orgSlug}

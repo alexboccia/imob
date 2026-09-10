@@ -259,6 +259,38 @@ export async function esperarJanelaAntiSpam(page: Page) {
 // pelo fluxo REAL para o hash de um token conhecido, e o devolve. Ver o
 // cabeçalho daquele arquivo: o que se testa depois é o consumo de
 // verdade — validação, expiração, uso único e replay.
+// =======================================================================
+// Restauração do fixture de perfil público
+// =======================================================================
+// Publicar um perfil é estado GLOBAL do tenant, então todo teste que
+// publica precisa despublicar depois. O caminho normal é pelo painel (é
+// o fluxo real do produto). O problema observado: num timeout de teste o
+// `finally` roda, mas a página já está fechada, a restauração pela UI
+// falha e o próximo teste herda um perfil publicado.
+//
+// Esta função é a rede: tenta o caminho da UI e, se ele falhar por
+// qualquer motivo, escreve direto no banco de teste — que funciona mesmo
+// sem navegador vivo. Um teste interrompido deixa de contaminar os
+// seguintes, sem aumentar timeout e sem enfraquecer asserção nenhuma.
+export async function restaurarPerfilDespublicado(
+  restaurarPelaUI: () => Promise<void>
+): Promise<void> {
+  try {
+    await restaurarPelaUI();
+  } catch {
+    despublicarPerfisNoBanco();
+  }
+}
+
+// Faxina direta no banco de teste — sem browser, sem sessão.
+export function despublicarPerfisNoBanco(): void {
+  const raiz = path.resolve(__dirname, "..", "..");
+  execFileSync("npx", ["tsx", path.join(raiz, "scripts", "e2e-perfil-publico.ts"), "despublicar"], {
+    cwd: raiz,
+    encoding: "utf8",
+  });
+}
+
 export function obterTokenDeAcesso(
   tipo: "convite" | "reset" | "cadastro",
   email: string,

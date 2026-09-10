@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { withOrganization } from "@/lib/tenant-context";
 import { getSiteUrl, resolverBasePath } from "@/lib/site-url";
 import { resolverOrigemPublicacao } from "@/lib/platform/organization-domain";
+import { caminhoPerfilCorretor } from "@/lib/perfil-publico-corretor";
 
 // sitemap.js é um "special Route Handler" — cacheado por padrão A MENOS
 // QUE use uma Request-time API (ver doc oficial de sitemap.js,
@@ -66,7 +67,32 @@ async function entradasDaOrganizacao(
     priority: 0.7,
   }));
 
-  return [...paginasEstaticas(basePath, construirUrl), ...entradasImoveis];
+  // Perfis públicos de corretor. O filtro é o MESMO portão da rota
+  // (`publicProfileEnabled: true`): perfil despublicado responde 404, e
+  // uma URL 404 no sitemap é erro de indexação — não um detalhe
+  // cosmético. Quem despublica sai daqui na próxima revalidação.
+  const corretores = await withOrganization(organization.id, () =>
+    prisma.organizationMember.findMany({
+      where: { organizationId: organization.id, publicProfileEnabled: true },
+      select: { id: true, updatedAt: true },
+      orderBy: { id: "asc" },
+    })
+  );
+
+  const entradasCorretores: MetadataRoute.Sitemap = corretores.map((corretor) => ({
+    url: construirUrl(caminhoPerfilCorretor(basePath, corretor.id)),
+    lastModified: corretor.updatedAt,
+    changeFrequency: "monthly",
+    // Abaixo do imóvel (0.7) e acima das páginas institucionais (0.5):
+    // é conteúdo real e indexável, mas o produto do site é o imóvel.
+    priority: 0.6,
+  }));
+
+  return [
+    ...paginasEstaticas(basePath, construirUrl),
+    ...entradasImoveis,
+    ...entradasCorretores,
+  ];
 }
 
 // Correção AU (auditoria pré-commit da Fase P.10): o sitemap agora

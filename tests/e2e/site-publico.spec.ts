@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { IDS_E2E, ORG_A, login } from "./helpers";
+import { IDS_E2E, ORG_A, login, restaurarPerfilDespublicado } from "./helpers";
 
 // Redesign do site público (Proposta 2) — roda no host padrão (sem
 // prefixo de slug: PUBLIC_ORG_SLUG=e2e-org-a em .env.test), já seedado
@@ -1293,7 +1293,12 @@ test.describe("Perfil público do corretor — privacidade", () => {
       expect(html).not.toContain("11955554444");
       await expect(page.getByText("Corretor(a) responsável")).toHaveCount(0);
     } finally {
-      await definirPerfilPublico(page, { publicar: false });
+      // Rede de segurança: num timeout a página já está fechada e a
+      // restauração pela UI falharia em silêncio, deixando o perfil
+      // publicado para o próximo teste. Ver restaurarPerfilDespublicado.
+      await restaurarPerfilDespublicado(() =>
+        definirPerfilPublico(page, { publicar: false })
+      );
     }
   });
 
@@ -1322,7 +1327,12 @@ test.describe("Perfil público do corretor — privacidade", () => {
       await expect(page.locator("#perfilPublicoCreci")).toHaveValue(creci);
       await expect(page.locator("#perfilPublicoBio")).toHaveValue(bio);
     } finally {
-      await definirPerfilPublico(page, { publicar: false });
+      // Rede de segurança: num timeout a página já está fechada e a
+      // restauração pela UI falharia em silêncio, deixando o perfil
+      // publicado para o próximo teste. Ver restaurarPerfilDespublicado.
+      await restaurarPerfilDespublicado(() =>
+        definirPerfilPublico(page, { publicar: false })
+      );
     }
   });
 
@@ -1356,7 +1366,12 @@ test.describe("Card do corretor responsável", () => {
       // Uma identidade só na página: ela saiu do card lateral.
       await expect(page.getByText(CRECI)).toHaveCount(1);
     } finally {
-      await definirPerfilPublico(page, { publicar: false });
+      // Rede de segurança: num timeout a página já está fechada e a
+      // restauração pela UI falharia em silêncio, deixando o perfil
+      // publicado para o próximo teste. Ver restaurarPerfilDespublicado.
+      await restaurarPerfilDespublicado(() =>
+        definirPerfilPublico(page, { publicar: false })
+      );
     }
   });
 
@@ -1386,7 +1401,12 @@ test.describe("Card do corretor responsável", () => {
       // E o card não vira uma caixa com um título e nada dentro.
       expect(await card.textContent()).toContain("Corretor");
     } finally {
-      await definirPerfilPublico(page, { publicar: false });
+      // Rede de segurança: num timeout a página já está fechada e a
+      // restauração pela UI falharia em silêncio, deixando o perfil
+      // publicado para o próximo teste. Ver restaurarPerfilDespublicado.
+      await restaurarPerfilDespublicado(() =>
+        definirPerfilPublico(page, { publicar: false })
+      );
     }
   });
 
@@ -1419,26 +1439,47 @@ test.describe("Card do corretor responsável", () => {
       // Ícone sozinho não carrega a informação: há texto e aria-label.
       await expect(botao).toContainText("Falar no WhatsApp");
     } finally {
-      await definirPerfilPublico(page, { publicar: false });
+      // Rede de segurança: num timeout a página já está fechada e a
+      // restauração pela UI falharia em silêncio, deixando o perfil
+      // publicado para o próximo teste. Ver restaurarPerfilDespublicado.
+      await restaurarPerfilDespublicado(() =>
+        definirPerfilPublico(page, { publicar: false })
+      );
     }
   });
 
-  test("não existe CTA de perfil completo — o produto não tem essa página", async ({
-    page,
-  }) => {
+  // Esta asserção era o oposto: enquanto não existia página pública de
+  // corretor, o card NÃO podia oferecer "Ver perfil completo", porque um
+  // botão sem destino é pior que botão nenhum. A rota passou a existir,
+  // então o que se fixa agora é o outro lado — o CTA existe e leva a um
+  // perfil de verdade, servido pela mesma organização.
+  test("o CTA de perfil completo aponta para o perfil público real", async ({ page }) => {
     await login(page, ORG_A);
     try {
       await definirPerfilPublico(page, { publicar: true, creci: CRECI });
       await page.goto(URL_IMOVEL);
       const card = page.locator("[data-card-corretor]");
-      await expect(card.getByRole("link", { name: /perfil/i })).toHaveCount(0);
-      // Nenhum link quebrado saindo do card.
+      const perfil = card.getByRole("link", { name: "Ver perfil completo" });
+      await expect(perfil).toBeVisible();
+      await expect(perfil).toHaveAttribute("href", /\/corretores\/[a-z0-9]+$/);
+
+      // Nenhum link do card leva a lugar nenhum: ou é o WhatsApp, ou é o
+      // perfil — e o perfil responde 200, não 404.
       const hrefs = await card.locator("a").evaluateAll((as) =>
         as.map((a) => (a as HTMLAnchorElement).getAttribute("href") ?? "")
       );
-      expect(hrefs.every((h) => h.startsWith("https://wa.me/"))).toBe(true);
+      expect(
+        hrefs.every((h) => h.startsWith("https://wa.me/") || h.includes("/corretores/"))
+      ).toBe(true);
+      const destino = await page.goto((await perfil.getAttribute("href"))!);
+      expect(destino?.status()).toBe(200);
     } finally {
-      await definirPerfilPublico(page, { publicar: false });
+      // Rede de segurança: num timeout a página já está fechada e a
+      // restauração pela UI falharia em silêncio, deixando o perfil
+      // publicado para o próximo teste. Ver restaurarPerfilDespublicado.
+      await restaurarPerfilDespublicado(() =>
+        definirPerfilPublico(page, { publicar: false })
+      );
     }
   });
 
@@ -1461,7 +1502,12 @@ test.describe("Card do corretor responsável", () => {
       });
       expect(temAnel).toBe(true);
     } finally {
-      await definirPerfilPublico(page, { publicar: false });
+      // Rede de segurança: num timeout a página já está fechada e a
+      // restauração pela UI falharia em silêncio, deixando o perfil
+      // publicado para o próximo teste. Ver restaurarPerfilDespublicado.
+      await restaurarPerfilDespublicado(() =>
+        definirPerfilPublico(page, { publicar: false })
+      );
     }
   });
 
@@ -1504,7 +1550,9 @@ test.describe("Card do corretor responsável", () => {
           `overflow da página @ ${largura}px`
         ).toBe(true);
       } finally {
-        await definirPerfilPublico(page, { publicar: false });
+        await restaurarPerfilDespublicado(() =>
+          definirPerfilPublico(page, { publicar: false })
+        );
       }
     });
   }
@@ -1595,7 +1643,12 @@ test.describe("Perfil público do corretor — WhatsApp", () => {
       // foi só o canal que não existe.
       await expect(page.getByText("Corretor(a) responsável")).toBeVisible();
     } finally {
-      await definirPerfilPublico(page, { publicar: false });
+      // Rede de segurança: num timeout a página já está fechada e a
+      // restauração pela UI falharia em silêncio, deixando o perfil
+      // publicado para o próximo teste. Ver restaurarPerfilDespublicado.
+      await restaurarPerfilDespublicado(() =>
+        definirPerfilPublico(page, { publicar: false })
+      );
     }
   });
 
@@ -1626,7 +1679,12 @@ test.describe("Perfil público do corretor — responsividade do card", () => {
         expect(await semOverflow(page), `overflow em ${largura}px`).toBe(true);
       }
     } finally {
-      await definirPerfilPublico(page, { publicar: false });
+      // Rede de segurança: num timeout a página já está fechada e a
+      // restauração pela UI falharia em silêncio, deixando o perfil
+      // publicado para o próximo teste. Ver restaurarPerfilDespublicado.
+      await restaurarPerfilDespublicado(() =>
+        definirPerfilPublico(page, { publicar: false })
+      );
     }
   });
 });

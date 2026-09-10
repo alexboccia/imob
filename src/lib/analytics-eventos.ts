@@ -81,6 +81,16 @@ export const PLACEMENTS_ANALYTICS = {
   BROKER_CARD: "BROKER_CARD",
 } as const;
 
+// NÃO existe placement para a página pública do corretor, e a ausência é
+// deliberada: PropertyAnalyticsEvent.propertyId é OBRIGATÓRIO por decisão
+// do modelo ("um evento sem imóvel não significaria nada", ver o
+// comentário do model), e no perfil do corretor não há imóvel nenhum. O
+// clique de WhatsApp de lá simplesmente não é registrado — preferimos um
+// buraco conhecido na medição a um propertyId inventado ou a uma coluna
+// nullable que mudaria o significado de toda a tabela. Se um dia medir
+// isso importar, a decisão é tornar o evento independente de imóvel, e
+// isso é uma fase própria.
+
 export type PlacementAnalytics =
   (typeof PLACEMENTS_ANALYTICS)[keyof typeof PLACEMENTS_ANALYTICS];
 

@@ -30,6 +30,14 @@ const nextConfig: NextConfig = {
       { source: "/vendidos", destination: `/${PUBLIC_ORG_SLUG}/vendidos` },
       { source: "/contato", destination: `/${PUBLIC_ORG_SLUG}/contato` },
       { source: "/anuncie", destination: `/${PUBLIC_ORG_SLUG}/anuncie` },
+      // Perfil público do corretor. Sem esta linha a página existe em
+      // /{orgSlug}/corretores/{id} mas responde 404 na organização
+      // principal, que é justamente onde ela é servida na raiz — o link
+      // do card do imóvel apontaria para lugar nenhum.
+      {
+        source: "/corretores/:id",
+        destination: `/${PUBLIC_ORG_SLUG}/corretores/:id`,
+      },
     ];
   },
 };

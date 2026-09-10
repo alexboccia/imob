@@ -42,6 +42,10 @@ describe("placement", () => {
     expect(placementValido("MOBILE_BAR")).toBe(true);
     expect(placementValido("GALLERY")).toBe(true);
     expect(placementValido("BROKER_CARD")).toBe(true);
+    // O perfil do corretor NÃO tem placement: o evento exige propertyId
+    // e lá não há imóvel. Fixar isso evita que alguém "conserte" o
+    // catálogo sem tornar o evento independente de imóvel primeiro.
+    expect(placementValido("BROKER_PROFILE")).toBe(false);
     expect(placementValido("QUALQUER_OUTRO")).toBe(false);
     expect(placementValido(undefined)).toBe(false);
   });
