@@ -5,6 +5,7 @@ import {
   emailPublicoDoCorretor,
   hrefEmail,
   hrefTelefone,
+  nomePublicoDoCorretor,
   resolverCorretorPublico,
   resolverWhatsAppDoImovel,
   telefonePublicoDoCorretor,
@@ -252,5 +253,30 @@ describe("telefone e e-mail públicos exigem o mesmo opt-in", () => {
     // para qualquer conteúdo.
     expect(hrefEmail("maria@imobiliaria.test")).toBe("mailto:maria@imobiliaria.test");
     expect(hrefEmail(null)).toBeNull();
+  });
+});
+
+// O portão mínimo, usado pela faceta "?corretor=" da listagem pública:
+// mesma decisão de sempre, sem carregar bio, foto, CRECI nem contatos.
+describe("nomePublicoDoCorretor", () => {
+  test("sem opt-in não há nome público, por mais completo que o cadastro esteja", () => {
+    expect(nomePublicoDoCorretor(MEMBRO_COMPLETO_SEM_OPTIN)).toBeNull();
+  });
+
+  test("com opt-in, devolve o nome sem espaços de sobra", () => {
+    expect(
+      nomePublicoDoCorretor({ publicProfileEnabled: true, user: { name: "  Paula Souza " } })
+    ).toBe("Paula Souza");
+  });
+
+  test("nome vazio não publica ninguém", () => {
+    expect(
+      nomePublicoDoCorretor({ publicProfileEnabled: true, user: { name: "   " } })
+    ).toBeNull();
+  });
+
+  test("membro ausente é ausência, não erro", () => {
+    expect(nomePublicoDoCorretor(null)).toBeNull();
+    expect(nomePublicoDoCorretor(undefined)).toBeNull();
   });
 });

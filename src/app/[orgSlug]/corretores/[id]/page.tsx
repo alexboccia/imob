@@ -17,6 +17,7 @@ import {
 } from "@/lib/perfil-publico-corretor";
 import { formatarTelefone } from "@/lib/telefone";
 import { linkWhatsApp } from "@/lib/whatsapp";
+import { hrefListagemDoCorretor } from "@/lib/filtro-corretor";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { SecaoImoveis } from "@/components/SecaoImoveis";
 import { buttonVariants } from "@/components/ui/button";
@@ -42,10 +43,18 @@ import { TITULO_DETALHE, TITULO_SECAO } from "@/lib/site-typography";
 export const revalidate = 60;
 
 // Quantos imóveis do corretor a página mostra. Vitrine, não catálogo:
-// quem quiser o acervo inteiro tem a listagem pública, e é para lá que o
-// "Ver tudo" aponta. Sem paginação nesta fase — ela só faria sentido se
-// existisse filtro por corretor na listagem, que é outra decisão.
+// quem quiser o acervo inteiro tem a listagem pública JÁ FILTRADA por
+// este profissional (/imoveis?corretor=<id>), e é para lá que o "Ver
+// todos" aponta. Continua sem paginação própria aqui de propósito — a
+// paginação de verdade é a da listagem, que não foi duplicada.
 const MAX_IMOVEIS_DO_CORRETOR = 6;
+
+// `take` de 7 para decidir o CTA sem um COUNT extra: se voltarem 7, é
+// porque existe pelo menos um sétimo imóvel e vale oferecer o acervo
+// completo; se voltarem 6 ou menos, tudo o que o corretor tem já está
+// na tela e o link seria um convite para ver o que já se vê. Uma linha
+// a mais numa consulta que já roda, em vez de uma segunda ida ao banco.
+const LIMITE_COM_SONDA = MAX_IMOVEIS_DO_CORRETOR + 1;
 
 // UMA consulta, escopada ao tenant desde o `where` — nunca "busca o
 // membro e depois confere a organização". Um id de membro de outra
@@ -172,7 +181,7 @@ export default async function PerfilCorretorPage({
         media: { where: { type: "PHOTO" }, select: { url: true }, orderBy: [{ isCover: "desc" }, { order: "asc" }] },
       },
       orderBy: { createdAt: "desc" },
-      take: MAX_IMOVEIS_DO_CORRETOR,
+      take: LIMITE_COM_SONDA,
     });
 
     return {
@@ -314,8 +323,17 @@ export default async function PerfilCorretorPage({
         {imoveis.length > 0 ? (
           <SecaoImoveis
             titulo=""
-            imoveis={imoveis.map(paraImovelCard)}
-            verTudoHref={`${basePath}/imoveis`}
+            imoveis={imoveis.slice(0, MAX_IMOVEIS_DO_CORRETOR).map(paraImovelCard)}
+            // O CTA só existe quando há mais imóveis do que a vitrine
+            // mostra, e leva à listagem pública já filtrada por este
+            // profissional. Com tudo visível não há "todos" a ver: o
+            // link viraria ruído (e, apontando para a listagem inteira,
+            // mentiria sobre o destino).
+            verTudoHref={
+              imoveis.length > MAX_IMOVEIS_DO_CORRETOR
+                ? hrefListagemDoCorretor(basePath, corretor.id)
+                : undefined
+            }
             verTudoRotulo="Ver todos os imóveis"
             basePath={basePath}
           />

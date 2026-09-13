@@ -54,12 +54,26 @@ export type ContatosPublicosCorretor = {
   whatsapp: string | null;
 };
 
-export function resolverCorretorPublico(membro: MembroResponsavel): CorretorPublico | null {
+// O PORTÃO, isolado: publicação é `publicProfileEnabled` e o nome é o
+// único dado obrigatório para publicar alguém. Existe separado porque a
+// faceta "imóveis deste corretor" da listagem pública precisa da MESMA
+// decisão sem precisar carregar bio, foto, CRECI e contatos — dados que
+// aquela página não mostra e, portanto, não deve buscar.
+export type IdentidadeMinimaCorretor =
+  | { publicProfileEnabled: boolean; user: { name: string } }
+  | null
+  | undefined;
+
+export function nomePublicoDoCorretor(membro: IdentidadeMinimaCorretor): string | null {
   if (!membro?.publicProfileEnabled) return null;
   // Consistência técnica mínima pra publicar: sem nome não há o que
   // apresentar, e um card com CRECI e foto sem nome seria pior que nenhum.
-  const nome = membro.user.name.trim();
-  if (!nome) return null;
+  return membro.user.name.trim() || null;
+}
+
+export function resolverCorretorPublico(membro: MembroResponsavel): CorretorPublico | null {
+  const nome = nomePublicoDoCorretor(membro);
+  if (!membro || !nome) return null;
 
   return {
     nome,

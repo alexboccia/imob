@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ImovelCard } from "@/components/ImovelCard";
@@ -6,8 +7,14 @@ import { SeletorOrdenacao } from "@/components/SeletorOrdenacao";
 import { FiltrosImoveis } from "@/components/FiltrosImoveis";
 import { PaginacaoPublica } from "@/components/PaginacaoPublica";
 import { paraImovelCard } from "@/lib/imovel-card";
-import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
+import { buscarDadosFiltros, resolverCorretorDoFiltro } from "@/lib/filtros-imoveis-data";
 import { campoPrecoPorFinalidade } from "@/lib/imovel-filtros";
+import {
+  hrefSemFiltroCorretor,
+  interpretarFiltroCorretor,
+  PARAM_CORRETOR,
+} from "@/lib/filtro-corretor";
+import { FiltroCorretorAtivo } from "@/components/FiltroCorretorAtivo";
 import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
@@ -62,6 +69,7 @@ type SearchParams = {
   destaque?: string;
   oportunidade?: string;
   ordenar?: string;
+  corretor?: string;
 };
 
 function paraArray(valor: string | string[] | undefined): string[] {
@@ -111,8 +119,15 @@ export default async function ListaImoveisPage({
   const areaMin = params.areaMin ? Number(params.areaMin) : undefined;
   const areaMax = params.areaMax ? Number(params.areaMax) : undefined;
 
-  const { imoveis, totalCount, dadosFiltros } = await withOrganization(organizationId, async () => {
+  // O id vem cru da URL; quem ele PODE representar é decisão do banco,
+  // escopada nesta organização (ver resolverCorretorDoFiltro).
+  const corretorSolicitado = interpretarFiltroCorretor(params[PARAM_CORRETOR]);
+
+  const { imoveis, totalCount, dadosFiltros, corretor } = await withOrganization(organizationId, async () => {
     const dadosFiltros = await buscarDadosFiltros(organizationId);
+    const corretor = corretorSolicitado
+      ? await resolverCorretorDoFiltro(organizationId, corretorSolicitado)
+      : null;
 
     const tiposDaCategoria =
       tipos.length === 0 && params.categoriaTipo
@@ -173,6 +188,22 @@ export default async function ListaImoveisPage({
             ],
           }
         : {}),
+      // A faceta do corretor é INTERSEÇÃO como qualquer outra: entra no
+      // `where`, junto de bairro, tipo, preço e do escopo público de
+      // sempre (organizationId + AVAILABLE). Nunca substitui nada, e
+      // nunca é aplicada em memória sobre o conjunto completo.
+      //
+      // Pedido mas não resolvido (id inexistente, de outro tenant, ou de
+      // quem despublicou o perfil) devolve ZERO imóvel — nunca o
+      // catálogo inteiro. Ignorar o filtro transformaria um id inválido
+      // em mais acesso a dados do que o visitante pediu, e manter o
+      // recorte sem o portão continuaria revelando "estes imóveis são
+      // desta pessoa" depois do opt-out.
+      ...(corretor
+        ? { responsibleMemberId: corretor.id }
+        : corretorSolicitado
+          ? { id: { in: [] } }
+          : {}),
       ...(params.lancamento === "1" ? { isLaunch: true } : {}),
       ...(params.destaque === "1" ? { isFeatured: true } : {}),
       ...(params.oportunidade === "1" ? { isOpportunity: true } : {}),
@@ -214,7 +245,7 @@ export default async function ListaImoveisPage({
       prisma.property.count({ where }),
     ]);
 
-    return { imoveis, totalCount, dadosFiltros };
+    return { imoveis, totalCount, dadosFiltros, corretor };
   });
 
   const paginas = totalDePaginas(totalCount, take);
@@ -248,6 +279,10 @@ export default async function ListaImoveisPage({
           destaque: params.destaque ?? "",
           oportunidade: params.oportunidade ?? "",
           ordenar: params.ordenar ?? "",
+          // Sem isto, aplicar qualquer filtro pela barra apagaria o
+          // corretor: FiltrosImoveis remonta a query do zero a cada
+          // busca, e só sobrevive o que ele conhece.
+          [PARAM_CORRETOR]: corretorSolicitado ?? "",
         }}
       />
 
@@ -257,9 +292,23 @@ export default async function ListaImoveisPage({
           em 375px sem quebrar em 3 linhas espremidas. Abaixo de `sm`,
           título e ordenação empilham; a partir daí, voltam a dividir a
           linha como antes. */}
+      {/* Contexto do recorte, com o nome de quem ele é e a saída ao lado.
+          Só aparece quando o corretor RESOLVE — um id que não passa pelo
+          portão de publicação não ganha identidade nesta página. */}
+      {corretor && (
+        <FiltroCorretorAtivo
+          nome={corretor.nome}
+          membroId={corretor.id}
+          basePath={basePath}
+          hrefRemover={hrefSemFiltroCorretor(basePath, params)}
+        />
+      )}
+
       <div className="mb-4 mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className={TITULO_PAGINA}>
-          {params.lancamento === "1"
+          {corretor
+            ? `Imóveis de ${corretor.nome}`
+            : params.lancamento === "1"
             ? "Lançamentos"
             : params.destaque === "1"
               ? "Destaques"
@@ -274,9 +323,27 @@ export default async function ListaImoveisPage({
       </div>
 
       {imoveis.length === 0 ? (
-        <p className="text-gray-500">
-          Nenhum imóvel encontrado com esses filtros.
-        </p>
+        // Filtro de corretor que não resolve: a página diz o que houve
+        // sem confirmar se aquele id um dia existiu — a mensagem é a
+        // mesma para um cuid inventado, para o id de outro tenant e para
+        // quem despublicou o perfil. E oferece a saída, para o visitante
+        // que chegou por um link compartilhado não ficar num beco.
+        corretorSolicitado && !corretor ? (
+          <p className="text-gray-500">
+            Este corretor não está mais disponível no site.{" "}
+            <Link
+              href={hrefSemFiltroCorretor(basePath, params)}
+              className="text-link hover:underline"
+            >
+              Ver imóveis sem este filtro
+            </Link>
+            .
+          </p>
+        ) : (
+          <p className="text-gray-500">
+            Nenhum imóvel encontrado com esses filtros.
+          </p>
+        )
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

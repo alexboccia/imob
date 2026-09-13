@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ImovelCard } from "@/components/ImovelCard";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { TITULO_SECAO, SUBTITULO_SECAO } from "@/lib/site-typography";
 import type { paraImovelCard } from "@/lib/imovel-card";
 
@@ -45,15 +45,21 @@ export function SecaoImoveis({
           <h2 className={TITULO_SECAO}>{titulo}</h2>
           {descricao && <p className={`${SUBTITULO_SECAO} mt-1`}>{descricao}</p>}
         </div>
+        {/* Link de verdade, com a APARÊNCIA de botão-link — e não um
+            <Button render={<Link/>}>, que era o que havia aqui. Aquele
+            caminho renderiza <a role="button">: para quem usa leitor de
+            tela, o elemento se anunciava como botão, prometendo uma ação
+            na página em vez da navegação que ele de fato faz. Mesmas
+            classes, mesma aparência; muda a semântica, que estava
+            errada. buttonVariants em <a> já é o idioma do projeto (ver
+            os CTAs de contato do perfil do corretor). */}
         {verTudoHref && (
-          <Button
-            variant="link"
-            className="h-auto p-0"
-            nativeButton={false}
-            render={<Link href={verTudoHref} />}
+          <Link
+            href={verTudoHref}
+            className={buttonVariants({ variant: "link", className: "h-auto p-0" })}
           >
             {verTudoRotulo}
-          </Button>
+          </Link>
         )}
       </div>
       {/* Quatro cards lado a lado só a partir de xl: em lg (1024px) eles

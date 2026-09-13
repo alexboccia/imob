@@ -155,7 +155,25 @@ export const ORG_RESTRITA_BRUNO = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Fase 29 — organização dedicada ao portfólio público do corretor. Ver o
+// racional em prisma/seed-e2e.ts, seção "Organização P": a faceta afirma
+// números absolutos de imóveis por corretor, e Org A é mutada por vários
+// specs.
+export const ORG_PORTFOLIO = {
+  slug: "e2e-org-portfolio",
+  email: "owner-portfolio@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const IDS_E2E = {
+  // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
+  // (Organização P). Ids de membro fixos porque a faceta ?corretor= é
+  // filtrada por OrganizationMember.id: sem id determinístico, o spec
+  // teria de descobrir o membro pela UI antes de cada asserção.
+  membroPortfolioPaula: "e2e-membro-portfolio-paula",
+  membroPortfolioRui: "e2e-membro-portfolio-rui",
+  membroPortfolioSonia: "e2e-membro-portfolio-sonia",
+  imovelPortfolioSonia: "e2e-imovel-portfolio-sonia",
   imovelParaEditarOrgA: "e2e-imovel-editar-a",
   membroOwnerOrgB: "e2e-membro-owner-b",
   imovelOrgB: "e2e-imovel-org-b",
@@ -283,12 +301,35 @@ export async function restaurarPerfilDespublicado(
 }
 
 // Faxina direta no banco de teste — sem browser, sem sessão.
-export function despublicarPerfisNoBanco(): void {
+export function despublicarPerfisNoBanco(orgSlug?: string): void {
+  perfilPublicoNoBanco("despublicar", ...(orgSlug ? [orgSlug] : []));
+}
+
+// Fase 29 — o outro lado, para fixture: publica membros por id, sem
+// navegador. Quem prova que o PAINEL publica é perfil-corretor.spec.ts,
+// pela interface; aqui a publicação é só o estado de partida de quem
+// testa a faceta "imóveis deste corretor".
+export function publicarPerfisNoBanco(...membroIds: string[]): void {
+  perfilPublicoNoBanco("publicar", ...membroIds);
+}
+
+// Publica o membro de uma organização identificado pelo E-MAIL e devolve
+// o id dele. Existe para a Organização A, cujo membro não tem id fixo no
+// seed — e a faceta "?corretor=" é filtrada por id.
+export function publicarPerfilPorEmailNoBanco(orgSlug: string, email: string): string {
+  return perfilPublicoNoBanco("publicar-email", orgSlug, email).trim();
+}
+
+function perfilPublicoNoBanco(
+  acao: "publicar" | "despublicar" | "publicar-email",
+  ...argumentos: string[]
+): string {
   const raiz = path.resolve(__dirname, "..", "..");
-  execFileSync("npx", ["tsx", path.join(raiz, "scripts", "e2e-perfil-publico.ts"), "despublicar"], {
-    cwd: raiz,
-    encoding: "utf8",
-  });
+  return execFileSync(
+    "npx",
+    ["tsx", path.join(raiz, "scripts", "e2e-perfil-publico.ts"), acao, ...argumentos],
+    { cwd: raiz, encoding: "utf8" }
+  );
 }
 
 export function obterTokenDeAcesso(

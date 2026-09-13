@@ -69,7 +69,7 @@ test.describe("a Home mostra a seleção", () => {
 
   test("'Ver todos' leva à listagem da própria imobiliária", async ({ page }) => {
     await page.goto("/");
-    await vitrine(page).getByRole("button", { name: "Ver todos" }).click();
+    await vitrine(page).getByRole("link", { name: "Ver todos" }).click();
     await page.waitForURL(/\/imoveis$/);
     // Sem filtro por rótulo, a listagem se chama "Resultados da busca" —
     // é a listagem completa, que é justamente o destino certo para uma

@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { tagFacetas } from "@/lib/cache-tags";
+import { nomePublicoDoCorretor } from "@/lib/perfil-publico-corretor";
 
 export type TipoComCategoria = {
   nome: string;
@@ -94,4 +95,39 @@ export async function buscarDadosFiltros(organizationId: string) {
     ["dados-filtros-imoveis", organizationId],
     { tags: [tagFacetas(organizationId)], revalidate: 300 }
   )(organizationId);
+}
+
+// =======================================================================
+// Faceta "imóveis deste corretor"
+// =======================================================================
+// Quem o filtro ?corretor= pode representar. A resposta é a MESMA regra
+// da rota /corretores/{id}, e por isso passa pelo mesmo portão
+// (nomePublicoDoCorretor): um membro sem opt-in não é filtrável, do
+// mesmo jeito que não é visitável.
+//
+// Isso não é rigor decorativo. Sem esse portão, uma URL compartilhada
+// continuaria dizendo "estes imóveis são deste profissional" DEPOIS de
+// ele despublicar o perfil — a associação pública sobreviveria ao
+// opt-out, que é exatamente o que a doutrina de publicação proíbe.
+//
+// A query nasce escopada em `organizationId`: nunca "acha o membro e
+// depois confere a organização". Um id de outro tenant não encontra
+// ninguém aqui, e não há como ele virar filtro.
+//
+// Sem cache de propósito: despublicar precisa valer na próxima
+// requisição, não daqui a cinco minutos.
+//
+// O select traz o mínimo — id e nome. Bio, foto, CRECI, telefone,
+// e-mail e WhatsApp não são buscados porque a listagem não os mostra: o
+// que não é lido não vaza.
+export async function resolverCorretorDoFiltro(
+  organizationId: string,
+  membroId: string
+): Promise<{ id: string; nome: string } | null> {
+  const membro = await prisma.organizationMember.findFirst({
+    where: { id: membroId, organizationId, publicProfileEnabled: true },
+    select: { id: true, publicProfileEnabled: true, user: { select: { name: true } } },
+  });
+  const nome = nomePublicoDoCorretor(membro);
+  return membro && nome ? { id: membro.id, nome } : null;
 }

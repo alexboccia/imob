@@ -174,7 +174,7 @@ test.describe("Site público — Home (Proposta 2)", () => {
     // "Ver todos" leva à listagem completa desta organização — sem
     // filtro por rótulo, porque a vitrine não é um recorte por rótulo.
     // role="button": Button com render={<Link/>} preserva o role.
-    await expect(vitrine.getByRole("button", { name: "Ver todos" })).toHaveAttribute(
+    await expect(vitrine.getByRole("link", { name: "Ver todos" })).toHaveAttribute(
       "href",
       /\/imoveis$/
     );

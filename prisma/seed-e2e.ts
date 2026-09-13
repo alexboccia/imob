@@ -26,6 +26,14 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 export const IDS_E2E = {
+  // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
+  // (Organização P). Ids de membro fixos porque a faceta ?corretor= é
+  // filtrada por OrganizationMember.id: sem id determinístico, o spec
+  // teria de descobrir o membro pela UI antes de cada asserção.
+  membroPortfolioPaula: "e2e-membro-portfolio-paula",
+  membroPortfolioRui: "e2e-membro-portfolio-rui",
+  membroPortfolioSonia: "e2e-membro-portfolio-sonia",
+  imovelPortfolioSonia: "e2e-imovel-portfolio-sonia",
   imovelParaEditarOrgA: "e2e-imovel-editar-a",
   membroOwnerOrgB: "e2e-membro-owner-b",
   // Organização dedicada da Agenda (ver comentário na seção "Organização
@@ -195,6 +203,10 @@ async function garantirImovel(opcoes: {
   propertyFeatures?: string[];
   condoFeatures?: string[];
   responsibleMemberId?: string | null;
+  // Fase 29 — status explícito. Default AVAILABLE, como sempre foi: só o
+  // fixture da faceta "imóveis deste corretor" precisa de um imóvel FORA
+  // do critério público, pra provar que o filtro não o traz de volta.
+  status?: "DRAFT" | "AVAILABLE" | "RESERVED" | "SOLD" | "RENTED" | "INACTIVE";
   condoFee?: number | null;
   propertyTax?: number | null;
   developer?: string | null;
@@ -207,7 +219,7 @@ async function garantirImovel(opcoes: {
     title: opcoes.title,
     type: opcoes.type ?? "Apartamento",
     purpose: opcoes.purpose ?? "SALE",
-    status: "AVAILABLE",
+    status: opcoes.status ?? "AVAILABLE",
     neighborhood: opcoes.neighborhood ?? "Centro",
     city: opcoes.city ?? "São Paulo",
     state: "SP",
@@ -939,6 +951,12 @@ async function main() {
     id: "e2e-imovel-org-b",
     organizationId: orgB.organization.id,
     title: "Imóvel da Organização B",
+    // Fase 29 — responsável explícito para que a faceta "?corretor="
+    // possa ser exercitada SOB DOMÍNIO CUSTOMIZADO (Org B é a única do
+    // seed com hostname próprio ativo). Ter responsável não publica
+    // ninguém: o portão continua sendo publicProfileEnabled, e o membro
+    // segue nascendo despublicado como todos os outros.
+    responsibleMemberId: IDS_E2E.membroOwnerOrgB,
   });
 
   // Busca do Hero — segunda cidade/bairro + aluguel com rentPrice
@@ -1967,6 +1985,149 @@ async function main() {
       },
     });
   }
+
+  // =====================================================================
+  // Fase 29 — Organização P: portfólio público do corretor
+  // =====================================================================
+  // Organização DEDICADA, pelo mesmo motivo estrutural das organizações
+  // C, D e N: a faceta "?corretor=" afirma números absolutos ("8 imóveis
+  // deste corretor", "3 no Jardins") e a Org A é mutada por vários specs
+  // — colocar o fixture lá tornaria toda asserção refém da ordem de
+  // execução. Aqui os números são do seed e de mais ninguém.
+  //
+  // O elenco existe para provar o recorte, não para encher o banco:
+  //
+  //   Paula (BROKER) — 8 imóveis AVAILABLE + 1 SOLD.
+  //                    Oito é > 6, então o perfil dela mostra a vitrine
+  //                    cheia E o CTA "Ver todos os imóveis". O SOLD prova
+  //                    que a faceta não afrouxa o critério público.
+  //   Rui (BROKER)   — 2 imóveis. <= 6: perfil sem CTA redundante.
+  //   Sônia (BROKER) — 1 imóvel e perfil NUNCA publicado: é o corretor
+  //                    inelegível, e o imóvel dela prova que o filtro
+  //                    inválido devolve vazio em vez de devolver a
+  //                    carteira de quem não deu opt-in.
+  //   1 imóvel sem responsável — existe para que o total da organização
+  //                    seja maior que qualquer carteira individual.
+  //
+  // Ninguém nasce publicado (a doutrina do produto e do seed é essa); é
+  // o próprio spec que publica Paula e Rui pelo caminho de banco, e
+  // despublica no fim.
+  const orgPortfolio = await garantirOrganizacaoComDono({
+    slug: "e2e-org-portfolio",
+    timezone: "UTC",
+    name: "Organização E2E Portfólio",
+    planId: planoCompleto.id,
+    email: "owner-portfolio@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+
+  const corretorPortfolio = async (opcoes: {
+    membroId: string;
+    email: string;
+    nome: string;
+  }) => {
+    const usuario = await prisma.user.upsert({
+      where: { email: opcoes.email },
+      update: { name: opcoes.nome, passwordHash: await bcrypt.hash(senha, 10) },
+      create: {
+        name: opcoes.nome,
+        email: opcoes.email,
+        passwordHash: await bcrypt.hash(senha, 10),
+      },
+      select: { id: true },
+    });
+    return prisma.organizationMember.upsert({
+      where: {
+        organizationId_userId: {
+          organizationId: orgPortfolio.organization.id,
+          userId: usuario.id,
+        },
+      },
+      // publicProfileEnabled NÃO entra no update: o spec publica e
+      // despublica, e o seed não deve desfazer isso no meio de uma
+      // rodada. O estado inicial (false) vem do default da coluna.
+      update: { role: "BROKER" },
+      create: {
+        id: opcoes.membroId,
+        organizationId: orgPortfolio.organization.id,
+        userId: usuario.id,
+        role: "BROKER",
+      },
+      select: { id: true },
+    });
+  };
+
+  // Os três corretores são BROKER e têm NOME DE GENTE: o dono da
+  // organização herda o nome dela (garantirOrganizacaoComDono), e a
+  // faceta mostra o nome do profissional na tela — "Imóveis de
+  // Organização E2E Portfólio" não provaria nada sobre apresentação.
+  await corretorPortfolio({
+    membroId: IDS_E2E.membroPortfolioPaula,
+    email: "paula-portfolio@e2e.test",
+    nome: "Paula Portfolio",
+  });
+  await corretorPortfolio({
+    membroId: IDS_E2E.membroPortfolioRui,
+    email: "rui-portfolio@e2e.test",
+    nome: "Rui Portfolio",
+  });
+  await corretorPortfolio({
+    membroId: IDS_E2E.membroPortfolioSonia,
+    email: "sonia-portfolio@e2e.test",
+    nome: "Sônia Portfolio",
+  });
+
+  // Carteira da Paula: 5 no Centro (Apartamento) + 3 no Jardins (Casa).
+  // A divisão existe para o teste de INTERSEÇÃO: ?corretor=Paula&bairro=
+  // Jardins tem de dar 3 — nem 8 (ignorando o bairro), nem 5 (Jardins
+  // inteiro, que inclui os do Rui).
+  for (let i = 1; i <= 8; i++) {
+    const noJardins = i > 5;
+    await garantirImovel({
+      id: `e2e-imovel-portfolio-paula-${i}`,
+      organizationId: orgPortfolio.organization.id,
+      title: `Imóvel ${i} da Paula`,
+      neighborhood: noJardins ? "Jardins" : "Centro",
+      type: noJardins ? "Casa" : "Apartamento",
+      responsibleMemberId: IDS_E2E.membroPortfolioPaula,
+    });
+  }
+  await garantirImovel({
+    id: "e2e-imovel-portfolio-paula-vendido",
+    organizationId: orgPortfolio.organization.id,
+    title: "Imóvel vendido da Paula",
+    neighborhood: "Centro",
+    status: "SOLD",
+    responsibleMemberId: IDS_E2E.membroPortfolioPaula,
+  });
+
+  for (let i = 1; i <= 2; i++) {
+    await garantirImovel({
+      id: `e2e-imovel-portfolio-rui-${i}`,
+      organizationId: orgPortfolio.organization.id,
+      title: `Imóvel ${i} do Rui`,
+      neighborhood: "Jardins",
+      type: "Casa",
+      responsibleMemberId: IDS_E2E.membroPortfolioRui,
+    });
+  }
+
+  await garantirImovel({
+    id: IDS_E2E.imovelPortfolioSonia,
+    organizationId: orgPortfolio.organization.id,
+    title: "Imóvel da Sônia",
+    neighborhood: "Centro",
+    responsibleMemberId: IDS_E2E.membroPortfolioSonia,
+  });
+
+  await garantirImovel({
+    id: "e2e-imovel-portfolio-sem-responsavel",
+    organizationId: orgPortfolio.organization.id,
+    title: "Imóvel sem responsável",
+    neighborhood: "Centro",
+    responsibleMemberId: null,
+  });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);
