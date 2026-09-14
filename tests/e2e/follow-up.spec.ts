@@ -129,9 +129,15 @@ test.describe("ciclo de vida do follow-up", () => {
     await negociacaoNova(page, nome);
 
     await expect(page.getByRole("button", { name: "Agendar follow-up" })).toBeVisible();
+    // Fase 34 — perder passou a abrir um diálogo (o motivo da perda é
+    // registrado ali). O motivo é opcional: este teste não informa,
+    // porque o que ele prova é o ciclo de vida do follow-up.
+    await page.getByRole("button", { name: "Marcar como perdido" }).click();
+    const dialogoPerda = page.getByRole("dialog");
+    await expect(dialogoPerda).toBeVisible();
     await Promise.all([
       page.waitForResponse((r) => r.request().method() === "POST"),
-      page.getByRole("button", { name: "Marcar como perdido" }).click(),
+      dialogoPerda.getByRole("button", { name: "Marcar como perdido" }).click(),
     ]);
     await page.reload();
 

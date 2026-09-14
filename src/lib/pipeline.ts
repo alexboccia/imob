@@ -8,9 +8,11 @@ import { acaoOperacionalDaVisita } from "@/lib/scheduled-activity-date";
 import { paraResponsavel, type ResponsavelNegociacao } from "@/lib/responsavel-negociacao";
 import { paraAtorTransicao, type AtorTransicao } from "@/lib/ator-transicao";
 import type {
+  LostReason,
   MemberStatus,
   OfferSide,
   Prisma,
+  PropertyPurpose,
   PropertyInterestStage,
   PropertyStatus,
   ScheduledActivityType,
@@ -58,7 +60,14 @@ export type ItemPipeline = {
   // aparecendo (é legitimamente desta organização), só a relação anômala
   // é redigida, nunca vaza nome/título de outro tenant.
   person: { id: string; name: string } | null;
-  property: { id: string; title: string; status: PropertyStatus; neighborhood: string } | null;
+  property: {
+    id: string;
+    title: string;
+    status: PropertyStatus;
+    purpose: PropertyPurpose;
+    neighborhood: string;
+  } | null;
+  lostReason: LostReason | null;
   // Fase 19 — renomeado de `proximaVisita`: desde que ScheduledActivity
   // ganhou FOLLOW_UP, esta consulta (que nunca filtrou por tipo) pode
   // devolver um follow-up, e manter o nome antigo faria o campo mentir.
@@ -96,6 +105,9 @@ function selectItemPipeline(organizationId: string) {
     stage: true,
     closedAt: true,
     closedValue: true,
+    // Fase 34 — motivo da perda, para o drawer/card exibirem o desfecho
+    // sem uma segunda consulta.
+    lostReason: true,
     commissionValue: true,
     updatedAt: true,
     // Fase 11 — carregado no MESMO select (join batched pelo Prisma),
@@ -104,7 +116,17 @@ function selectItemPipeline(organizationId: string) {
       select: { id: true, status: true, organizationId: true, user: { select: { name: true } } },
     },
     person: { select: { id: true, name: true, organizationId: true } },
-    property: { select: { id: true, title: true, status: true, neighborhood: true, organizationId: true } },
+    property: {
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        // Fase 34 — decide se o fechamento precisa perguntar o desfecho.
+        purpose: true,
+        neighborhood: true,
+        organizationId: true,
+      },
+    },
     // organizationId explícito no where da relação — mesma defesa de
     // clientes/[id]/page.tsx e imoveis/[id]/page.tsx (H.2/P.2): mesmo sob
     // uma ScheduledActivity anômala (organizationId de outro tenant
@@ -166,7 +188,15 @@ type LinhaBrutaPipeline = {
     user: { name: string | null };
   } | null;
   person: { id: string; name: string; organizationId: string };
-  property: { id: string; title: string; status: PropertyStatus; neighborhood: string; organizationId: string };
+  property: {
+    id: string;
+    title: string;
+    status: PropertyStatus;
+    purpose: PropertyPurpose;
+    neighborhood: string;
+    organizationId: string;
+  };
+  lostReason: LostReason | null;
   scheduledActivities: {
     id: string;
     type: ScheduledActivityType;
@@ -250,6 +280,7 @@ export function paraItemPipeline(
           id: linha.property.id,
           title: linha.property.title,
           status: linha.property.status,
+          purpose: linha.property.purpose,
           neighborhood: linha.property.neighborhood,
         }
       : null;
@@ -294,6 +325,7 @@ export function paraItemPipeline(
     proximaAcao: property ? obterProximaAcaoComercial(linha.stage, property.status) : null,
     aging: formatarAgingStage(agingMs),
     agingMs,
+    lostReason: linha.lostReason,
     ultimaProposta: linha.offers[0]
       ? {
           // decimalParaValor devolve null para um Decimal ausente; aqui

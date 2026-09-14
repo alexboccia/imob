@@ -17,6 +17,7 @@ import { ResponsavelNegociacao } from "@/components/admin/ResponsavelNegociacao"
 import { DivisaoComissao } from "@/components/admin/DivisaoComissao";
 import { NegociacaoValores } from "@/components/admin/NegociacaoValores";
 import { precoPedido, type PropostaRegistrada } from "@/lib/proposta-negociacao";
+import type { LostReason, PropertyPurpose } from "@/generated/prisma/client";
 import type { ParticipanteExibicao } from "@/lib/participacao-comissao";
 import type { PagamentoExibicao } from "@/lib/pagamento-comissao";
 import type { AtorTransicao } from "@/lib/ator-transicao";
@@ -61,6 +62,7 @@ export function InteresseImovelItem({
     stage: PropertyInterestStage;
     // Fase 33 — histórico de valores, da mais recente para a mais antiga.
     propostas: PropostaRegistrada[];
+    lostReason: LostReason | null;
     favorited: boolean;
     notes: string | null;
     // Igual a scheduledAt: string ISO ou null, nunca Date (Fase P.3) — só
@@ -270,6 +272,9 @@ export function InteresseImovelItem({
           stage={interesse.stage}
           closedAtISO={interesse.closedAtISO}
           closedValue={interesse.closedValue}
+          purpose={interesse.property.purpose as PropertyPurpose}
+          propertyStatus={interesse.property.status}
+          lostReason={interesse.lostReason}
           // Fase 33 — quando o negócio ainda não foi fechado, o diálogo
           // já abre com a ÚLTIMA proposta: é o valor que está na mesa, e
           // redigitá-lo era pedir ao corretor um número que o easymob

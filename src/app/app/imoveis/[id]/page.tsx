@@ -233,6 +233,11 @@ export default async function EditarImovelPage({
                       stage={interesse.stage}
                       closedAtISO={interesse.closedAt ? interesse.closedAt.toISOString() : null}
                       closedValue={decimalParaValor(interesse.closedValue)}
+                      // Esta é a própria página do imóvel: finalidade e
+                      // status vêm dele, não de uma segunda consulta.
+                      purpose={imovel.purpose}
+                      propertyStatus={imovel.status}
+                      lostReason={interesse.lostReason}
                       commissionValue={decimalParaValor(interesse.commissionValue)}
                       imovelTitulo={imovel.title}
                       clienteNome={interesse.person.name}

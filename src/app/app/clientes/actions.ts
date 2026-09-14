@@ -45,6 +45,13 @@ import {
 } from "@/lib/registro-atendimento";
 import { deDatetimeLocalNoFuso } from "@/lib/fuso-horario";
 import { interpretarValorProposta, LADOS_PROPOSTA } from "@/lib/proposta-negociacao";
+import {
+  desfechoDoImovel,
+  imovelDeveTransicionar,
+  interpretarMotivoPerda,
+  DESFECHOS_POSSIVEIS,
+  type DesfechoEscolhido,
+} from "@/lib/desfecho-negocio";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import {
   erroAcessoNegado,
@@ -1112,6 +1119,7 @@ export async function registrarProposta(
     revalidatePath(`/app/clientes/${interesse.personId}`);
     revalidatePath(`/app/imoveis/${interesse.propertyId}`);
     revalidatePath("/app/pipeline");
+    revalidatePath("/app/imoveis");
 
     return sucesso("Proposta registrada.");
   });
@@ -1248,6 +1256,7 @@ export async function atualizarEstagioInteresse(
     // revalidar a própria tela do Pipeline também, senão o card fica
     // preso na coluna antiga até um reload manual.
     revalidatePath("/app/pipeline");
+    revalidatePath("/app/imoveis");
 
     switch (resultado.tipo) {
       case "nao_encontrado":
@@ -1301,7 +1310,12 @@ async function fecharInteresse(
   // parâmetro nunca é passado e a coluna permanece null.
   valorBruto?: unknown,
   // Fase 10 — comissão OPCIONAL. Só existe para GANHO.
-  comissaoBruta?: unknown
+  comissaoBruta?: unknown,
+  // Fase 34 — desfecho do IMÓVEL, só consultado quando a finalidade é
+  // ambígua (SALE_AND_RENT). Para SALE/RENT o domínio já decide.
+  desfechoBruto?: unknown,
+  // Fase 34 — motivo da perda. Só existe para REJECTED.
+  motivoBruto?: unknown
 ): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
@@ -1355,7 +1369,7 @@ async function fecharInteresse(
         personId: true,
         propertyId: true,
         person: { select: { organizationId: true } },
-        property: { select: { organizationId: true } },
+        property: { select: { organizationId: true, purpose: true, status: true } },
       },
     });
     if (
@@ -1365,6 +1379,37 @@ async function fecharInteresse(
     ) {
       return erroAcessoNegado("Relacionamento não encontrado.");
     }
+
+    // -------------------------------------------------------------------
+    // Fase 34 — para onde vai o IMÓVEL
+    // -------------------------------------------------------------------
+    // Só no ganho, e só se ele ainda estiver disponível. A finalidade
+    // decide sozinha em SALE e RENT; em SALE_AND_RENT o sistema não tem
+    // como saber o que aconteceu, e o diálogo pergunta — inventar seria
+    // gravar um fato comercial falso.
+    let novoStatusImovel: DesfechoEscolhido | null = null;
+    if (destino === "WON" && imovelDeveTransicionar(interesse.property.status)) {
+      const desfecho = desfechoDoImovel(interesse.property.purpose);
+      if (desfecho.tipo === "definido") {
+        novoStatusImovel = desfecho.status;
+      } else {
+        const escolhido = DESFECHOS_POSSIVEIS.find((d) => d === desfechoBruto);
+        if (!escolhido) {
+          return {
+            success: false,
+            message: "Verifique os campos destacados.",
+            fieldErrors: {
+              desfecho: ["Este imóvel está anunciado para venda e locação — informe o que aconteceu."],
+            },
+          };
+        }
+        novoStatusImovel = escolhido;
+      }
+    }
+
+    // Motivo SÓ na perda: um negócio ganho com motivo de perda seria uma
+    // contradição, e a garantia é do servidor, não da tela.
+    const lostReason = destino === "REJECTED" ? interpretarMotivoPerda(motivoBruto) : null;
 
     const resultado = await prisma.$transaction(async (tx): Promise<ResultadoFechamento> => {
       // Guard read-then-write, vinculando a leitura ao update: em vez de
@@ -1420,7 +1465,7 @@ async function fecharInteresse(
           // stage, closedAt, closedValue e commissionValue no MESMO
           // update da MESMA transação do histórico. Em REJECTED os dois
           // valores são null explicitamente.
-          data: { stage: destino, closedAt: agora, closedValue, commissionValue },
+          data: { stage: destino, closedAt: agora, closedValue, commissionValue, lostReason },
         });
 
         if (atualizado.count === 0) {
@@ -1450,6 +1495,47 @@ async function fecharInteresse(
             ),
           },
         });
+
+        // -----------------------------------------------------------
+        // Fase 34 — A TERCEIRA VERDADE: o imóvel sai de circulação
+        // -----------------------------------------------------------
+        // Mesma transação da negociação e do histórico dela: não pode
+        // existir "negociação ganha com imóvel ainda disponível" nem
+        // "imóvel vendido com negociação aberta" por falha parcial.
+        //
+        // O updateMany carrega `status: "AVAILABLE"` no WHERE: se outra
+        // negociação do MESMO imóvel venceu a corrida e já o tirou de
+        // circulação, este update não casa nada, o histórico de status
+        // não é escrito, e o fechamento desta negociação continua
+        // válido — ganhar duas vezes o mesmo imóvel é impossível de
+        // qualquer forma, e o primeiro fato registrado é o que vale.
+        if (novoStatusImovel) {
+          const imovelAtualizado = await tx.property.updateMany({
+            where: { id: interesse.propertyId, organizationId, status: "AVAILABLE" },
+            data: { status: novoStatusImovel },
+          });
+
+          if (imovelAtualizado.count > 0) {
+            // PropertyStatusHistory existia desde sempre e nunca havia
+            // sido escrito por fluxo nenhum (achado da auditoria). Este
+            // é o primeiro produtor, e ele grava só o que aconteceu de
+            // fato — sem backfill do passado.
+            await tx.propertyStatusHistory.create({
+              data: {
+                organizationId,
+                propertyId: interesse.propertyId,
+                previousStatus: "AVAILABLE",
+                newStatus: novoStatusImovel,
+                changedAt: agora,
+                changedByMemberId: await resolverAtorTransicao(
+                  tx,
+                  organizationId,
+                  session.user.organizationMemberId
+                ),
+              },
+            });
+          }
+        }
 
         // ActivityLog DENTRO da transação — mesmo desvio deliberado do
         // padrão best-effort documentado em concluirAgendamentoVisita: o
@@ -1512,6 +1598,7 @@ async function fecharInteresse(
     // um reload manual (mesmo racional do revalidatePath adicionado em
     // atualizarEstagioInteresse acima).
     revalidatePath("/app/pipeline");
+    revalidatePath("/app/imoveis");
 
     switch (resultado.tipo) {
       case "ja_fechado":
@@ -1657,6 +1744,7 @@ export async function corrigirDadosFechamento(
     revalidatePath(`/app/clientes/${resultado.personId}`);
     revalidatePath(`/app/imoveis/${resultado.propertyId}`);
     revalidatePath("/app/pipeline");
+    revalidatePath("/app/imoveis");
     return sucesso("Valores do fechamento atualizados.");
   });
 }
@@ -1777,6 +1865,7 @@ export async function transferirResponsavelNegociacao(
     revalidatePath(`/app/clientes/${resultado.personId}`);
     revalidatePath(`/app/imoveis/${resultado.propertyId}`);
     revalidatePath("/app/pipeline");
+    revalidatePath("/app/imoveis");
     return sucesso("Responsável atualizado.");
   });
 }
@@ -2462,7 +2551,10 @@ export async function marcarInteresseComoGanho(
     interesseId,
     "WON",
     formData.get("valorFechamento"),
-    formData.get("valorComissao")
+    formData.get("valorComissao"),
+    // Só é lido quando o imóvel é SALE_AND_RENT; nos demais o domínio
+    // decide sozinho e o campo nem existe no formulário.
+    formData.get("desfecho")
   );
 }
 
@@ -2471,12 +2563,13 @@ export async function marcarInteresseComoGanho(
 // (ESTAGIO_INTERESSE_LABEL, src/lib/property-interest-schema.ts), nenhum enum novo.
 export async function marcarInteresseComoPerdido(
   interesseId: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _prevState: ActionState,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _formData: FormData
+  formData: FormData
 ): Promise<ActionState> {
-  return fecharInteresse(interesseId, "REJECTED");
+  // Fase 34 — o motivo é OPCIONAL: ausente vira null, e o negócio é
+  // registrado como perdido do mesmo jeito. Obrigar uma escolha só
+  // produziria motivo falso.
+  return fecharInteresse(interesseId, "REJECTED", undefined, undefined, undefined, formData.get("motivo"));
 }
 
 // Alterna favorited (nunca toca stage). Sempre relê o valor atual do

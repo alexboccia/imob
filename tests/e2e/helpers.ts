@@ -181,6 +181,22 @@ export const IDS_E2E = {
   // entrada e os números daquele bloco continuam valendo.
   membroInboxOwner: "e2e-membro-inbox-owner",
   pessoaNegociacao: "e2e-pessoa-negociacao",
+  // Fase 34 — fechamento coerente: imóveis e negociações dedicadas,
+  // separadas das da Fase 33, porque GANHAR muda o status do imóvel e
+  // isso não pode contaminar as asserções de preço/catálogo dos outros
+  // specs.
+  imovelFechamentoGanho: "e2e-imovel-fechamento-ganho",
+  imovelFechamentoPerda: "e2e-imovel-fechamento-perda",
+  pessoaFechamentoGanho: "e2e-pessoa-fechamento-ganho",
+  pessoaFechamentoPerda: "e2e-pessoa-fechamento-perda",
+  interesseFechamentoGanho: "e2e-interesse-fechamento-ganho",
+  interesseFechamentoPerda: "e2e-interesse-fechamento-perda",
+  // Negociação que NUNCA é fechada: os testes de teclado e responsivo
+  // só abrem o diálogo, e depender das outras duas os deixaria reféns da
+  // ordem de execução (quem fecha primeiro apaga o botão dos seguintes).
+  imovelFechamentoDialogo: "e2e-imovel-fechamento-dialogo",
+  pessoaFechamentoDialogo: "e2e-pessoa-fechamento-dialogo",
+  interesseFechamentoDialogo: "e2e-interesse-fechamento-dialogo",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

@@ -145,6 +145,32 @@ enum OfferSide {
   OWNER
 }
 
+// Por que um negócio foi perdido. Lista CURTA de propósito: cada valor
+// existe porque responde a uma pergunta que o corretor faz de verdade, e
+// um catálogo grande vira campo que ninguém preenche.
+//
+//   PRICE                 não fecharam no valor. É a perda mais comum, e
+//                         desde a Fase 33 ela é verificável: o histórico
+//                         de propostas mostra a distância exata.
+//   FINANCING             crédito negado/insuficiente.
+//   CLIENT_GAVE_UP        o cliente desistiu do negócio.
+//   PROPERTY_UNAVAILABLE  o imóvel saiu de circulação — inclusive quando
+//                         OUTRA negociação do mesmo imóvel foi ganha,
+//                         situação que esta fase passa a produzir.
+//   OTHER                 o resto. Existe para o corretor não ser forçado
+//                         a escolher um motivo falso.
+//
+// Deliberadamente FORA por falta de evidência no domínio: "escolheu outro
+// imóvel" e "proprietário desistiu" — plausíveis, mas nada no produto
+// hoje os sustenta, e OTHER cobre os dois sem inventar taxonomia.
+enum LostReason {
+  PRICE
+  FINANCING
+  CLIENT_GAVE_UP
+  PROPERTY_UNAVAILABLE
+  OTHER
+}
+
 enum ScheduledActivityType {
   VISIT
   FOLLOW_UP
@@ -456,6 +482,14 @@ model PropertyStatusHistory {
   newStatus      PropertyStatus
   changedAt      DateTime        @default(now())
 
+  /// Fase 34 — QUEM provocou a transição. O modelo existia desde sempre
+  /// e nunca havia sido escrito por nenhum fluxo; ao finalmente passar a
+  /// ser, ficar sem ator o tornaria um histórico que não responde "quem
+  /// fez". Nullable e resolvido no servidor, como todo ator do domínio
+  /// (Fases 14/15), e nunca confundido com responsabilidade comercial.
+  changedByMemberId String?
+  changedByMember   OrganizationMember? @relation("PropertyStatusChangedByMember", fields: [changedByMemberId], references: [id])
+
   @@index([propertyId])
   @@map("property_status_history")
 }
@@ -673,7 +707,13 @@ model PropertyInterest {
   // nenhum código desta fase escreve neste campo (permanece null pra todo
   // registro existente e novo até a P.3 criar a action de fechamento que o
   // preenche atomicamente junto da mudança de stage).
-  closedAt DateTime?
+  closedAt   DateTime?
+  /// Fase 34 — por que o negócio foi perdido. SÓ existe em REJECTED: um
+  /// negócio ganho com motivo de perda seria uma contradição, e a action
+  /// garante isso no servidor. Opcional pela mesma honestidade de
+  /// closedValue: "não informado" é um estado real, e forçar uma escolha
+  /// produziria motivo falso.
+  lostReason LostReason?
 
   // Fase 9 — valor NEGOCIADO pelo qual a oportunidade foi fechada,
   // informado pelo corretor ao marcar como ganha. Decimal(14,2) igual a
@@ -1410,6 +1450,9 @@ model OrganizationMember {
   // SEPARADA das demais: mover o funil não é conduzir a negociação nem
   // receber comissão.
   stageChanges                   PropertyInterestStageHistory[]       @relation("StageHistoryChangedByMember")
+  // Fase 34 — transições de disponibilidade de imóvel provocadas por
+  // este membro. Ator, nunca posse.
+  propertyStatusChanges          PropertyStatusHistory[]              @relation("PropertyStatusChangedByMember")
   // Fase 33 — propostas REGISTRADAS por este membro (autoria). Nunca
   // "propostas dele": quem propõe é o cliente ou o proprietário.
   registeredOffers               PropertyInterestOffer[]              @relation("OfferCreatedByMember")

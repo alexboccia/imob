@@ -43,13 +43,14 @@ test.describe("Pipeline", () => {
       .click();
     await page.waitForURL(/\/app\/clientes\/.+/);
 
-    // Título capturado dinamicamente (não fixo): o imóvel seedado
-    // (IDS_E2E.imovelParaEditarOrgA) é compartilhado com
-    // imoveis.spec.ts, que pode já ter renomeado seu título ("Apartamento
-    // E2E editado com sucesso") antes deste spec rodar na mesma execução
-    // — Property não é limpa entre specs, só Person.
+    // Fase 34 — passou a usar o POOL de imóveis de fechamento em vez do
+    // imóvel seedado compartilhado. Dois motivos: este spec GANHA a
+    // negociação, e ganhar agora tira o imóvel de circulação — o antigo
+    // estava na vitrine da Home, que passava a mostrar três cards em vez
+    // de quatro. E, de quebra, some o acoplamento com imoveis.spec.ts,
+    // que renomeava aquele título no meio da execução.
     await page.getByRole("combobox", { name: "Imóvel" }).click();
-    const opcaoImovel = page.getByRole("option", { name: /^Apartamento E2E/ });
+    const opcaoImovel = page.getByRole("option", { name: /^A00 Negocio E2E/ }).first();
     const tituloImovel = (await opcaoImovel.textContent()) ?? "Apartamento E2E";
     await opcaoImovel.click();
     await page.getByRole("button", { name: "Relacionar imóvel" }).click();

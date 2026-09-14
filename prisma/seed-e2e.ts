@@ -34,6 +34,22 @@ export const IDS_E2E = {
   // entrada e os números daquele bloco continuam valendo.
   membroInboxOwner: "e2e-membro-inbox-owner",
   pessoaNegociacao: "e2e-pessoa-negociacao",
+  // Fase 34 — fechamento coerente: imóveis e negociações dedicadas,
+  // separadas das da Fase 33, porque GANHAR muda o status do imóvel e
+  // isso não pode contaminar as asserções de preço/catálogo dos outros
+  // specs.
+  imovelFechamentoGanho: "e2e-imovel-fechamento-ganho",
+  imovelFechamentoPerda: "e2e-imovel-fechamento-perda",
+  pessoaFechamentoGanho: "e2e-pessoa-fechamento-ganho",
+  pessoaFechamentoPerda: "e2e-pessoa-fechamento-perda",
+  interesseFechamentoGanho: "e2e-interesse-fechamento-ganho",
+  interesseFechamentoPerda: "e2e-interesse-fechamento-perda",
+  // Negociação que NUNCA é fechada: os testes de teclado e responsivo
+  // só abrem o diálogo, e depender das outras duas os deixaria reféns da
+  // ordem de execução (quem fecha primeiro apaga o botão dos seguintes).
+  imovelFechamentoDialogo: "e2e-imovel-fechamento-dialogo",
+  pessoaFechamentoDialogo: "e2e-pessoa-fechamento-dialogo",
+  interesseFechamentoDialogo: "e2e-interesse-fechamento-dialogo",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -2298,6 +2314,125 @@ async function main() {
   });
   await prisma.propertyInterestStageHistory.deleteMany({
     where: { propertyInterestId: IDS_E2E.interesseNegociacao },
+  });
+
+  // Fase 34 — POOL DE IMÓVEIS PARA FECHAMENTO (Org A).
+  //
+  // Ganhar uma negociação passou a tirar o imóvel de circulação, e vários
+  // specs de CRM escolhem "o primeiro imóvel disponível" no seletor da
+  // ficha do cliente (ordenado por título). Sem este pool, eles
+  // consumiriam justamente os imóveis da vitrine da Home, e a Home
+  // passaria a mostrar dois cards em vez de quatro — foi exatamente o que
+  // aconteceu na primeira execução da suíte com esta fase.
+  //
+  // Os títulos começam em "A00" para ordenarem ANTES de qualquer outro
+  // ("A0" < "Ap"), e a cidade/bairro/tipo são os mesmos já usados pelo
+  // seed, para não introduzir faceta nova em nenhum filtro público.
+  // Nenhum deles tem homeHighlightPosition: a vitrine continua sendo dos
+  // quatro de sempre.
+  // O pool existe em TODA organização onde algum spec fecha negócio —
+  // a de Agenda é a mais usada por eles, e seu único imóvel era
+  // consumido logo no primeiro ganho, deixando os testes seguintes sem
+  // nenhum imóvel para relacionar.
+  const poolDeFechamento = async (prefixo: string, organizationId: string, quantos: number) => {
+    for (let i = 1; i <= quantos; i++) {
+      await garantirImovel({
+        id: `e2e-imovel-negocio-${prefixo}-${String(i).padStart(2, "0")}`,
+        organizationId,
+        title: `A00 Negocio E2E ${prefixo} ${String(i).padStart(2, "0")}`,
+        price: 400000 + i * 1000,
+      });
+    }
+  };
+
+  await poolDeFechamento("a", orgA.organization.id, 12);
+  await poolDeFechamento("ag", orgAgenda.organization.id, 20);
+  await poolDeFechamento("an", orgAnalytics.organization.id, 12);
+  await poolDeFechamento("ce", orgCentral.organization.id, 8);
+
+  // O pool precisa ser o PRIMEIRO no seletor da ficha do cliente
+  // (ordenado por título, e "A0" < qualquer outra letra) e o ÚLTIMO na
+  // lista administrativa (ordenada por createdAt desc). Sem esta data
+  // antiga ele ocupava a primeira página de /app/imoveis e empurrava os
+  // imóveis que outros specs clicam para a página 2.
+  await prisma.property.updateMany({
+    where: { id: { startsWith: "e2e-imovel-negocio-" } },
+    data: { createdAt: new Date("2020-01-01T00:00:00.000Z") },
+  });
+
+  // Fase 34 — duas negociações prontas para fechar: uma para ganhar
+  // (o imóvel precisa sair de circulação) e outra para perder (o imóvel
+  // precisa CONTINUAR disponível). O seed devolve os dois ao estado
+  // inicial a cada rodada, inclusive o status do imóvel e o histórico —
+  // sem isso a segunda execução começaria com o imóvel já vendido.
+  const fechamentoFixture = async (opcoes: {
+    imovelId: string;
+    pessoaId: string;
+    interesseId: string;
+    titulo: string;
+    nome: string;
+  }) => {
+    await garantirImovel({
+      id: opcoes.imovelId,
+      organizationId: orgInbox.organization.id,
+      title: opcoes.titulo,
+      price: 700000,
+      responsibleMemberId: IDS_E2E.membroInboxOwner,
+    });
+    // garantirImovel devolve o status para AVAILABLE no update, que é
+    // exatamente o reset de que este fixture precisa.
+    await prisma.person.upsert({
+      where: { id: opcoes.pessoaId },
+      update: { name: opcoes.nome },
+      create: {
+        id: opcoes.pessoaId,
+        organizationId: orgInbox.organization.id,
+        name: opcoes.nome,
+        roles: ["CLIENT"],
+      },
+    });
+    await prisma.propertyInterestOffer.deleteMany({
+      where: { propertyInterestId: opcoes.interesseId },
+    });
+    await prisma.propertyInterestStageHistory.deleteMany({
+      where: { propertyInterestId: opcoes.interesseId },
+    });
+    await prisma.propertyStatusHistory.deleteMany({ where: { propertyId: opcoes.imovelId } });
+    await prisma.propertyInterest.upsert({
+      where: { id: opcoes.interesseId },
+      update: { stage: "PROPOSAL", closedAt: null, closedValue: null, lostReason: null },
+      create: {
+        id: opcoes.interesseId,
+        organizationId: orgInbox.organization.id,
+        personId: opcoes.pessoaId,
+        propertyId: opcoes.imovelId,
+        responsibleMemberId: IDS_E2E.membroInboxOwner,
+        stage: "PROPOSAL",
+      },
+    });
+  };
+
+  await fechamentoFixture({
+    imovelId: IDS_E2E.imovelFechamentoGanho,
+    pessoaId: IDS_E2E.pessoaFechamentoGanho,
+    interesseId: IDS_E2E.interesseFechamentoGanho,
+    titulo: "Casa do Fechamento Ganho",
+    nome: "Tereza Ganho",
+  });
+  await fechamentoFixture({
+    imovelId: IDS_E2E.imovelFechamentoPerda,
+    pessoaId: IDS_E2E.pessoaFechamentoPerda,
+    interesseId: IDS_E2E.interesseFechamentoPerda,
+    titulo: "Casa do Fechamento Perda",
+    nome: "Ulisses Perda",
+  });
+
+  await fechamentoFixture({
+    imovelId: IDS_E2E.imovelFechamentoDialogo,
+    pessoaId: IDS_E2E.pessoaFechamentoDialogo,
+    interesseId: IDS_E2E.interesseFechamentoDialogo,
+    titulo: "Casa do Fechamento Dialogo",
+    nome: "Vera Dialogo",
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);

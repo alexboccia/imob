@@ -48,6 +48,8 @@ function linhaFake(overrides: {
   personOrganizationId?: string;
   propertyOrganizationId?: string;
   propertyStatus?: PropertyStatus;
+  propertyPurpose?: "SALE" | "RENT" | "SALE_AND_RENT";
+  lostReason?: "PRICE" | "FINANCING" | "CLIENT_GAVE_UP" | "PROPERTY_UNAVAILABLE" | "OTHER" | null;
   scheduledActivities?: {
     id: string;
     type: "VISIT" | "FOLLOW_UP";
@@ -85,8 +87,10 @@ function linhaFake(overrides: {
       title: "Apto Teste",
       status: overrides.propertyStatus ?? "AVAILABLE",
       neighborhood: "Centro",
+      purpose: overrides.propertyPurpose ?? "SALE",
       organizationId: overrides.propertyOrganizationId ?? ORG,
     },
+    lostReason: overrides.lostReason ?? null,
     scheduledActivities: overrides.scheduledActivities ?? [],
     // Fase 33 — sem proposta por padrão: é o estado de toda negociação
     // anterior a esta fase, e o caso que precisa continuar correto.
@@ -203,13 +207,21 @@ function itemFake(overrides: Partial<ItemPipeline> & { stage: PropertyInterestSt
     stage: overrides.stage,
     closedAtISO: overrides.closedAtISO ?? null,
     ultimaProposta: overrides.ultimaProposta ?? null,
+    lostReason: overrides.lostReason ?? null,
     closedValue: overrides.closedValue ?? null,
     commissionValue: overrides.commissionValue ?? null,
     responsavel: overrides.responsavel ?? null,
     atorUltimaTransicao: overrides.atorUltimaTransicao ?? null,
     updatedAtISO: overrides.updatedAtISO ?? "2026-01-01T00:00:00.000Z",
     person: overrides.person ?? { id: "p1", name: "Fulano" },
-    property: overrides.property ?? { id: "im1", title: "Imóvel", status: "AVAILABLE", neighborhood: "Centro" },
+    property:
+      overrides.property ?? {
+        id: "im1",
+        title: "Imóvel",
+        status: "AVAILABLE",
+        purpose: "SALE",
+        neighborhood: "Centro",
+      },
     proximoCompromisso: overrides.proximoCompromisso ?? null,
     proximaAcao: overrides.proximaAcao ?? null,
     aging: overrides.aging ?? null,

@@ -211,6 +211,9 @@ describe("Pipeline — Kanban operacional (Fase P.4)", () => {
       id: imovel.id,
       title: "Cobertura Duplex",
       status: "AVAILABLE",
+      // Fase 34 — a finalidade entrou no card porque é ela que decide se
+      // o fechamento precisa perguntar o desfecho do imóvel.
+      purpose: "SALE",
       neighborhood: "Bairro de teste",
     });
   });
