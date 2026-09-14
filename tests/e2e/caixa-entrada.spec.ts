@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { IDS_E2E, ORG_A, ORG_INBOX, login } from "./helpers";
+import { IDS_E2E, ORG_A, ORG_INBOX, limparAtendimentosNoBanco, login } from "./helpers";
 
 // =======================================================================
 // Caixa de entrada comercial — "quem acabou de levantar a mão"
@@ -109,11 +109,66 @@ test.describe("caixa de entrada comercial", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Maria");
   });
 
-  test("teclado: as ações do primeiro contato são alcançáveis e focáveis", async ({ page }) => {
+  test("teclado: a ação principal é alcançável, e o diálogo abre e fecha por teclado", async ({
+    page,
+  }) => {
     await abrirCentral(page);
-    const acao = page.locator(BLOCO).getByRole("link", { name: "Abrir cliente" }).first();
+    const acao = page
+      .locator(BLOCO)
+      .getByRole("button", { name: "Registrar atendimento" })
+      .first();
     await acao.focus();
     await expect(acao).toBeFocused();
+
+    await acao.press("Enter");
+    const dialogo = page.getByRole("dialog");
+    await expect(dialogo).toBeVisible();
+    // Escape fecha e devolve o foco ao gatilho — o primitivo cuida disso,
+    // e o teste garante que continuamos usando o primitivo.
+    await page.keyboard.press("Escape");
+    await expect(dialogo).toHaveCount(0);
+    await expect(acao).toBeFocused();
+  });
+
+  test("registrar atendimento tira o contato da fila e aparece no histórico do cliente", async ({
+    page,
+  }) => {
+    const MARCADOR = "E2E atendimento inline";
+    try {
+      await abrirCentral(page);
+      const bloco = page.locator(BLOCO);
+      const itemMaria = bloco.locator("li").filter({ hasText: "Maria Silva Inbox" });
+      await expect(itemMaria).toHaveCount(1);
+
+      await itemMaria.getByRole("button", { name: "Registrar atendimento" }).click();
+      const dialogo = page.getByRole("dialog");
+      await expect(dialogo).toBeVisible();
+      // Rótulos de gente, nunca o enum cru.
+      await expect(dialogo.getByLabel("Como foi o contato")).toBeVisible();
+      await dialogo.getByLabel("Como foi o contato").selectOption("CALL");
+      await dialogo.getByLabel("Observação (opcional)").fill(MARCADOR);
+      await dialogo.getByRole("button", { name: "Registrar" }).click();
+
+      // Confirmação no toast: o item que a exibiria é desmontado.
+      await expect(page.getByText("Atendimento registrado.")).toBeVisible();
+
+      // O card some porque existe FATO novo, não porque o React o
+      // escondeu: a prova é recarregar do servidor.
+      await page.reload();
+      await expect(
+        page.locator(BLOCO).locator("li").filter({ hasText: "Maria Silva Inbox" })
+      ).toHaveCount(0);
+      // Joao continua esperando: só o contato atendido saiu.
+      await expect(page.locator(BLOCO)).toContainText("Joao Pereira Inbox");
+
+      // E o atendimento existe no histórico do cliente.
+      await page.goto("/app/clientes");
+      await page.getByRole("link", { name: "Maria Silva Inbox" }).first().click();
+      await page.waitForURL(/\/app\/clientes\/[^/]+$/);
+      await expect(page.getByText(MARCADOR)).toBeVisible();
+    } finally {
+      limparAtendimentosNoBanco(MARCADOR);
+    }
   });
 
   test("organização sem contatos aguardando não ganha bloco nenhum", async ({ page }) => {

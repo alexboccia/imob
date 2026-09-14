@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { BotaoCriarOportunidade } from "@/components/admin/BotaoCriarOportunidade";
+import { RegistrarAtendimento } from "@/components/admin/RegistrarAtendimento";
 import { IconeWhatsApp } from "@/components/icons";
 import { rotuloOrigemCaptacao } from "@/lib/captacao";
 import { oportunidadeElegivel } from "@/lib/oportunidade";
@@ -122,9 +123,14 @@ function ItemContato({ contato }: { contato: NovoContato }) {
         </p>
       )}
 
-      {/* Ações: alvo de toque confortável e quebra de linha no celular,
-          que é onde o corretor atende. */}
+      {/* Hierarquia: REGISTRAR ATENDIMENTO é a ação principal — é ela que
+          fecha o ciclo e tira o contato da fila. WhatsApp fica ao lado
+          como ação rápida (e continua não registrando nada: clicar não é
+          conversar). "Abrir cliente" saiu: o nome da pessoa, logo acima,
+          já é esse link, e um botão a mais transformaria o card numa
+          árvore de botões sem acrescentar capacidade. */}
       <div data-acoes-contato className="mt-2 flex flex-wrap items-center gap-2">
+        <RegistrarAtendimento interactionId={contato.id} nomePessoa={contato.pessoa.nome} />
         {whatsapp && (
           <a
             href={whatsapp}
@@ -132,21 +138,15 @@ function ItemContato({ contato }: { contato: NovoContato }) {
             rel="noopener noreferrer"
             aria-label={`Falar no WhatsApp com ${contato.pessoa.nome}`}
             className={buttonVariants({
+              variant: "outline",
               size: "sm",
-              className:
-                "bg-whatsapp-brand text-white hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active",
+              className: "text-whatsapp-brand hover:text-whatsapp-brand-hover",
             })}
           >
             <IconeWhatsApp className="size-4" />
             WhatsApp
           </a>
         )}
-        <Link
-          href={`/app/clientes/${contato.pessoa.id}`}
-          className={buttonVariants({ variant: "outline", size: "sm" })}
-        >
-          Abrir cliente
-        </Link>
         {oportunidadeElegivel({ origin: contato.origem, propertyId: contato.imovel?.id ?? null }) && (
           <BotaoCriarOportunidade interactionId={contato.id} />
         )}

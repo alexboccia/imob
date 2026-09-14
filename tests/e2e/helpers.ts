@@ -344,6 +344,17 @@ function perfilPublicoNoBanco(
   );
 }
 
+// Fase 31 — remove os atendimentos criados por um spec, pelo marcador da
+// nota. Cirúrgico de propósito: o atendimento que vem do seed precisa
+// sobreviver (ver scripts/e2e-atendimento.ts).
+export function limparAtendimentosNoBanco(marcador: string): void {
+  const raiz = path.resolve(__dirname, "..", "..");
+  execFileSync("npx", ["tsx", path.join(raiz, "scripts", "e2e-atendimento.ts"), "limpar", marcador], {
+    cwd: raiz,
+    encoding: "utf8",
+  });
+}
+
 export function obterTokenDeAcesso(
   tipo: "convite" | "reset" | "cadastro",
   email: string,

@@ -37,6 +37,7 @@ import {
   type EscopoComercial,
 } from "@/lib/escopo-comercial";
 import { formatarPreco } from "@/lib/format";
+import { dadosDoAtendimento, interacaoSchema } from "@/lib/registro-atendimento";
 import {
   erroAcessoNegado,
   erroGenerico,
@@ -281,10 +282,27 @@ export async function atualizarEstagioFunil(
   });
 }
 
-const interacaoSchema = z.object({
-  tipo: z.enum(["VISIT", "CALL", "MESSAGE", "EMAIL", "OTHER"]),
-  notas: z.string().optional(),
-});
+// Quem está registrando — resolvido da SESSÃO e confirmado contra a
+// organização, nunca aceito do navegador. É a linha que impede um
+// memberId de outro usuário ou de outro tenant de virar autoria: o id da
+// sessão só é gravado se existir vínculo com ESTA organização. Sessão
+// inconsistente grava `null` — o fato comercial não se perde por causa
+// de um ator que não confere (doutrina das Fases 14/15).
+//
+// Vive aqui, e não em @/lib/registro-atendimento, porque precisa do
+// Prisma e aquele módulo é importado pelo componente cliente do diálogo.
+// As duas entradas que registram atendimento estão neste arquivo, então
+// continua sendo UMA definição.
+async function resolverAutorDoAtendimento(
+  organizationId: string,
+  sessionMemberId: string | null | undefined
+): Promise<string | null> {
+  const autor = await prisma.organizationMember.findFirst({
+    where: { id: sessionMemberId ?? "", organizationId },
+    select: { id: true },
+  });
+  return autor?.id ?? null;
+}
 
 export async function registrarInteracao(pessoaId: string, formData: FormData) {
   const session = await auth();
@@ -311,25 +329,28 @@ export async function registrarInteracao(pessoaId: string, formData: FormData) {
     });
     if (!pessoa) return;
 
-    // Fase 15 — AUTOR da interação, com guarda de tenant. O campo já era
-    // escrito (a dívida herdada de "memberId nunca é escrito" vinha de um
-    // grep que filtrava a própria expressão da escrita), mas confiava
-    // cegamente no memberId da sessão. Mesmo padrão da Fase 14: uma
-    // sessão inconsistente nunca grava FK cross-tenant, e ator inválido
-    // vira null sem bloquear o registro do fato comercial.
-    const autor = await prisma.organizationMember.findFirst({
-      where: { id: session.user.organizationMemberId ?? "", organizationId },
-      select: { id: true },
-    });
+    // Fase 15 — AUTOR da interação, com guarda de tenant: uma sessão
+    // inconsistente nunca grava FK cross-tenant, e ator inválido vira
+    // null sem bloquear o registro do fato comercial. A regra vive em
+    // src/lib/registro-atendimento.ts porque a Central registra
+    // atendimento pelo mesmo caminho — duas entradas, uma regra.
+    const autorMemberId = await resolverAutorDoAtendimento(
+      organizationId,
+      session.user.organizationMemberId
+    );
 
     await prisma.interaction.create({
-      data: {
+      data: dadosDoAtendimento({
         organizationId,
         personId: pessoaId,
-        type: dados.tipo,
-        notes: dados.notas || null,
-        memberId: autor?.id ?? null,
-      },
+        // A ficha do cliente não pergunta sobre imóvel: o registro é
+        // sobre a pessoa. Quem preserva o imóvel é a Central, que parte
+        // de um contato que já tem um.
+        propertyId: null,
+        tipo: dados.tipo,
+        notas: dados.notas,
+        autorMemberId,
+      }),
     });
 
     revalidatePath(`/app/clientes/${pessoaId}`);
@@ -832,6 +853,75 @@ type ResultadoAtualizacaoEstagio =
 // transição (INTERESTED → PROPOSAL é permitido de propósito — decisão da
 // Fase D, MVP sem máquina de estado rígida, mesmo nível de simplicidade
 // de atualizarEstagioFunil).
+// =======================================================================
+// Registrar atendimento a partir de um contato — usado pela Central
+// =======================================================================
+// Mesma regra da ficha do cliente (registrarInteracao acima), com duas
+// diferenças que existem porque o ponto de partida é outro:
+//
+//   1. recebe o ID DO CONTATO, não o da pessoa. Pessoa e imóvel são
+//      LIDOS do contato já validado contra a organização e contra o
+//      escopo comercial — não há id de pessoa nem de imóvel vindo do
+//      navegador, então não há como registrar atendimento sobre a
+//      pessoa ou o imóvel de outro tenant mandando um id no FormData.
+//      É o mesmo desenho de criarOportunidadeDoContato.
+//
+//   2. devolve ActionState e revalida a Central. O item sai da fila
+//      porque agora existe um atendimento POSTERIOR ao contato — a
+//      derivação de src/lib/novos-contatos.ts continua sendo a única
+//      fonte da verdade, e nada é "marcado como resolvido".
+export async function registrarAtendimentoDoContato(
+  interactionId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const analise = interacaoSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!analise.success) return erroValidacao(analise.error);
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) return erroAcessoNegado();
+  const escopo = await escopoComercialDaSessao(organizationId);
+
+  return withOrganization(organizationId, async () => {
+    // O contato tem de estar na organização E no escopo comercial de
+    // quem registra: sem isso, um id copiado da tela de outra pessoa
+    // viraria atendimento numa carteira alheia. Mensagem genérica de
+    // propósito — não revela se o contato existe fora do escopo.
+    const contato = await prisma.interaction.findFirst({
+      where: { id: interactionId, organizationId, person: { is: wherePessoa(escopo) } },
+      select: { id: true, personId: true, propertyId: true },
+    });
+    if (!contato) return erroGenerico("Contato não encontrado.");
+
+    const autorMemberId = await resolverAutorDoAtendimento(
+      organizationId,
+      session.user.organizationMemberId
+    );
+
+    await prisma.interaction.create({
+      data: dadosDoAtendimento({
+        organizationId,
+        personId: contato.personId,
+        // Preserva o imóvel do contato original quando existe.
+        propertyId: contato.propertyId,
+        tipo: analise.data.tipo,
+        notas: analise.data.notas,
+        autorMemberId,
+      }),
+    });
+
+    // A Central recalcula a fila na revalidação; a ficha do cliente
+    // passa a mostrar o atendimento no histórico.
+    revalidatePath("/app");
+    revalidatePath(`/app/clientes/${contato.personId}`);
+
+    return sucesso("Atendimento registrado.");
+  });
+}
+
 export async function atualizarEstagioInteresse(
   interesseId: string,
   _prevState: ActionState,
