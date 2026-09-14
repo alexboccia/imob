@@ -15,7 +15,9 @@
     "test:unit": "vitest run src",
     "pretest:integration": "tsx scripts/prepare-test-db.ts",
     "test:integration": "vitest run tests/integration",
+    "pretest:e2e": "tsx scripts/e2e-preparar.ts",
     "test:e2e": "playwright test",
+    "test:e2e:dev": "E2E_MODO=dev playwright test",
     "pretest:coverage": "tsx scripts/prepare-test-db.ts",
     "test:coverage": "vitest run --coverage",
     "postinstall": "prisma generate"

@@ -311,9 +311,12 @@ jobs:
       # tem esse crescimento.
       #
       # Não é máscara: nenhum timeout de teste, retry ou assertion mudou.
-      # É a remoção da causa. Local continua em `next dev`, onde o
-      # feedback rápido importa mais que a estabilidade de 358 testes
-      # seguidos (ver playwright.config.ts).
+      # É a remoção da causa. O ambiente LOCAL passou pelo mesmo
+      # diagnóstico depois (3 reinícios, 12 testes derrubados, 6 min
+      # virando 23 numa máquina de 8 GB) e adotou a mesma correção: hoje
+      # `npm run test:e2e` também builda e serve o build, e `next dev`
+      # ficou só no modo exploratório `npm run test:e2e:dev` (ver
+      # playwright.config.ts e README, "test:e2e vs test:e2e:dev").
       # NODE_ENV=test não é detalhe: é o que faz o Next carregar
       # .env.test no BUILD. PUBLIC_ORG_SLUG é lido em build time pelos
       # rewrites de next.config.ts (`/` -> `/{slug}`), então um build

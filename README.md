@@ -524,7 +524,8 @@ npm run test:unit        # só unitários, rápido, sem precisar do banco de tes
 npm run test:integration # unitários + integração (cria/migra imoveis_test automaticamente)
 npm run test             # mesma coisa que test:integration (inclui unitários por estarem no mesmo include)
 npm run test:coverage    # test + relatório de cobertura (texto + HTML em coverage/)
-npm run test:e2e         # Playwright — sobe o Next em modo teste (porta 3100) e roda os specs
+npm run test:e2e         # Playwright — CANÔNICO: build NODE_ENV=test + `next start` na porta 3100
+npm run test:e2e:dev     # exploratório — `next dev`, sem build; para iterar em UM spec
 ```
 
 `npm run test`/`test:integration`/`test:coverage` têm um hook `pretest*`
@@ -532,6 +533,49 @@ que roda `scripts/prepare-test-db.ts` (idempotente: cria o banco
 `imoveis_test` se não existir e aplica migrations pendentes). `test:e2e`
 faz o equivalente sozinho via `globalSetup` do Playwright, que também
 recria o seed determinístico (`prisma/seed-e2e.ts`) antes de cada rodada.
+
+#### `test:e2e` vs `test:e2e:dev`
+
+| | `test:e2e` (canônico) | `test:e2e:dev` (exploratório) |
+|---|---|---|
+| Servidor | `next start` — serve o build | `next dev` — compila sob demanda |
+| Build | `pretest:e2e` builda com `NODE_ENV=test` antes de cada rodada | nenhum |
+| Igual ao CI | sim | não |
+| Reaproveita servidor na 3100 | **não** (porta ocupada = erro imediato) | sim |
+| Para que serve | a suíte inteira, e qualquer resultado em que se vá confiar | iterar em um spec, sem esperar build |
+
+**Por que o canônico não usa `next dev`.** Quem consome memória no modo
+dev é o COMPILADOR. Ao longo de centenas de testes ele cresce até o Next
+se reiniciar sozinho (`Server is approaching the used memory threshold,
+restarting...`), e toda navegação em voo nesse instante morre com
+`ERR_CONNECTION_REFUSED`/`ERR_ABORTED` — derrubando testes escolhidos
+pelo acaso, em specs sem relação entre si. Aconteceu no CI (corrigido
+migrando para `next start`) e voltou a acontecer localmente: 3
+reinícios, 12 testes derrubados, a suíte passando de 6 para 23 minutos.
+Servindo o build, o mesmo hardware roda 598/598 em ~6 min, com zero
+reinícios.
+
+**`NODE_ENV=test` no build não é detalhe.** É o que faz o Next carregar
+`.env.test`, e `PUBLIC_ORG_SLUG` é lido em *build time* pelos rewrites de
+`next.config.ts` (`/` → `/{slug}`). Um build feito sem ele serve **404 na
+home pública** e derruba `site-publico.spec.ts` inteiro — o que parece um
+bug de produto e não é. Isso já custou 13 falhas fantasma numa fase e um
+diagnóstico inteiro em outra; hoje o `pretest:e2e` builda com o env certo
+imediatamente antes da suíte, então o caminho canônico não tem como cair
+nessa.
+
+**Memória.** O teto de heap vale só para o processo do servidor Next
+(nem Playwright nem browser o herdam) e é calculado a partir da RAM da
+máquina em `src/test/heap-e2e.ts`, que documenta a medição por trás de
+cada constante. Medido nesta suíte servindo o build: servidor 636 MB,
+chromium 540 MB, Playwright 359 MB, Postgres+Docker 256 MB. Máquina
+pequena demais falha com mensagem explícita em vez de flake; para forçar
+um valor, `E2E_HEAP_MB=2048 npm run test:e2e`.
+
+**Porta 3100 ocupada.** No modo canônico isso é erro imediato, de
+propósito: um `next start` esquecido serve o build **anterior**, e a
+suíte passa a reprovar código correto (ou aprovar código quebrado).
+Derrube o processo (`lsof -ti tcp:3100 | xargs kill`) e rode de novo.
 
 Nenhum teste depende da ordem de execução: os de integração criam
 organizações com slugs/e-mails únicos por execução e apagam tudo que
@@ -754,7 +798,8 @@ npm run lint          # lint
 npm run test:unit     # testes unitários (Vitest, sem banco)
 npm run test          # testes unitários + integração (Vitest, banco de teste)
 npm run test:coverage # test + relatório de cobertura
-npm run test:e2e      # testes E2E (Playwright)
+npm run test:e2e      # testes E2E (Playwright) — builda com NODE_ENV=test e serve o build
+npm run test:e2e:dev  # E2E exploratório em `next dev`, sem build (um spec por vez)
 npx prisma studio     # explorar o banco de dados visualmente
 npx prisma migrate dev --name <nome>   # criar uma nova migration
 ```

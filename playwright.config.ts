@@ -1,6 +1,8 @@
+import os from "node:os";
 import path from "node:path";
 import { config as carregarEnv } from "dotenv";
 import { defineConfig, devices } from "@playwright/test";
+import { nodeOptionsDeHeap, tetoDeHeapMB } from "./src/test/heap-e2e";
 
 // Carregado aqui (não só no global-setup) porque os testes em si também
 // leem SEED_ADMIN_EMAIL/SEED_ADMIN_SENHA/ORG_SLUG do process.env — workers
@@ -9,6 +11,28 @@ carregarEnv({ path: path.resolve(__dirname, ".env.test"), override: true });
 
 const PORTA = process.env.PLAYWRIGHT_PORT ?? "3100";
 const baseURL = `http://localhost:${PORTA}`;
+
+// MODO DEV — exploratório, opt-in explícito (E2E_MODO=dev, via
+// `npm run test:e2e:dev`). Serve para iterar em UM spec sem esperar
+// build: o Next compila sob demanda e o feedback é imediato.
+//
+// Ele NÃO é o modo da suíte completa, e isto não é preferência: o
+// compilador do modo dev cresce ao longo de centenas de testes até o
+// Next se reiniciar sozinho, matando as navegações em voo. Aconteceu no
+// CI (Fase 12) e voltou a acontecer na máquina local — 3 reinícios, 12
+// testes derrubados em specs sem relação, 6 min virando 23. O caminho
+// canônico serve o BUILD, como o CI, e não tem compilador para crescer.
+const modoDev = !process.env.CI && process.env.E2E_MODO === "dev";
+
+// Teto aplicado SÓ ao processo do servidor Next (webServer.env abaixo),
+// calculado a partir da RAM da máquina — ver src/test/heap-e2e.ts, que
+// traz a medição por trás de cada constante. O CI continua com o valor
+// de sempre. E2E_HEAP_MB força um valor em máquina incomum.
+const tetoHeapMB = tetoDeHeapMB({
+  ramTotalMB: os.totalmem() / (1024 * 1024),
+  ci: Boolean(process.env.CI),
+  override: process.env.E2E_HEAP_MB,
+});
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -51,11 +75,19 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    // CI serve o BUILD (next start); local segue em dev.
-    // Ver o comentário do step "Build de produção" em
-    // .github/workflows/ci.yml: o reinício por memória vinha do
-    // compilador do modo dev, que `next start` simplesmente não carrega.
-    command: process.env.CI ? `npx next start -p ${PORTA}` : `npx next dev -p ${PORTA}`,
+    // O caminho canônico (local e CI) serve o BUILD. Só o modo dev
+    // explícito sobe o compilador — ver o comentário de `modoDev` acima.
+    //
+    // NODE_ENV=test no BUILD não é detalhe: é o que faz o Next carregar
+    // .env.test, e PUBLIC_ORG_SLUG é lido em build time pelos rewrites
+    // de next.config.ts (`/` -> `/{slug}`). Um build feito com o env
+    // errado serve 404 na home e derruba site-publico.spec.ts inteiro —
+    // aconteceu duas vezes, custou 13 falhas fantasma numa fase e um
+    // diagnóstico inteiro em outra. Localmente quem garante isso é o
+    // hook `pretest:e2e` (scripts/e2e-preparar.ts), que builda com o env
+    // certo imediatamente antes da suíte; no CI, o passo de build do
+    // workflow.
+    command: modoDev ? `npx next dev -p ${PORTA}` : `npx next start -p ${PORTA}`,
     // Readiness apontada para /api/health, não para `/`: a raiz é o site
     // público, resolvido por HOST em ambiente multi-tenant, e em
     // `next start` responde 404 para `localhost` — o polling do
@@ -63,42 +95,20 @@ export default defineConfig({
     // /api/health existe exatamente para dizer "de pé", responde nos dois
     // modos e não depende de organização nenhuma.
     url: `${baseURL}/api/health`,
-    reuseExistingServer: !process.env.CI,
+    // Reaproveitar um servidor já de pé só faz sentido no modo dev, onde
+    // ele recompila sozinho a cada mudança. No caminho canônico isso é
+    // uma ARMADILHA: um `next start` esquecido na porta 3100 serve o
+    // build ANTERIOR, e a suíte reprova código que está correto (ou
+    // aprova código que está quebrado). Com `false`, a porta ocupada
+    // vira erro imediato em vez de um resultado mentiroso.
+    reuseExistingServer: modoDev,
     timeout: 120_000,
     env: {
       NODE_ENV: "test",
-      // Causa raiz de um flake real e reproduzido: ao longo da suíte
-      // inteira (~300 testes num único servidor), o `next dev` chegava ao
-      // limite de heap e se REINICIAVA sozinho — "Server is approaching
-      // the used memory threshold, restarting..." aparece no log do
-      // WebServer. Toda navegação em voo durante esse reinício morria com
-      // ERR_CONNECTION_REFUSED, derrubando um teste arbitrário (foram
-      // observados três diferentes, em specs diferentes, sempre com essa
-      // mesma mensagem logo antes).
-      //
-      // Isto NÃO é aumento de timeout nem de retries mascarando um
-      // problema: é remover o teto de memória que provoca o reinício. O
-      // padrão do Node numa máquina de 16 GB fica em torno de 2 GB, e o
-      // Turbopack em modo dev, compilando dezenas de rotas ao longo da
-      // suíte, passa disso com folga.
-      // O teto precisa caber na MÁQUINA, não só no problema. O runner do
-      // GitHub Actions tem ~7 GB de RAM TOTAL e divide isso entre o
-      // servidor Next, o Chromium do Playwright e o Postgres do job —
-      // autorizar 6 GB só de heap ali empurra tudo para swap e o servidor
-      // fica lentíssimo em vez de reiniciar, degradando a suíte inteira.
-      // Na máquina local (16 GB+) o teto generoso é o que resolve o
-      // reinício por memória descrito acima.
-      //
-      // Os dois valores continuam bem ACIMA do padrão do Node (~2 GB),
-      // que era a causa original dos reinícios — o objetivo nunca foi o
-      // número máximo, e sim não esbarrar no teto no meio da suíte.
-      // CI: 3072 preservado. Com `next start` sobra memória de folga —
-      // o teto continua ali como rede de segurança, não como remédio.
-      // LOCAL: 6144 preservado, porque lá o servidor ainda é o dev e é
-      // exatamente esse teto que evita o reinício descrito acima.
-      NODE_OPTIONS: process.env.CI
-        ? "--max-old-space-size=3072"
-        : "--max-old-space-size=6144",
+      // Teto de heap do SERVIDOR, e de mais nada — Playwright e browser
+      // não herdam isto. O número vem de medição, não de chute: ver
+      // src/test/heap-e2e.ts.
+      NODE_OPTIONS: nodeOptionsDeHeap(tetoHeapMB),
     },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
