@@ -9,6 +9,7 @@ import { paraResponsavel, type ResponsavelNegociacao } from "@/lib/responsavel-n
 import { paraAtorTransicao, type AtorTransicao } from "@/lib/ator-transicao";
 import type {
   MemberStatus,
+  OfferSide,
   Prisma,
   PropertyInterestStage,
   PropertyStatus,
@@ -78,6 +79,10 @@ export type ItemPipeline = {
   // inventada) OU quando o stage atual é encerrado (WON/REJECTED usam
   // closedAtISO como data de referência, ver FechamentoInteresse).
   aging: string | null;
+  // Fase 33 — o último valor negociado, quando existe. null quando a
+  // negociação ainda não teve proposta nenhuma; nunca zero, que seria
+  // afirmar uma oferta de R$ 0.
+  ultimaProposta: { valor: number; lado: OfferSide; ocorridoEmISO: string } | null;
   // Fase P.8: mesmo valor bruto (ms) por trás de `aging` acima, exposto pra
   // permitir comparação com tempoMedioHistorico (P.7) em
   // classificarPrioridadePipeline — nunca recalculado, nunca uma segunda
@@ -112,6 +117,16 @@ function selectItemPipeline(organizationId: string) {
       orderBy: { scheduledAt: "asc" as const },
       take: 1,
       select: { id: true, type: true, subject: true, scheduledAt: true },
+    },
+    // Fase 33 — a ÚLTIMA proposta, batched no mesmo select: é o que
+    // transforma "PROPOSTA" de rótulo em informação ("R$ 500.000,
+    // Cliente"). take: 1 porque o card mostra o estado atual, não o
+    // histórico — a sequência completa vive na negociação.
+    offers: {
+      where: { organizationId },
+      orderBy: { offeredAt: "desc" as const },
+      take: 1,
+      select: { amount: true, side: true, offeredAt: true },
     },
     // Fase P.6: última transição de stage registrada, batched (mesmo
     // padrão de scheduledActivities acima — uma única query extra pro
@@ -158,6 +173,8 @@ type LinhaBrutaPipeline = {
     subject: string | null;
     scheduledAt: Date;
   }[];
+  // Fase 33 — a última proposta (take: 1 no select acima).
+  offers: { amount: unknown; side: OfferSide; offeredAt: Date }[];
   stageHistory: {
     newStage: PropertyInterestStage;
     changedAt: Date;
@@ -277,6 +294,17 @@ export function paraItemPipeline(
     proximaAcao: property ? obterProximaAcaoComercial(linha.stage, property.status) : null,
     aging: formatarAgingStage(agingMs),
     agingMs,
+    ultimaProposta: linha.offers[0]
+      ? {
+          // decimalParaValor devolve null para um Decimal ausente; aqui
+          // ele nunca é ausente (amount é obrigatório), e o ?? 0 seria
+          // afirmar uma proposta de R$ 0 — por isso a linha some quando,
+          // por anomalia, o valor não puder ser lido.
+          valor: decimalParaValor(linha.offers[0].amount)!,
+          lado: linha.offers[0].side,
+          ocorridoEmISO: linha.offers[0].offeredAt.toISOString(),
+        }
+      : null,
   };
 }
 

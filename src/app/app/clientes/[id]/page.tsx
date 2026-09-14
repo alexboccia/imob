@@ -138,7 +138,16 @@ export default async function DetalheClientePage({
             where: { ...escopoInteresse, organizationId },
             orderBy: { updatedAt: "desc" },
             include: {
-              property: { select: { id: true, title: true, price: true, rentPrice: true, status: true } },
+              property: {
+                select: {
+                  id: true,
+                  title: true,
+                  purpose: true,
+                  price: true,
+                  rentPrice: true,
+                  status: true,
+                },
+              },
               // Compromissos SCHEDULED desta negociação, batch numa única
               // query (Fase H.2), nunca uma consulta por card.
               //
@@ -153,6 +162,26 @@ export default async function DetalheClientePage({
                 orderBy: { scheduledAt: "asc" },
                 take: 20,
                 select: { id: true, type: true, subject: true, scheduledAt: true, notes: true },
+              },
+              // Fase 33 — as propostas desta negociação, no mesmo select
+              // batched: uma query para a lista inteira, nunca uma por
+              // negociação. Mais recente primeiro, que é a ordem em que
+              // a tela lê ("qual foi o último valor?"). Teto defensivo
+              // de 50 — uma negociação com mais que isso é anomalia, não
+              // paginação.
+              offers: {
+                where: { organizationId },
+                orderBy: { offeredAt: "desc" },
+                take: 50,
+                select: {
+                  id: true,
+                  amount: true,
+                  side: true,
+                  offeredAt: true,
+                  createdByMember: {
+                    select: { organizationId: true, user: { select: { name: true } } },
+                  },
+                },
               },
               // Fase 12 — participantes da divisão, no MESMO select
               // batched das demais relações: uma query para a lista
@@ -394,12 +423,25 @@ export default async function DetalheClientePage({
                     property: {
                       id: interesse.property.id,
                       title: interesse.property.title,
+                      purpose: interesse.property.purpose,
                       // Fase 16 — Decimal do Prisma convertido AQUI, na
                       // fronteira servidor→cliente. Mesmo racional (e
                       // mesma solução) já usada no formulário de imóvel.
                       ...precosDoImovel(interesse.property),
                       status: interesse.property.status,
                     },
+                    propostas: interesse.offers.map((o) => ({
+                      id: o.id,
+                      valor: decimalParaValor(o.amount) ?? 0,
+                      lado: o.side,
+                      ocorridoEmISO: o.offeredAt.toISOString(),
+                      // Nome redigido quando a relação é cross-tenant —
+                      // mesma defesa em profundidade do resto da tela.
+                      registradoPor:
+                        o.createdByMember && o.createdByMember.organizationId === organizationId
+                          ? o.createdByMember.user.name
+                          : null,
+                    })),
                     proximaVisita: proximaVisita
                       ? {
                           id: proximaVisita.id,

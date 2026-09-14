@@ -176,7 +176,12 @@ export const IDS_E2E = {
   // Fase 30 — organização dedicada à CAIXA DE ENTRADA comercial
   // (Organização Q). Números absolutos de novos contatos, então
   // organização própria pelo mesmo motivo estrutural das C/D/N/P.
+  // Fase 33 — negociação dedicada à NEGOCIAÇÃO DE VALORES. Pessoa
+  // própria, sem contato de site: assim ela nunca entra na caixa de
+  // entrada e os números daquele bloco continuam valendo.
   membroInboxOwner: "e2e-membro-inbox-owner",
+  pessoaNegociacao: "e2e-pessoa-negociacao",
+  interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
   // (Organização P). Ids de membro fixos porque a faceta ?corretor= é

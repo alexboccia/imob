@@ -50,7 +50,7 @@ test.describe("Autoria na timeline do cliente", () => {
     await page.getByPlaceholder("Notas").fill("Liguei para o cliente");
     await Promise.all([
       page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/app/clientes/")),
-      page.getByRole("button", { name: "Registrar" }).click(),
+      page.getByRole("button", { name: "Registrar", exact: true }).click(),
     ]);
     await page.reload();
 
@@ -77,7 +77,7 @@ test.describe("Autoria na timeline do cliente", () => {
     await page.getByPlaceholder("Notas").fill("Contato registrado pela equipe");
     await Promise.all([
       page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/app/clientes/")),
-      page.getByRole("button", { name: "Registrar" }).click(),
+      page.getByRole("button", { name: "Registrar", exact: true }).click(),
     ]);
     const urlFicha = page.url();
 

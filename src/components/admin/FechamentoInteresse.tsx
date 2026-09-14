@@ -48,6 +48,7 @@ export function FechamentoInteresse({
   stage,
   closedAtISO,
   closedValue,
+  valorSugerido,
   commissionValue,
   atorFechamento,
   fuso,
@@ -60,6 +61,12 @@ export function FechamentoInteresse({
   stage: PropertyInterestStage;
   closedAtISO: string | null;
   closedValue?: number | null;
+  /**
+   * Fase 33 — valor que o diálogo de fechamento já abre preenchido.
+   * Vem da última proposta registrada quando o negócio ainda não tem
+   * valor fechado; é sugestão editável, nunca um valor gravado sozinho.
+   */
+  valorSugerido?: number | null;
   commissionValue?: number | null;
   // Fase 14 — quem executou a transição de FECHAMENTO. Aparece na linha
   // que já mostra "Fechado em ...", que é a superfície onde a última
@@ -142,7 +149,7 @@ export function FechamentoInteresse({
             <form action={formActionCorrecao} className="space-y-3">
               <CamposFinanceirosFechamento
                 idPrefixo={`correcao-${interesseId}`}
-                valorInicial={closedValue}
+                valorInicial={valorSugerido ?? closedValue}
                 comissaoInicial={commissionValue}
               />
 
@@ -235,11 +242,21 @@ export function FechamentoInteresse({
           </DialogHeader>
 
           <form action={formActionGanho} className="space-y-3">
-            {/* Nenhum valor é sugerido a partir do preço anunciado do
-                imóvel: preço pedido não é valor fechado, e um campo
-                pré-preenchido seria confirmado no automático,
-                registrando um número que ninguém negociou. */}
-            <CamposFinanceirosFechamento idPrefixo={`fechamento-${interesseId}`} />
+            {/* Continua NÃO sugerindo nada a partir do preço anunciado
+                do imóvel: preço pedido não é valor fechado, e um campo
+                pré-preenchido com ele seria confirmado no automático,
+                registrando um número que ninguém negociou.
+                
+                A ÚLTIMA PROPOSTA é outra coisa (Fase 33): é um valor que
+                alguém efetivamente colocou na mesa e o corretor
+                registrou. Sugerir esse número não inventa negociação
+                nenhuma — só evita redigitar o que o easymob acabou de
+                guardar. Continua totalmente editável, e sem proposta
+                registrada o campo segue vazio como antes. */}
+            <CamposFinanceirosFechamento
+              idPrefixo={`fechamento-${interesseId}`}
+              valorInicial={valorSugerido}
+            />
 
             {estadoGanho.message && !estadoGanho.success && (
               <p role="alert" className="text-xs text-destructive">

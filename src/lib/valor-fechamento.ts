@@ -51,23 +51,39 @@ export type ValorFechamento =
 // representação correta é null (ver regra de obrigatoriedade abaixo),
 // nunca zero.
 export function interpretarValorFechamento(bruto: unknown): ValorFechamento {
+  return interpretarValorMonetario(bruto, "de fechamento");
+}
+
+/**
+ * A MESMA regra monetária, com o rótulo de quem está pedindo.
+ *
+ * Extraída na Fase 33 porque a negociação de valores precisa exatamente
+ * destas validações (zero, negativo, NaN, Infinity, duas casas, teto do
+ * Decimal(14,2)) com outras palavras na mensagem. Duplicá-las criaria
+ * duas definições do que é um valor válido, e elas divergiriam na
+ * primeira correção.
+ */
+export function interpretarValorMonetario(
+  bruto: unknown,
+  rotulo: string
+): ValorFechamento {
   if (typeof bruto !== "string" && typeof bruto !== "number") {
-    return { ok: false, erro: "Informe o valor de fechamento." };
+    return { ok: false, erro: `Informe o valor ${rotulo}.` };
   }
 
   const texto = String(bruto).trim();
-  if (!texto) return { ok: false, erro: "Informe o valor de fechamento." };
+  if (!texto) return { ok: false, erro: `Informe o valor ${rotulo}.` };
 
   const numero = Number(texto);
   // Number("") é 0 e Number("abc") é NaN; Infinity vem de "1e999".
   if (!Number.isFinite(numero)) {
-    return { ok: false, erro: "Valor de fechamento inválido." };
+    return { ok: false, erro: `Valor ${rotulo} inválido.` };
   }
   if (numero <= 0) {
-    return { ok: false, erro: "O valor de fechamento precisa ser maior que zero." };
+    return { ok: false, erro: `O valor ${rotulo} precisa ser maior que zero.` };
   }
   if (numero > VALOR_FECHAMENTO_MAXIMO) {
-    return { ok: false, erro: "Valor de fechamento acima do limite permitido." };
+    return { ok: false, erro: `Valor ${rotulo} acima do limite permitido.` };
   }
   // Mais de 2 casas não cabe em Decimal(14,2) e seria truncado em
   // silêncio pelo banco — melhor recusar do que gravar um valor

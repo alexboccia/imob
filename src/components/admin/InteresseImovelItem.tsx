@@ -15,6 +15,8 @@ import { CriarFollowUp, FollowUpAgendadoCard } from "@/components/admin/FollowUp
 import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
 import { ResponsavelNegociacao } from "@/components/admin/ResponsavelNegociacao";
 import { DivisaoComissao } from "@/components/admin/DivisaoComissao";
+import { NegociacaoValores } from "@/components/admin/NegociacaoValores";
+import { precoPedido, type PropostaRegistrada } from "@/lib/proposta-negociacao";
 import type { ParticipanteExibicao } from "@/lib/participacao-comissao";
 import type { PagamentoExibicao } from "@/lib/pagamento-comissao";
 import type { AtorTransicao } from "@/lib/ator-transicao";
@@ -57,6 +59,8 @@ export function InteresseImovelItem({
   interesse: {
     id: string;
     stage: PropertyInterestStage;
+    // Fase 33 — histórico de valores, da mais recente para a mais antiga.
+    propostas: PropostaRegistrada[];
     favorited: boolean;
     notes: string | null;
     // Igual a scheduledAt: string ISO ou null, nunca Date (Fase P.3) — só
@@ -71,6 +75,9 @@ export function InteresseImovelItem({
     property: {
       id: string;
       title: string;
+      // Fase 33 — a finalidade decide QUAL preço é o "pedido": venda lê
+      // price, aluguel lê rentPrice.
+      purpose: string;
       price: number | null;
       rentPrice: number | null;
       status: PropertyStatus;
@@ -224,6 +231,18 @@ export function InteresseImovelItem({
           </form>
         )}
 
+        {/* Fase 33 — a negociação de valores vem ANTES do responsável e
+            da comissão na ordem de leitura: é o estado comercial atual do
+            negócio, e é a primeira coisa que o corretor procura ao abrir
+            uma negociação em andamento. */}
+        <NegociacaoValores
+          interesseId={interesse.id}
+          propostas={interesse.propostas}
+          precoPedido={precoPedido(interesse.property)}
+          encerrada={estagioInteresseEncerrado(interesse.stage)}
+          fuso={fuso}
+        />
+
         <ResponsavelNegociacao
           interesseId={interesse.id}
           responsavel={interesse.responsavel}
@@ -251,6 +270,12 @@ export function InteresseImovelItem({
           stage={interesse.stage}
           closedAtISO={interesse.closedAtISO}
           closedValue={interesse.closedValue}
+          // Fase 33 — quando o negócio ainda não foi fechado, o diálogo
+          // já abre com a ÚLTIMA proposta: é o valor que está na mesa, e
+          // redigitá-lo era pedir ao corretor um número que o easymob
+          // acabou de registrar. Continua totalmente editável, e não
+          // sobrepõe um valor de fechamento já existente.
+          valorSugerido={interesse.closedValue ?? interesse.propostas[0]?.valor ?? null}
           commissionValue={interesse.commissionValue}
           atorFechamento={interesse.atorFechamento}
           imovelTitulo={interesse.property.title}

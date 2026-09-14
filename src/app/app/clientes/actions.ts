@@ -44,6 +44,7 @@ import {
   proximaAcaoSchema,
 } from "@/lib/registro-atendimento";
 import { deDatetimeLocalNoFuso } from "@/lib/fuso-horario";
+import { interpretarValorProposta, LADOS_PROPOSTA } from "@/lib/proposta-negociacao";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import {
   erroAcessoNegado,
@@ -1001,6 +1002,118 @@ export async function registrarAtendimentoDoContato(
     revalidatePath(`/app/clientes/${contato.personId}`);
 
     return sucesso("Atendimento registrado e próximo contato agendado.");
+  });
+}
+
+// =======================================================================
+// Registrar uma proposta — a negociação de valores
+// =======================================================================
+// O menor fato comercial que faltava: alguém ofereceu um valor nesta
+// negociação. Um EVENTO, imutável, que se soma à sequência — uma
+// contraproposta é a próxima linha no tempo, não a edição da anterior.
+//
+// Só o id da NEGOCIAÇÃO vem do cliente, e ele passa pelo escopo comercial
+// antes de qualquer escrita: pessoa, imóvel e organização são lidos do
+// registro validado, nunca do FormData.
+export async function registrarProposta(
+  interesseId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+  const escopo = await escopoComercialDaSessao(organizationId);
+
+  const ladoBruto = formData.get("lado");
+  const lado = LADOS_PROPOSTA.find((l) => l === ladoBruto);
+  if (!lado) {
+    return {
+      success: false,
+      message: "Verifique os campos destacados.",
+      fieldErrors: { lado: ["Informe quem fez a proposta."] },
+    };
+  }
+
+  // Mesma regra monetária do fechamento (zero, negativo, NaN, duas casas,
+  // teto do Decimal) — uma definição só do que é um valor válido.
+  const valor = interpretarValorProposta(formData.get("valor"));
+  if (!valor.ok) {
+    return {
+      success: false,
+      message: "Verifique os campos destacados.",
+      fieldErrors: { valor: [valor.erro] },
+    };
+  }
+
+  return withOrganization(organizationId, async () => {
+    const interesse = await prisma.propertyInterest.findFirst({
+      where: whereNegociacaoAlvo(escopo, interesseId, organizationId),
+      select: { id: true, stage: true, personId: true, propertyId: true },
+    });
+    if (!interesse) return erroGenerico("Negociação não encontrada.");
+
+    // Negociação encerrada não recebe proposta nova — mesma regra que já
+    // impede agendar visita ou follow-up num negócio ganho ou perdido.
+    // Reabrir é outra operação, que o produto deliberadamente não tem.
+    if (estagioInteresseEncerrado(interesse.stage)) {
+      return erroGenerico("Esta negociação já foi encerrada.");
+    }
+
+    const autorMemberId = await resolverAutorDoAtendimento(
+      organizationId,
+      session.user.organizationMemberId
+    );
+
+    // A primeira proposta REAL leva a negociação para PROPOSTA — o stage
+    // deixa de ser um rótulo que alguém move à mão e passa a ser
+    // consequência de um fato. Já estando em PROPOSAL, a contraproposta
+    // NÃO gera histórico redundante: a etapa não mudou.
+    const moveStage = interesse.stage !== "PROPOSAL";
+
+    await prisma.$transaction(async (tx) => {
+      await tx.propertyInterestOffer.create({
+        data: {
+          organizationId,
+          propertyInterestId: interesse.id,
+          amount: valor.valor,
+          side: lado,
+          // AUTORIA: quem registrou no easymob. `side` acima é quem
+          // PROPÔS — o corretor registra a proposta do cliente.
+          createdByMemberId: autorMemberId,
+        },
+      });
+
+      if (moveStage) {
+        await tx.propertyInterest.update({
+          where: { id: interesse.id },
+          data: { stage: "PROPOSAL" },
+        });
+        await tx.propertyInterestStageHistory.create({
+          data: {
+            organizationId,
+            propertyInterestId: interesse.id,
+            previousStage: interesse.stage,
+            newStage: "PROPOSAL",
+            changedByMemberId: await resolverAtorTransicao(
+              tx,
+              organizationId,
+              session.user.organizationMemberId
+            ),
+          },
+        });
+      }
+    });
+
+    revalidatePath(`/app/clientes/${interesse.personId}`);
+    revalidatePath(`/app/imoveis/${interesse.propertyId}`);
+    revalidatePath("/app/pipeline");
+
+    return sucesso("Proposta registrada.");
   });
 }
 

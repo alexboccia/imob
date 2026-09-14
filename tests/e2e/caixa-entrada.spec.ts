@@ -147,7 +147,7 @@ test.describe("caixa de entrada comercial", () => {
       await expect(dialogo.getByLabel("Como foi o contato")).toBeVisible();
       await dialogo.getByLabel("Como foi o contato").selectOption("CALL");
       await dialogo.getByLabel("Observação (opcional)").fill(MARCADOR);
-      await dialogo.getByRole("button", { name: "Registrar" }).click();
+      await dialogo.getByRole("button", { name: "Registrar", exact: true }).click();
 
       // Confirmação no toast: o item que a exibiria é desmontado.
       await expect(page.getByText("Atendimento registrado.")).toBeVisible();

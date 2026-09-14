@@ -29,7 +29,12 @@ export const IDS_E2E = {
   // Fase 30 — organização dedicada à CAIXA DE ENTRADA comercial
   // (Organização Q). Números absolutos de novos contatos, então
   // organização própria pelo mesmo motivo estrutural das C/D/N/P.
+  // Fase 33 — negociação dedicada à NEGOCIAÇÃO DE VALORES. Pessoa
+  // própria, sem contato de site: assim ela nunca entra na caixa de
+  // entrada e os números daquele bloco continuam valendo.
   membroInboxOwner: "e2e-membro-inbox-owner",
+  pessoaNegociacao: "e2e-pessoa-negociacao",
+  interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
   // (Organização P). Ids de membro fixos porque a faceta ?corretor= é
@@ -2257,6 +2262,42 @@ async function main() {
       memberId: IDS_E2E.membroInboxOwner,
       occurredAt: new Date(agoraInbox - 3 * 3600 * 1000),
     },
+  });
+
+  // Negociação aberta para a fase de NEGOCIAÇÃO DE VALORES. As
+  // propostas são apagadas a cada seed para a sequência afirmada pelo
+  // spec ser sempre a mesma — o resto do fixture é idempotente por
+  // upsert, e propostas são eventos que se acumulariam.
+  const pessoaNegociacao = await prisma.person.upsert({
+    where: { id: IDS_E2E.pessoaNegociacao },
+    update: { name: "Rita Negociacao" },
+    create: {
+      id: IDS_E2E.pessoaNegociacao,
+      organizationId: orgInbox.organization.id,
+      name: "Rita Negociacao",
+      phone: "11944443333",
+      phoneNormalized: "11944443333",
+      roles: ["CLIENT"],
+    },
+    select: { id: true },
+  });
+  await prisma.propertyInterest.upsert({
+    where: { id: IDS_E2E.interesseNegociacao },
+    update: { stage: "VISITED", closedAt: null, closedValue: null },
+    create: {
+      id: IDS_E2E.interesseNegociacao,
+      organizationId: orgInbox.organization.id,
+      personId: pessoaNegociacao.id,
+      propertyId: IDS_E2E.imovelInbox,
+      responsibleMemberId: IDS_E2E.membroInboxOwner,
+      stage: "VISITED",
+    },
+  });
+  await prisma.propertyInterestOffer.deleteMany({
+    where: { propertyInterestId: IDS_E2E.interesseNegociacao },
+  });
+  await prisma.propertyInterestStageHistory.deleteMany({
+    where: { propertyInterestId: IDS_E2E.interesseNegociacao },
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);

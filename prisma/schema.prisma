@@ -127,6 +127,24 @@ enum PropertyInterestStage {
 // evidência de uso real que sustente essa taxonomia, e um enum
 // especulativo engessaria o produto. "Enviar proposta revisada" é mais
 // informativo do que qualquer rótulo que pudéssemos ter adivinhado.
+// Os dois lados de uma negociação imobiliária. DUAS opções, não um
+// catálogo: quem procura o imóvel e quem é dono dele. Vale igual para
+// venda (comprador/vendedor) e para aluguel (locatário/locador) — é a
+// mesma mesa, e a finalidade do imóvel já diz qual das duas leituras
+// usar, então um enum por finalidade seria duplicar a mesma informação.
+//
+// As PALAVRAS são as que o produto já usa para essas duas partes em
+// PersonRole (CLIENT e OWNER). O enum é separado de propósito:
+// PersonRole tem LEAD, que não é lado de proposta nenhuma, e reutilizá-lo
+// permitiria gravar um valor sem significado aqui.
+//
+// Não confundir com PropertyInterestParticipant, que é a divisão de
+// COMISSÃO entre membros da imobiliária — outra pergunta, outro modelo.
+enum OfferSide {
+  CLIENT
+  OWNER
+}
+
 enum ScheduledActivityType {
   VISIT
   FOLLOW_UP
@@ -766,6 +784,8 @@ model PropertyInterest {
 
   scheduledActivities ScheduledActivity[]
   stageHistory        PropertyInterestStageHistory[]
+  // Fase 33 — o histórico de valores negociados.
+  offers              PropertyInterestOffer[]
   // Fase 12 — divisão da comissão deste negócio. Lista VAZIA por padrão:
   // não existe split presumido, nem 100% para o responsável.
   participants        PropertyInterestParticipant[]
@@ -1028,6 +1048,66 @@ model PropertyInterestStageHistory {
 // tempo, mas isso não é validado em nível de banco nesta fase (mesmo nível
 // de simplicidade de PropertyInterestStage/Person.pipelineStage: nenhuma
 // transição de status é validada no schema).
+// Fase 33 — A NEGOCIAÇÃO DE VALORES.
+//
+// Até aqui o produto sabia que uma negociação estava "em PROPOSTA" e não
+// sabia QUAL era a proposta: o valor vivia em `notes` (texto livre), no
+// WhatsApp e na memória do corretor, e reaparecia digitado do zero no
+// fechamento. Este modelo é o menor fato que corrige isso: alguém
+// ofereceu um valor, nesta negociação, neste instante.
+//
+// É um EVENTO IMUTÁVEL, no mesmo formato de PropertyInterestStageHistory:
+// sem `updatedAt`, sem edição, sem exclusão. Uma proposta que aconteceu
+// aconteceu — uma correção é uma proposta nova, e a sequência conta a
+// história.
+//
+// O QUE DELIBERADAMENTE NÃO EXISTE AQUI, e por quê:
+//
+//   status              derivável sem ambiguidade da sequência: a última
+//                       proposta é a que está em jogo, e o lado dela diz
+//                       de quem é a vez. Aceitação é o fechamento
+//                       (PropertyInterest.closedValue), que já existe.
+//   parentOfferId       uma contraproposta é a próxima linha no tempo;
+//                       árvore só faria sentido com negociações
+//                       paralelas, que o produto não tem.
+//   notes/condições     a negociação já tem `notes`. Uma proposta é
+//                       quanto, de quem e quando.
+//   expiração, versão, aprovação, documento, assinatura
+//                       nenhum deles responde a uma pergunta que o
+//                       corretor faça hoje.
+model PropertyInterestOffer {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // Cascade como em participants/stageHistory: uma proposta não tem
+  // significado fora da negociação que a recebeu.
+  propertyInterestId String
+  propertyInterest   PropertyInterest @relation(fields: [propertyInterestId], references: [id], onDelete: Cascade)
+
+  /// "Quanto foi oferecido?" — mesma representação monetária de todo o
+  /// domínio financeiro (Decimal 14,2), nunca Float.
+  amount Decimal @db.Decimal(14, 2)
+
+  /// "Quem propôs?" — a parte COMERCIAL, não quem digitou.
+  side OfferSide
+
+  /// "Quando?" — o instante do fato, como `changedAt` do histórico de
+  /// etapa.
+  offeredAt DateTime @default(now())
+
+  /// "Quem registrou no easymob?" — AUTORIA, e nunca a parte que propôs:
+  /// o corretor registra a proposta que o CLIENTE fez. Nullable e
+  /// resolvido no servidor, como todo ator do domínio (Fases 14/15).
+  createdByMemberId String?
+  createdByMember   OrganizationMember? @relation("OfferCreatedByMember", fields: [createdByMemberId], references: [id])
+
+  // O padrão de acesso é exatamente este: as propostas DESTA negociação,
+  // da mais recente para a mais antiga.
+  @@index([organizationId, propertyInterestId, offeredAt])
+  @@map("property_interest_offers")
+}
+
 model ScheduledActivity {
   id             String       @id @default(cuid())
   organizationId String
@@ -1330,6 +1410,9 @@ model OrganizationMember {
   // SEPARADA das demais: mover o funil não é conduzir a negociação nem
   // receber comissão.
   stageChanges                   PropertyInterestStageHistory[]       @relation("StageHistoryChangedByMember")
+  // Fase 33 — propostas REGISTRADAS por este membro (autoria). Nunca
+  // "propostas dele": quem propõe é o cliente ou o proprietário.
+  registeredOffers               PropertyInterestOffer[]              @relation("OfferCreatedByMember")
   registeredPayments             PropertyInterestParticipantPayment[] @relation("PaymentCreatedByMember")
   cancelledPayments              PropertyInterestParticipantPayment[] @relation("PaymentCancelledByMember")
   assignedPeople                 Person[]                             @relation("PersonAssignedMember")
@@ -1421,6 +1504,7 @@ model Organization {
   personPreferences                   PersonPreference[]
   propertyInterests                   PropertyInterest[]
   propertyInterestStageHistory        PropertyInterestStageHistory[]
+  propertyInterestOffers              PropertyInterestOffer[]
   scheduledActivities                 ScheduledActivity[]
   properties                          Property[]
   media                               Media[]

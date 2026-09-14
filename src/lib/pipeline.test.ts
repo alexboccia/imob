@@ -54,6 +54,7 @@ function linhaFake(overrides: {
     subject: string | null;
     scheduledAt: Date;
   }[];
+  offers?: { amount: number; side: "CLIENT" | "OWNER"; offeredAt: Date }[];
   stageHistory?: {
     newStage: PropertyInterestStage;
     changedAt: Date;
@@ -87,6 +88,9 @@ function linhaFake(overrides: {
       organizationId: overrides.propertyOrganizationId ?? ORG,
     },
     scheduledActivities: overrides.scheduledActivities ?? [],
+    // Fase 33 — sem proposta por padrão: é o estado de toda negociação
+    // anterior a esta fase, e o caso que precisa continuar correto.
+    offers: overrides.offers ?? [],
     // Fase 14 — sem ator por padrão: é o estado de todo histórico
     // legado, e o caso que mais precisa continuar correto.
     stageHistory: (overrides.stageHistory ?? []).map((h) => ({
@@ -198,6 +202,7 @@ function itemFake(overrides: Partial<ItemPipeline> & { stage: PropertyInterestSt
     id: overrides.id ?? `item-${Math.random()}`,
     stage: overrides.stage,
     closedAtISO: overrides.closedAtISO ?? null,
+    ultimaProposta: overrides.ultimaProposta ?? null,
     closedValue: overrides.closedValue ?? null,
     commissionValue: overrides.commissionValue ?? null,
     responsavel: overrides.responsavel ?? null,

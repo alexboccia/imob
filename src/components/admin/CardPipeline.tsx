@@ -1,5 +1,7 @@
 "use client";
 
+import { formatarPreco } from "@/lib/format";
+import { LADO_PROPOSTA_LABEL } from "@/lib/proposta-negociacao";
 import { useState } from "react";
 import type { ItemPipeline, PrioridadePipeline } from "@/lib/pipeline";
 import { estagioInteresseEncerrado } from "@/lib/property-interest-schema";
@@ -85,6 +87,20 @@ export function CardPipeline({
                 <p className="text-xs">
                   <span className={item.proximaAcao.ativa ? "font-medium text-foreground" : "text-muted-foreground"}>
                     {item.proximaAcao.label}
+                  </span>
+                </p>
+              )}
+              {/* Fase 33 — o valor que está na mesa. Sem ele, a coluna
+                  "Proposta" era um rótulo que não dizia proposta de
+                  quanto nem de quem. Uma linha só: o card continua sendo
+                  um card. */}
+              {item.ultimaProposta && (
+                <p className="text-xs">
+                  <span className="font-medium tabular-nums">
+                    {formatarPreco(item.ultimaProposta.valor)}
+                  </span>{" "}
+                  <span className="text-muted-foreground">
+                    · {LADO_PROPOSTA_LABEL[item.ultimaProposta.lado]}
                   </span>
                 </p>
               )}
