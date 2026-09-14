@@ -18,6 +18,8 @@ import {
   contarCaptacoesPendentes,
 } from "@/lib/captacao-pendente";
 import { CaptacoesPendentes } from "@/components/admin/CaptacoesPendentes";
+import { buscarNovosContatos } from "@/lib/novos-contatos";
+import { NovosContatos } from "@/components/admin/NovosContatos";
 import { buscarOnboarding } from "@/lib/onboarding";
 import { PrimeirosPassos } from "@/components/admin/PrimeirosPassos";
 import { buscarMetricasDashboard } from "@/lib/dashboard";
@@ -100,6 +102,20 @@ export default async function DashboardPage({
       ? await buscarCaptacoesPendentes(organizationId, { limite: 3 })
       : [];
 
+  // Caixa de entrada comercial — contatos que chegaram pelo site e ainda
+  // não foram trabalhados. É a primeira coisa da tela porque é o único
+  // trabalho que hoje depende de alguém LEMBRAR de procurar: a Central
+  // mostra compromissos já marcados, e um contato novo ainda não é
+  // compromisso nenhum.
+  //
+  // Escopado pelo MESMO `escopo` do resto da Central: em modo restrito o
+  // corretor vê os contatos das pessoas com quem tem vínculo comercial,
+  // e a camada gerencial vê a organização. Nenhum privilégio novo.
+  const novosContatos =
+    temCrm && membroId
+      ? await buscarNovosContatos(organizationId, escopo)
+      : { itens: [], total: 0, truncado: false };
+
   // Fase 26 — primeiros passos. Derivado de fatos, some quando não há
   // pendência: para uma organização já operando, isto é uma consulta
   // barata que não renderiza nada.
@@ -156,6 +172,8 @@ export default async function DashboardPage({
           está vazia por definição, e a primeira coisa útil da tela tem
           de ser o que fazer a seguir. */}
       <PrimeirosPassos dados={onboarding} />
+
+      <NovosContatos dados={novosContatos} />
 
       {captacoes.length > 0 && (
         <CaptacoesPendentes

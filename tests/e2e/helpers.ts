@@ -165,7 +165,19 @@ export const ORG_PORTFOLIO = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Fase 30 — organização dedicada à caixa de entrada comercial.
+export const ORG_INBOX = {
+  slug: "e2e-org-inbox",
+  email: "owner-inbox@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const IDS_E2E = {
+  // Fase 30 — organização dedicada à CAIXA DE ENTRADA comercial
+  // (Organização Q). Números absolutos de novos contatos, então
+  // organização própria pelo mesmo motivo estrutural das C/D/N/P.
+  membroInboxOwner: "e2e-membro-inbox-owner",
+  imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
   // (Organização P). Ids de membro fixos porque a faceta ?corretor= é
   // filtrada por OrganizationMember.id: sem id determinístico, o spec

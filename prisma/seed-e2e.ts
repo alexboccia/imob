@@ -26,6 +26,11 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 export const IDS_E2E = {
+  // Fase 30 — organização dedicada à CAIXA DE ENTRADA comercial
+  // (Organização Q). Números absolutos de novos contatos, então
+  // organização própria pelo mesmo motivo estrutural das C/D/N/P.
+  membroInboxOwner: "e2e-membro-inbox-owner",
+  imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
   // (Organização P). Ids de membro fixos porque a faceta ?corretor= é
   // filtrada por OrganizationMember.id: sem id determinístico, o spec
@@ -2127,6 +2132,131 @@ async function main() {
     title: "Imóvel sem responsável",
     neighborhood: "Centro",
     responsibleMemberId: null,
+  });
+
+  // =====================================================================
+  // Fase 30 — Organização Q: caixa de entrada comercial
+  // =====================================================================
+  // A caixa de entrada afirma NÚMEROS ABSOLUTOS ("2 novos contatos") e
+  // depende de fatos de trabalho POSTERIORES ao contato. Numa
+  // organização compartilhada, qualquer spec que registrasse um
+  // atendimento mudaria esses números — daí a organização própria, pelo
+  // mesmo motivo estrutural das organizações C, D, N e P.
+  //
+  // O elenco existe para cobrir a derivação inteira:
+  //
+  //   Maria  contato de IMÓVEL, recente     -> aparece, ELEGÍVEL a oportunidade
+  //   João   contato de CONTATO, 2 dias     -> aparece, NÃO elegível (sem imóvel)
+  //   Carla  contato + atendimento posterior-> NÃO aparece (já trabalhada)
+  //   Pedro  só interação registrada à mão  -> NÃO aparece (nunca foi captação)
+  const orgInbox = await garantirOrganizacaoComDono({
+    slug: "e2e-org-inbox",
+    timezone: "UTC",
+    name: "Organização E2E Inbox",
+    planId: planoCompleto.id,
+    email: "owner-inbox@e2e.test",
+    senha,
+    role: "OWNER",
+    membroId: IDS_E2E.membroInboxOwner,
+  });
+
+  await garantirImovel({
+    id: IDS_E2E.imovelInbox,
+    organizationId: orgInbox.organization.id,
+    title: "Apartamento da Caixa de Entrada",
+    price: 640000,
+    responsibleMemberId: IDS_E2E.membroInboxOwner,
+  });
+
+  const pessoaInbox = async (nome: string, telefone: string) => {
+    const existente = await prisma.person.findFirst({
+      where: { organizationId: orgInbox.organization.id, name: nome },
+      select: { id: true },
+    });
+    if (existente) return existente;
+    return prisma.person.create({
+      data: {
+        organizationId: orgInbox.organization.id,
+        name: nome,
+        phone: telefone,
+        phoneNormalized: telefone,
+        roles: ["LEAD"],
+      },
+      select: { id: true },
+    });
+  };
+
+  // Idempotência: o seed roda antes de cada rodada e os specs não mutam
+  // esta organização, então recriar do zero mantém os instantes
+  // relativos corretos (o "há 2 dias" do João precisa continuar sendo 2
+  // dias em qualquer execução).
+  await prisma.interaction.deleteMany({ where: { organizationId: orgInbox.organization.id } });
+
+  const agoraInbox = Date.now();
+  const maria = await pessoaInbox("Maria Silva Inbox", "11988887777");
+  const joao = await pessoaInbox("Joao Pereira Inbox", "11977776666");
+  const carla = await pessoaInbox("Carla Souza Inbox", "11966665555");
+  const pedro = await pessoaInbox("Pedro Lima Inbox", "11955554444");
+
+  await prisma.interaction.create({
+    data: {
+      organizationId: orgInbox.organization.id,
+      personId: maria.id,
+      propertyId: IDS_E2E.imovelInbox,
+      type: "MESSAGE",
+      notes: "Gostaria de agendar uma visita neste fim de semana.",
+      origin: "IMOVEL",
+      memberId: null,
+      occurredAt: new Date(agoraInbox - 30 * 60 * 1000),
+    },
+  });
+
+  await prisma.interaction.create({
+    data: {
+      organizationId: orgInbox.organization.id,
+      personId: joao.id,
+      type: "MESSAGE",
+      notes: "Procuro apartamento de dois dormitorios na zona sul.",
+      origin: "CONTATO",
+      memberId: null,
+      occurredAt: new Date(agoraInbox - 48 * 3600 * 1000),
+    },
+  });
+
+  // Carla escreveu e JÁ foi atendida — o atendimento é posterior ao
+  // contato, que é exatamente o que tira alguém da fila.
+  await prisma.interaction.create({
+    data: {
+      organizationId: orgInbox.organization.id,
+      personId: carla.id,
+      type: "MESSAGE",
+      notes: "Tenho interesse no imovel anunciado.",
+      origin: "IMOVEL",
+      propertyId: IDS_E2E.imovelInbox,
+      memberId: null,
+      occurredAt: new Date(agoraInbox - 26 * 3600 * 1000),
+    },
+  });
+  await prisma.interaction.create({
+    data: {
+      organizationId: orgInbox.organization.id,
+      personId: carla.id,
+      type: "CALL",
+      notes: "Liguei e combinei a visita.",
+      memberId: IDS_E2E.membroInboxOwner,
+      occurredAt: new Date(agoraInbox - 2 * 3600 * 1000),
+    },
+  });
+
+  await prisma.interaction.create({
+    data: {
+      organizationId: orgInbox.organization.id,
+      personId: pedro.id,
+      type: "CALL",
+      notes: "Contato feito por indicacao, registrado a mao.",
+      memberId: IDS_E2E.membroInboxOwner,
+      occurredAt: new Date(agoraInbox - 3 * 3600 * 1000),
+    },
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
