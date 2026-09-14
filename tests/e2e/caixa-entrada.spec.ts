@@ -171,6 +171,60 @@ test.describe("caixa de entrada comercial", () => {
     }
   });
 
+  test("atendimento + próximo contato: os dois fatos, uma submissão", async ({ page }) => {
+    const MARCADOR = "E2E proxima acao inline";
+    try {
+      await abrirCentral(page);
+      const itemJoao = page
+        .locator(BLOCO)
+        .locator("li")
+        .filter({ hasText: "Joao Pereira Inbox" });
+      await itemJoao.getByRole("button", { name: "Registrar atendimento" }).click();
+
+      const dialogo = page.getByRole("dialog");
+      await dialogo.getByLabel("Como foi o contato").selectOption("MESSAGE");
+      await dialogo.getByLabel("Observação (opcional)").fill(MARCADOR);
+
+      // Os campos da próxima ação só existem depois do opt-in: o
+      // atendimento que termina ali não vê formulário de agenda nenhum.
+      await expect(dialogo.getByLabel("O que precisa ser feito")).toHaveCount(0);
+      await dialogo.getByLabel("Agendar próximo contato").check();
+      await expect(dialogo.getByLabel("O que precisa ser feito")).toBeVisible();
+
+      await dialogo.getByLabel("O que precisa ser feito").fill(MARCADOR);
+      // A organização do fixture está em UTC, então a hora de parede
+      // dela é a hora UTC — nenhuma conversão improvisada no teste.
+      const amanha = new Date(Date.now() + 24 * 3600_000);
+      const dois = (n: number) => String(n).padStart(2, "0");
+      await dialogo
+        .getByLabel("Quando")
+        .fill(
+          `${amanha.getUTCFullYear()}-${dois(amanha.getUTCMonth() + 1)}-${dois(amanha.getUTCDate())}T10:00`
+        );
+      await dialogo.getByRole("button", { name: "Registrar", exact: true }).click();
+
+      await expect(page.getByText("Atendimento registrado e próximo contato agendado.")).toBeVisible();
+
+      // Estado real do servidor, não estado do React.
+      await page.reload();
+      await expect(
+        page.locator(BLOCO).locator("li").filter({ hasText: "Joao Pereira Inbox" })
+      ).toHaveCount(0);
+      // O compromisso aparece na Central, no bloco de compromissos que já
+      // existia — nenhum bloco novo foi criado para esta feature.
+      await expect(page.getByText(MARCADOR).first()).toBeVisible();
+
+      // E na Agenda, porque ScheduledActivity é ScheduledActivity.
+      // Aba "próximas": a Agenda abre em HOJE, e o compromisso é de
+      // amanhã — é a classificação existente, não um caso especial
+      // desta feature.
+      await page.goto("/app/agenda?aba=proximas");
+      await expect(page.getByText(MARCADOR).first()).toBeVisible();
+    } finally {
+      limparAtendimentosNoBanco(MARCADOR);
+    }
+  });
+
   test("organização sem contatos aguardando não ganha bloco nenhum", async ({ page }) => {
     // Org A tem contatos do site, mas o bloco só aparece com fila real;
     // um card permanente de "nenhum contato" seria ruído diário.

@@ -29,11 +29,14 @@ import { temPapel, PAPEIS_VISAO_EQUIPE } from "@/lib/authorization";
 // -----------------------------------------------------------------------
 // DE QUEM É O TRABALHO
 // -----------------------------------------------------------------------
-// Do RESPONSÁVEL PELA NEGOCIAÇÃO (PropertyInterest.responsibleMemberId),
-// nunca de createdByMemberId — criar não é ser dono (Fases 14/17/19).
-// Uma atividade sem propertyInterestId não tem dono objetivo e por isso
-// NÃO é atribuída a ninguém; ela é contada à parte (ver
-// `semNegociacao`), em vez de ser inventada para o criador.
+// Do RESPONSÁVEL PELA NEGOCIAÇÃO (PropertyInterest.responsibleMemberId)
+// quando existe negociação e, desde a Fase 32, do
+// ScheduledActivity.responsibleMemberId quando não existe. Nunca de
+// createdByMemberId — criar não é ser dono (Fases 14/17/19).
+//
+// Só continua sem dono — e contada à parte em `semNegociacao` — a
+// atividade que não tem nenhum dos dois, o que hoje significa registro
+// histórico anterior à coluna. Nada é inventado para o criador.
 //
 // -----------------------------------------------------------------------
 // COMO ISSO NÃO VIRA N+1
@@ -110,10 +113,9 @@ export type VisaoEquipe = {
     proximas: number;
     negociacoesAbertas: number;
     semResponsavel: number;
-    // Compromissos pendentes que não pertencem a nenhuma negociação e
-    // portanto não têm dono objetivo. Zero em toda organização cujos
-    // dados nasceram dos fluxos do produto — declarado em vez de
-    // silenciosamente somado a alguém.
+    // Compromissos pendentes sem negociação E sem responsável próprio —
+    // os únicos que continuam sem dono objetivo depois da Fase 32.
+    // Declarado em vez de silenciosamente somado a alguém.
     semNegociacao: number;
   };
   membros: LinhaEquipe[];
@@ -161,17 +163,17 @@ export async function buscarVisaoEquipe(
         _count: { _all: true },
       }),
       prisma.scheduledActivity.groupBy({
-        by: ["propertyInterestId"],
+        by: ["propertyInterestId", "responsibleMemberId"],
         where: { ...baseAtividade, ...baldes.atrasadas },
         _count: { _all: true },
       }),
       prisma.scheduledActivity.groupBy({
-        by: ["propertyInterestId"],
+        by: ["propertyInterestId", "responsibleMemberId"],
         where: { ...baseAtividade, ...baldes.hoje },
         _count: { _all: true },
       }),
       prisma.scheduledActivity.groupBy({
-        by: ["propertyInterestId"],
+        by: ["propertyInterestId", "responsibleMemberId"],
         where: { ...baseAtividade, ...baldes.proximas },
         _count: { _all: true },
       }),
@@ -227,17 +229,34 @@ export async function buscarVisaoEquipe(
     const responsavelDaNegociacao = new Map(donos.map((d) => [d.id, d.responsibleMemberId]));
 
     // Dobra os três baldes por membro. `null` como chave é o balde "sem
-    // responsável"; uma atividade sem negociação (propertyInterestId
-    // null) NÃO entra aqui — é contada separadamente.
+    // responsável".
+    //
+    // Fase 32 — uma atividade sem negociação deixou de ser
+    // necessariamente sem dono: quando ela traz responsibleMemberId, o
+    // trabalho é DAQUELE membro e entra na linha dele, como qualquer
+    // outro. Só continua em `semNegociacao` o que de fato não tem dono
+    // por nenhum dos dois caminhos — atividade histórica, anterior à
+    // coluna. A precedência é a mesma do resto do produto: havendo
+    // negociação, é ela quem decide (ver responsavel-atividade.ts).
     const porMembro = new Map<string | null, ContadoresBalde>();
     let semNegociacao = 0;
     const acumular = (
-      grupo: { propertyInterestId: string | null; _count: { _all: number } }[],
+      grupo: {
+        propertyInterestId: string | null;
+        responsibleMemberId: string | null;
+        _count: { _all: number };
+      }[],
       balde: keyof ContadoresBalde
     ) => {
       for (const linha of grupo) {
         if (linha.propertyInterestId === null) {
-          semNegociacao += linha._count._all;
+          if (linha.responsibleMemberId === null) {
+            semNegociacao += linha._count._all;
+            continue;
+          }
+          const atualDireto = porMembro.get(linha.responsibleMemberId) ?? zerado();
+          atualDireto[balde] += linha._count._all;
+          porMembro.set(linha.responsibleMemberId, atualDireto);
           continue;
         }
         // Negociação de outro tenant não casaria o findMany acima; sem

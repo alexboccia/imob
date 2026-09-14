@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { withOrganization } from "@/lib/tenant-context";
 import { intervaloDoDia } from "@/lib/fuso-horario";
 import { ESTAGIOS_INTERESSE } from "@/lib/property-interest-schema";
+import { atividadeDoMembro } from "@/lib/responsavel-atividade";
 import type { ScheduledActivityType } from "@/generated/prisma/client";
 
 // =======================================================================
@@ -162,10 +163,13 @@ export function paraCompromisso(
 // negociação desta organização cujo responsável é este membro. O
 // `organizationId` é repetido dentro da relação pelo mesmo motivo de
 // condicaoBusca no Pipeline — fechar o canal de vazamento indireto.
+// Fase 32 — a posse deixou de ser sempre a da negociação: um
+// compromisso SEM negociação pertence a quem tem de executá-lo. A regra
+// inteira (e a precedência da negociação) vive em
+// src/lib/responsavel-atividade.ts, para a Central, a Agenda e o escopo
+// comercial nunca discordarem sobre de quem é um compromisso.
 function daMinhaResponsabilidade(organizationId: string, memberId: string) {
-  return {
-    propertyInterest: { is: { organizationId, responsibleMemberId: memberId } },
-  };
+  return atividadeDoMembro(memberId, organizationId);
 }
 
 export async function buscarCentralTrabalho(

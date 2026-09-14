@@ -17,7 +17,7 @@ export const notesSchema = z
 // parseável por parseScheduledAt abaixo — a validação de "não pode ser no
 // passado" é feita nas Server Actions (depende de Date.now() no momento da
 // chamada, não é responsabilidade de um schema Zod estático).
-const scheduledAtInputSchema = z
+export const scheduledAtInputSchema = z
   .string()
   .min(1, "Informe a data e o horário da visita.")
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Data/horário inválidos.");

@@ -92,9 +92,20 @@ describe("RESTRICTED — membro operacional fica na própria carteira", () => {
     expect(ponte.propertyInterests).toEqual({ none: {} });
   });
 
-  test("compromisso: herda o dono da negociação, nunca createdByMemberId", () => {
+  test("compromisso: dono da negociação quando existe, dono próprio quando não, nunca createdByMemberId", () => {
+    // Fase 32 — a posse ganhou uma segunda dimensão, e o formato mudou
+    // junto. O que NÃO mudou, e é o que este teste protege: a negociação
+    // continua soberana, e autoria continua não sendo posse.
     const w = whereAtividade(escopo("RESTRICTED", "BROKER"));
-    expect(w).toEqual({ propertyInterest: { is: { responsibleMemberId: EU } } });
+    expect(w).toEqual({
+      OR: [
+        { propertyInterest: { is: { responsibleMemberId: EU } } },
+        // O `propertyInterestId: null` é a PRECEDÊNCIA em forma de
+        // predicado: uma atividade que pertence a uma negociação não
+        // pode ser reivindicada pela coluna da própria atividade.
+        { propertyInterestId: null, responsibleMemberId: EU },
+      ],
+    });
     expect(JSON.stringify(w)).not.toContain("createdByMemberId");
   });
 });

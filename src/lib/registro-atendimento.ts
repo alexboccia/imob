@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  assuntoFollowUpSchema,
+  scheduledAtInputSchema,
+} from "@/lib/scheduled-activity-schema";
 import type { Prisma } from "@/generated/prisma/client";
 
 // =======================================================================
@@ -69,3 +73,29 @@ export function dadosDoAtendimento(entrada: {
     // fluxo, com outra tela e outras perguntas.
   };
 }
+
+// -----------------------------------------------------------------------
+// Próxima ação — opcional, na mesma submissão
+// -----------------------------------------------------------------------
+// ATENDIMENTO responde "o que acabou de acontecer?"; FOLLOW-UP responde
+// "o que eu preciso fazer depois?". São dois fatos diferentes e
+// continuam sendo dois registros diferentes no domínio — o que a
+// experiência faz é criá-los juntos quando o corretor pede os dois.
+//
+// Os campos NÃO são novos: `subject` é obrigatório para FOLLOW_UP por
+// regra de aplicação já existente (ver o comentário do campo no schema)
+// e o instante segue o mesmo contrato datetime-local das demais telas de
+// agenda, interpretado como hora de PAREDE da organização. Nada aqui
+// inventa validação: as duas vêm de scheduled-activity-schema.ts.
+
+/** Nome do checkbox no formulário. Marcado envia "on". */
+export const CAMPO_AGENDAR_PROXIMO = "agendarProximo";
+
+export function pediuProximaAcao(formData: FormData): boolean {
+  return formData.get(CAMPO_AGENDAR_PROXIMO) === "on";
+}
+
+export const proximaAcaoSchema = z.object({
+  proximoAssunto: assuntoFollowUpSchema,
+  proximoQuando: scheduledAtInputSchema,
+});

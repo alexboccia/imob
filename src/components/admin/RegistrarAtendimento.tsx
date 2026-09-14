@@ -4,10 +4,15 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { registrarAtendimentoDoContato } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
-import { TIPOS_ATENDIMENTO, TIPO_ATENDIMENTO_PADRAO } from "@/lib/registro-atendimento";
+import {
+  CAMPO_AGENDAR_PROXIMO,
+  TIPOS_ATENDIMENTO,
+  TIPO_ATENDIMENTO_PADRAO,
+} from "@/lib/registro-atendimento";
 import { TIPO_INTERACAO_LABEL } from "@/lib/crm-labels";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -46,6 +51,11 @@ export function RegistrarAtendimento({
 }) {
   const [aberto, setAberto] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [errosCampo, setErrosCampo] = useState<Record<string, string[]>>({});
+  // Os campos da próxima ação só existem quando ela é pedida — o diálogo
+  // fechado continua do tamanho de antes, e quem só quer registrar o
+  // atendimento não vê formulário de agenda nenhum.
+  const [agendarProximo, setAgendarProximo] = useState(false);
   const [pendente, iniciar] = useTransition();
 
   function enviar(evento: React.FormEvent<HTMLFormElement>) {
@@ -59,10 +69,13 @@ export function RegistrarAtendimento({
       );
       if (estado.success) {
         setErro(null);
+        setErrosCampo({});
         setAberto(false);
+        setAgendarProximo(false);
         toast.success(estado.message ?? "Atendimento registrado.");
       } else {
         setErro(estado.message ?? "Não foi possível registrar o atendimento.");
+        setErrosCampo(estado.fieldErrors ?? {});
       }
     });
   }
@@ -70,13 +83,20 @@ export function RegistrarAtendimento({
   const idTipo = `atendimento-tipo-${interactionId}`;
   const idNotas = `atendimento-notas-${interactionId}`;
   const idErro = `atendimento-erro-${interactionId}`;
+  const idProximo = `atendimento-proximo-${interactionId}`;
+  const idAssunto = `atendimento-assunto-${interactionId}`;
+  const idQuando = `atendimento-quando-${interactionId}`;
 
   return (
     <Dialog
       open={aberto}
       onOpenChange={(valor) => {
         setAberto(valor);
-        if (!valor) setErro(null);
+        if (!valor) {
+          setErro(null);
+          setErrosCampo({});
+          setAgendarProximo(false);
+        }
       }}
     >
       <DialogTrigger render={<Button type="button" size="sm" />}>
@@ -119,6 +139,59 @@ export function RegistrarAtendimento({
                 aria-describedby={erro ? idErro : undefined}
               />
             </div>
+
+            {/* A próxima ação é OPCIONAL: existe atendimento que termina
+                ali, e obrigar um agendamento faria o corretor inventar
+                um compromisso para conseguir salvar. Checkbox nativo com
+                <label> clicável — semântica antes de estilo. */}
+            <div className="flex items-center gap-2 border-t pt-3">
+              <input
+                type="checkbox"
+                id={idProximo}
+                name={CAMPO_AGENDAR_PROXIMO}
+                checked={agendarProximo}
+                onChange={(e) => setAgendarProximo(e.target.checked)}
+                className="size-4"
+              />
+              <Label htmlFor={idProximo} className="font-normal">
+                Agendar próximo contato
+              </Label>
+            </div>
+
+            {agendarProximo && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor={idAssunto}>O que precisa ser feito</Label>
+                  <Input
+                    id={idAssunto}
+                    name="proximoAssunto"
+                    placeholder="Ex.: ligar para confirmar a visita."
+                    aria-invalid={errosCampo.proximoAssunto ? true : undefined}
+                    aria-describedby={errosCampo.proximoAssunto ? `${idAssunto}-erro` : undefined}
+                  />
+                  {errosCampo.proximoAssunto && (
+                    <p id={`${idAssunto}-erro`} className="text-sm text-destructive">
+                      {errosCampo.proximoAssunto[0]}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={idQuando}>Quando</Label>
+                  <Input
+                    id={idQuando}
+                    name="proximoQuando"
+                    type="datetime-local"
+                    aria-invalid={errosCampo.proximoQuando ? true : undefined}
+                    aria-describedby={errosCampo.proximoQuando ? `${idQuando}-erro` : undefined}
+                  />
+                  {errosCampo.proximoQuando && (
+                    <p id={`${idQuando}-erro`} className="text-sm text-destructive">
+                      {errosCampo.proximoQuando[0]}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {erro && (
               <p id={idErro} role="alert" className="text-sm text-destructive">

@@ -34,10 +34,16 @@ async function main() {
   if (acao !== "limpar") throw new Error(`Ação desconhecida: ${acao ?? "(nenhuma)"}.`);
   if (!marcador) throw new Error("limpar exige o marcador da nota do teste.");
 
-  const { count } = await prisma.interaction.deleteMany({
+  // Fase 32 — o mesmo marcador limpa os DOIS fatos que a submissão pode
+  // criar. O compromisso é apagado primeiro por clareza; não há FK entre
+  // eles (a relação nunca foi persistida, de propósito).
+  const compromissos = await prisma.scheduledActivity.deleteMany({
+    where: { subject: marcador },
+  });
+  const atendimentos = await prisma.interaction.deleteMany({
     where: { memberId: { not: null }, notes: marcador },
   });
-  console.log(String(count));
+  console.log(String(atendimentos.count + compromissos.count));
 }
 
 main()

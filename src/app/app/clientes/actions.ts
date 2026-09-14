@@ -37,7 +37,14 @@ import {
   type EscopoComercial,
 } from "@/lib/escopo-comercial";
 import { formatarPreco } from "@/lib/format";
-import { dadosDoAtendimento, interacaoSchema } from "@/lib/registro-atendimento";
+import {
+  dadosDoAtendimento,
+  interacaoSchema,
+  pediuProximaAcao,
+  proximaAcaoSchema,
+} from "@/lib/registro-atendimento";
+import { deDatetimeLocalNoFuso } from "@/lib/fuso-horario";
+import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import {
   erroAcessoNegado,
   erroGenerico,
@@ -901,24 +908,99 @@ export async function registrarAtendimentoDoContato(
       session.user.organizationMemberId
     );
 
-    await prisma.interaction.create({
-      data: dadosDoAtendimento({
-        organizationId,
-        personId: contato.personId,
-        // Preserva o imóvel do contato original quando existe.
-        propertyId: contato.propertyId,
-        tipo: analise.data.tipo,
-        notas: analise.data.notas,
-        autorMemberId,
-      }),
+    const dadosInteracao = dadosDoAtendimento({
+      organizationId,
+      personId: contato.personId,
+      // Preserva o imóvel do contato original quando existe.
+      propertyId: contato.propertyId,
+      tipo: analise.data.tipo,
+      notas: analise.data.notas,
+      autorMemberId,
     });
 
-    // A Central recalcula a fila na revalidação; a ficha do cliente
-    // passa a mostrar o atendimento no histórico.
+    // -------------------------------------------------------------------
+    // Sem próxima ação: um fato, uma escrita, nenhuma transação.
+    // -------------------------------------------------------------------
+    if (!pediuProximaAcao(formData)) {
+      await prisma.interaction.create({ data: dadosInteracao });
+      revalidatePath("/app");
+      revalidatePath(`/app/clientes/${contato.personId}`);
+      return sucesso("Atendimento registrado.");
+    }
+
+    // -------------------------------------------------------------------
+    // Com próxima ação: DOIS fatos, uma intenção
+    // -------------------------------------------------------------------
+    const proxima = proximaAcaoSchema.safeParse(Object.fromEntries(formData.entries()));
+    if (!proxima.success) return erroValidacao(proxima.error);
+
+    // datetime-local é hora de PAREDE da organização, nunca do navegador
+    // nem do processo — mesma conversão de criarFollowUp (Fase 18).
+    const fuso = await buscarFusoOrganizacao(organizationId);
+    const quando = deDatetimeLocalNoFuso(proxima.data.proximoQuando, fuso);
+    if (!quando) {
+      return {
+        success: false,
+        message: "Verifique os campos destacados.",
+        fieldErrors: { proximoQuando: ["Data/horário inválidos."] },
+      };
+    }
+    // Mesma regra do follow-up da negociação: compromisso é futuro. Não
+    // inventei regra nova aqui, e também não afrouxei a que existe.
+    if (quando.getTime() <= Date.now()) {
+      return {
+        success: false,
+        message: "Verifique os campos destacados.",
+        fieldErrors: { proximoQuando: ["O próximo contato deve ser agendado para uma data futura."] },
+      };
+    }
+
+    // O compromisso existe para ter DONO. Sem membership válida nesta
+    // organização ele nasceria órfão e invisível — melhor recusar do que
+    // gravar algo que o corretor pediu e nunca veria.
+    if (!autorMemberId) {
+      return erroGenerico("Não foi possível identificar seu vínculo com esta organização.");
+    }
+
+    // ATÔMICO: o corretor pediu as duas coisas. Registrar o atendimento
+    // e falhar o agendamento tiraria o contato da fila sem criar o
+    // compromisso que ele explicitamente pediu — o pior resultado
+    // possível, porque some da vista E não vira próximo passo.
+    await prisma.$transaction(async (tx) => {
+      await tx.interaction.create({ data: dadosInteracao });
+      await tx.scheduledActivity.create({
+        data: {
+          organizationId,
+          personId: contato.personId,
+          propertyId: contato.propertyId,
+          // SEM negociação, e isso é deliberado: este compromisso nasce
+          // do ATENDIMENTO, não de um negócio. Mesmo quando já existe
+          // uma negociação daquele par (pessoa, imóvel), associá-la aqui
+          // mudaria silenciosamente de quem é o compromisso — passaria a
+          // ser do responsável pela negociação, que pode ser outra
+          // pessoa. Quem quer follow-up DA NEGOCIAÇÃO tem criarFollowUp,
+          // que continua exigindo a negociação e é onde essa semântica
+          // mora.
+          propertyInterestId: null,
+          type: "FOLLOW_UP",
+          subject: proxima.data.proximoAssunto,
+          scheduledAt: quando,
+          // POSSE: quem vai executar. Resolvido no servidor a partir da
+          // sessão e já validado contra esta organização.
+          responsibleMemberId: autorMemberId,
+          // AUTORIA: quem criou. Hoje é o mesmo membro, e isso é
+          // coincidência deste caso de uso — o modelo continua capaz de
+          // distinguir um gestor que agenda para outro corretor.
+          createdByMemberId: autorMemberId,
+        },
+      });
+    });
+
     revalidatePath("/app");
+    revalidatePath("/app/agenda");
     revalidatePath(`/app/clientes/${contato.personId}`);
 
-    return sucesso("Atendimento registrado.");
+    return sucesso("Atendimento registrado e próximo contato agendado.");
   });
 }
 

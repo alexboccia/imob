@@ -1,5 +1,6 @@
 import type { CommercialVisibility, Prisma } from "@/generated/prisma/client";
 import { temPapel, PAPEIS_VISAO_EQUIPE } from "@/lib/authorization";
+import { atividadeDoMembro } from "@/lib/responsavel-atividade";
 
 // =======================================================================
 // Escopo comercial (Fase 22)
@@ -110,16 +111,26 @@ export function wherePessoa(escopo: EscopoComercial): Prisma.PersonWhereInput {
   };
 }
 
-// COMPROMISSO — herda o dono da negociação (Fases 17/19), nunca de
-// createdByMemberId.
+// COMPROMISSO — a posse vem da negociação quando ela existe e, desde a
+// Fase 32, da própria atividade quando não existe.
 //
-// Atividade SEM negociação não tem dono objetivo. No modo restrito ela
-// fica fora do escopo do membro (só a camada gerencial a vê), pela mesma
-// razão conservadora da Fase 21: atribuí-la a quem a criou seria usar
-// autoria como posse. Nenhum fluxo do produto cria atividade órfã.
+// O texto anterior dizia que "atividade SEM negociação não tem dono
+// objetivo", e isso era verdade enquanto o único caminho de criação
+// sempre trazia uma negociação. Quando a Caixa de Entrada passou a
+// precisar agendar o próximo contato de um lead que ainda não virou
+// oportunidade, a ausência de dono deixou de ser uma consequência
+// aceitável e virou a lacuna que a coluna responsibleMemberId fechou.
+//
+// O que NÃO mudou: createdByMemberId continua sendo autoria e nunca
+// posse, e a negociação continua soberana quando existe — ver
+// atividadeDoMembro, onde a precedência é estrutural.
+//
+// Atividade histórica sem negociação e sem responsável continua fora do
+// escopo restrito, exatamente como antes: nenhuma visibilidade foi
+// reduzida, e nenhuma foi ampliada por acidente.
 export function whereAtividade(escopo: EscopoComercial): Prisma.ScheduledActivityWhereInput {
   if (escopo.tipo === "ORGANIZACAO") return {};
-  return { propertyInterest: { is: { responsibleMemberId: escopo.memberId } } };
+  return atividadeDoMembro(escopo.memberId);
 }
 
 // -----------------------------------------------------------------------

@@ -1045,6 +1045,31 @@ model ScheduledActivity {
   createdByMemberId String?
   createdByMember   OrganizationMember? @relation("ScheduledActivityCreatedByMember", fields: [createdByMemberId], references: [id])
 
+  // Fase 32 — QUEM PRECISA EXECUTAR, quando o compromisso não pertence a
+  // uma negociação. Até aqui a posse de uma atividade era derivada
+  // EXCLUSIVAMENTE de PropertyInterest.responsibleMemberId, e por isso um
+  // compromisso sem negociação não tinha dono objetivo — ele existia no
+  // banco e não aparecia na Central pessoal de ninguém. É essa lacuna, e
+  // só ela, que esta coluna fecha.
+  //
+  // PRECEDÊNCIA, e ela não é negociável: quando existe negociação, quem
+  // manda é ela. Esta coluna NUNCA sobrescreve
+  // PropertyInterest.responsibleMemberId — duas fontes de verdade para a
+  // mesma pergunta seria pior que a lacuna original. Ver
+  // responsavelEfetivoDaAtividade em src/lib/responsavel-atividade.ts,
+  // onde a regra vive inteira.
+  //
+  // E NÃO se confunde com createdByMemberId acima: AUTORIA ≠ POSSE
+  // (Fases 14/15/21). Hoje os dois coincidem no único fluxo que grava
+  // esta coluna, mas isso é coincidência do caso de uso — um gestor
+  // agendando para um corretor é exatamente o que o modelo precisa
+  // continuar conseguindo expressar.
+  //
+  // Nullable e sem backfill: atividade histórica continua com null e
+  // com o comportamento de sempre, decidido pela negociação.
+  responsibleMemberId String?
+  responsibleMember   OrganizationMember? @relation("ScheduledActivityResponsibleMember", fields: [responsibleMemberId], references: [id])
+
   type   ScheduledActivityType   @default(VISIT)
   status ScheduledActivityStatus @default(SCHEDULED)
 
@@ -1077,6 +1102,12 @@ model ScheduledActivity {
   @@index([organizationId, personId, scheduledAt])
   @@index([organizationId, propertyId, scheduledAt])
   @@index([organizationId, propertyInterestId, scheduledAt])
+  // Fase 32 — a visão pessoal da Central passa a buscar, além das
+  // atividades da minha negociação, as atividades SEM negociação cuja
+  // responsabilidade é minha. Este índice é esse padrão de acesso, no
+  // mesmo formato dos irmãos acima: organização, dimensão de posse,
+  // ordenação por data.
+  @@index([organizationId, responsibleMemberId, scheduledAt])
   @@index([organizationId, status, scheduledAt])
   @@map("scheduled_activities")
 }
@@ -1282,30 +1313,36 @@ model OrganizationMember {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  notificationPreferences    NotificationPreference[]
-  responsibleProperties      Property[]                           @relation("PropertyResponsibleMember")
+  notificationPreferences        NotificationPreference[]
+  responsibleProperties          Property[]                           @relation("PropertyResponsibleMember")
   // Fase 11 — negociações sob responsabilidade deste membro. Relação
   // SEPARADA de responsibleProperties de propósito: ser responsável pelo
   // imóvel não torna ninguém responsável pela negociação daquele imóvel.
-  responsibleInterests       PropertyInterest[]                   @relation("PropertyInterestResponsibleMember")
+  responsibleInterests           PropertyInterest[]                   @relation("PropertyInterestResponsibleMember")
   // Fase 12 — participações econômicas em negócios. SEPARADA de
   // responsibleInterests de propósito: conduzir a negociação não implica
   // receber parcela nenhuma da comissão.
-  commissionParticipations   PropertyInterestParticipant[]        @relation("ParticipantMember")
+  commissionParticipations       PropertyInterestParticipant[]        @relation("ParticipantMember")
   // Fase 13 — pagamentos de comissão REGISTRADOS por este membro (ator
   // administrativo), não recebidos por ele. Quem recebe é determinado
   // pelo participante, nunca por estas relações.
   // Fase 14 — transições de etapa executadas por este membro. Relação
   // SEPARADA das demais: mover o funil não é conduzir a negociação nem
   // receber comissão.
-  stageChanges               PropertyInterestStageHistory[]       @relation("StageHistoryChangedByMember")
-  registeredPayments         PropertyInterestParticipantPayment[] @relation("PaymentCreatedByMember")
-  cancelledPayments          PropertyInterestParticipantPayment[] @relation("PaymentCancelledByMember")
-  assignedPeople             Person[]                             @relation("PersonAssignedMember")
-  leadCapturesResolvidas     LeadCapture[]                        @relation("LeadCaptureResolvedByMember")
-  interactions               Interaction[]                        @relation("InteractionMember")
-  deals                      Deal[]                               @relation("DealMember")
-  createdScheduledActivities ScheduledActivity[]                  @relation("ScheduledActivityCreatedByMember")
+  stageChanges                   PropertyInterestStageHistory[]       @relation("StageHistoryChangedByMember")
+  registeredPayments             PropertyInterestParticipantPayment[] @relation("PaymentCreatedByMember")
+  cancelledPayments              PropertyInterestParticipantPayment[] @relation("PaymentCancelledByMember")
+  assignedPeople                 Person[]                             @relation("PersonAssignedMember")
+  leadCapturesResolvidas         LeadCapture[]                        @relation("LeadCaptureResolvedByMember")
+  interactions                   Interaction[]                        @relation("InteractionMember")
+  deals                          Deal[]                               @relation("DealMember")
+  createdScheduledActivities     ScheduledActivity[]                  @relation("ScheduledActivityCreatedByMember")
+  // Fase 32 — compromissos que este membro precisa EXECUTAR quando não
+  // há negociação decidindo isso. Relação SEPARADA de
+  // createdScheduledActivities de propósito, pela mesma razão que
+  // responsibleInterests é separada de responsibleProperties: criar não
+  // é ser dono.
+  responsibleScheduledActivities ScheduledActivity[]                  @relation("ScheduledActivityResponsibleMember")
 
   @@unique([organizationId, userId])
   @@map("organization_members")

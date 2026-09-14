@@ -19,6 +19,7 @@ import { auth } from "@/lib/auth";
 import { registrarAtendimentoDoContato } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { buscarNovosContatos } from "@/lib/novos-contatos";
+import { buscarCentralTrabalho } from "@/lib/central-trabalho";
 
 // =======================================================================
 // Registrar atendimento a partir de um contato
@@ -58,6 +59,26 @@ function formulario(tipo: string, notas?: string): FormData {
   const fd = new FormData();
   fd.set("tipo", tipo);
   if (notas !== undefined) fd.set("notas", notas);
+  return fd;
+}
+
+// Formulário COM a próxima ação marcada. O instante viaja como
+// datetime-local (hora de parede da organização), igual às telas de
+// agenda — nenhuma convenção nova.
+function formularioComProximo(opcoes: {
+  tipo?: string;
+  assunto?: string;
+  quando?: Date;
+}): FormData {
+  const fd = formulario(opcoes.tipo ?? "CALL", "Conversei com o cliente.");
+  fd.set("agendarProximo", "on");
+  fd.set("proximoAssunto", opcoes.assunto ?? "Ligar para confirmar a visita");
+  const quando = opcoes.quando ?? new Date(Date.now() + 48 * 3600_000);
+  const dois = (n: number) => String(n).padStart(2, "0");
+  fd.set(
+    "proximoQuando",
+    `${quando.getUTCFullYear()}-${dois(quando.getUTCMonth() + 1)}-${dois(quando.getUTCDate())}T${dois(quando.getUTCHours())}:${dois(quando.getUTCMinutes())}`
+  );
   return fd;
 }
 
@@ -341,5 +362,223 @@ describe("derivação da fila — bordas de tempo", () => {
     });
 
     expect((await buscarNovosContatos(cenario.organization.id, TODA_A_ORGANIZACAO)).total).toBe(0);
+  });
+});
+
+// =======================================================================
+// Atendimento + próxima ação, na mesma submissão
+// =======================================================================
+// Dois FATOS diferentes, uma intenção do usuário. O domínio continua
+// expressando os dois separadamente — o que muda é que eles podem nascer
+// juntos, e atomicamente.
+describe("registrarAtendimentoDoContato — com próxima ação", () => {
+  test("sem marcar: cria só a Interaction, nenhum compromisso", async () => {
+    const cenario = await novoCenario();
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const contato = await contatoDoSite({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+    });
+
+    expect(
+      (await registrarAtendimentoDoContato(contato.id, ESTADO_INICIAL_ACAO, formulario("CALL")))
+        .success
+    ).toBe(true);
+    expect(
+      await prisma.scheduledActivity.count({ where: { organizationId: cenario.organization.id } })
+    ).toBe(0);
+  });
+
+  test("marcando: cria os dois, com posse e autoria corretas, sem negociação", async () => {
+    const cenario = await novoCenario();
+    autenticarComo(cenario);
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const contato = await contatoDoSite({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+    });
+
+    const estado = await registrarAtendimentoDoContato(
+      contato.id,
+      ESTADO_INICIAL_ACAO,
+      formularioComProximo({ assunto: "Ligar para confirmar a visita" })
+    );
+    expect(estado.success).toBe(true);
+
+    const atendimento = await prisma.interaction.findFirst({
+      where: { organizationId: cenario.organization.id, memberId: { not: null } },
+    });
+    expect(atendimento).not.toBeNull();
+
+    const compromisso = await prisma.scheduledActivity.findFirstOrThrow({
+      where: { organizationId: cenario.organization.id },
+    });
+    expect(compromisso.type).toBe("FOLLOW_UP");
+    expect(compromisso.subject).toBe("Ligar para confirmar a visita");
+    expect(compromisso.status).toBe("SCHEDULED");
+    expect(compromisso.personId).toBe(pessoa.id);
+    // O imóvel do contato viaja junto: "próximo contato com Maria SOBRE
+    // o apartamento X".
+    expect(compromisso.propertyId).toBe(imovel.id);
+    // Sem negociação, de propósito — o compromisso nasce do atendimento.
+    expect(compromisso.propertyInterestId).toBeNull();
+    // POSSE e AUTORIA são o mesmo membro neste caso de uso, e continuam
+    // sendo colunas diferentes.
+    expect(compromisso.responsibleMemberId).toBe(cenario.membro.id);
+    expect(compromisso.createdByMemberId).toBe(cenario.membro.id);
+  });
+
+  test("o compromisso aparece na Central do responsável", async () => {
+    const cenario = await novoCenario();
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const contato = await contatoDoSite({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+    });
+
+    await registrarAtendimentoDoContato(
+      contato.id,
+      ESTADO_INICIAL_ACAO,
+      formularioComProximo({})
+    );
+
+    const central = await buscarCentralTrabalho(
+      cenario.organization.id,
+      cenario.membro.id,
+      "UTC"
+    );
+    const todos = [...central.atrasadas.itens, ...central.hoje.itens, ...central.proximas];
+    expect(todos.map((c) => c.tipo)).toContain("FOLLOW_UP");
+  });
+
+  test("o contato sai da fila pelo ATENDIMENTO, nunca pelo compromisso", async () => {
+    // O compromisso é próxima ação, não prova de atendimento. A fila
+    // continua olhando só para Interaction/negociação.
+    const cenario = await novoCenario();
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const contato = await contatoDoSite({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      occurredAt: new Date(Date.now() - 3600_000),
+    });
+
+    await registrarAtendimentoDoContato(contato.id, ESTADO_INICIAL_ACAO, formularioComProximo({}));
+    expect((await buscarNovosContatos(cenario.organization.id, TODA_A_ORGANIZACAO)).total).toBe(0);
+  });
+
+  test("data no passado: nada é criado — nem o atendimento", async () => {
+    // ATOMICIDADE na prática: a validação acontece antes de qualquer
+    // escrita, então não existe o estado intermediário "contato saiu da
+    // fila mas o compromisso que ele pediu não existe".
+    const cenario = await novoCenario();
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const contato = await contatoDoSite({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+    });
+
+    const estado = await registrarAtendimentoDoContato(
+      contato.id,
+      ESTADO_INICIAL_ACAO,
+      formularioComProximo({ quando: new Date(Date.now() - 3600_000) })
+    );
+    expect(estado.success).toBe(false);
+    expect(estado.fieldErrors?.proximoQuando).toBeTruthy();
+    expect(
+      await prisma.interaction.count({
+        where: { organizationId: cenario.organization.id, memberId: { not: null } },
+      })
+    ).toBe(0);
+    expect(
+      await prisma.scheduledActivity.count({ where: { organizationId: cenario.organization.id } })
+    ).toBe(0);
+  });
+
+  test("assunto vazio: recusado, e nada é criado", async () => {
+    const cenario = await novoCenario();
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const contato = await contatoDoSite({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+    });
+
+    const estado = await registrarAtendimentoDoContato(
+      contato.id,
+      ESTADO_INICIAL_ACAO,
+      formularioComProximo({ assunto: "   " })
+    );
+    expect(estado.success).toBe(false);
+    expect(estado.fieldErrors?.proximoAssunto).toBeTruthy();
+    expect(
+      await prisma.interaction.count({
+        where: { organizationId: cenario.organization.id, memberId: { not: null } },
+      })
+    ).toBe(0);
+    expect(
+      await prisma.scheduledActivity.count({ where: { organizationId: cenario.organization.id } })
+    ).toBe(0);
+  });
+
+  test("membro de outro tenant na sessão: recusa e não cria compromisso órfão", async () => {
+    const meu = await novoCenario();
+    const alheio = await novoCenario();
+    const pessoa = await criarPessoa({ organizationId: meu.organization.id });
+    const contato = await contatoDoSite({
+      organizationId: meu.organization.id,
+      personId: pessoa.id,
+    });
+
+    autenticarComo(meu, { organizationMemberId: alheio.membro.id });
+    const estado = await registrarAtendimentoDoContato(
+      contato.id,
+      ESTADO_INICIAL_ACAO,
+      formularioComProximo({})
+    );
+
+    // Sem vínculo válido não há a quem atribuir o compromisso — e um
+    // compromisso órfão seria invisível justamente para quem o pediu.
+    expect(estado.success).toBe(false);
+    expect(
+      await prisma.scheduledActivity.count({ where: { organizationId: meu.organization.id } })
+    ).toBe(0);
+    expect(
+      await prisma.interaction.count({
+        where: { organizationId: meu.organization.id, memberId: { not: null } },
+      })
+    ).toBe(0);
+  });
+
+  test("novo contato depois do follow-up volta para a fila", async () => {
+    // Compromisso futuro agendado não pode mascarar uma manifestação
+    // NOVA de interesse.
+    const cenario = await novoCenario();
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const primeiro = await contatoDoSite({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      occurredAt: new Date(Date.now() - 4 * 3600_000),
+    });
+    await registrarAtendimentoDoContato(primeiro.id, ESTADO_INICIAL_ACAO, formularioComProximo({}));
+    expect((await buscarNovosContatos(cenario.organization.id, TODA_A_ORGANIZACAO)).total).toBe(0);
+
+    await prisma.interaction.updateMany({
+      where: { organizationId: cenario.organization.id, memberId: { not: null } },
+      data: { occurredAt: new Date(Date.now() - 2 * 3600_000) },
+    });
+    await contatoDoSite({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+      occurredAt: new Date(Date.now() - 3600_000),
+    });
+
+    expect((await buscarNovosContatos(cenario.organization.id, TODA_A_ORGANIZACAO)).total).toBe(1);
   });
 });
