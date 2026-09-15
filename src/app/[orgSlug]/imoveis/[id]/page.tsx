@@ -41,7 +41,6 @@ import { ResumoComercialImovel } from "@/components/imovel/ResumoComercialImovel
 import { BarraCtaImovel } from "@/components/imovel/BarraCtaImovel";
 import {
   ehLancamento,
-  estaEmObra,
   previsaoEntregaPorExtenso,
   rotuloEstagioObra,
 } from "@/lib/imovel-lancamento";
@@ -287,7 +286,6 @@ export default async function DetalheImovelPage({
   const lancamento = ehLancamento(imovel);
   const estagioObra = rotuloEstagioObra(imovel);
   const previsaoEntrega = previsaoEntregaPorExtenso(imovel.deliveryForecast);
-  const emObra = estaEmObra(imovel);
 
   return (
     <>
@@ -432,19 +430,6 @@ export default async function DetalheImovelPage({
             passam a ser percebidos como blocos próprios, sem alongar a
             página com áreas vazias. */}
         <div className="space-y-10 lg:col-span-2">
-          {/* Com obra em andamento, a evolução vem ANTES da descrição:
-              é a pergunta que o visitante faz primeiro num imóvel que
-              ainda está sendo construído. Pronto (ou sem estágio
-              cadastrado), o bloco continua na posição de sempre, mais
-              abaixo — ver EvolucaoObra adiante, que só renderiza uma vez
-              porque a condição das duas posições é mutuamente exclusiva. */}
-          {emObra && (
-            <EvolucaoObra
-              estagioObra={imovel.constructionStage}
-              previsaoEntrega={imovel.deliveryForecast}
-            />
-          )}
-
           {imovel.description && (
             <section>
               <h2 className={`${TITULO_BLOCO} mb-3`}>Descrição</h2>
@@ -459,12 +444,21 @@ export default async function DetalheImovelPage({
           )}
           <CaracteristicasDoImovel imovel={imovel} />
 
-          {!emObra && (
-            <EvolucaoObra
-              estagioObra={imovel.constructionStage}
-              previsaoEntrega={imovel.deliveryForecast}
-            />
-          )}
+          {/* POSIÇÃO ÚNICA da evolução da obra: sempre depois de
+              descrição e das duas listas de características (unidade e
+              condomínio).
+              Antes havia DUAS posições mutuamente exclusivas — em obra,
+              o bloco subia para antes da descrição; pronto, ficava aqui.
+              O bloco tinha assim uma posição que dependia do estágio, e
+              a ficha mudava de forma conforme o imóvel.
+              O componente já se autoprotege (devolve null quando não há
+              estágio cadastrado), então não há condicional aqui: sem
+              obra, nada renderiza e o `space-y-10` do container não abre
+              espaço nenhum. */}
+          <EvolucaoObra
+            estagioObra={imovel.constructionStage}
+            previsaoEntrega={imovel.deliveryForecast}
+          />
 
           {plantas.length > 0 && (
             <div>

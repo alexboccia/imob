@@ -1736,13 +1736,57 @@ test.describe("Detalhe — experiência de lançamento", () => {
     expect(texto).not.toMatch(/conclu[ií]d[oa]s?\s*:/i);
   });
 
-  test("com obra em andamento, a evolução vem antes da descrição", async ({ page }) => {
+  // A evolução da obra tinha DUAS posições possíveis: em obra, subia
+  // para antes da descrição; pronto, ficava depois das características.
+  // A ficha mudava de forma conforme o estágio do imóvel. Agora a
+  // posição é única e a ordem de leitura é sempre a mesma — primeiro o
+  // que o imóvel É, depois em que ponto a obra está.
+  test("a ordem de leitura é descrição, características e só então a obra", async ({
+    page,
+  }) => {
     await page.goto(URL_IMOVEL);
     const titulos = await page.locator("main h2").allInnerTexts();
-    const iObra = titulos.findIndex((t) => /Evolução da obra/.test(t));
+
     const iDescricao = titulos.indexOf("Descrição");
-    expect(iObra).toBeGreaterThanOrEqual(0);
-    expect(iObra).toBeLessThan(iDescricao);
+    const iUnidade = titulos.indexOf("Características da unidade");
+    const iCondominio = titulos.indexOf("Características do condomínio");
+    const iObra = titulos.findIndex((t) => /Evolução da obra/.test(t));
+
+    // Os quatro existem nesta ficha (fixture com obra em andamento,
+    // descrição e as duas listas de características preenchidas).
+    for (const [rotulo, indice] of [
+      ["Descrição", iDescricao],
+      ["Características da unidade", iUnidade],
+      ["Características do condomínio", iCondominio],
+      ["Evolução da obra", iObra],
+    ] as const) {
+      expect(indice, `bloco ausente: ${rotulo}`).toBeGreaterThanOrEqual(0);
+    }
+
+    // E a sequência inteira, não só um par: é a ordem que se quer travar.
+    expect(iDescricao).toBeLessThan(iUnidade);
+    expect(iUnidade).toBeLessThan(iCondominio);
+    expect(iCondominio).toBeLessThan(iObra);
+  });
+
+  // A mudança de posição não pode ter mexido no bloco em si: ele continua
+  // renderizando, com a mesma linha do tempo e a mesma previsão.
+  test("a evolução da obra continua com o mesmo conteúdo na nova posição", async ({
+    page,
+  }) => {
+    await page.goto(URL_IMOVEL);
+    // O container é o pai direto do título — o card com borda que o
+    // próprio EvolucaoObra renderiza.
+    const bloco = page
+      .getByRole("heading", { name: /Evolução da obra/ })
+      .locator("xpath=..");
+    // A linha do tempo inteira, com a etapa ATUAL marcada e a previsão
+    // no formato curto que o bloco sempre usou (JUN/27) — o cabeçalho da
+    // página é que escreve "Junho de 2027" por extenso.
+    await expect(bloco).toContainText("Na planta");
+    await expect(bloco).toContainText("Em construção");
+    await expect(bloco).toContainText("Pronto para morar");
+    await expect(bloco).toContainText("JUN/27");
   });
 
   test("resumo comercial mostra atributos reais e nenhum contador em zero", async ({ page }) => {
@@ -1789,6 +1833,30 @@ test.describe("Detalhe — experiência de lançamento", () => {
     await expect(page.getByRole("heading", { name: /Evolução da obra/ })).toBeVisible();
     expect(await semOverflow(page)).toBe(true);
   });
+
+  // A reordenação mexeu na coluna principal, que em lg divide espaço com
+  // o card lateral. Estas larguras cobrem os dois regimes (empilhado
+  // abaixo de lg, duas colunas a partir dele) e o bloco reposicionado
+  // precisa estar inteiro em todos.
+  for (const largura of [320, 390, 768, 1280, 1440]) {
+    test(`${largura}px: a obra na nova posição não estoura nem é cortada`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.goto(URL_IMOVEL);
+
+      const titulo = page.getByRole("heading", { name: /Evolução da obra/ });
+      await expect(titulo).toBeVisible();
+      // Visível não basta: o bloco precisa caber na largura da coluna.
+      const caixa = await titulo.boundingBox();
+      expect(caixa, `sem bounding box @ ${largura}px`).not.toBeNull();
+      expect(caixa!.x + caixa!.width, `bloco cortado @ ${largura}px`).toBeLessThanOrEqual(
+        largura + 1
+      );
+
+      expect(await semOverflow(page), `overflow @ ${largura}px`).toBe(true);
+    });
+  }
 });
 
 // Trava semântica: o domínio NÃO tem empreendimento nem unidades — cada
