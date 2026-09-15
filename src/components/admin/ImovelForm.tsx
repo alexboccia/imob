@@ -21,6 +21,13 @@ import { MAX_DESTAQUES_HOME, type OcupacaoVitrine } from "@/lib/vitrine-home";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
   Select,
   SelectContent,
   SelectGroup,
@@ -114,33 +121,49 @@ export function ImovelForm({
       ? v.tipo
       : null;
 
+  // Mesmo padrão das telas de Configurações: o formulário é uma pilha de
+  // CARDS, um por assunto, cada um com título e uma linha dizendo o que
+  // aquele bloco decide. Antes era uma coluna única com vinte e poucos
+  // campos seguidos, sem hierarquia — a mesma informação, mas sem nada
+  // que dissesse onde um assunto termina e outro começa.
+  //
+  // Nenhum campo mudou de nome, de valor padrão ou de ordem: isto é
+  // reorganização visual, e o que a action recebe continua idêntico.
   return (
-    <form action={formAction} className="space-y-6 max-w-3xl">
+    <form action={formAction} className="space-y-5">
       {estado.message && !estado.success && (
         <Alert variant="destructive">
           <AlertDescription>{estado.message}</AlertDescription>
         </Alert>
       )}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="titulo">Título</Label>
-        <Input id="titulo" name="titulo" defaultValue={v.titulo ?? ""} required />
-        <ErroCampo erros={estado.fieldErrors?.titulo} />
-      </div>
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="min-w-0 break-words">Identificação</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            Como o imóvel é apresentado e em que situação ele está.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="min-w-0 space-y-6">
+          <div className="space-y-1.5">
+            <Label htmlFor="titulo">Título</Label>
+            <Input id="titulo" name="titulo" defaultValue={v.titulo ?? ""} required />
+            <ErroCampo erros={estado.fieldErrors?.titulo} />
+          </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="descricao">Descrição</Label>
-        <Textarea
+          <div className="space-y-1.5">
+            <Label htmlFor="descricao">Descrição</Label>
+            <Textarea
           id="descricao"
           name="descricao"
           defaultValue={v.descricao ?? ""}
           rows={4}
-        />
-        <ErroCampo erros={estado.fieldErrors?.descricao} />
-      </div>
+            />
+            <ErroCampo erros={estado.fieldErrors?.descricao} />
+          </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="space-y-1.5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
           <Label htmlFor="tipo">Tipo</Label>
           <Select
             name="tipo"
@@ -170,8 +193,8 @@ export function ImovelForm({
             </SelectContent>
           </Select>
           <ErroCampo erros={estado.fieldErrors?.tipo} />
-        </div>
-        <div className="space-y-1.5">
+            </div>
+            <div className="space-y-1.5">
           <Label htmlFor="finalidade">Finalidade</Label>
           <Select name="finalidade" defaultValue={v.finalidade ?? "SALE"}>
             <SelectTrigger id="finalidade" className="w-full">
@@ -187,8 +210,8 @@ export function ImovelForm({
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-1.5">
+            </div>
+            <div className="space-y-1.5">
           <Label htmlFor="status">Status</Label>
           <Select name="status" defaultValue={v.status ?? "DRAFT"}>
             <SelectTrigger id="status" className="w-full">
@@ -204,27 +227,38 @@ export function ImovelForm({
               ))}
             </SelectContent>
           </Select>
-        </div>
-      </div>
+            </div>
+          </div>
 
-      {/* "Lançamento" saiu deste grupo e virou seção própria (abaixo),
+        </CardContent>
+      </Card>
+
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="min-w-0 break-words">Divulgação</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            Onde este imóvel aparece no site e com quais selos.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="min-w-0 space-y-6">
+          {/* "Lançamento" saiu deste grupo e virou seção própria (abaixo),
           junto dos campos que só existem por causa dele. Aqui ficam os
           rótulos que são só marcação comercial, sem campo associado. */}
-      {/* Vitrine editorial da Home — separada dos "Rótulos" abaixo de
+          {/* Vitrine editorial da Home — separada dos "Rótulos" abaixo de
           propósito: aqueles marcam o imóvel (badge, filtro), este decide
           o que a página inicial mostra. Um select, e não um checkbox,
           porque a escolha carrega a ORDEM junto: selecionar e ordenar
           numa interação só, sem arrastar nada. */}
-      <div>
-        <Label className="mb-2" htmlFor="posicaoDestaqueHome">
+          <div>
+            <Label className="mb-2" htmlFor="posicaoDestaqueHome">
           Página inicial
-        </Label>
-        <select
+            </Label>
+            <select
           id="posicaoDestaqueHome"
           name="posicaoDestaqueHome"
           defaultValue={v.posicaoDestaqueHome ? String(v.posicaoDestaqueHome) : ""}
           className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:max-w-sm"
-        >
+            >
           <option value="">Não exibir na página inicial</option>
           {ocupacaoVitrine.map(({ posicao, imovel }) => {
             const ehEsteImovel = imovel !== null && imovel.id === propertyId;
@@ -242,16 +276,16 @@ export function ImovelForm({
               </option>
             );
           })}
-        </select>
-        <p className="mt-1 text-xs text-muted-foreground">
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
           A página inicial exibe até {MAX_DESTAQUES_HOME} imóveis em destaque, na ordem
           escolhida aqui. Só aparecem os que estiverem disponíveis.
-        </p>
-      </div>
+            </p>
+          </div>
 
-      <div>
-        <Label className="mb-2">Rótulos</Label>
-        <div className="flex flex-col gap-2">
+          <div>
+            <Label className="mb-2">Rótulos</Label>
+            <div className="flex flex-col gap-2">
           <label className="flex items-center gap-2 text-sm">
             <Checkbox name="destaque" defaultChecked={v.destaque ?? false} />
             Destaque
@@ -263,25 +297,36 @@ export function ImovelForm({
             />
             Oportunidade
           </label>
-        </div>
-      </div>
+            </div>
+          </div>
 
-      <SecaoLancamentoFields
-        valores={{
+          <SecaoLancamentoFields
+            valores={{
           lancamento: v.lancamento,
           construtora: v.construtora,
           estagioObra: v.estagioObra,
           previsaoEntrega: v.previsaoEntrega,
-        }}
-      />
+            }}
+          />
 
-      <label className="flex items-center gap-2 text-sm">
-        <Checkbox name="slideshow" defaultChecked={v.slideshow ?? false} />
-        Adicionar ao slideshow da página inicial
-      </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox name="slideshow" defaultChecked={v.slideshow ?? false} />
+            Adicionar ao slideshow da página inicial
+          </label>
 
-      <CamposEndereco
-        valoresIniciais={{
+        </CardContent>
+      </Card>
+
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="min-w-0 break-words">Endereço</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            Onde o imóvel fica. Define bairro e cidade nos filtros do site.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="min-w-0">
+          <CamposEndereco
+            valoresIniciais={{
           cep: v.cep,
           logradouro: v.logradouro,
           numero: v.numero,
@@ -291,12 +336,23 @@ export function ImovelForm({
           estado: v.estado,
           latitude: v.latitude,
           longitude: v.longitude,
-        }}
-        erros={estado.fieldErrors}
-      />
+            }}
+            erros={estado.fieldErrors}
+          />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="space-y-1.5">
+        </CardContent>
+      </Card>
+
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="min-w-0 break-words">Valores</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            O site mostra o preço da finalidade escolhida acima.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="min-w-0">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="space-y-1.5">
           <Label htmlFor="preco">Preço de venda (R$)</Label>
           <CampoMoeda
             id="preco"
@@ -305,8 +361,8 @@ export function ImovelForm({
             className="w-full border rounded-md px-3 py-2"
           />
           <ErroCampo erros={estado.fieldErrors?.preco} />
-        </div>
-        <div className="space-y-1.5">
+            </div>
+            <div className="space-y-1.5">
           <Label htmlFor="precoAluguel">Preço de aluguel (R$/mês)</Label>
           <CampoMoeda
             id="precoAluguel"
@@ -315,8 +371,8 @@ export function ImovelForm({
             className="w-full border rounded-md px-3 py-2"
           />
           <ErroCampo erros={estado.fieldErrors?.precoAluguel} />
-        </div>
-        <div className="space-y-1.5">
+            </div>
+            <div className="space-y-1.5">
           <Label htmlFor="precoCondominio">Condomínio (R$)</Label>
           <CampoMoeda
             id="precoCondominio"
@@ -325,8 +381,8 @@ export function ImovelForm({
             className="w-full border rounded-md px-3 py-2"
           />
           <ErroCampo erros={estado.fieldErrors?.precoCondominio} />
-        </div>
-        <div className="space-y-1.5">
+            </div>
+            <div className="space-y-1.5">
           <Label htmlFor="precoIptu">IPTU (R$)</Label>
           <CampoMoeda
             id="precoIptu"
@@ -335,11 +391,22 @@ export function ImovelForm({
             className="w-full border rounded-md px-3 py-2"
           />
           <ErroCampo erros={estado.fieldErrors?.precoIptu} />
-        </div>
-      </div>
+            </div>
+          </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="space-y-1.5">
+        </CardContent>
+      </Card>
+
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="min-w-0 break-words">Medidas e cômodos</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            Alimentam os filtros de área, dormitórios e vagas do site.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="min-w-0">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
           <Label htmlFor="areaTotal">Área total (m²)</Label>
           <Input
             id="areaTotal"
@@ -348,8 +415,8 @@ export function ImovelForm({
             step="0.01"
             defaultValue={v.areaTotal ?? ""}
           />
-        </div>
-        <div className="space-y-1.5">
+            </div>
+            <div className="space-y-1.5">
           <Label htmlFor="areaPrivativa">Área privativa (m²)</Label>
           <Input
             id="areaPrivativa"
@@ -358,8 +425,8 @@ export function ImovelForm({
             step="0.01"
             defaultValue={v.areaPrivativa ?? ""}
           />
-        </div>
-        <div className="space-y-1.5">
+            </div>
+            <div className="space-y-1.5">
           <Label htmlFor="quartos">Quartos</Label>
           <Input
             id="quartos"
@@ -367,8 +434,8 @@ export function ImovelForm({
             type="number"
             defaultValue={v.quartos ?? ""}
           />
-        </div>
-        <div className="space-y-1.5">
+            </div>
+            <div className="space-y-1.5">
           <Label htmlFor="suites">Suítes</Label>
           <Input
             id="suites"
@@ -376,8 +443,8 @@ export function ImovelForm({
             type="number"
             defaultValue={v.suites ?? ""}
           />
-        </div>
-        <div className="space-y-1.5">
+            </div>
+            <div className="space-y-1.5">
           <Label htmlFor="banheiros">Banheiros</Label>
           <Input
             id="banheiros"
@@ -385,8 +452,8 @@ export function ImovelForm({
             type="number"
             defaultValue={v.banheiros ?? ""}
           />
-        </div>
-        <div className="space-y-1.5">
+            </div>
+            <div className="space-y-1.5">
           <Label htmlFor="vagasGaragem">Vagas</Label>
           <Input
             id="vagasGaragem"
@@ -394,34 +461,68 @@ export function ImovelForm({
             type="number"
             defaultValue={v.vagasGaragem ?? ""}
           />
-        </div>
-      </div>
+            </div>
+          </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <SeletorCaracteristicas
+        </CardContent>
+      </Card>
+
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="min-w-0 break-words">Características</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            O que o imóvel e o condomínio oferecem. Viram filtros no site.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <SeletorCaracteristicas
           nome="caracteristicasImovel"
           titulo="Características do imóvel"
           opcoes={todasOpcoesImovel}
           selecionadas={v.caracteristicasImovel ?? []}
-        />
-        <SeletorCaracteristicas
+            />
+            <SeletorCaracteristicas
           nome="caracteristicasCondominio"
           titulo="Características do condomínio"
           opcoes={todasOpcoesCondominio}
           selecionadas={v.caracteristicasCondominio ?? []}
-        />
-      </div>
+            />
+          </div>
 
-      <div className="border-t pt-6">
-        <MediaUploader midiasIniciais={midiasIniciais} propertyId={propertyId} />
-      </div>
+        </CardContent>
+      </Card>
 
-      <div className="border-t pt-6">
-        <MateriaisUploader
-          materiaisIniciais={materiaisIniciais}
-          propertyId={propertyId}
-        />
-      </div>
+      {/* Fotos e materiais eram separados por uma linha (`border-t`), que
+          é o mesmo recurso que as Configurações usam DENTRO de um card
+          para dividir assuntos próximos. Aqui são assuntos inteiros, e
+          viram cards como os demais. */}
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="min-w-0 break-words">Fotos</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            A primeira foto é a capa nas listagens e no compartilhamento.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="min-w-0">
+          <MediaUploader midiasIniciais={midiasIniciais} propertyId={propertyId} />
+        </CardContent>
+      </Card>
+
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="min-w-0 break-words">Materiais de apresentação</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            Book, plantas e tabelas — entregues no site após o visitante se identificar.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="min-w-0">
+          <MateriaisUploader
+            materiaisIniciais={materiaisIniciais}
+            propertyId={propertyId}
+          />
+        </CardContent>
+      </Card>
 
       <BotaoSalvarImovel />
     </form>

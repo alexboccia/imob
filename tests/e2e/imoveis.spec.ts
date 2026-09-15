@@ -40,6 +40,43 @@ test("mostra erro de validação quando o título é curto demais", async ({ pag
 });
 
 // 5. editar imóvel
+// A tela de imóvel segue o MESMO padrão visual das Configurações: uma
+// pilha de cards por assunto, com título e descrição, em vez da coluna
+// única de vinte e poucos campos que ela era. Isto é teste de estrutura,
+// não de estética: sem ele, nada impede a tela de voltar a ser plana.
+test("o formulário do imóvel é uma pilha de seções, como as Configurações", async ({
+  page,
+}) => {
+  await page.goto(`/app/imoveis/${IDS_E2E.imovelParaEditarOrgA}`);
+
+  await expect(page.getByRole("heading", { level: 1, name: "Editar imóvel" })).toBeVisible();
+  for (const secao of [
+    "Identificação",
+    "Divulgação",
+    "Endereço",
+    "Valores",
+    "Medidas e cômodos",
+    "Características",
+    "Fotos",
+    "Materiais de apresentação",
+  ]) {
+    await expect(page.getByText(secao, { exact: true }).first()).toBeVisible();
+  }
+});
+
+for (const largura of [320, 390, 768, 1280, 1440]) {
+  test(`${largura}px: o formulário do imóvel não estoura a tela`, async ({ page }) => {
+    await page.setViewportSize({ width: largura, height: 900 });
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelParaEditarOrgA}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Editar imóvel" })).toBeVisible();
+
+    const semOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1
+    );
+    expect(semOverflow, `overflow @ ${largura}px`).toBe(true);
+  });
+}
+
 test("edita um imóvel existente", async ({ page }) => {
   await page.goto(`/app/imoveis/${IDS_E2E.imovelParaEditarOrgA}`);
   await expect(page.locator("#titulo")).toHaveValue("Apartamento E2E para edição");

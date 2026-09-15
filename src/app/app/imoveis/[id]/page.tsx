@@ -101,11 +101,18 @@ export default async function EditarImovelPage({
   const atualizarComId = atualizarImovel.bind(null, imovel.id);
 
   return (
-    <div>
+    <div className="space-y-5">
       <Suspense fallback={null}>
         <ToastSalvo />
       </Suspense>
-      <h1 className="text-2xl font-semibold mb-6">Editar imóvel</h1>
+      {/* Mesmo cabeçalho das telas de Configurações: título e uma linha
+          dizendo o que a tela decide. */}
+      <div className="min-w-0">
+        <h1 className="min-w-0 break-words text-2xl font-semibold">Editar imóvel</h1>
+        <p className="text-sm text-muted-foreground">
+          Dados, fotos e materiais que o site publica sobre este imóvel.
+        </p>
+      </div>
       <ImovelForm
         action={atualizarComId}
         propertyId={imovel.id}

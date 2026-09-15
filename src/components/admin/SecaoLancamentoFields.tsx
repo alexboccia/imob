@@ -74,8 +74,14 @@ export function SecaoLancamentoFields({
   const aberta = ehLancamento || temAlgumDado;
 
   return (
-    <fieldset className="space-y-4 rounded-lg border p-4">
-      <legend className="px-1 text-sm font-semibold">Lançamento</legend>
+    // Sem borda própria: desde que o formulário de imóvel virou uma pilha
+    // de cards (mesmo padrão das Configurações), esta caixa ficaria
+    // desenhada DENTRO de outra caixa. O agrupamento continua existindo
+    // onde importa — fieldset/legend, que é o que leitor de tela anuncia
+    // —, separado dos campos vizinhos por uma linha, exatamente como as
+    // Configurações separam assuntos próximos dentro de um card.
+    <fieldset className="min-w-0 space-y-4 border-t pt-6">
+      <legend className="text-sm font-medium">Lançamento</legend>
 
       <div className="space-y-0.5">
         <label className="flex items-start gap-2.5 text-sm font-medium">

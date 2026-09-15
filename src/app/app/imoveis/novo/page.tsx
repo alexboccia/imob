@@ -18,8 +18,13 @@ export default async function NovoImovelPage() {
   const ocupacaoVitrine = await buscarOcupacaoVitrine(organizationId);
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-6">Novo imóvel</h1>
+    <div className="space-y-5">
+      <div className="min-w-0">
+        <h1 className="min-w-0 break-words text-2xl font-semibold">Novo imóvel</h1>
+        <p className="text-sm text-muted-foreground">
+          Cadastre o imóvel. Ele só aparece no site quando o status for Disponível.
+        </p>
+      </div>
       <ImovelForm
         action={criarImovel}
         opcoesCaracteristicasImovel={opcoesImovel}
