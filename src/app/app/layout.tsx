@@ -38,6 +38,12 @@ const TODOS_NAV_LINKS: {
   // delas, fechando o bloco de CRM, e nunca antes de Imóveis/Clientes
   // (que são o trabalho diário, não a leitura gerencial).
   { href: "/app/analytics", label: "Analytics", modulo: "crm" },
+  // Fase 35 — a carteira financeira do corretor. Mesmo portão de módulo
+  // do resto do CRM e NENHUM recorte por papel: o saldo é pessoal, a
+  // consulta filtra pelo membro da sessão, e todo mundo que participa de
+  // uma comissão tem direito à própria resposta. Fica depois do Analytics
+  // porque é leitura, não trabalho diário — e antes dos catálogos.
+  { href: "/app/minhas-comissoes", label: "Minhas comissões", modulo: "crm" },
   // Fase 24 — fila de identificação. Primeiro item do menu com recorte
   // por PAPEL, e não só por módulo: um BROKER não decide a qual cliente
   // pertence um contato ambíguo, então o item não existe para ele. Isso

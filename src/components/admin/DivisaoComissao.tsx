@@ -7,7 +7,7 @@ import {
   removerParticipante,
 } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
-import { formatarPreco } from "@/lib/format";
+import { formatarPreco, formatarValorExato } from "@/lib/format";
 import { CampoMoeda } from "@/components/admin/CampoMoeda";
 import {
   resumirDivisao,
@@ -357,16 +357,21 @@ function LinhaParticipante({
             {participante.alocacao === null ? (
               <span className="text-xs italic text-muted-foreground">Parcela não definida</span>
             ) : (
-              formatarPreco(participante.alocacao)
+              // Centavos EXATOS aqui, diferente da comissão total logo
+              // acima: este é o valor devido a uma pessoa, e é o mesmo
+              // número que "Minhas comissões" mostra. Duas telas que
+              // arredondam de formas diferentes o mesmo fato parecem
+              // divergir mesmo calculando igual.
+              formatarValorExato(participante.alocacao)
             )}
           </p>
           {/* ATRIBUÍDO != PAGO. As três grandezas aparecem juntas, em
               TEXTO — o status nunca depende só de cor. */}
           <p className="text-xs text-muted-foreground">
-            Pago {formatarPreco(liquidacao.pago)} ·{" "}
+            Pago {formatarValorExato(liquidacao.pago)} ·{" "}
             {liquidacao.pendente === null
               ? "pendente —"
-              : `pendente ${formatarPreco(liquidacao.pendente)}`}{" "}
+              : `pendente ${formatarValorExato(liquidacao.pendente)}`}{" "}
             · <span className="font-medium text-foreground">{STATUS_LIQUIDACAO_LABEL[liquidacao.status]}</span>
           </p>
         </div>

@@ -172,6 +172,26 @@ export const ORG_INBOX = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Fase 35 — organização dedicada à COMISSÃO A RECEBER. Organização
+// própria pelo mesmo motivo das anteriores: as asserções afirmam valores
+// ABSOLUTOS de dinheiro, e registrar um pagamento em qualquer org
+// compartilhada deslocaria os números de liquidacao/participacao/analytics.
+//
+// Duas identidades com papéis diferentes, de propósito:
+//   OWNER    conduz a jornada — só ele pode registrar e cancelar pagamento.
+//   BRUNO    guarda a carteira de LEITURA, nunca mutada, e prova que um
+//            BROKER vê exclusivamente a própria participação.
+export const ORG_COMISSOES = {
+  slug: "e2e-org-comissoes",
+  email: "owner-comissoes@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+export const ORG_COMISSOES_BRUNO = {
+  slug: "e2e-org-comissoes",
+  email: "bruno-comissoes@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const IDS_E2E = {
   // Fase 30 — organização dedicada à CAIXA DE ENTRADA comercial
   // (Organização Q). Números absolutos de novos contatos, então
@@ -201,6 +221,12 @@ export const IDS_E2E = {
   // cadastrada, para "Clientes compatíveis" renderizar uma RECOMENDAÇÃO
   // de verdade e não o estado vazio.
   pessoaCompativelInbox: "e2e-pessoa-compativel-inbox",
+  // Fase 35 — carteira de comissão (Organização R).
+  imovelComissaoParcial: "e2e-imovel-comissao-parcial",
+  imovelComissaoPendente: "e2e-imovel-comissao-pendente",
+  imovelComissaoPerdido: "e2e-imovel-comissao-perdido",
+  imovelComissaoSemValor: "e2e-imovel-comissao-sem-valor",
+  imovelComissaoJornada: "e2e-imovel-comissao-jornada",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

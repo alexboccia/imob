@@ -38,6 +38,26 @@ export function formatarPreco(valor: unknown) {
 // inteiros — diferente do CampoMoeda (usado no cadastro do imóvel), que
 // mascara centavos dígito a dígito. O texto digitado já É o valor em
 // reais; isto só adiciona separador de milhar pra leitura, nunca decimal.
+// Valor monetário COM centavos — para dinheiro que alguém tem a receber.
+//
+// `formatarPreco` arredonda de propósito: preço de imóvel em centavos é
+// ruído, e o produto inteiro mostra "R$ 480.000". Comissão devida a uma
+// pessoa é outra coisa — R$ 10,37 arredondado para "R$ 10" transforma um
+// saldo exato numa aproximação, justamente onde o número precisa ser
+// conferível. Por isso são duas funções, e não um parâmetro: a escolha é
+// do tipo de valor, não de quem chama.
+//
+// null/ausente NÃO vira "R$ 0,00": em financeiro, ausência e zero são
+// fatos diferentes, e quem chama decide o que dizer no lugar.
+export function formatarValorExato(valor: number): string {
+  return valor.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function formatarMilharDigitos(valor: string): string {
   if (!valor) return "";
   return Number(valor).toLocaleString("pt-BR");

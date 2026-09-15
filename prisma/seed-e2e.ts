@@ -54,6 +54,13 @@ export const IDS_E2E = {
   // cadastrada, para "Clientes compatíveis" renderizar uma RECOMENDAÇÃO
   // de verdade e não o estado vazio.
   pessoaCompativelInbox: "e2e-pessoa-compativel-inbox",
+  // Fase 35 — carteira de comissão (Organização R). Ids fixos porque os
+  // specs abrem a ficha do imóvel e do cliente a partir do saldo.
+  imovelComissaoParcial: "e2e-imovel-comissao-parcial",
+  imovelComissaoPendente: "e2e-imovel-comissao-pendente",
+  imovelComissaoPerdido: "e2e-imovel-comissao-perdido",
+  imovelComissaoSemValor: "e2e-imovel-comissao-sem-valor",
+  imovelComissaoJornada: "e2e-imovel-comissao-jornada",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -737,6 +744,11 @@ async function main() {
     // Fase 26 — identidade multi-org e a dona da segunda organização.
     "multi-org@e2e.test",
     "owner-multi-b@e2e.test",
+    // Fase 35 — Organização R (comissão a receber). A dona conduz a
+    // jornada de pagamento e o corretor guarda a carteira de leitura:
+    // as duas identidades precisam sobreviver à limpeza de membros.
+    "owner-comissoes@e2e.test",
+    "bruno-comissoes@e2e.test",
     // Fase 27 — donas das organizações do ciclo financeiro.
     "owner-trial@e2e.test",
     "owner-vencida@e2e.test",
@@ -2470,6 +2482,217 @@ async function main() {
     where: { personId: IDS_E2E.pessoaCompativelInbox },
     update: preferenciaCompativel,
     create: { personId: IDS_E2E.pessoaCompativelInbox, ...preferenciaCompativel },
+  });
+
+  // =====================================================================
+  // Fase 35 — COMISSÃO A RECEBER (Organização R)
+  // =====================================================================
+  // Organização própria porque as asserções afirmam DINHEIRO em valores
+  // absolutos, e registrar um pagamento numa org compartilhada deslocaria
+  // os números de liquidacao/participacao/analytics.
+  //
+  // A divisão de papéis é o que torna a suíte estável:
+  //   BRUNO (BROKER)  carteira de LEITURA, nunca mutada. Ele não tem
+  //                   PAPEIS_LIQUIDACAO_COMISSAO, então nenhum spec
+  //                   consegue mexer nela nem por acidente.
+  //   DONA  (OWNER)   conduz a jornada de pagar/completar/cancelar, num
+  //                   negócio SÓ DELA, que ninguém lê por total.
+  //
+  // Carteira do Bruno, por construção:
+  //   parcial   15.000 atribuídos, 5.000 pagos  -> 10.000 a receber
+  //   pendente   8.000 atribuídos, nada pago    ->  8.000 a receber
+  //   perdido    9.000 atribuídos, REJECTED     -> fora da carteira
+  //   sem valor  parcela não definida           -> declarada à parte
+  //   TOTAIS    23.000 atribuídos · 5.000 recebidos · 18.000 a receber
+  const orgComissoes = await garantirOrganizacaoComDono({
+    slug: "e2e-org-comissoes",
+    timezone: "UTC",
+    name: "Organização E2E Comissões",
+    planId: planoCompleto.id,
+    email: "owner-comissoes@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+
+  // RESET EXPLÍCITO desta organização a cada rodada. A limpeza geral do
+  // seed monta a sua lista de organizações antes daqui (idsOrgs) e não
+  // alcança as orgs criadas no fim do arquivo — sem este bloco, cada
+  // execução somaria uma segunda carteira por cima da anterior e os
+  // totais dobrariam. Ordem obrigatória: o ledger tem FK RESTRICT para a
+  // parcela, então os pagamentos saem primeiro.
+  const idOrgComissoes = orgComissoes.organization.id;
+  await prisma.propertyInterestParticipantPayment.deleteMany({
+    where: { organizationId: idOrgComissoes },
+  });
+  await prisma.propertyInterestParticipant.deleteMany({
+    where: { organizationId: idOrgComissoes },
+  });
+  await prisma.propertyInterestStageHistory.deleteMany({
+    where: { organizationId: idOrgComissoes },
+  });
+  await prisma.propertyStatusHistory.deleteMany({
+    where: { property: { organizationId: idOrgComissoes } },
+  });
+  // Person.deleteMany cascateia PropertyInterest — e só depois de os
+  // participantes já terem saído.
+  await prisma.person.deleteMany({ where: { organizationId: idOrgComissoes } });
+
+  const usuarioBrunoComissoes = await prisma.user.upsert({
+    where: { email: "bruno-comissoes@e2e.test" },
+    update: { passwordHash: await bcrypt.hash(senha, 10) },
+    create: {
+      name: "Bruno Comissoes",
+      email: "bruno-comissoes@e2e.test",
+      passwordHash: await bcrypt.hash(senha, 10),
+    },
+    select: { id: true },
+  });
+  const brunoComissoes = await prisma.organizationMember.upsert({
+    where: {
+      organizationId_userId: {
+        organizationId: orgComissoes.organization.id,
+        userId: usuarioBrunoComissoes.id,
+      },
+    },
+    update: { role: "BROKER" },
+    create: {
+      organizationId: orgComissoes.organization.id,
+      userId: usuarioBrunoComissoes.id,
+      role: "BROKER",
+    },
+    select: { id: true },
+  });
+
+  // Um negócio com a sua divisão. `alocacaoColega` existe só no primeiro:
+  // é o dinheiro de outra pessoa no MESMO negócio, que precisa estar lá
+  // para a carteira poder provar que não o soma.
+  const negocioDeComissao = async (opcoes: {
+    imovelId: string;
+    titulo: string;
+    nomePessoa: string;
+    stage: "WON" | "REJECTED";
+    closedValue: string | null;
+    commissionValue: string | null;
+    memberId: string;
+    alocacao: string | null;
+    pago?: string;
+    alocacaoColega?: { memberId: string; valor: string; pago?: string };
+  }) => {
+    const organizationId = orgComissoes.organization.id;
+    const imovel = await garantirImovel({
+      id: opcoes.imovelId,
+      organizationId,
+      title: opcoes.titulo,
+      price: 500000,
+    });
+    const pessoa = await prisma.person.create({
+      data: { organizationId, name: opcoes.nomePessoa, roles: ["CLIENT"] },
+      select: { id: true },
+    });
+    const negociacao = await prisma.propertyInterest.create({
+      data: {
+        organizationId,
+        personId: pessoa.id,
+        propertyId: imovel.id,
+        stage: opcoes.stage,
+        closedAt: diasAtras(3),
+        closedValue: opcoes.closedValue,
+        commissionValue: opcoes.commissionValue,
+      },
+      select: { id: true },
+    });
+    const criarParcela = async (memberId: string, valor: string | null, pago?: string) => {
+      const parcela = await prisma.propertyInterestParticipant.create({
+        data: {
+          organizationId,
+          propertyInterestId: negociacao.id,
+          memberId,
+          allocationValue: valor,
+        },
+        select: { id: true },
+      });
+      if (pago) {
+        await prisma.propertyInterestParticipantPayment.create({
+          data: {
+            organizationId,
+            participantId: parcela.id,
+            amount: pago,
+            paidAt: diasAtras(1),
+          },
+        });
+      }
+      return parcela;
+    };
+    await criarParcela(opcoes.memberId, opcoes.alocacao, opcoes.pago);
+    if (opcoes.alocacaoColega) {
+      await criarParcela(
+        opcoes.alocacaoColega.memberId,
+        opcoes.alocacaoColega.valor,
+        opcoes.alocacaoColega.pago
+      );
+    }
+    return negociacao;
+  };
+
+  await negocioDeComissao({
+    imovelId: IDS_E2E.imovelComissaoParcial,
+    titulo: "Apartamento Jardins E2E",
+    nomePessoa: "Cliente Comissao Parcial",
+    stage: "WON",
+    closedValue: "500000.00",
+    commissionValue: "30000.00",
+    memberId: brunoComissoes.id,
+    alocacao: "15000.00",
+    pago: "5000.00",
+    // Dinheiro da DONA no mesmo negócio — a carteira do Bruno não pode
+    // somá-lo, e a dela não pode somar o dele.
+    alocacaoColega: { memberId: orgComissoes.membro.id, valor: "10000.00", pago: "9000.00" },
+  });
+  await negocioDeComissao({
+    imovelId: IDS_E2E.imovelComissaoPendente,
+    titulo: "Casa Moema E2E",
+    nomePessoa: "Cliente Comissao Pendente",
+    stage: "WON",
+    closedValue: "300000.00",
+    commissionValue: "12000.00",
+    memberId: brunoComissoes.id,
+    alocacao: "8000.00",
+  });
+  await negocioDeComissao({
+    imovelId: IDS_E2E.imovelComissaoPerdido,
+    titulo: "Loja Perdida E2E",
+    nomePessoa: "Cliente Comissao Perdida",
+    stage: "REJECTED",
+    closedValue: null,
+    commissionValue: "9000.00",
+    memberId: brunoComissoes.id,
+    alocacao: "9000.00",
+  });
+  await negocioDeComissao({
+    imovelId: IDS_E2E.imovelComissaoSemValor,
+    titulo: "Sala Sem Valor E2E",
+    nomePessoa: "Cliente Comissao Sem Valor",
+    stage: "WON",
+    closedValue: "200000.00",
+    commissionValue: null,
+    memberId: brunoComissoes.id,
+    alocacao: null,
+  });
+
+  // Negócio da JORNADA — parcela de R$ 10.000 sem nenhum pagamento. O
+  // spec registra, completa e cancela pagamentos aqui; como a carteira
+  // da dona contém só este negócio mais a parcela de R$ 10.000 do
+  // primeiro, os totais dela são previsíveis e nunca dependem da ordem
+  // em que os testes rodam (o seed recria tudo a cada execução).
+  await negocioDeComissao({
+    imovelId: IDS_E2E.imovelComissaoJornada,
+    titulo: "Cobertura Jornada E2E",
+    nomePessoa: "Cliente Comissao Jornada",
+    stage: "WON",
+    closedValue: "800000.00",
+    commissionValue: "20000.00",
+    memberId: orgComissoes.membro.id,
+    alocacao: "10000.00",
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
