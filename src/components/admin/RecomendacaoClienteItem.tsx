@@ -8,7 +8,6 @@ import { ESTAGIO_INTERESSE_LABEL } from "@/lib/property-interest-schema";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 import type { CriterioMatch } from "@/lib/property-matching";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -47,83 +46,85 @@ export function RecomendacaoClienteItem({
   const temScorePercentual = recomendacao.activeSoftCriteriaCount > 0;
 
   return (
-    <Card>
-      <CardContent className="text-sm space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <p className="font-medium">{recomendacao.person.name}</p>
-          <Badge variant="secondary">
-            {temScorePercentual ? `${recomendacao.score}% compatível` : "Compatível"}
-          </Badge>
+    // Linha de lista, não um card: esta recomendação já é renderizada
+    // DENTRO do card "Clientes compatíveis" da ficha do imóvel, e um
+    // Card aqui produzia caixa dentro de caixa — mesmo motivo pelo qual
+    // o fieldset "Lançamento" perdeu a borda no formulário.
+    <li className="min-w-0 space-y-3 border-b pb-4 last:border-b-0 last:pb-0">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="min-w-0 break-words font-medium">{recomendacao.person.name}</p>
+        <Badge variant="secondary">
+          {temScorePercentual ? `${recomendacao.score}% compatível` : "Compatível"}
+        </Badge>
+      </div>
+
+      {requisitos.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-1">Requisitos atendidos</p>
+          <ul className="text-sm space-y-1">
+            {requisitos.map((criterio) => (
+              <li key={criterio.key}>✓ {criterio.detail ?? criterio.label}</li>
+            ))}
+          </ul>
         </div>
+      )}
 
-        {requisitos.length > 0 && (
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Requisitos atendidos</p>
-            <ul className="text-sm space-y-1">
-              {requisitos.map((criterio) => (
-                <li key={criterio.key}>✓ {criterio.detail ?? criterio.label}</li>
-              ))}
-            </ul>
-          </div>
-        )}
+      {criteriosCompatibilidade.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-1">Compatibilidade</p>
+          <ul className="text-sm space-y-1">
+            {criteriosCompatibilidade.map((criterio) => (
+              <li
+                key={criterio.key}
+                className={criterio.matched ? "text-foreground" : "text-muted-foreground"}
+              >
+                {criterio.matched ? "✓" : "✕"} {criterio.detail ?? criterio.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-        {criteriosCompatibilidade.length > 0 && (
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-1">Compatibilidade</p>
-            <ul className="text-sm space-y-1">
-              {criteriosCompatibilidade.map((criterio) => (
-                <li
-                  key={criterio.key}
-                  className={criterio.matched ? "text-foreground" : "text-muted-foreground"}
-                >
-                  {criterio.matched ? "✓" : "✕"} {criterio.detail ?? criterio.label}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link
+          href={`/app/clientes/${recomendacao.person.id}`}
+          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+        >
+          Ver cliente
+        </Link>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Link
-            href={`/app/clientes/${recomendacao.person.id}`}
-            className="text-sm text-blue-600 hover:underline"
-          >
-            Ver cliente
-          </Link>
-
-          {recomendacao.existingInterest ? (
-            // Relacionamento histórico nunca some, mesmo se o imóvel virou
-            // indisponível depois — só o formulário de NOVO relacionamento
-            // é condicionado a propertyDisponivel.
-            <div className="text-sm text-muted-foreground text-right">
-              <p>
-                Já relacionado — {ESTAGIO_INTERESSE_LABEL[recomendacao.existingInterest.stage] ??
-                  recomendacao.existingInterest.stage}
-                {recomendacao.existingInterest.favorited && " ★"}
+        {recomendacao.existingInterest ? (
+          // Relacionamento histórico nunca some, mesmo se o imóvel virou
+          // indisponível depois — só o formulário de NOVO relacionamento
+          // é condicionado a propertyDisponivel.
+          <div className="text-sm text-muted-foreground text-right">
+            <p>
+              Já relacionado — {ESTAGIO_INTERESSE_LABEL[recomendacao.existingInterest.stage] ??
+                recomendacao.existingInterest.stage}
+              {recomendacao.existingInterest.favorited && " ★"}
+            </p>
+            {proximaAcao && (
+              <p className="text-xs">
+                Próxima ação:{" "}
+                <span className={proximaAcao.ativa ? "font-medium text-foreground" : ""}>
+                  {proximaAcao.label}
+                </span>
               </p>
-              {proximaAcao && (
-                <p className="text-xs">
-                  Próxima ação:{" "}
-                  <span className={proximaAcao.ativa ? "font-medium text-foreground" : ""}>
-                    {proximaAcao.label}
-                  </span>
-                </p>
-              )}
-            </div>
-          ) : propertyDisponivel ? (
-            <form action={formAction}>
-              <input type="hidden" name="propertyId" value={propertyId} />
-              <Button type="submit" variant="outline" size="sm" disabled={pendente}>
-                {pendente ? "Relacionando..." : "Relacionar cliente"}
-              </Button>
-            </form>
-          ) : (
-            <span className="text-sm text-muted-foreground">
-              Imóvel indisponível para novo relacionamento
-            </span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+            )}
+          </div>
+        ) : propertyDisponivel ? (
+          <form action={formAction}>
+            <input type="hidden" name="propertyId" value={propertyId} />
+            <Button type="submit" variant="outline" size="sm" disabled={pendente}>
+              {pendente ? "Relacionando..." : "Relacionar cliente"}
+            </Button>
+          </form>
+        ) : (
+          <span className="text-sm text-muted-foreground">
+            Imóvel indisponível para novo relacionamento
+          </span>
+        )}
+      </div>
+    </li>
   );
 }

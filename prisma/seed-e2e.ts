@@ -50,6 +50,10 @@ export const IDS_E2E = {
   imovelFechamentoDialogo: "e2e-imovel-fechamento-dialogo",
   pessoaFechamentoDialogo: "e2e-pessoa-fechamento-dialogo",
   interesseFechamentoDialogo: "e2e-interesse-fechamento-dialogo",
+  // Padrão visual da ficha do imóvel — cliente com preferência
+  // cadastrada, para "Clientes compatíveis" renderizar uma RECOMENDAÇÃO
+  // de verdade e não o estado vazio.
+  pessoaCompativelInbox: "e2e-pessoa-compativel-inbox",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -2433,6 +2437,39 @@ async function main() {
     interesseId: IDS_E2E.interesseFechamentoDialogo,
     titulo: "Casa do Fechamento Dialogo",
     nome: "Vera Dialogo",
+  });
+
+  // Padrão visual da ficha do imóvel — a seção "Clientes compatíveis"
+  // só tinha estado vazio em teste (nenhuma PersonPreference era
+  // seedada em lugar nenhum), então nada impedia a recomendação de
+  // voltar a ser um card dentro do card da seção.
+  //
+  // A preferência usa SÓ HARD FILTERS, todos satisfeitos pelos imóveis
+  // desta organização (Apartamento, venda, São Paulo, abaixo do teto):
+  // sem critério soft ativo o score é 100 por definição, então a
+  // recomendação não depende de peso nem do limiar de score — ela não
+  // muda se a fórmula for ajustada um dia.
+  await prisma.person.upsert({
+    where: { id: IDS_E2E.pessoaCompativelInbox },
+    update: { name: "Wanda Compativel" },
+    create: {
+      id: IDS_E2E.pessoaCompativelInbox,
+      organizationId: orgInbox.organization.id,
+      name: "Wanda Compativel",
+      roles: ["CLIENT"],
+    },
+  });
+  const preferenciaCompativel = {
+    organizationId: orgInbox.organization.id,
+    transactionType: "SALE" as const,
+    propertyTypes: ["Apartamento"],
+    cities: ["São Paulo"],
+    maxPrice: 800000,
+  };
+  await prisma.personPreference.upsert({
+    where: { personId: IDS_E2E.pessoaCompativelInbox },
+    update: preferenciaCompativel,
+    create: { personId: IDS_E2E.pessoaCompativelInbox, ...preferenciaCompativel },
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);

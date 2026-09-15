@@ -197,6 +197,10 @@ export const IDS_E2E = {
   imovelFechamentoDialogo: "e2e-imovel-fechamento-dialogo",
   pessoaFechamentoDialogo: "e2e-pessoa-fechamento-dialogo",
   interesseFechamentoDialogo: "e2e-interesse-fechamento-dialogo",
+  // Padrão visual da ficha do imóvel — cliente com preferência
+  // cadastrada, para "Clientes compatíveis" renderizar uma RECOMENDAÇÃO
+  // de verdade e não o estado vazio.
+  pessoaCompativelInbox: "e2e-pessoa-compativel-inbox",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

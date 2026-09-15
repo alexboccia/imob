@@ -13,7 +13,13 @@ import { requireOrganizationId } from "@/lib/tenant";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AgendamentoVisita } from "@/components/admin/AgendamentoVisita";
 import { FechamentoInteresse } from "@/components/admin/FechamentoInteresse";
@@ -175,19 +181,24 @@ export default async function EditarImovelPage({
         ocupacaoVitrine={ocupacaoVitrine}
       />
 
-      <Card className="mt-6 max-w-3xl">
+      {/* Mesma anatomia de card das telas de Configurações e do
+          formulário acima: título no tamanho padrão, uma linha dizendo
+          o que o bloco mostra, e a largura do restante da página — não
+          um bloco estreito colado embaixo do formulário. */}
+      <Card className="min-w-0">
         <CardHeader>
-          <CardTitle className="text-sm font-medium">
-            Clientes interessados
-          </CardTitle>
+          <CardTitle className="min-w-0 break-words">Clientes interessados</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            Quem está negociando este imóvel e qual é o próximo passo de cada um.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
           {interesses.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
+            <p className="text-sm text-muted-foreground">
               Nenhum cliente relacionado a este imóvel ainda.
             </p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-4 text-sm">
               {interesses.map((interesse) => {
                 const proximaAcao = obterProximaAcaoComercial(interesse.stage, imovel.status);
                 // Mesma regra de InteresseImovelItem.tsx (Fase H.2/P.2/P.3):
@@ -206,49 +217,55 @@ export default async function EditarImovelPage({
                 return (
                   <li
                     key={interesse.id}
-                    className="text-sm border-b pb-2 last:border-b-0 last:pb-0 space-y-1"
+                    className="min-w-0 border-b pb-4 last:border-b-0 last:pb-0"
                   >
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                       <Link
                         href={`/app/clientes/${interesse.person.id}`}
-                        className="text-blue-600 hover:underline"
+                        className="min-w-0 break-words font-medium text-primary underline-offset-4 hover:underline"
                       >
                         {interesse.person.name}
                       </Link>
-                      <div className="flex items-center gap-2">
+                      <div className="flex shrink-0 items-center gap-2">
                         {interesse.favorited && <span title="Favoritado">★</span>}
                         <Badge variant="secondary">
                           {ESTAGIO_INTERESSE_LABEL[interesse.stage] ?? interesse.stage}
                         </Badge>
                       </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       Próxima ação:{" "}
                       <span className={proximaAcao.ativa ? "font-medium text-foreground" : ""}>
                         {proximaAcao.label}
                       </span>
                     </p>
-                    <AgendamentoVisita
-                      fuso={fuso}
-                      propertyInterestId={interesse.id}
-                      podeAgendar={podeAgendarVisita}
-                      atividadeAgendada={proximaVisita}
-                    />
-                    <FechamentoInteresse
-                      fuso={fuso}
-                      interesseId={interesse.id}
-                      stage={interesse.stage}
-                      closedAtISO={interesse.closedAt ? interesse.closedAt.toISOString() : null}
-                      closedValue={decimalParaValor(interesse.closedValue)}
-                      // Esta é a própria página do imóvel: finalidade e
-                      // status vêm dele, não de uma segunda consulta.
-                      purpose={imovel.purpose}
-                      propertyStatus={imovel.status}
-                      lostReason={interesse.lostReason}
-                      commissionValue={decimalParaValor(interesse.commissionValue)}
-                      imovelTitulo={imovel.title}
-                      clienteNome={interesse.person.name}
-                    />
+                    {/* As duas superfícies de ação do interesse ficam num
+                        bloco só, separadas do texto acima — antes elas
+                        herdavam o mesmo espaçamento das linhas de leitura
+                        e os botões pareciam soltos na lista. */}
+                    <div className="mt-2 space-y-2">
+                      <AgendamentoVisita
+                        fuso={fuso}
+                        propertyInterestId={interesse.id}
+                        podeAgendar={podeAgendarVisita}
+                        atividadeAgendada={proximaVisita}
+                      />
+                      <FechamentoInteresse
+                        fuso={fuso}
+                        interesseId={interesse.id}
+                        stage={interesse.stage}
+                        closedAtISO={interesse.closedAt ? interesse.closedAt.toISOString() : null}
+                        closedValue={decimalParaValor(interesse.closedValue)}
+                        // Esta é a própria página do imóvel: finalidade e
+                        // status vêm dele, não de uma segunda consulta.
+                        purpose={imovel.purpose}
+                        propertyStatus={imovel.status}
+                        lostReason={interesse.lostReason}
+                        commissionValue={decimalParaValor(interesse.commissionValue)}
+                        imovelTitulo={imovel.title}
+                        clienteNome={interesse.person.name}
+                      />
+                    </div>
                   </li>
                 );
               })}
@@ -258,23 +275,24 @@ export default async function EditarImovelPage({
       </Card>
 
       {crmHabilitado && (
-        <Card className="mt-6 max-w-3xl">
+        <Card className="min-w-0">
           <CardHeader>
-            <CardTitle className="text-sm font-medium">
-              Clientes compatíveis
-            </CardTitle>
+            <CardTitle className="min-w-0 break-words">Clientes compatíveis</CardTitle>
+            <CardDescription className="min-w-0 break-words">
+              Clientes cujas preferências cadastradas combinam com este imóvel.
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="min-w-0">
             {clientesCompativeis.totalPreferenciasNaOrganizacao === 0 ? (
-              <p className="text-muted-foreground text-sm">
+              <p className="text-sm text-muted-foreground">
                 Nenhum cliente com preferências cadastradas para comparar.
               </p>
             ) : clientesCompativeis.recomendacoes.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
+              <p className="text-sm text-muted-foreground">
                 Nenhum cliente compatível encontrado para este imóvel.
               </p>
             ) : (
-              <div className="space-y-3">
+              <ul className="space-y-4 text-sm">
                 {clientesCompativeis.recomendacoes.map((recomendacao) => (
                   <RecomendacaoClienteItem
                     key={recomendacao.person.id}
@@ -298,7 +316,7 @@ export default async function EditarImovelPage({
                     }}
                   />
                 ))}
-              </div>
+              </ul>
             )}
           </CardContent>
         </Card>
