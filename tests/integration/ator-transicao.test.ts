@@ -27,6 +27,16 @@ import {
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { buscarPipelineAberto, buscarPipelineEncerrado } from "@/lib/pipeline";
 
+// Fase 37 — encerrar uma visita passou a EXIGIR o resultado. Estes testes
+// afirmam o que a conclusão PRODUZ (ator, autoria, stage, Interaction), e
+// isso não mudou: o que mudou é que agora é preciso dizer o que
+// aconteceu. O desfecho positivo é o que eles sempre exercitaram.
+function comResultado(resultado = "INTERESTED") {
+  const fd = new FormData();
+  fd.set("resultado", resultado);
+  return fd;
+}
+
 type Cenario = Awaited<ReturnType<typeof criarCenario>>;
 
 const cenarios: Cenario[] = [];
@@ -262,7 +272,7 @@ describe("transições vindas da agenda", () => {
     // Quem conclui é outra pessoa — e é ela que fica no histórico.
     autenticarComo(c, carla.id);
     expect(
-      (await concluirAgendamentoVisita(atividade.id, ESTADO_INICIAL_ACAO, new FormData())).success
+      (await concluirAgendamentoVisita(atividade.id, ESTADO_INICIAL_ACAO, comResultado())).success
     ).toBe(true);
 
     const linhas = await historico(interesseId, c.organization.id);

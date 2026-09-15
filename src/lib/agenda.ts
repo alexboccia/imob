@@ -8,7 +8,7 @@ import {
   parseDataCalendario,
   type DataCalendario,
 } from "@/lib/fuso-horario";
-import type { Prisma, ScheduledActivityType } from "@/generated/prisma/client";
+import type { Prisma, ScheduledActivityType, VisitOutcome } from "@/generated/prisma/client";
 
 // Agenda do corretor (Fase H.3, evoluída na H.4 e generalizada na Fase
 // 19) — projeção operacional de ScheduledActivity, nunca uma segunda
@@ -30,6 +30,11 @@ export type ItemAgenda = {
   status: StatusScheduledActivity;
   scheduledAt: Date;
   notes: string | null;
+  // Fase 37 — o que a visita produziu. null enquanto ela não foi
+  // encerrada, num cancelamento, num no-show (onde o fato é o status) e
+  // em toda visita anterior a esta fase, que NÃO recebeu backfill.
+  visitOutcome: VisitOutcome | null;
+  outcomeNotes: string | null;
   propertyInterestId: string | null;
   // null tanto no caso normal de ausência (propertyId nulo na linha) quanto
   // na anomalia defensiva abaixo — a UI trata os dois casos da mesma forma
@@ -56,6 +61,10 @@ const SELECT_ITEM_AGENDA = {
   status: true,
   scheduledAt: true,
   notes: true,
+  // Fase 37 — o resultado viaja na MESMA consulta da lista; nenhuma
+  // query por card.
+  visitOutcome: true,
+  outcomeNotes: true,
   propertyInterestId: true,
   // organizationId de Person/Property selecionado só pra reconferência
   // abaixo — nunca exposto no tipo de retorno ItemAgenda.
@@ -70,6 +79,8 @@ type LinhaBruta = {
   status: StatusScheduledActivity;
   scheduledAt: Date;
   notes: string | null;
+  visitOutcome: VisitOutcome | null;
+  outcomeNotes: string | null;
   propertyInterestId: string | null;
   person: { id: string; name: string; phone: string | null; organizationId: string };
   property: { id: string; title: string; neighborhood: string; organizationId: string } | null;
@@ -94,6 +105,8 @@ function paraItemAgenda(linha: LinhaBruta, organizationId: string): ItemAgenda {
     status: linha.status,
     scheduledAt: linha.scheduledAt,
     notes: linha.notes,
+    visitOutcome: linha.visitOutcome,
+    outcomeNotes: linha.outcomeNotes,
     propertyInterestId: linha.propertyInterestId,
     person:
       linha.person.organizationId === organizationId
@@ -265,6 +278,11 @@ function condicaoStatusAnteriores(
     OR: [
       { status: "COMPLETED" },
       { status: "CANCELLED" },
+      // Fase 37 — sem esta linha, uma visita em que o cliente não
+      // apareceu sairia de SCHEDULED e não entraria em nenhuma aba: o
+      // registro existiria e seria invisível. NO_SHOW é passado, como
+      // COMPLETED e CANCELLED.
+      { status: "NO_SHOW" },
       { status: "SCHEDULED", scheduledAt: { lt: inicioHoje } },
     ],
   };
@@ -424,6 +442,10 @@ export async function contarAgenda(
           OR: [
             { status: "COMPLETED" },
             { status: "CANCELLED" },
+            // Fase 37 — o contador tem de casar exatamente com a query
+            // da aba; divergir faria a Agenda anunciar um número que a
+            // lista não mostra.
+            { status: "NO_SHOW" },
             { status: "SCHEDULED", scheduledAt: { lt: dia.inicio } },
           ],
         },

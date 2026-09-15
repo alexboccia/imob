@@ -64,6 +64,8 @@ export const IDS_E2E = {
   // Fase 36 — posse do lead (Organizações S e T).
   imovelPosse: "e2e-imovel-posse",
   imovelPosseColab: "e2e-imovel-posse-colab",
+  // Fase 37 — resultado da visita (Organização U).
+  imovelResultado: "e2e-imovel-resultado",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -747,6 +749,11 @@ async function main() {
     // Fase 26 — identidade multi-org e a dona da segunda organização.
     "multi-org@e2e.test",
     "owner-multi-b@e2e.test",
+    // Fase 37 — Organização U (resultado da visita). A dona encerra as
+    // visitas da jornada; organização própria porque a fase afirma
+    // ESTADOS de visita, e encerrá-las em qualquer org compartilhada
+    // deslocaria os KPIs da Agenda e os contadores do Analytics.
+    "owner-resultado@e2e.test",
     // Fase 36 — Organizações S e T (posse do lead). A dona distribui e
     // os dois corretores provam a separação restrita; na colaborativa os
     // mesmos papéis provam que ter dono não tira ninguém da vista.
@@ -2880,6 +2887,86 @@ async function main() {
     propertyId: imovelPosseColab.id,
     minutosAtras: 15,
   });
+
+  // =====================================================================
+  // Fase 37 — RESULTADO DA VISITA (Organização U)
+  // =====================================================================
+  // Quatro visitas AGENDADAS para hoje, num horário que já passou — que é
+  // exatamente o estado em que o produto pede "Registrar resultado"
+  // (acaoOperacionalDaVisita devolve REGISTRAR_RESULTADO assim que o
+  // horário passa). Uma por jornada, para nenhum teste depender do outro:
+  //
+  //   positiva   encerrada com resultado + próxima ação
+  //   no-show    encerrada como não comparecimento
+  //   negativa   encerrada sem interesse (prova que não vira LOST)
+  //   intocada   fica agendada, serve ao responsivo
+  const orgResultado = await garantirOrganizacaoComDono({
+    slug: "e2e-org-resultado",
+    timezone: "UTC",
+    name: "Organização E2E Resultado",
+    planId: planoCompleto.id,
+    email: "owner-resultado@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+
+  // RESET a cada rodada: a limpeza geral do seed monta idsOrgs antes
+  // daqui, e a jornada ENCERRA visitas — sem isto a segunda execução
+  // começaria com tudo já encerrado.
+  {
+    const id = orgResultado.organization.id;
+    await prisma.propertyInterestStageHistory.deleteMany({ where: { organizationId: id } });
+    await prisma.scheduledActivity.deleteMany({ where: { organizationId: id } });
+    await prisma.person.deleteMany({ where: { organizationId: id } });
+  }
+
+  const imovelResultado = await garantirImovel({
+    id: IDS_E2E.imovelResultado,
+    organizationId: orgResultado.organization.id,
+    title: "Apartamento Resultado E2E",
+    price: 520000,
+  });
+
+  const visitaParaResultado = async (nome: string, horasAtras: number) => {
+    const organizationId = orgResultado.organization.id;
+    const pessoa = await prisma.person.create({
+      data: { organizationId, name: nome, roles: ["CLIENT"] },
+      select: { id: true },
+    });
+    const interesse = await prisma.propertyInterest.create({
+      data: {
+        organizationId,
+        personId: pessoa.id,
+        propertyId: imovelResultado.id,
+        // VISIT_SCHEDULED é o stage real de quem tem visita marcada — é
+        // dele que a conclusão avança para VISITED, e é ele que um
+        // no-show precisa NÃO mover.
+        stage: "VISIT_SCHEDULED",
+        responsibleMemberId: orgResultado.membro.id,
+      },
+      select: { id: true },
+    });
+    await prisma.scheduledActivity.create({
+      data: {
+        organizationId,
+        personId: pessoa.id,
+        propertyId: imovelResultado.id,
+        propertyInterestId: interesse.id,
+        type: "VISIT",
+        status: "SCHEDULED",
+        // Hoje, num horário que já passou: o estado em que a Agenda pede
+        // o resultado.
+        scheduledAt: new Date(Date.now() - horasAtras * 60 * 60 * 1000),
+        createdByMemberId: orgResultado.membro.id,
+      },
+    });
+    return { pessoaId: pessoa.id, interesseId: interesse.id };
+  };
+
+  await visitaParaResultado("Cliente Resultado Positivo", 3);
+  await visitaParaResultado("Cliente Resultado NoShow", 4);
+  await visitaParaResultado("Cliente Resultado Negativo", 5);
+  await visitaParaResultado("Cliente Resultado Intocado", 2);
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);

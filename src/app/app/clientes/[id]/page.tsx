@@ -176,11 +176,36 @@ export default async function DetalheClientePage({
               // separação acontece em memória logo abaixo. O teto de 20 é
               // defensivo (uma negociação com 20 compromissos abertos já é
               // uma anomalia operacional), não paginação.
+              // Fase 37 — a lista passou a trazer, além dos compromissos
+              // ABERTOS, as visitas já ENCERRADAS com o que cada uma
+              // produziu. Uma relação só (o Prisma não permite incluir a
+              // mesma duas vezes com filtros diferentes), separada em
+              // memória logo abaixo — e continua sendo UMA query para a
+              // ficha inteira, nunca uma por negociação.
+              //
+              // MÚLTIPLAS VISITAS, CADA UMA COM SEU RESULTADO: nada é
+              // achatado num "último resultado" da negociação; a segunda
+              // visita não apaga o que aconteceu na primeira.
               scheduledActivities: {
-                where: { organizationId, status: "SCHEDULED" },
+                where: {
+                  organizationId,
+                  OR: [
+                    { status: "SCHEDULED" },
+                    { type: "VISIT", status: { in: ["COMPLETED", "NO_SHOW"] } },
+                  ],
+                },
                 orderBy: { scheduledAt: "asc" },
-                take: 20,
-                select: { id: true, type: true, subject: true, scheduledAt: true, notes: true },
+                take: 30,
+                select: {
+                  id: true,
+                  type: true,
+                  status: true,
+                  subject: true,
+                  scheduledAt: true,
+                  notes: true,
+                  visitOutcome: true,
+                  outcomeNotes: true,
+                },
               },
               // Fase 33 — as propostas desta negociação, no mesmo select
               // batched: uma query para a lista inteira, nunca uma por
@@ -434,12 +459,28 @@ export default async function DetalheClientePage({
                 // cada tipo é o compromisso mais próximo daquele tipo.
                 // Visita e follow-up são dimensões separadas e podem
                 // coexistir na mesma negociação.
+                // O filtro de status é OBRIGATÓRIO aqui desde a Fase 37:
+                // a relação passou a trazer visitas encerradas junto, e
+                // sem ele a ficha anunciaria como "próxima" uma visita
+                // que já aconteceu.
                 const proximaVisita = interesse.scheduledActivities.find(
-                  (a) => a.type === "VISIT"
+                  (a) => a.type === "VISIT" && a.status === "SCHEDULED"
                 );
                 const proximoFollowUp = interesse.scheduledActivities.find(
-                  (a) => a.type === "FOLLOW_UP"
+                  (a) => a.type === "FOLLOW_UP" && a.status === "SCHEDULED"
                 );
+                // Encerradas, mais recente primeiro — a ordem em que a
+                // tela lê ("o que aconteceu da última vez?").
+                const visitasEncerradas = interesse.scheduledActivities
+                  .filter((a) => a.type === "VISIT" && a.status !== "SCHEDULED")
+                  .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime())
+                  .map((a) => ({
+                    id: a.id,
+                    scheduledAtISO: a.scheduledAt.toISOString(),
+                    status: a.status,
+                    visitOutcome: a.visitOutcome,
+                    outcomeNotes: a.outcomeNotes,
+                  }));
                 return (
                 <InteresseImovelItem
                   key={interesse.id}
@@ -477,6 +518,7 @@ export default async function DetalheClientePage({
                           ? o.createdByMember.user.name
                           : null,
                     })),
+                    visitasEncerradas,
                     proximaVisita: proximaVisita
                       ? {
                           id: proximaVisita.id,

@@ -31,6 +31,10 @@ export const STATUS_VISITA_LABEL: Record<string, string> = {
   SCHEDULED: "Agendada",
   COMPLETED: "Concluída",
   CANCELLED: "Cancelada",
+  // Fase 37 — o badge diz o FATO, não um julgamento: a visita estava
+  // marcada e o cliente não apareceu. Diferente de "Cancelada", que
+  // significa que alguém desmarcou antes.
+  NO_SHOW: "Não compareceu",
 };
 
 export const ACAO_OPERACIONAL_LABEL: Record<Exclude<AcaoOperacionalVisita, null>, string> = {

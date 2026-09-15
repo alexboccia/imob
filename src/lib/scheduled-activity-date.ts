@@ -15,8 +15,19 @@
 // (formatarDataHoraNoFuso e irmãs) — não há wrapper duplicado aqui.
 
 import { intervaloDoDia, componentesNoFuso } from "@/lib/fuso-horario";
+import type { ScheduledActivityStatus } from "@/generated/prisma/client";
 
-export type StatusScheduledActivity = "SCHEDULED" | "COMPLETED" | "CANCELLED";
+// DERIVADO do enum do Prisma, nunca reescrito à mão. A união literal que
+// existia aqui ficou defasada no instante em que a Fase 37 acrescentou
+// NO_SHOW ao schema, e o compilador só reclamou porque as duas coisas se
+// encontravam em agenda.ts — um status novo que ninguém usasse em query
+// tipada teria passado despercebido. Amarrar ao enum fecha essa classe
+// de divergência de uma vez.
+//
+// Nenhuma regra deste arquivo mudou: todas testam `!== "SCHEDULED"`, e
+// uma visita em que ninguém apareceu não é acionável nem pendente, então
+// NO_SHOW se comporta como COMPLETED/CANCELLED por construção.
+export type StatusScheduledActivity = ScheduledActivityStatus;
 export type PeriodoAgenda = "HOJE" | "PROXIMAS" | "ANTERIORES";
 
 // Única fonte de verdade da classificação Hoje/Próximas/Anteriores — usada

@@ -17,7 +17,14 @@ import { ResponsavelNegociacao } from "@/components/admin/ResponsavelNegociacao"
 import { DivisaoComissao } from "@/components/admin/DivisaoComissao";
 import { NegociacaoValores } from "@/components/admin/NegociacaoValores";
 import { precoPedido, type PropostaRegistrada } from "@/lib/proposta-negociacao";
-import type { LostReason, PropertyPurpose } from "@/generated/prisma/client";
+import type {
+  LostReason,
+  PropertyPurpose,
+  ScheduledActivityStatus,
+  VisitOutcome,
+} from "@/generated/prisma/client";
+import { rotuloResultadoRegistrado } from "@/lib/resultado-visita";
+import { formatarDataHoraNoFuso as formatarDataVisita } from "@/lib/fuso-horario";
 import type { ParticipanteExibicao } from "@/lib/participacao-comissao";
 import type { PagamentoExibicao } from "@/lib/pagamento-comissao";
 import type { AtorTransicao } from "@/lib/ator-transicao";
@@ -88,6 +95,19 @@ export function InteresseImovelItem({
     // vem pronta da query da página (batch, sem N+1 por card). scheduledAt
     // trafega como string ISO, nunca Date (ver AgendamentoVisita.tsx).
     proximaVisita: { id: string; scheduledAtISO: string; notes: string | null } | null;
+    /**
+     * Fase 37 — as visitas desta negociação que já foram encerradas, com
+     * o que cada uma produziu. Mais recente primeiro. Lista, e não um
+     * "último resultado": a segunda visita de um imóvel não apaga o que
+     * aconteceu na primeira.
+     */
+    visitasEncerradas: {
+      id: string;
+      scheduledAtISO: string;
+      status: ScheduledActivityStatus;
+      visitOutcome: VisitOutcome | null;
+      outcomeNotes: string | null;
+    }[];
     // Fase 19 — follow-up SCHEDULED mais próximo desta negociação, se
     // houver. Dimensão SEPARADA de proximaVisita: as duas coexistem, e
     // uma negociação pode ter visita e follow-up marcados ao mesmo
@@ -237,6 +257,37 @@ export function InteresseImovelItem({
             da comissão na ordem de leitura: é o estado comercial atual do
             negócio, e é a primeira coisa que o corretor procura ao abrir
             uma negociação em andamento. */}
+        {/* Fase 37 — O QUE JÁ ACONTECEU nas visitas desta negociação.
+            Fica acima das propostas e do agendamento porque é o histórico
+            que explica como o negócio chegou até aqui. Cada visita
+            mantém o seu resultado; nada é achatado. */}
+        {interesse.visitasEncerradas.length > 0 && (
+          <div className="min-w-0 border-t pt-4">
+            <p className="text-sm font-medium">Visitas realizadas</p>
+            <ul className="mt-2 space-y-2 text-sm">
+              {interesse.visitasEncerradas.map((visita) => {
+                const resultado = rotuloResultadoRegistrado(visita.status, visita.visitOutcome);
+                return (
+                  <li key={visita.id} className="min-w-0 border-b pb-2 last:border-b-0 last:pb-0">
+                    <p className="min-w-0 break-words text-xs text-muted-foreground">
+                      {formatarDataVisita(visita.scheduledAtISO, fuso)}
+                      {resultado && (
+                        <>
+                          {" · "}
+                          <span className="font-medium text-foreground">{resultado}</span>
+                        </>
+                      )}
+                    </p>
+                    {visita.outcomeNotes && (
+                      <p className="mt-0.5 min-w-0 break-words text-sm">{visita.outcomeNotes}</p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
         <NegociacaoValores
           interesseId={interesse.id}
           propostas={interesse.propostas}

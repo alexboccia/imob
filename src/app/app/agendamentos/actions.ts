@@ -26,6 +26,12 @@ import {
 } from "@/lib/scheduled-activity-schema";
 import { deDatetimeLocalNoFuso } from "@/lib/fuso-horario";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
+import {
+  desfechoDaVisita,
+  ehResultadoVisita,
+  interpretarObservacaoResultado,
+} from "@/lib/resultado-visita";
+import { pediuProximaAcao, proximaAcaoSchema } from "@/lib/registro-atendimento";
 
 // Server Actions da agenda de visitas (Fase H.2 do CRM) — arquivo dedicado,
 // separado de clientes/actions.ts por decisão da própria H.1. Cobre
@@ -427,12 +433,25 @@ export async function cancelarAgendamentoVisita(
 
 // Conclui (marca como realizada) uma visita agendada — cria Interaction
 // VISIT e, se o stage ainda for VISIT_SCHEDULED, avança pra VISITED.
+// Encerra uma visita REGISTRANDO O QUE ACONTECEU (Fase 37).
+//
+// Antes esta action era um clique só ("Marcar como realizada"): ela dizia
+// que algo aconteceu e nada sobre o quê. O resultado passou a ser
+// OBRIGATÓRIO — encerrar sem dizer o que aconteceu é exatamente o buraco
+// que a fase veio fechar — enquanto observação e próxima ação continuam
+// opcionais.
+//
+// O QUE O RESULTADO DECIDE, e o que ele NUNCA decide:
+//   decide  o status final (COMPLETED ou NO_SHOW)
+//   decide  se existe Interaction VISIT (não existe num no-show)
+//   decide  se o stage pode avançar VISIT_SCHEDULED -> VISITED
+//   NÃO decide  PROPOSAL, REJECTED, lostReason ou qualquer outro estado
+//               comercial: isso continua sendo escolha explícita do
+//               corretor, nos fluxos onde sempre esteve.
 export async function concluirAgendamentoVisita(
   scheduledActivityId: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _prevState: ActionState,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _formData: FormData
+  formData: FormData
 ): Promise<ActionState> {
   const session = await auth();
   if (!session) redirect("/app/login");
@@ -441,7 +460,60 @@ export async function concluirAgendamentoVisita(
   if (!(await hasModule(organizationId, "crm"))) {
     return erroAcessoNegado("CRM não incluído no seu plano.");
   }
+  // ESCOPO COMERCIAL INALTERADO: quem pode encerrar a visita é quem já
+  // podia alcançá-la (whereAtividadeAlvo). A posse da PESSOA introduzida
+  // na Fase 36 não concede acesso à visita de uma negociação de outro
+  // corretor — são dimensões diferentes, e nada aqui as mistura.
   const escopo = await escopoComercialDaSessao(organizationId);
+
+  // O resultado é OBRIGATÓRIO e é validado antes de qualquer escrita.
+  const resultadoBruto = formData.get("resultado");
+  if (!ehResultadoVisita(resultadoBruto)) {
+    return {
+      success: false,
+      message: "Verifique os campos destacados.",
+      fieldErrors: { resultado: ["Informe o que aconteceu nesta visita."] },
+    };
+  }
+  const desfecho = desfechoDaVisita(resultadoBruto);
+
+  const observacao = interpretarObservacaoResultado(formData.get("observacaoResultado"));
+  if (!observacao.ok) {
+    return {
+      success: false,
+      message: "Verifique os campos destacados.",
+      fieldErrors: { observacaoResultado: [observacao.erro] },
+    };
+  }
+
+  // PRÓXIMA AÇÃO — opcional, e reaproveita o MESMO contrato do
+  // atendimento inline (Fase 31): mesmo checkbox, mesmo schema, mesma
+  // regra de data futura. Um segundo jeito de agendar o próximo passo
+  // seria um segundo conceito de compromisso.
+  let proximaAcao: { assunto: string; quando: Date } | null = null;
+  if (pediuProximaAcao(formData)) {
+    const proxima = proximaAcaoSchema.safeParse(Object.fromEntries(formData.entries()));
+    if (!proxima.success) return erroValidacao(proxima.error);
+    const fuso = await buscarFusoOrganizacao(organizationId);
+    const quando = deDatetimeLocalNoFuso(proxima.data.proximoQuando, fuso);
+    if (!quando) {
+      return {
+        success: false,
+        message: "Verifique os campos destacados.",
+        fieldErrors: { proximoQuando: ["Data/horário inválidos."] },
+      };
+    }
+    if (quando.getTime() <= Date.now()) {
+      return {
+        success: false,
+        message: "Verifique os campos destacados.",
+        fieldErrors: {
+          proximoQuando: ["O próximo contato deve ser agendado para uma data futura."],
+        },
+      };
+    }
+    proximaAcao = { assunto: proxima.data.proximoAssunto, quando };
+  }
 
   return withOrganization(organizationId, async () => {
     const atividade = await prisma.scheduledActivity.findFirst({
@@ -475,10 +547,17 @@ export async function concluirAgendamentoVisita(
     // igual à de "não encontrado" — nunca revela o tipo da linha.
     if (atividade.type !== "VISIT") return erroAcessoNegado("Agendamento não encontrado.");
 
-    // Idempotente: concluir uma visita já COMPLETED é sucesso sem novo
-    // efeito (sem Interaction/ActivityLog duplicados).
-    if (atividade.status === "COMPLETED") {
-      return sucesso("Visita já estava concluída.");
+    // IDEMPOTENTE: uma visita já encerrada não é encerrada de novo, e o
+    // resultado registrado na primeira vez é preservado. Reenvio, duplo
+    // clique e retry devolvem sucesso sem criar segunda Interaction,
+    // segundo follow-up nem segundo resultado.
+    //
+    // Fase 37 — NO_SHOW entra aqui pelo mesmo motivo de COMPLETED: é um
+    // desfecho terminal. Corrigir um resultado errado não é reenviar
+    // esta action; é um fluxo que o produto ainda não tem (limitação
+    // declarada no relatório).
+    if (atividade.status === "COMPLETED" || atividade.status === "NO_SHOW") {
+      return sucesso("Esta visita já foi encerrada.");
     }
     // Preferência de produto: concluir permitido mesmo que o Property
     // tenha mudado de status depois do agendamento (diferente de
@@ -501,7 +580,19 @@ export async function concluirAgendamentoVisita(
       // concorrência — sem precisar de lock distribuído.
       const atualizado = await tx.scheduledActivity.updateMany({
         where: { id: atividade.id, organizationId, status: "SCHEDULED" },
-        data: { status: "COMPLETED", completedAt: new Date() },
+        data: {
+          status: desfecho.status,
+          // completedAt marca o encerramento do compromisso nos dois
+          // desfechos: num no-show ele é o instante em que se soube que
+          // ninguém apareceu. cancelledAt continua intocado — cancelar é
+          // outro fato, com outro caminho.
+          completedAt: new Date(),
+          // O RESULTADO ENTRA NA MESMA ESCRITA que o status. Não existe
+          // janela em que a visita esteja encerrada e sem resultado:
+          // uma linha, uma transição.
+          visitOutcome: desfecho.visitOutcome,
+          outcomeNotes: observacao.texto,
+        },
       });
 
       if (atualizado.count === 0) {
@@ -534,7 +625,12 @@ export async function concluirAgendamentoVisita(
       // PROPOSAL, REJECTED, ou até INTERESTED por algum caminho
       // inesperado) fica intocado, nunca regride nem sobrescreve.
       let stageSincronizado = false;
-      if (atividade.propertyInterestId) {
+      // `houveVisita` é a guarda mais importante da fase: num NO_SHOW o
+      // stage NÃO avança para VISITED, porque ninguém visitou nada.
+      // A consequência automática que já existia desde a Fase H.2 é
+      // preservada exatamente — só deixou de valer para o caso em que
+      // ela seria uma mentira.
+      if (desfecho.houveVisita && atividade.propertyInterestId) {
         const interesse = await tx.propertyInterest.findUnique({
           where: { id: atividade.propertyInterestId, organizationId },
           select: { stage: true },
@@ -570,12 +666,21 @@ export async function concluirAgendamentoVisita(
         }
       }
 
+      // INTERACTION VISIT SÓ QUANDO HOUVE VISITA.
+      //
+      // Esta é a invariante que impede o produto de mentir: num no-show,
+      // criar uma Interaction do tipo VISIT afirmaria no histórico do
+      // cliente que ele visitou um imóvel que nunca viu — e esse
+      // histórico alimenta a timeline da ficha e a caixa de entrada.
+      // O fato do no-show fica no próprio compromisso, que é onde ele
+      // aconteceu.
+      //
       // occurredAt = scheduledAt (preferência de produto): representa
       // quando a visita de fato ocorreu, não o instante em que alguém
       // clicou "concluir" (que pode ser bem depois). notes: null de
-      // propósito — não gera texto automático nem duplica a nota do
-      // agendamento no histórico de Interaction (evita vazar contexto
-      // desnecessário fora do que já está em ScheduledActivity.notes).
+      // propósito — a observação do RESULTADO vive em outcomeNotes, e
+      // copiá-la para cá criaria duas fontes do mesmo texto.
+      if (desfecho.houveVisita) {
       await tx.interaction.create({
         data: {
           organizationId,
@@ -596,6 +701,37 @@ export async function concluirAgendamentoVisita(
           ),
         },
       });
+      }
+
+      // PRÓXIMA AÇÃO — opcional, e DENTRO da mesma transação.
+      //
+      // O corretor pediu duas coisas de uma vez: encerrar a visita e
+      // marcar o próximo passo. Encerrar e falhar o agendamento tiraria
+      // a visita da lista de pendências SEM criar o compromisso pedido —
+      // o pior resultado possível, porque some da vista e não vira
+      // próximo passo. Mesmo raciocínio (e mesma escolha) do atendimento
+      // inline da Fase 31.
+      //
+      // O follow-up nasce ligado à NEGOCIAÇÃO, diferente do que nasce da
+      // caixa de entrada: uma visita sempre pertence a uma negociação
+      // (criarAgendamentoVisita exige propertyInterestId), então o
+      // próximo passo dela é um passo daquele negócio, e o dono é o
+      // responsável pela negociação — resolvido na leitura, nunca
+      // copiado para cá.
+      if (proximaAcao) {
+        await tx.scheduledActivity.create({
+          data: {
+            organizationId,
+            personId: atividade.personId,
+            propertyId: atividade.propertyId,
+            propertyInterestId: atividade.propertyInterestId,
+            type: "FOLLOW_UP",
+            subject: proximaAcao.assunto,
+            scheduledAt: proximaAcao.quando,
+            createdByMemberId: session.user.organizationMemberId ?? null,
+          },
+        });
+      }
 
       // ActivityLog DENTRO da transação — desvio deliberado do padrão
       // best-effort de logActivity() (que nunca bloqueia a operação
@@ -610,6 +746,9 @@ export async function concluirAgendamentoVisita(
           entity: "ScheduledActivity",
           entityId: atividade.id,
           action: "scheduled_activity_completed",
+          // Só o desfecho — nunca a observação, que é texto livre e pode
+          // conter dado do cliente que não precisa estar no log.
+          payload: { status: desfecho.status, visitOutcome: desfecho.visitOutcome },
         },
       });
       if (stageSincronizado && atividade.propertyInterestId) {
@@ -625,19 +764,32 @@ export async function concluirAgendamentoVisita(
         });
       }
 
-      return { tipo: "concluida_agora" as const };
+      return { tipo: "concluida_agora" as const, houveVisita: desfecho.houveVisita };
     });
 
     revalidarPaginasAgendamento(atividade.personId, atividade.propertyId);
+    // A Agenda e a Central exibem a pendência desta visita; o pipeline
+    // mostra o próximo compromisso. Todas mudam quando a visita é
+    // encerrada — ainda mais quando nasce uma próxima ação.
+    revalidatePath("/app");
+    revalidatePath("/app/agenda");
+    revalidatePath("/app/pipeline");
     switch (resultado.tipo) {
       case "ja_concluida":
-        return sucesso("Visita já estava concluída.");
+        return sucesso("Esta visita já foi encerrada.");
       case "foi_cancelada":
         return erroGenerico("Não é possível concluir uma visita cancelada.");
       case "nao_encontrada":
         return erroAcessoNegado("Agendamento não encontrado.");
       case "concluida_agora":
-        return sucesso("Visita concluída.");
+        // A mensagem diz o que foi gravado: num no-show, "visita
+        // concluída" seria exatamente a afirmação falsa que esta fase
+        // existe para evitar.
+        return sucesso(
+          resultado.houveVisita
+            ? "Resultado da visita registrado."
+            : "Não comparecimento registrado."
+        );
     }
   });
 }

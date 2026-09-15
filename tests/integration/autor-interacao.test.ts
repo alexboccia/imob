@@ -25,6 +25,16 @@ import { enviarContato, enviarAnuncioProprietario } from "@/app/[orgSlug]/action
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { paraAutorInteracao, rotuloAutorInteracao } from "@/lib/autor-interacao";
 
+// Fase 37 — encerrar uma visita passou a EXIGIR o resultado. Estes testes
+// afirmam o que a conclusão PRODUZ (ator, autoria, stage, Interaction), e
+// isso não mudou: o que mudou é que agora é preciso dizer o que
+// aconteceu. O desfecho positivo é o que eles sempre exercitaram.
+function comResultado(resultado = "INTERESTED") {
+  const fd = new FormData();
+  fd.set("resultado", resultado);
+  return fd;
+}
+
 type Cenario = Awaited<ReturnType<typeof criarCenario>>;
 
 const cenarios: Cenario[] = [];
@@ -310,7 +320,7 @@ describe("interação de VISITA", () => {
 
     // Quem CONCLUI é a Carla — e é ela a autora da interação de visita.
     autenticarComo(c, carla.id);
-    await concluirAgendamentoVisita(atividade.id, ESTADO_INICIAL_ACAO, new FormData());
+    await concluirAgendamentoVisita(atividade.id, ESTADO_INICIAL_ACAO, comResultado());
 
     const visita = await prisma.interaction.findFirstOrThrow({
       where: { organizationId: c.organization.id, type: "VISIT" },
@@ -345,7 +355,7 @@ describe("interação de VISITA", () => {
     });
 
     autenticarComo(a, b.membro.id);
-    await concluirAgendamentoVisita(atividade.id, ESTADO_INICIAL_ACAO, new FormData());
+    await concluirAgendamentoVisita(atividade.id, ESTADO_INICIAL_ACAO, comResultado());
 
     const visita = await prisma.interaction.findFirstOrThrow({
       where: { organizationId: a.organization.id, type: "VISIT" },

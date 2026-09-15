@@ -17,6 +17,7 @@ import {
   acaoOperacionalDaVisita,
 } from "@/lib/scheduled-activity-date";
 import { formatarDataHoraNoFuso } from "@/lib/fuso-horario";
+import { rotuloResultadoRegistrado } from "@/lib/resultado-visita";
 import { cn } from "@/lib/utils";
 import { CalendarCheck } from "lucide-react";
 
@@ -55,6 +56,8 @@ export function AgendaItemCard({
   const acaoOperacional = acionavel
     ? acaoOperacionalDaVisita({ status: item.status, scheduledAt }, fuso, agora)
     : null;
+  const resultadoRegistrado =
+    item.type === "VISIT" ? rotuloResultadoRegistrado(item.status, item.visitOutcome) : null;
 
   return (
     <>
@@ -110,6 +113,19 @@ export function AgendaItemCard({
 
           {acaoOperacional && (
             <p className="text-xs font-medium text-primary">{ACAO_OPERACIONAL_LABEL[acaoOperacional]}</p>
+          )}
+
+          {/* Fase 37 — o que a visita produziu. Aparece só depois de
+              encerrada, em TEXTO (o badge de status já diz o estado; esta
+              linha diz o resultado comercial, que é outra coisa).
+              "Resultado não registrado" é dito de propósito nas visitas
+              anteriores a esta fase: elas não receberam backfill, e
+              inventar um resultado seria pior que declarar a ausência. */}
+          {resultadoRegistrado && (
+            <p className="min-w-0 break-words text-xs text-muted-foreground">
+              Resultado: <span className="font-medium text-foreground">{resultadoRegistrado}</span>
+              {item.outcomeNotes && ` — ${item.outcomeNotes}`}
+            </p>
           )}
 
           <div className="border-t pt-2">

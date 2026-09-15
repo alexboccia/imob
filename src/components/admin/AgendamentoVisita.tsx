@@ -5,7 +5,6 @@ import {
   criarAgendamentoVisita,
   remarcarAgendamentoVisita,
   cancelarAgendamentoVisita,
-  concluirAgendamentoVisita,
   atualizarObservacaoAgendamentoVisita,
 } from "@/app/app/agendamentos/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
@@ -14,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { RegistrarResultadoVisita } from "@/components/admin/RegistrarResultadoVisita";
 
 // Agenda de visitas (Fase H.2 do CRM) — componente único reutilizado tanto
 // na ficha do cliente (InteresseImovelItem) quanto na ficha do imóvel
@@ -160,12 +160,6 @@ function VisitaAgendadaCard({
     ESTADO_INICIAL_ACAO
   );
 
-  const concluirAcao = concluirAgendamentoVisita.bind(null, atividade.id);
-  const [estadoConcluir, formActionConcluir, pendenteConcluir] = useActionState(
-    concluirAcao,
-    ESTADO_INICIAL_ACAO
-  );
-
   const observacaoAcao = atualizarObservacaoAgendamentoVisita.bind(null, atividade.id);
   const [estadoObservacao, formActionObservacao, pendenteObservacao] = useActionState(
     observacaoAcao,
@@ -174,7 +168,10 @@ function VisitaAgendadaCard({
 
   const dataId = useId();
   const notesId = useId();
-  const erro = [estadoRemarcar, estadoCancelar, estadoConcluir].find(
+  // O erro do encerramento NÃO entra aqui: desde a Fase 37 ele é
+  // exibido dentro do próprio diálogo de resultado, ao lado do campo que
+  // o causou, em vez de numa linha solta acima do card.
+  const erro = [estadoRemarcar, estadoCancelar].find(
     (e) => e.message && !e.success
   );
 
@@ -265,11 +262,12 @@ function VisitaAgendadaCard({
               {pendenteCancelar ? "Cancelando..." : "Cancelar visita"}
             </Button>
           </form>
-          <form action={formActionConcluir}>
-            <Button type="submit" variant="outline" size="sm" disabled={pendenteConcluir}>
-              {pendenteConcluir ? "Salvando..." : "Marcar como realizada"}
-            </Button>
-          </form>
+          {/* Fase 37 — encerrar a visita passou a exigir dizer o que
+              aconteceu. O botão de um clique virou um diálogo, e isso
+              vale para as TRÊS superfícies de uma vez (Agenda, ficha do
+              cliente e ficha do imóvel), porque as três reaproveitam
+              este mesmo componente. */}
+          <RegistrarResultadoVisita atividadeId={atividade.id} />
         </div>
       )}
     </div>

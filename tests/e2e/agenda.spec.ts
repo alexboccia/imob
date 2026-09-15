@@ -168,11 +168,19 @@ test.describe("Agenda", () => {
     await drawer.getByRole("button", { name: "Salvar nova data" }).click();
     await expect(drawer.getByText("Salvando...")).not.toBeVisible({ timeout: 10000 });
 
-    // Conclui — some da aba atual e passa a aparecer em "Anteriores"
+    // Encerra — some da aba atual e passa a aparecer em "Anteriores"
     // como Concluída; o KPI "Concluídas" (hoje) reflete isso porque a
     // visita foi agendada pra hoje.
-    await drawer.getByRole("button", { name: "Marcar como realizada" }).click();
-    await expect(drawer.getByText("Salvando...")).not.toBeVisible({ timeout: 10000 });
+    //
+    // Fase 37 — encerrar passou a exigir dizer o que aconteceu: o botão
+    // de um clique virou um diálogo com o resultado. O que este teste
+    // afirma não mudou (a visita sai da aba e vira Concluída), só o
+    // caminho até lá.
+    await drawer.getByRole("button", { name: "Registrar resultado" }).click();
+    const dialogoResultado = page.getByRole("dialog");
+    await dialogoResultado.getByRole("radio", { name: "Gostou e quer avançar" }).check();
+    await dialogoResultado.getByRole("button", { name: "Salvar resultado" }).click();
+    await expect(dialogoResultado).not.toBeVisible({ timeout: 10000 });
     await page.keyboard.press("Escape");
 
     await page.getByRole("link", { name: /^Anteriores/ }).click();

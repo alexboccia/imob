@@ -28,6 +28,16 @@ import { buscarCentralTrabalho } from "@/lib/central-trabalho";
 import { buscarAgendaHoje, buscarAgendaProximas, contarAgenda } from "@/lib/agenda";
 import { paraDatetimeLocalNoFuso } from "@/lib/fuso-horario";
 
+// Fase 37 — encerrar uma visita passou a EXIGIR o resultado. Estes testes
+// afirmam o que a conclusão PRODUZ (ator, autoria, stage, Interaction), e
+// isso não mudou: o que mudou é que agora é preciso dizer o que
+// aconteceu. O desfecho positivo é o que eles sempre exercitaram.
+function comResultado(resultado = "INTERESTED") {
+  const fd = new FormData();
+  fd.set("resultado", resultado);
+  return fd;
+}
+
 // =======================================================================
 // Follow-up comercial (Fase 19) — contra o banco
 // =======================================================================
@@ -663,7 +673,7 @@ describe("regressão: a visita continua exatamente como era", () => {
     const estado = await concluirAgendamentoVisita(
       visita.id,
       { success: false, message: "" },
-      new FormData()
+      comResultado()
     );
     expect(estado.success).toBe(true);
 
@@ -689,7 +699,7 @@ describe("regressão: a visita continua exatamente como era", () => {
     const followUp = await followUpDireto(cenario, interesse, emHoras(26));
     const estadoVazio = { success: false, message: "" };
 
-    expect((await concluirAgendamentoVisita(followUp.id, estadoVazio, new FormData())).success).toBe(false);
+    expect((await concluirAgendamentoVisita(followUp.id, estadoVazio, comResultado())).success).toBe(false);
     expect((await cancelarAgendamentoVisita(followUp.id, estadoVazio, new FormData())).success).toBe(false);
     expect(
       (

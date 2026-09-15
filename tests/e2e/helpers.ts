@@ -221,6 +221,15 @@ export const ORG_POSSE_COLAB_BRUNO = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Fase 37 — organização dedicada ao RESULTADO DA VISITA. A jornada
+// encerra visitas de verdade, e fazer isso numa org compartilhada
+// deslocaria os KPIs da Agenda e os contadores do Analytics.
+export const ORG_RESULTADO = {
+  slug: "e2e-org-resultado",
+  email: "owner-resultado@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const ORG_COMISSOES_BRUNO = {
   slug: "e2e-org-comissoes",
   email: "bruno-comissoes@e2e.test",
@@ -265,6 +274,8 @@ export const IDS_E2E = {
   // Fase 36 — posse do lead (Organizações S e T).
   imovelPosse: "e2e-imovel-posse",
   imovelPosseColab: "e2e-imovel-posse-colab",
+  // Fase 37 — resultado da visita (Organização U).
+  imovelResultado: "e2e-imovel-resultado",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

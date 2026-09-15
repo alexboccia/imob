@@ -180,6 +180,58 @@ enum ScheduledActivityStatus {
   SCHEDULED
   COMPLETED
   CANCELLED
+  // Fase 37 — A VISITA ESTAVA MARCADA E O CLIENTE NÃO APARECEU.
+  //
+  // Status próprio, e não um reuso de CANCELLED, porque os dois fatos são
+  // operacionalmente diferentes: CANCELLED é "soubemos ANTES que não
+  // aconteceria" (alguém desmarcou, e `cancelledAt` registra quando);
+  // NO_SHOW é "estava prevista, o horário chegou, ninguém veio". Tratar
+  // um como o outro apagaria justamente o dado que o corretor precisa
+  // para decidir se insiste naquele cliente.
+  //
+  // É STATUS e não outcome porque é o status que todo o produto já usa
+  // para decidir o que ainda está em aberto (`status: "SCHEDULED"` em
+  // Central, Agenda, pipeline e ficha): uma visita que não aconteceu
+  // precisa parar de pedir ação, e sair de SCHEDULED é o que faz isso.
+  //
+  // E é por isso que NO_SHOW nunca cria Interaction VISIT: não houve
+  // visita para registrar no histórico do cliente.
+  NO_SHOW
+}
+
+// Fase 37 — O QUE A VISITA PRODUZIU COMERCIALMENTE.
+//
+// Dimensão DIFERENTE do status acima. O status responde "o que foi feito
+// do compromisso"; este enum responde "o que o cliente achou do imóvel", e
+// só existe quando a visita de fato aconteceu (status COMPLETED) — num
+// no-show ele é null, porque não há o que opinar sobre um imóvel que
+// ninguém viu.
+//
+// POR QUE ESTES TRÊS, E NÃO QUINZE: são as três decisões comerciais
+// distintas que o corretor toma depois de uma visita — insistir neste
+// imóvel, esperar o cliente decidir, ou procurar outro imóvel. Nuance
+// ("achou o quarto pequeno") vive em outcomeNotes, que é texto livre;
+// transformar cada nuance num valor de enum criaria um catálogo que
+// ninguém preenche com consistência.
+//
+// UNDECIDED existe porque sem ele a escolha seria uma mentira binária: a
+// visita em que o cliente gostou mas quer ver outras duas antes não é
+// "sem interesse", e registrá-la assim envenenaria qualquer leitura
+// futura do histórico.
+//
+// O QUE NÃO ESTÁ AQUI, deliberadamente:
+//   REMARCADA  — remarcar já é `remarcarAgendamentoVisita`, que altera o
+//                scheduledAt do MESMO compromisso. A visita continua
+//                pendente e sem resultado, que é a verdade; inventar um
+//                resultado "remarcada" criaria um fato histórico para
+//                algo que não aconteceu.
+//   CANCELADA  — é status, não resultado (ver acima).
+//   Nota/score — fora de escopo por decisão de produto: temperatura e
+//                probabilidade seriam números que ninguém pode verificar.
+enum VisitOutcome {
+  INTERESTED
+  UNDECIDED
+  NOT_INTERESTED
 }
 
 // ---------- Modelos de domínio ----------
@@ -1266,6 +1318,38 @@ model ScheduledActivity {
   subject String?
 
   notes String?
+
+  // Fase 37 — RESULTADO COMERCIAL DA VISITA.
+  //
+  // Preenchido no momento em que a visita é encerrada, junto com o
+  // status, na mesma transação. null em três situações, todas legítimas:
+  //   - visita ainda SCHEDULED (não aconteceu nada ainda)
+  //   - visita CANCELLED ou NO_SHOW (não houve visita para avaliar)
+  //   - visita histórica, anterior a esta fase — SEM BACKFILL: nenhum
+  //     resultado foi inferido de proposta posterior, de fechamento
+  //     WON/LOST nem da existência da Interaction. A tela diz
+  //     "resultado não registrado", que é a verdade.
+  //
+  // FONTE ÚNICA: o resultado NÃO é copiado para Interaction nem para
+  // PropertyInterest. A Interaction VISIT continua sendo o fato "a visita
+  // ocorreu" e o stage continua sendo o estado da negociação — três
+  // coisas diferentes, cada uma no seu lugar.
+  //
+  // Só faz sentido para type VISIT. FOLLOW_UP nunca o preenche (a action
+  // de concluir follow-up não o toca), e a guarda de tipo que já existe
+  // em concluirAgendamentoVisita impede o contrário.
+  visitOutcome VisitOutcome?
+
+  // A observação DO RESULTADO — "achou o quarto pequeno", "quer voltar
+  // com a esposa no sábado".
+  //
+  // Campo próprio, e não reuso de `notes` logo acima: aquele é a
+  // observação de PREPARAÇÃO, escrita antes da visita ("cliente pediu
+  // para ver a área de lazer"), e sobrescrevê-la apagaria o contexto que
+  // levou à visita. Também não é Interaction.notes, que continua null de
+  // propósito — e que nem existiria num no-show, onde a observação
+  // ("avisou depois que esqueceu") é justamente a mais útil.
+  outcomeNotes String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

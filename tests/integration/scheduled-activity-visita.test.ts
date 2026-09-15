@@ -73,8 +73,20 @@ async function remarcar(scheduledActivityId: string, campos: Record<string, stri
 async function cancelar(scheduledActivityId: string) {
   return cancelarAgendamentoVisita(scheduledActivityId, ESTADO_INICIAL_ACAO, new FormData());
 }
-async function concluir(scheduledActivityId: string) {
-  return concluirAgendamentoVisita(scheduledActivityId, ESTADO_INICIAL_ACAO, new FormData());
+// Fase 37 — encerrar uma visita passou a EXIGIR dizer o que aconteceu.
+// O default aqui é o resultado positivo porque é o que estes testes
+// historicamente exercitavam ("a visita aconteceu"); quem precisa de
+// outro desfecho passa explicitamente.
+async function concluir(
+  scheduledActivityId: string,
+  resultado = "INTERESTED",
+  extras: Record<string, string> = {}
+) {
+  return concluirAgendamentoVisita(
+    scheduledActivityId,
+    ESTADO_INICIAL_ACAO,
+    formData({ resultado, ...extras })
+  );
 }
 async function atualizarObservacao(scheduledActivityId: string, notes: string) {
   return atualizarObservacaoAgendamentoVisita(
