@@ -3,6 +3,7 @@ import {
   resolverEscopoComercial,
   whereNegociacao,
   wherePessoa,
+  wherePessoaNaFilaDeEntrada,
   whereAtividade,
   whereNegociacaoAlvo,
   wherePessoaAlvo,
@@ -72,13 +73,58 @@ describe("RESTRICTED — membro operacional fica na própria carteira", () => {
     expect(w.responsibleMemberId).not.toBeNull();
   });
 
-  test("pessoa: vínculo por negociação, e a ponte estreita de registro sem negociação", () => {
+  test("pessoa: negociação, POSSE DECLARADA e a ponte estreita de registro", () => {
+    // Fase 36 — a posse da pessoa passou a existir e entrou como ramo
+    // próprio. Os outros dois ramos continuam idênticos: ninguém perdeu
+    // visibilidade, e a ampliação é exatamente uma.
     expect(wherePessoa(escopo("RESTRICTED", "BROKER"))).toEqual({
       OR: [
         { propertyInterests: { some: { responsibleMemberId: EU } } },
+        { responsibleMemberId: EU },
         { assignedMemberId: EU, propertyInterests: { none: {} } },
       ],
     });
+  });
+
+  // A diferença entre os dois ramos de "pessoa sem negociação" é a
+  // invariante central da fase: POSSE não é AUTORIA.
+  test("posse não tem a restrição de 'sem negociação' que a autoria tem", () => {
+    const w = wherePessoa(escopo("RESTRICTED", "BROKER")) as {
+      OR: { responsibleMemberId?: string; assignedMemberId?: string; propertyInterests?: unknown }[];
+    };
+    // Sou responsável pela pessoa: continuo vendo mesmo que um colega
+    // conduza uma negociação com ela. Perder a pessoa de vista nesse caso
+    // seria perder o próprio trabalho.
+    const posse = w.OR.find((c) => c.responsibleMemberId === EU && !c.assignedMemberId)!;
+    expect(posse.propertyInterests).toBeUndefined();
+    // Já a autoria continua valendo só enquanto ninguém conduz nada.
+    const autoria = w.OR.find((c) => c.assignedMemberId === EU)!;
+    expect(autoria.propertyInterests).toEqual({ none: {} });
+  });
+
+  // A fila de entrada é o ÚNICO lugar com alcance maior — e a diferença
+  // é exatamente um ramo: o lead que não é de ninguém.
+  test("fila de entrada acrescenta apenas os contatos sem responsável", () => {
+    expect(wherePessoaNaFilaDeEntrada(escopo("RESTRICTED", "BROKER"))).toEqual({
+      OR: [
+        { propertyInterests: { some: { responsibleMemberId: EU } } },
+        { responsibleMemberId: EU },
+        { assignedMemberId: EU, propertyInterests: { none: {} } },
+        { responsibleMemberId: null },
+      ],
+    });
+  });
+
+  // Lead de COLEGA nunca entra na fila: sem dono é trabalho aberto da
+  // organização, com dono é carteira de alguém.
+  test("fila de entrada NÃO alcança lead de colega", () => {
+    const w = wherePessoaNaFilaDeEntrada(escopo("RESTRICTED", "BROKER")) as {
+      OR: { responsibleMemberId?: string | null }[];
+    };
+    const valores = w.OR.map((c) => c.responsibleMemberId);
+    expect(valores).toContain(EU);
+    expect(valores).toContain(null);
+    expect(valores.some((v) => typeof v === "string" && v !== EU)).toBe(false);
   });
 
   // assignedMemberId é AUTORIA do registro (um writer, nunca transferido,

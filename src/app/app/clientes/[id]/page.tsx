@@ -34,7 +34,13 @@ import { paraPagamentos } from "@/lib/pagamento-comissao";
 import { paraAtorTransicao } from "@/lib/ator-transicao";
 import { precosDoImovel } from "@/lib/imovel-precos";
 import { paraAutorInteracao, rotuloAutorInteracao } from "@/lib/autor-interacao";
-import { temPapel, PAPEIS_LIQUIDACAO_COMISSAO } from "@/lib/authorization";
+import {
+  temPapel,
+  PAPEIS_LIQUIDACAO_COMISSAO,
+  PAPEIS_DISTRIBUICAO_LEAD,
+} from "@/lib/authorization";
+import { PosseContato } from "@/components/admin/PosseContato";
+import { paraResponsavelPessoa } from "@/lib/posse-lead";
 import { papelAtual } from "@/lib/papel-atual";
 import { auth } from "@/lib/auth";
 import {
@@ -64,7 +70,9 @@ export default async function DetalheClientePage({
   const fuso = await buscarFusoOrganizacao(organizationId);
   // Papel EFETIVO resolvido uma vez (Fase 27): a lista renderiza vários
   // itens e um await dentro do JSX de cada um seria inválido.
-  const podeLiquidar = temPapel(await papelAtual(), PAPEIS_LIQUIDACAO_COMISSAO);
+  const papel = await papelAtual();
+  const podeLiquidar = temPapel(papel, PAPEIS_LIQUIDACAO_COMISSAO);
+  const podeAtribuirContato = temPapel(papel, PAPEIS_DISTRIBUICAO_LEAD);
   const session = await auth();
   const escopo = await escopoComercialDaSessao(organizationId);
   const escopoPessoa = wherePessoa(escopo);
@@ -116,6 +124,17 @@ export default async function DetalheClientePage({
             },
           },
           preference: true,
+          // Fase 36 — quem CONDUZ este cliente. Na mesma consulta da
+          // pessoa; redigido contra tenant na leitura, como todo membro
+          // exibido no produto.
+          responsibleMember: {
+            select: {
+              id: true,
+              organizationId: true,
+              status: true,
+              user: { select: { name: true } },
+            },
+          },
           // where: { organizationId } explícito na sub-relação — nunca
           // depender só da integridade implícita do relacionamento
           // Prisma (Person → propertyInterests). Redundante com o
@@ -297,10 +316,25 @@ export default async function DetalheClientePage({
   return (
     <div className="max-w-3xl">
       <h1 className="text-2xl font-semibold">{pessoa.name}</h1>
-      <p className="text-muted-foreground mb-6">
+      <p className="text-muted-foreground">
         {pessoa.phone ?? "sem telefone"} · {pessoa.email ?? "sem e-mail"} ·{" "}
         {pessoa.roles.join(", ")}
       </p>
+
+      {/* Fase 36 — de quem é este cliente. Mesmo componente da caixa de
+          entrada, e mesmas actions: a resposta não pode depender da tela
+          onde a pergunta foi feita. NÃO é o responsável das negociações
+          dele, que continua sendo declarado negócio a negócio abaixo. */}
+      <div className="mb-6">
+        <PosseContato
+          personId={pessoa.id}
+          nomePessoa={pessoa.name}
+          responsavel={paraResponsavelPessoa(pessoa.responsibleMember, organizationId)}
+          souEu={pessoa.responsibleMemberId === (session?.user.organizationMemberId ?? null)}
+          podeAtribuir={podeAtribuirContato}
+          membros={membrosAtribuiveis}
+        />
+      </div>
 
       <Card className="mb-6">
         <CardHeader>

@@ -26,7 +26,11 @@ import {
   validarPagamentoContraAtribuicao,
   validarAtribuicaoContraPagamentos,
 } from "@/lib/pagamento-comissao";
-import { temPapel, PAPEIS_LIQUIDACAO_COMISSAO } from "@/lib/authorization";
+import {
+  temPapel,
+  PAPEIS_LIQUIDACAO_COMISSAO,
+  PAPEIS_DISTRIBUICAO_LEAD,
+} from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
 import { escopoComercialDaSessao } from "@/lib/escopo-comercial-sessao";
 import {
@@ -53,6 +57,7 @@ import {
   type DesfechoEscolhido,
 } from "@/lib/desfecho-negocio";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
+import { MENSAGEM_ASSUMIR } from "@/lib/posse-lead";
 import {
   erroAcessoNegado,
   erroGenerico,
@@ -1769,6 +1774,215 @@ export async function corrigirDadosFechamento(
 // exige um fluxo administrativo auditável que esta fase não cria.
 //
 // Não é alteração silenciosa: grava ActivityLog com de/para.
+// =======================================================================
+// Posse do LEAD — assumir e atribuir (Fase 36)
+// =======================================================================
+// Estas duas actions decidem quem CONDUZ uma pessoa. Elas não registram
+// atendimento, não criam negociação e não agendam nada: posse e trabalho
+// são fatos diferentes, e misturá-los faria o produto afirmar que alguém
+// falou com o cliente porque clicou num botão de distribuição.
+//
+// Ficam ao lado de transferirResponsavelNegociacao de propósito — é o
+// precedente que elas reusam (validarMembroAtribuivel, guarda no WHERE
+// do updateMany, ActivityLog com de/para) e a vizinhança deixa a
+// diferença entre as duas posses visível para quem ler o arquivo.
+// =======================================================================
+
+// Revalidação das superfícies que exibem posse: a Central (caixa de
+// entrada), a lista e a ficha do cliente. Uma função só para as duas
+// actions não divergirem sobre onde a mudança precisa aparecer.
+function revalidarPosse(personId: string) {
+  revalidatePath("/app");
+  revalidatePath("/app/clientes");
+  revalidatePath(`/app/clientes/${personId}`);
+}
+
+// ASSUMIR — "eu cuido deste lead".
+//
+// O cliente NÃO diz quem assume: manda apenas o id da pessoa. Quem
+// assume sai da sessão do servidor, sempre. Não há memberId, role nem
+// organizationId vindos do navegador para serem injetados.
+//
+// NUNCA ROUBA. O `responsibleMemberId: null` no WHERE é a regra de
+// negócio inteira, expressa como condição atômica: se alguém já assumiu,
+// o UPDATE casa zero linhas e o segundo corretor recebe a resposta
+// correta em vez de sobrescrever o primeiro. É também a proteção de
+// concorrência — um único UPDATE condicional, sem read-then-write e sem
+// lock distribuído. Dois cliques simultâneos: um vence, o outro é
+// informado de quem venceu.
+export async function assumirContato(
+  personId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // Assumir não lê NADA do formulário — de propósito. Quem assume é a
+  // sessão, e um memberId vindo do navegador não teria como ser confiado.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+
+  // Sem vínculo de membro não existe "eu" para assumir. Falha fechada.
+  const meuMemberId = session.user.organizationMemberId;
+  if (!meuMemberId) {
+    return erroAcessoNegado("Sua conta não está vinculada a esta organização.");
+  }
+
+  // NENHUM papel exigido além do CRM, de propósito: pegar trabalho em
+  // aberto não é autoridade. Apontar o trabalho de outra pessoa é —
+  // e isso é a action de atribuir, abaixo.
+
+  return withOrganization(organizationId, async () => {
+    // A TENTATIVA VEM PRIMEIRO, e ela é a regra de negócio inteira
+    // expressa como uma única condição atômica:
+    //
+    //   id + organizationId  -> tenant, sempre no WHERE
+    //   responsibleMemberId: null -> assumir NUNCA rouba
+    //
+    // Não há read-then-write: dois cliques simultâneos disputam o mesmo
+    // UPDATE condicional e exatamente um casa uma linha.
+    //
+    // POR QUE NÃO HÁ PREDICADO DE ESCOPO AQUI: o alvo de um assumir é
+    // sempre uma pessoa SEM RESPONSÁVEL, e uma pessoa sem responsável
+    // está ao alcance de qualquer membro por construção — é o ramo
+    // `{ responsibleMemberId: null }` de wherePessoaNaFilaDeEntrada.
+    // Aplicar o predicado seria repetir uma condição que o próprio
+    // WHERE já contém. Um lead que ninguém assumiu é trabalho aberto da
+    // organização, e é exatamente isso que esta fase resolve.
+    const assumido = await prisma.person.updateMany({
+      where: { id: personId, organizationId, responsibleMemberId: null },
+      data: { responsibleMemberId: meuMemberId },
+    });
+
+    if (assumido.count === 0) {
+      // Zero linhas tem três causas possíveis, e elas merecem respostas
+      // diferentes. A releitura só acontece no caminho de falha — o
+      // caminho feliz continua sendo uma consulta só.
+      const atual = await prisma.person.findFirst({
+        where: { id: personId, organizationId },
+        select: { responsibleMemberId: true },
+      });
+      // Fora do tenant (ou inexistente): 404, o padrão do resto do CRM.
+      if (!atual) return erroAcessoNegado("Contato não encontrado.");
+      if (atual.responsibleMemberId === meuMemberId) {
+        return sucesso(MENSAGEM_ASSUMIR.ja_era_meu);
+      }
+      // ALGUÉM TEM O LEAD — pode ter sido o vencedor de uma corrida de
+      // milissegundos ou um dono de ontem; para quem clicou é a mesma
+      // resposta, e ela é verdadeira nos dois casos.
+      //
+      // Esta mensagem é dita mesmo em política restrita, onde quem
+      // perdeu a corrida deixou de alcançar a pessoa no instante em que
+      // ela ganhou dono. Um "não encontrado" ali seria tecnicamente
+      // coerente com o escopo e péssimo como produto: o corretor está
+      // olhando para o card na tela. O que se revela é só que o contato
+      // foi assumido — nunca por quem, nunca nenhum dado dele.
+      return erroGenerico(MENSAGEM_ASSUMIR.ja_assumido);
+    }
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "Person",
+      entityId: personId,
+      action: "person_owner_claimed",
+      // Só ids: nome de membro é PII desnecessária no log.
+      payload: { deMemberId: null, paraMemberId: meuMemberId },
+    });
+
+    revalidarPosse(personId);
+    return sucesso(MENSAGEM_ASSUMIR.assumido);
+  });
+}
+
+// ATRIBUIR — ação GERENCIAL explícita.
+//
+// Diferente de assumir em três pontos, todos deliberados:
+//   1. exige PAPEIS_DISTRIBUICAO_LEAD (OWNER/ADMIN/MANAGER);
+//   2. o destino vem do formulário e é validado contra o tenant;
+//   3. PODE SOBRESCREVER um responsável existente — é o que transferir
+//      significa. Um gestor redistribuindo a carteira de quem saiu de
+//      férias é exatamente este caminho, e é por isso que ele não pode
+//      ter a guarda `responsibleMemberId: null` que protege o assumir.
+//
+// String vazia = "deixar sem responsável", um destino legítimo (o
+// corretor saiu e ninguém assumiu ainda) — mesma convenção de
+// transferirResponsavelNegociacao.
+export async function atribuirContato(
+  personId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+  if (!temPapel(await papelAtual(), PAPEIS_DISTRIBUICAO_LEAD)) {
+    return erroAcessoNegado("Você não tem permissão para atribuir contatos.");
+  }
+  // Sem predicado de escopo no alcance da pessoa: os três papéis acima
+  // resolvem para escopo de ORGANIZAÇÃO em qualquer política, então o
+  // predicado seria `{}`. Documentado em vez de aplicado por simetria,
+  // que sugeriria uma proteção que não está agindo — mesmo raciocínio
+  // de registrarPagamentoParticipante.
+
+  const bruto = String(formData.get("responsavelId") ?? "").trim();
+  let destino: string | null = null;
+  if (bruto) {
+    // Tenant + status ACTIVE, na mesma validação que a transferência de
+    // negociação já usa. Membro de outra organização nunca passa: o
+    // organizationId está no WHERE, não numa checagem posterior.
+    const validado = await validarMembroAtribuivel(organizationId, bruto);
+    if (!validado.ok) return erroGenerico(validado.erro);
+    destino = validado.responsibleMemberId;
+  }
+
+  return withOrganization(organizationId, async () => {
+    const atual = await prisma.person.findFirst({
+      where: { id: personId, organizationId },
+      select: { id: true, responsibleMemberId: true },
+    });
+    if (!atual) return erroAcessoNegado("Contato não encontrado.");
+    if (atual.responsibleMemberId === destino) {
+      return sucesso("Este contato já estava com esse responsável.");
+    }
+
+    // O WHERE repete o responsável lido: se outra transação mudou a posse
+    // no meio do caminho (um corretor assumindo no mesmo instante), a
+    // atribuição não acontece às cegas por cima de um estado que o gestor
+    // não viu. Ele relê e decide de novo — em vez de last-write-wins.
+    const atribuido = await prisma.person.updateMany({
+      where: { id: personId, organizationId, responsibleMemberId: atual.responsibleMemberId },
+      data: { responsibleMemberId: destino },
+    });
+    if (atribuido.count === 0) {
+      return erroGenerico(
+        "O responsável por este contato mudou enquanto você decidia. Recarregue e tente de novo."
+      );
+    }
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "Person",
+      entityId: personId,
+      action: "person_owner_assigned",
+      payload: { deMemberId: atual.responsibleMemberId, paraMemberId: destino },
+    });
+
+    revalidarPosse(personId);
+    return sucesso(destino ? "Responsável atualizado." : "Contato ficou sem responsável.");
+  });
+}
+
 export async function transferirResponsavelNegociacao(
   interesseId: string,
   _prevState: ActionState,

@@ -1,6 +1,6 @@
 import { describe, test, expect, afterEach } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { criarCenario, criarImovel, criarPessoa } from "@/test/fixtures";
+import { criarCenario, criarImovel, criarPessoa, criarUsuario, criarMembro } from "@/test/fixtures";
 import { buscarNovosContatos } from "@/lib/novos-contatos";
 
 // =======================================================================
@@ -208,11 +208,36 @@ describe("buscarNovosContatos", () => {
     expect((await buscarNovosContatos(cenarioB.organization.id, TODA_A_ORGANIZACAO)).total).toBe(1);
   });
 
-  test("escopo restrito: só os contatos de quem tem vínculo comercial com o membro", async () => {
+  // Fase 36 — o alcance da FILA mudou, e mudou exatamente uma vez.
+  //
+  // Antes: o membro via só os contatos de quem já tinha vínculo comercial
+  // com ele — o que deixava todo lead novo do site invisível para todo
+  // corretor, sem nenhuma forma de lhe dar um dono.
+  //
+  // Agora: ele vê os seus MAIS os que não são de ninguém (trabalho em
+  // aberto da organização, que é o que a fila existe para distribuir).
+  // O que continua fora, e é o que este teste protege: lead de COLEGA.
+  test("escopo restrito: os meus, os sem dono — e NUNCA o lead de um colega", async () => {
     cenarioA = await criarCenario();
     const imovel = await criarImovel({ organizationId: cenarioA.organization.id });
     const minha = await criarPessoa({ organizationId: cenarioA.organization.id, name: "Minha" });
     const alheia = await criarPessoa({ organizationId: cenarioA.organization.id, name: "Alheia" });
+    const semDono = await criarPessoa({
+      organizationId: cenarioA.organization.id,
+      name: "SemDono",
+    });
+
+    // Um colega de verdade, dono da pessoa "Alheia".
+    const usuarioColega = await criarUsuario({ name: "Colega" });
+    const colega = await criarMembro({
+      organizationId: cenarioA.organization.id,
+      userId: usuarioColega.id,
+      role: "BROKER",
+    });
+    await prisma.person.updateMany({
+      where: { id: alheia.id, organizationId: cenarioA.organization.id },
+      data: { responsibleMemberId: colega.id },
+    });
 
     // Vínculo comercial = negociação conduzida por mim. Criada ANTES do
     // contato novo, para não tirar o contato da fila.
@@ -236,17 +261,32 @@ describe("buscarNovosContatos", () => {
       personId: alheia.id,
       occurredAt: AGORA,
     });
+    await contatoDoSite({
+      organizationId: cenarioA.organization.id,
+      personId: semDono.id,
+      occurredAt: AGORA,
+    });
 
     const restrito = await buscarNovosContatos(cenarioA.organization.id, {
       tipo: "MEMBRO",
       memberId: cenarioA.membro.id,
     });
-    expect(restrito.total).toBe(1);
-    expect(restrito.itens[0].pessoa.nome).toBe("Minha");
+    // O meu (por negociação) e o que não é de ninguém.
+    expect(restrito.total).toBe(2);
+    const nomes = restrito.itens.map((i) => i.pessoa.nome).sort();
+    expect(nomes).toEqual(["Minha", "SemDono"]);
+    // PII do lead de um colega não sai do banco.
     expect(JSON.stringify(restrito)).not.toContain("Alheia");
 
-    // A camada gerencial continua vendo os dois.
-    expect((await buscarNovosContatos(cenarioA.organization.id, TODA_A_ORGANIZACAO)).total).toBe(2);
+    // A posse aparece na fila — e aqui está a invariante central da
+    // fase, visível num dado real: "Minha" é minha POR NEGOCIAÇÃO e
+    // mesmo assim continua SEM RESPONSÁVEL PELA PESSOA. Conduzir um
+    // negócio com alguém não é ser dono do lead dela, e a fila não
+    // finge que é.
+    expect(restrito.itens.every((i) => i.responsavel === null)).toBe(true);
+
+    // A camada gerencial continua vendo os três.
+    expect((await buscarNovosContatos(cenarioA.organization.id, TODA_A_ORGANIZACAO)).total).toBe(3);
   });
 
   test("ordem é o relógio: mais recente primeiro, e a espera é calculada", async () => {

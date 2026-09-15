@@ -210,8 +210,52 @@ model Person {
   emailNormalized String?
   phoneNormalized String?
 
+  // AUTORIA DO REGISTRO, apesar do nome. A auditoria da Fase 22 já havia
+  // provado (e a Fase 36 reconfirmou campo a campo): um único writer
+  // (criarPessoa), que grava quem CADASTROU; nunca transferido, porque
+  // não existe action que o altere; lead do site público nasce com ele
+  // null (person-dedup.ts não o preenche); lido apenas para exibir o
+  // nome de quem cadastrou na lista de clientes.
+  //
+  // NÃO É POSSE, e não foi reinterpretado como tal na Fase 36: promover
+  // este campo a responsável transformaria todo cliente já cadastrado à
+  // mão num lead "pertencente" a quem digitou — inclusive os que foram
+  // repassados a outra pessoa anos depois. Seria backfill inventado
+  // disfarçado de reaproveitamento. Ver responsibleMemberId abaixo.
   assignedMemberId String?
   assignedMember   OrganizationMember? @relation("PersonAssignedMember", fields: [assignedMemberId], references: [id])
+
+  // Fase 36 — RESPONSÁVEL PELO LEAD/CLIENTE.
+  //
+  // Quem deve CONDUZIR esta pessoa. É a resposta a "de quem é este lead
+  // agora?", que o produto não tinha: um contato do site nascia sem dono
+  // e não havia nenhuma forma de lhe dar um — em política RESTRICTED ele
+  // ficava estruturalmente invisível a todo corretor, e em COLLABORATIVE
+  // ficava visível a todos e responsabilidade de ninguém.
+  //
+  // Mesmo vocabulário das outras posses do domínio
+  // (Property.responsibleMember, PropertyInterest.responsibleMember,
+  // ScheduledActivity.responsibleMember): `responsibleMemberId` significa
+  // posse, `assignedMemberId`/`createdByMemberId`/`memberId` significam
+  // autoria. Os dois convivem nesta tabela de propósito — quem cadastrou
+  // e quem conduz são fatos diferentes e ambos continuam registrados.
+  //
+  // NÃO é responsabilidade da NEGOCIAÇÃO (PropertyInterest.responsible-
+  // MemberId) nem do COMPROMISSO (ScheduledActivity.responsibleMemberId):
+  // dimensões independentes, e nenhuma é sincronizada com esta. Uma
+  // pessoa conduzida por Ana pode ter uma negociação de Bruno.
+  //
+  // NULLABLE E SEM BACKFILL: "sem responsável" é um estado real e é o
+  // estado de toda pessoa anterior a esta fase. Nenhum responsável
+  // histórico foi inferido de createdBy, da última Interaction, do
+  // responsável de negociação ou de assignedMemberId — nenhum desses
+  // fatos prova posse.
+  //
+  // SET NULL, como TODAS as FKs de ownership deste schema (auditado em
+  // pg_constraint nas Fases 11/32): desativar um membro não apaga o lead
+  // nem o redistribui sozinho.
+  responsibleMemberId String?
+  responsibleMember   OrganizationMember? @relation("PersonResponsibleMember", fields: [responsibleMemberId], references: [id])
 
   ownedProperties        Property[]          @relation("PropertyOwner")
   interactions           Interaction[]
@@ -224,6 +268,13 @@ model Person {
   @@unique([organizationId, emailNormalized])
   @@unique([organizationId, phoneNormalized])
   @@index([organizationId])
+  // Fase 36 — a carteira de leads de um membro ("minhas pessoas") e a
+  // FILA DE DISTRIBUIÇÃO ("sem responsável") são as duas leituras novas,
+  // e as duas filtram por organização + responsável. Mesmo formato do
+  // @@index([organizationId, memberId]) de PropertyInterestParticipant,
+  // pelo mesmo motivo. O índice cobre `responsibleMemberId IS NULL`
+  // tanto quanto um id: no Postgres, NULL é indexável em B-tree.
+  @@index([organizationId, responsibleMemberId])
   // GIN: `roles` é filtrado com `has`/`hasSome` (ex: dashboard, roles: {
   // has: "LEAD" }) — índice B-tree comum não serve pra containment de
   // array, só GIN.
@@ -1459,6 +1510,9 @@ model OrganizationMember {
   registeredPayments             PropertyInterestParticipantPayment[] @relation("PaymentCreatedByMember")
   cancelledPayments              PropertyInterestParticipantPayment[] @relation("PaymentCancelledByMember")
   assignedPeople                 Person[]                             @relation("PersonAssignedMember")
+  // Fase 36 — leads/clientes que esta pessoa CONDUZ (posse), distinto de
+  // assignedPeople logo acima, que é quem ela CADASTROU (autoria).
+  responsiblePeople              Person[]                             @relation("PersonResponsibleMember")
   leadCapturesResolvidas         LeadCapture[]                        @relation("LeadCaptureResolvedByMember")
   interactions                   Interaction[]                        @relation("InteractionMember")
   deals                          Deal[]                               @relation("DealMember")

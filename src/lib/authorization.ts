@@ -60,6 +60,30 @@ export const PAPEIS_VISAO_EQUIPE: ReadonlySet<string> = new Set([
   "MANAGER",
 ]);
 
+// Fase 36 — DISTRIBUIR LEAD: atribuir um contato a outro membro, e
+// transferir um que já tem dono.
+//
+// É o MESMO trio de sempre, e conjunto próprio pelo mesmo motivo que
+// PAPEIS_LIQUIDACAO_COMISSAO e PAPEIS_VISAO_EQUIPE são conjuntos
+// próprios: cada capacidade é nomeada aqui para que mudar uma nunca
+// mude as outras por efeito colateral. Nenhum papel novo foi criado.
+//
+// A assimetria com ASSUMIR é deliberada e é o coração da fase: qualquer
+// membro que trabalha o CRM pode assumir um lead SEM DONO para si —
+// isso é pegar trabalho em aberto, não é autoridade — mas apontar o
+// trabalho de OUTRA pessoa, ou tirar um lead de quem já o tem, é
+// autoridade comercial e fica com a camada gerencial. É por isso que
+// "Assumir" não tem conjunto de papéis: ele não precisa de nenhum além
+// do gate do CRM que a action já aplica.
+//
+// BROKER e ASSISTANT ficam de fora, exatamente como em toda outra
+// capacidade gerencial do produto. Nenhuma permissão foi ampliada.
+export const PAPEIS_DISTRIBUICAO_LEAD: ReadonlySet<string> = new Set([
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+]);
+
 // Fase 23 — MANUTENÇÃO do site (limpeza de mídias órfãs).
 //
 // Não muda quem tem acesso: é exatamente o trio que a Server Action e a

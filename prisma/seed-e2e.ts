@@ -61,6 +61,9 @@ export const IDS_E2E = {
   imovelComissaoPerdido: "e2e-imovel-comissao-perdido",
   imovelComissaoSemValor: "e2e-imovel-comissao-sem-valor",
   imovelComissaoJornada: "e2e-imovel-comissao-jornada",
+  // Fase 36 — posse do lead (Organizações S e T).
+  imovelPosse: "e2e-imovel-posse",
+  imovelPosseColab: "e2e-imovel-posse-colab",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -744,6 +747,15 @@ async function main() {
     // Fase 26 — identidade multi-org e a dona da segunda organização.
     "multi-org@e2e.test",
     "owner-multi-b@e2e.test",
+    // Fase 36 — Organizações S e T (posse do lead). A dona distribui e
+    // os dois corretores provam a separação restrita; na colaborativa os
+    // mesmos papéis provam que ter dono não tira ninguém da vista.
+    "owner-posse@e2e.test",
+    "ana-posse@e2e.test",
+    "bruno-posse@e2e.test",
+    "owner-posse-colab@e2e.test",
+    "ana-posse-colab@e2e.test",
+    "bruno-posse-colab@e2e.test",
     // Fase 35 — Organização R (comissão a receber). A dona conduz a
     // jornada de pagamento e o corretor guarda a carteira de leitura:
     // as duas identidades precisam sobreviver à limpeza de membros.
@@ -2693,6 +2705,180 @@ async function main() {
     commissionValue: "20000.00",
     memberId: orgComissoes.membro.id,
     alocacao: "10000.00",
+  });
+
+  // =====================================================================
+  // Fase 36 — POSSE DO LEAD (Organizações S e T)
+  // =====================================================================
+  // Duas organizações porque a fase prova comportamentos OPOSTOS das duas
+  // políticas de visibilidade, e porque a jornada muda dono e registra
+  // atendimento — mutações que deslocariam as asserções de escopo em Org G.
+  //
+  // Cada contato tem propósito único e nenhum spec cruza com o do outro:
+  //   atribuir   a dona distribui para a Ana; Bruno nunca enxerga
+  //   assumir    a Ana pega para si; Bruno tenta roubar e não consegue
+  //   sem imóvel contato de /contato, propertyId null — o caso que não
+  //              tinha como ter dono antes desta fase
+  const posseOrg = async (
+    slug: string,
+    nome: string,
+    visibilidade: "RESTRICTED" | "COLLABORATIVE",
+    sufixo: string
+  ) => {
+    const org = await garantirOrganizacaoComDono({
+      slug,
+      timezone: "UTC",
+      name: nome,
+      planId: planoCompleto.id,
+      email: `owner-${sufixo}@e2e.test`,
+      senha,
+      role: "OWNER",
+    });
+    await prisma.organization.update({
+      where: { id: org.organization.id },
+      data: { commercialVisibility: visibilidade },
+    });
+    const corretor = async (email: string, nomeCorretor: string) => {
+      const usuario = await prisma.user.upsert({
+        where: { email },
+        update: { passwordHash: await bcrypt.hash(senha, 10) },
+        create: { name: nomeCorretor, email, passwordHash: await bcrypt.hash(senha, 10) },
+        select: { id: true },
+      });
+      return prisma.organizationMember.upsert({
+        where: {
+          organizationId_userId: { organizationId: org.organization.id, userId: usuario.id },
+        },
+        update: { role: "BROKER", status: "ACTIVE" },
+        create: { organizationId: org.organization.id, userId: usuario.id, role: "BROKER" },
+        select: { id: true },
+      });
+    };
+    return {
+      org,
+      ana: await corretor(`ana-${sufixo}@e2e.test`, `Ana ${nomeCorretor(sufixo)}`),
+      bruno: await corretor(`bruno-${sufixo}@e2e.test`, `Bruno ${nomeCorretor(sufixo)}`),
+    };
+  };
+  function nomeCorretor(sufixo: string) {
+    return sufixo === "posse" ? "Posse" : "Colab";
+  }
+
+  const posseRestrita = await posseOrg(
+    "e2e-org-posse",
+    "Organização E2E Posse",
+    "RESTRICTED",
+    "posse"
+  );
+  const posseColab = await posseOrg(
+    "e2e-org-posse-colab",
+    "Organização E2E Posse Colaborativa",
+    "COLLABORATIVE",
+    "posse-colab"
+  );
+
+  // RESET a cada rodada: como nas outras organizações criadas no fim do
+  // arquivo, a limpeza geral do seed (idsOrgs) não alcança estas — e a
+  // jornada MUTA posse e cria atendimento, então sem isto a segunda
+  // execução começaria com o lead já assumido e já atendido.
+  for (const alvo of [posseRestrita, posseColab]) {
+    const id = alvo.org.organization.id;
+    await prisma.propertyInterestStageHistory.deleteMany({ where: { organizationId: id } });
+    await prisma.scheduledActivity.deleteMany({ where: { organizationId: id } });
+    await prisma.person.deleteMany({ where: { organizationId: id } });
+  }
+
+  // Contato do site: Interaction SEM autor (memberId null) é o que define
+  // "chegou e ninguém atendeu" — a mesma derivação de novos-contatos.ts.
+  const contatoDoSitePosse = async (opcoes: {
+    organizationId: string;
+    nome: string;
+    origem: "IMOVEL" | "CONTATO";
+    propertyId?: string | null;
+    minutosAtras: number;
+  }) => {
+    const pessoa = await prisma.person.create({
+      data: {
+        organizationId: opcoes.organizationId,
+        name: opcoes.nome,
+        phone: null,
+        roles: ["LEAD"],
+        source: "WEBSITE",
+        // SEM responsável e SEM assignedMemberId: é exatamente como um
+        // lead do site nasce hoje (person-dedup.ts não preenche nenhum
+        // dos dois). É o estado que esta fase existe para resolver.
+      },
+      select: { id: true },
+    });
+    await prisma.interaction.create({
+      data: {
+        organizationId: opcoes.organizationId,
+        personId: pessoa.id,
+        propertyId: opcoes.propertyId ?? null,
+        type: "MESSAGE",
+        memberId: null,
+        origin: opcoes.origem,
+        notes: `Contato E2E de ${opcoes.nome}.`,
+        occurredAt: new Date(Date.now() - opcoes.minutosAtras * 60 * 1000),
+      },
+    });
+    return pessoa;
+  };
+
+  const imovelPosse = await garantirImovel({
+    id: IDS_E2E.imovelPosse,
+    organizationId: posseRestrita.org.organization.id,
+    title: "Apartamento Posse E2E",
+    price: 450000,
+  });
+  await contatoDoSitePosse({
+    organizationId: posseRestrita.org.organization.id,
+    nome: "Lead Atribuir Posse",
+    origem: "IMOVEL",
+    propertyId: imovelPosse.id,
+    minutosAtras: 20,
+  });
+  await contatoDoSitePosse({
+    organizationId: posseRestrita.org.organization.id,
+    nome: "Lead Assumir Posse",
+    origem: "IMOVEL",
+    propertyId: imovelPosse.id,
+    minutosAtras: 40,
+  });
+  // O CASO DA FASE: contato de /contato, sem imóvel nenhum. Antes desta
+  // fase ele não podia virar oportunidade (exige propertyId) e portanto
+  // não tinha nenhum caminho para ganhar dono.
+  await contatoDoSitePosse({
+    organizationId: posseRestrita.org.organization.id,
+    nome: "Lead Sem Imovel Posse",
+    origem: "CONTATO",
+    propertyId: null,
+    minutosAtras: 60,
+  });
+
+  // Contato que NENHUM teste muta: serve às asserções de responsivo, que
+  // precisam do card no estado "sem responsável" com as duas ações
+  // visíveis, independentemente do que as jornadas já fizeram.
+  await contatoDoSitePosse({
+    organizationId: posseRestrita.org.organization.id,
+    nome: "Lead Responsivo Posse",
+    origem: "CONTATO",
+    propertyId: null,
+    minutosAtras: 80,
+  });
+
+  const imovelPosseColab = await garantirImovel({
+    id: IDS_E2E.imovelPosseColab,
+    organizationId: posseColab.org.organization.id,
+    title: "Apartamento Posse Colab E2E",
+    price: 390000,
+  });
+  await contatoDoSitePosse({
+    organizationId: posseColab.org.organization.id,
+    nome: "Lead Colab Posse",
+    origem: "IMOVEL",
+    propertyId: imovelPosseColab.id,
+    minutosAtras: 15,
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);

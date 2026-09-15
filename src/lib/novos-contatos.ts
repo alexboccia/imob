@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { withOrganization } from "@/lib/tenant-context";
 import { ORIGENS_CAPTACAO } from "@/lib/captacao";
-import { wherePessoa, type EscopoComercial } from "@/lib/escopo-comercial";
+import { wherePessoaNaFilaDeEntrada, type EscopoComercial } from "@/lib/escopo-comercial";
+import { paraResponsavelPessoa, type ResponsavelPessoa } from "@/lib/posse-lead";
 
 // =======================================================================
 // Novos contatos — a caixa de entrada comercial
@@ -43,6 +44,24 @@ import { wherePessoa, type EscopoComercial } from "@/lib/escopo-comercial";
 // da fila; abrir a tela não tira nada.
 //
 // -----------------------------------------------------------------------
+// POSSE (Fase 36) — QUEM CUIDA DISTO
+// -----------------------------------------------------------------------
+// Cada item passou a carregar o RESPONSÁVEL pela pessoa
+// (Person.responsibleMemberId), ou a ausência dele. Isso responde uma
+// pergunta que a fila não respondia: um contato aparecia para todo mundo
+// e não era de ninguém.
+//
+// ASSUMIR NÃO É ATENDER, e a fila prova isso: tomar posse NÃO remove o
+// item daqui. Ele continua aguardando, agora com dono. Quem remove
+// continua sendo o atendimento registrado ou a oportunidade criada — a
+// derivação abaixo não olha para `responsibleMemberId` em momento algum.
+//
+// O ALCANCE tambem mudou, e só aqui: em política restrita a fila mostra
+// também os contatos SEM RESPONSÁVEL (ver wherePessoaNaFilaDeEntrada).
+// Sem isso, um corretor nunca veria um lead que ainda não é de ninguém e
+// o botão "Assumir" seria inalcançável justamente para quem deveria usá-lo.
+//
+// -----------------------------------------------------------------------
 // O QUE ESTA CAIXA NÃO AFIRMA
 // -----------------------------------------------------------------------
 // Não há score, "lead quente", temperatura nem próxima melhor ação. A
@@ -77,6 +96,13 @@ export type NovoContato = {
   mensagem: string | null;
   /** Fato derivado do relógio, calculado no servidor para a tela não divergir. */
   aguardandoHaHoras: number;
+  /**
+   * Fase 36 — quem CONDUZ esta pessoa. null = sem responsável, que é um
+   * estado real e o mais importante da fila: é o que precisa ser
+   * distribuído. Nunca confundir com `imovel.responsavel`, que é quem
+   * responde pelo IMÓVEL.
+   */
+  responsavel: ResponsavelPessoa | null;
   pessoa: { id: string; nome: string; telefone: string | null; email: string | null };
   imovel: {
     id: string;
@@ -118,7 +144,7 @@ export async function buscarNovosContatos(
         organizationId,
         memberId: null,
         origin: { in: ORIGENS_DO_SITE },
-        person: { is: wherePessoa(escopo) },
+        person: { is: wherePessoaNaFilaDeEntrada(escopo) },
       },
       select: { id: true, personId: true, occurredAt: true },
       orderBy: { occurredAt: "desc" },
@@ -174,7 +200,25 @@ export async function buscarNovosContatos(
         occurredAt: true,
         origin: true,
         notes: true,
-        person: { select: { id: true, name: true, phone: true, email: true } },
+        person: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            // Fase 36 — na consulta que já existe, nunca uma por card:
+            // a fila tem no máximo LIMITE_NOVOS_CONTATOS itens e esta é
+            // a única leitura de PII da caixa.
+            responsibleMember: {
+              select: {
+                id: true,
+                organizationId: true,
+                status: true,
+                user: { select: { name: true } },
+              },
+            },
+          },
+        },
         property: {
           select: {
             id: true,
@@ -215,6 +259,9 @@ export async function buscarNovosContatos(
           telefone: d.person.phone,
           email: d.person.email,
         },
+        // Redigido contra tenant na leitura: membro de outra organização
+        // vira null e o nome nunca chega à tela.
+        responsavel: paraResponsavelPessoa(d.person.responsibleMember, organizationId),
         imovel: d.property
           ? {
               id: d.property.id,

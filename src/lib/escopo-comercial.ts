@@ -24,9 +24,35 @@ import { atividadeDoMembro } from "@/lib/responsavel-atividade";
 // de quem criou, e negaria acesso a quem recebeu a negociação por
 // transferência. Por isso o escopo de Person é derivado de NEGOCIAÇÃO.
 //
-// `PropertyInterest.responsibleMemberId` é quem CONDUZ (Fase 11), muda
-// por transferência, e é o único campo do domínio que significa posse
-// comercial. É ele que define o universo autorizado.
+// `PropertyInterest.responsibleMemberId` é quem CONDUZ A NEGOCIAÇÃO
+// (Fase 11) e muda por transferência.
+//
+// -----------------------------------------------------------------------
+// FASE 36 — A POSSE DA PESSOA PASSA A EXISTIR
+// -----------------------------------------------------------------------
+// Até aqui o escopo de Person derivava EXCLUSIVAMENTE da negociação, e
+// isso tinha uma consequência que só apareceu quando a caixa de entrada
+// foi construída: um lead do site não tem negociação nenhuma, então em
+// política restrita ele não casava nenhum ramo e ficava invisível para
+// TODO corretor — sem nenhuma forma de lhe dar um dono, porque criar a
+// negociação exige um imóvel que um contato genérico não tem.
+//
+// `Person.responsibleMemberId` fecha isso. Ele é posse de verdade — tem
+// action de assumir, action de atribuir, transferência gerencial e
+// rastro no ActivityLog — e por isso entra aqui como ramo próprio.
+//
+// POR QUE O RAMO NOVO NÃO TEM `propertyInterests: { none: {} }`, ao
+// contrário do ramo de autoria logo abaixo: a ponte de autoria é
+// estreita de propósito (só vale enquanto ninguém conduz nada), porque
+// ter digitado um cadastro não é ser dono dele. Posse é o oposto: se eu
+// sou o responsável pelo lead, continuo responsável mesmo que um colega
+// conduza uma negociação com a mesma pessoa. Perder a pessoa de vista
+// nesse caso seria perder o próprio trabalho.
+//
+// O QUE ESTE RAMO NÃO FAZ: não dá acesso às NEGOCIAÇÕES da pessoa.
+// `whereNegociacao` não mudou, e a ficha do cliente já carrega
+// `propertyInterests` com o escopo de negociação aplicado à sub-relação.
+// Ver a matriz completa em tests/integration/posse-lead.test.ts.
 //
 // Nunca são usados como posse: createdByMemberId (autor, Fases 14/17/19),
 // Interaction.memberId (autor, Fase 15), StageHistory.changedByMemberId
@@ -105,10 +131,39 @@ export function wherePessoa(escopo: EscopoComercial): Prisma.PersonWhereInput {
   if (escopo.tipo === "ORGANIZACAO") return {};
   return {
     OR: [
+      // 1. conduzo uma negociação com ela
       { propertyInterests: { some: { responsibleMemberId: escopo.memberId } } },
+      // 2. Fase 36 — sou o responsável pela pessoa (posse declarada)
+      { responsibleMemberId: escopo.memberId },
+      // 3. eu criei o registro e ninguém conduz nada ainda (autoria)
       { assignedMemberId: escopo.memberId, propertyInterests: { none: {} } },
     ],
   };
+}
+
+// FILA DE ENTRADA — um escopo mais largo que `wherePessoa`, e só aqui.
+//
+// Um lead que ninguém assumiu não é a carteira de um colega: é trabalho
+// em aberto da organização. Se ele não aparecesse para o corretor, o
+// botão "Assumir" não existiria em política restrita e a fila só poderia
+// ser distribuída por um gestor — que foi exatamente o beco sem saída
+// que esta fase veio desfazer.
+//
+// POR QUE NÃO ENTRA EM `wherePessoa`: lá isto tornaria TODA pessoa sem
+// responsável da organização visível em /app/clientes, na busca e na
+// ficha — incluindo cliente antigo que ninguém nunca assumiu. Aqui o
+// alcance é só o da caixa de entrada, que já é restrita a contatos do
+// site AGUARDANDO atendimento. Assim que alguém assume, o item sai da
+// visão dos outros corretores pelo ramo 2 acima.
+//
+// TRADEOFF DECLARADO: em política restrita, os dados de contato de um
+// lead AINDA NÃO ASSUMIDO ficam visíveis a todos os membros. É uma
+// ampliação real e deliberada, limitada à fila de distribuição — sem
+// ela, nenhum corretor consegue receber um lead por conta própria.
+export function wherePessoaNaFilaDeEntrada(escopo: EscopoComercial): Prisma.PersonWhereInput {
+  if (escopo.tipo === "ORGANIZACAO") return {};
+  const doMembro = wherePessoa(escopo).OR ?? [];
+  return { OR: [...doMembro, { responsibleMemberId: null }] };
 }
 
 // COMPROMISSO — a posse vem da negociação quando ela existe e, desde a

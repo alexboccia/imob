@@ -11,7 +11,12 @@ import { CentralTrabalho } from "@/components/admin/CentralTrabalho";
 import { buscarVisaoEquipe, resolverVisaoCentral } from "@/lib/central-equipe";
 import { CentralEquipe } from "@/components/admin/CentralEquipe";
 import { AlternadorVisaoCentral } from "@/components/admin/AlternadorVisaoCentral";
-import { temPapel, PAPEIS_RESOLUCAO_IDENTIDADE } from "@/lib/authorization";
+import {
+  temPapel,
+  PAPEIS_RESOLUCAO_IDENTIDADE,
+  PAPEIS_DISTRIBUICAO_LEAD,
+} from "@/lib/authorization";
+import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
 import { papelAtual } from "@/lib/papel-atual";
 import {
   buscarCaptacoesPendentes,
@@ -108,13 +113,28 @@ export default async function DashboardPage({
   // mostra compromissos já marcados, e um contato novo ainda não é
   // compromisso nenhum.
   //
-  // Escopado pelo MESMO `escopo` do resto da Central: em modo restrito o
-  // corretor vê os contatos das pessoas com quem tem vínculo comercial,
-  // e a camada gerencial vê a organização. Nenhum privilégio novo.
+  // Escopado pelo MESMO `escopo` do resto da Central, com uma ampliação
+  // declarada na Fase 36: em modo restrito o corretor vê os contatos das
+  // pessoas com quem tem vínculo comercial E os que ainda não são de
+  // ninguém — trabalho em aberto da organização, que é o que a fila
+  // existe para distribuir. Ver wherePessoaNaFilaDeEntrada.
   const novosContatos =
     temCrm && membroId
       ? await buscarNovosContatos(organizationId, escopo)
       : { itens: [], total: 0, truncado: false };
+
+  // Fase 36 — quem pode APONTAR o trabalho de outra pessoa. Assumir para
+  // si não exige papel nenhum além do CRM (a action decide); atribuir e
+  // transferir são autoridade comercial. A tela só esconde o botão — a
+  // action revalida o papel de novo no servidor.
+  const podeAtribuirContato =
+    temCrm && temPapel(await papelAtual(), PAPEIS_DISTRIBUICAO_LEAD);
+  // A lista de destinos só é carregada por quem pode atribuir, e uma vez
+  // por carregamento — nunca uma consulta por card.
+  const membrosParaAtribuir =
+    podeAtribuirContato && novosContatos.itens.length > 0
+      ? await buscarMembrosAtribuiveis(organizationId)
+      : [];
 
   // Fase 26 — primeiros passos. Derivado de fatos, some quando não há
   // pendência: para uma organização já operando, isto é uma consulta
@@ -173,7 +193,12 @@ export default async function DashboardPage({
           de ser o que fazer a seguir. */}
       <PrimeirosPassos dados={onboarding} />
 
-      <NovosContatos dados={novosContatos} />
+      <NovosContatos
+        dados={novosContatos}
+        meuMemberId={membroId}
+        podeAtribuir={podeAtribuirContato}
+        membros={membrosParaAtribuir}
+      />
 
       {captacoes.length > 0 && (
         <CaptacoesPendentes

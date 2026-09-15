@@ -186,6 +186,41 @@ export const ORG_COMISSOES = {
   email: "owner-comissoes@e2e.test",
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
+// Fase 36 — POSSE DO LEAD. Duas organizações dedicadas porque a fase
+// prova comportamentos OPOSTOS das duas políticas de visibilidade, e
+// porque a jornada muda dono e registra atendimento — mutações que
+// deslocariam as asserções de escopo-comercial.spec.ts na Org G.
+//
+//   S (e2e-org-posse)        RESTRICTED — a dona distribui, Ana recebe,
+//                            Bruno não enxerga o que não é dele.
+//   T (e2e-org-posse-colab)  COLLABORATIVE — ter dono NÃO tira a pessoa
+//                            da vista do colega.
+export const ORG_POSSE = {
+  slug: "e2e-org-posse",
+  email: "owner-posse@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+export const ORG_POSSE_ANA = {
+  slug: "e2e-org-posse",
+  email: "ana-posse@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+export const ORG_POSSE_BRUNO = {
+  slug: "e2e-org-posse",
+  email: "bruno-posse@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+export const ORG_POSSE_COLAB_ANA = {
+  slug: "e2e-org-posse-colab",
+  email: "ana-posse-colab@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+export const ORG_POSSE_COLAB_BRUNO = {
+  slug: "e2e-org-posse-colab",
+  email: "bruno-posse-colab@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const ORG_COMISSOES_BRUNO = {
   slug: "e2e-org-comissoes",
   email: "bruno-comissoes@e2e.test",
@@ -227,6 +262,9 @@ export const IDS_E2E = {
   imovelComissaoPerdido: "e2e-imovel-comissao-perdido",
   imovelComissaoSemValor: "e2e-imovel-comissao-sem-valor",
   imovelComissaoJornada: "e2e-imovel-comissao-jornada",
+  // Fase 36 — posse do lead (Organizações S e T).
+  imovelPosse: "e2e-imovel-posse",
+  imovelPosseColab: "e2e-imovel-posse-colab",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

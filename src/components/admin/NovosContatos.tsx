@@ -5,12 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { BotaoCriarOportunidade } from "@/components/admin/BotaoCriarOportunidade";
 import { RegistrarAtendimento } from "@/components/admin/RegistrarAtendimento";
+import { PosseContato } from "@/components/admin/PosseContato";
 import { IconeWhatsApp } from "@/components/icons";
 import { rotuloOrigemCaptacao } from "@/lib/captacao";
 import { oportunidadeElegivel } from "@/lib/oportunidade";
 import { formatarPreco, FINALIDADE_LABEL } from "@/lib/format";
 import { linkWhatsApp } from "@/lib/whatsapp";
 import { HORAS_PARA_ALERTA, type NovoContato, type NovosContatos as Dados } from "@/lib/novos-contatos";
+import type { OpcaoResponsavel } from "@/lib/responsavel-negociacao";
 
 // Caixa de entrada comercial — o primeiro bloco da Central.
 //
@@ -39,7 +41,17 @@ function precoRelevante(imovel: NonNullable<NovoContato["imovel"]>): string | nu
   return valor ? formatarPreco(valor) : null;
 }
 
-function ItemContato({ contato }: { contato: NovoContato }) {
+function ItemContato({
+  contato,
+  meuMemberId,
+  podeAtribuir,
+  membros,
+}: {
+  contato: NovoContato;
+  meuMemberId: string | null;
+  podeAtribuir: boolean;
+  membros: OpcaoResponsavel[];
+}) {
   const origem = rotuloOrigemCaptacao(contato.origem);
   const alerta = contato.aguardandoHaHoras >= HORAS_PARA_ALERTA;
 
@@ -119,9 +131,23 @@ function ItemContato({ contato }: { contato: NovoContato }) {
 
       {contato.imovel?.responsavel && (
         <p className="mt-1 text-xs text-muted-foreground">
+          {/* Responsável pelo IMÓVEL — dimensão diferente da posse do
+              contato logo abaixo, e por isso o rótulo é explícito nas
+              duas linhas. */}
           Responsável pelo imóvel: {contato.imovel.responsavel}
         </p>
       )}
+
+      {/* Fase 36 — de quem é este lead. Vem antes das ações: a primeira
+          pergunta é "isto é meu?", e só depois "o que eu faço agora". */}
+      <PosseContato
+        personId={contato.pessoa.id}
+        nomePessoa={contato.pessoa.nome}
+        responsavel={contato.responsavel}
+        souEu={contato.responsavel !== null && contato.responsavel.memberId === meuMemberId}
+        podeAtribuir={podeAtribuir}
+        membros={membros}
+      />
 
       {/* Hierarquia: REGISTRAR ATENDIMENTO é a ação principal — é ela que
           fecha o ciclo e tira o contato da fila. WhatsApp fica ao lado
@@ -155,8 +181,24 @@ function ItemContato({ contato }: { contato: NovoContato }) {
   );
 }
 
-export function NovosContatos({ dados }: { dados: Dados }) {
+export function NovosContatos({
+  dados,
+  meuMemberId,
+  podeAtribuir,
+  membros,
+}: {
+  dados: Dados;
+  /** Membro da SESSÃO, resolvido no servidor — nunca lido do cliente. */
+  meuMemberId: string | null;
+  podeAtribuir: boolean;
+  membros: OpcaoResponsavel[];
+}) {
   if (dados.itens.length === 0) return null;
+
+  // FILA DE DISTRIBUIÇÃO: quantos dos contatos exibidos ainda não são de
+  // ninguém. Contado sobre o que está na tela, sem uma segunda consulta —
+  // é uma chamada à ação, não uma métrica.
+  const semResponsavel = dados.itens.filter((c) => c.responsavel === null).length;
 
   return (
     <Card data-novos-contatos>
@@ -171,11 +213,27 @@ export function NovosContatos({ dados }: { dados: Dados }) {
         <p className="text-sm text-muted-foreground">
           Chegaram pelo site e ninguém registrou atendimento ainda.
         </p>
+        {/* Texto, não cor: a fila diz em palavras quantos precisam de
+            dono. Assumir e atribuir NÃO tiram o contato daqui — só o
+            atendimento registrado faz isso. */}
+        {semResponsavel > 0 && (
+          <p className="pt-1 text-sm text-muted-foreground">
+            {semResponsavel === 1
+              ? "1 destes ainda está sem responsável."
+              : `${semResponsavel} destes ainda estão sem responsável.`}
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         <ul>
           {dados.itens.map((contato) => (
-            <ItemContato key={contato.id} contato={contato} />
+            <ItemContato
+              key={contato.id}
+              contato={contato}
+              meuMemberId={meuMemberId}
+              podeAtribuir={podeAtribuir}
+              membros={membros}
+            />
           ))}
         </ul>
         {dados.total > dados.itens.length && (
