@@ -230,6 +230,15 @@ export const ORG_RESULTADO = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Fase 38 — organização dedicada ao EMPREENDIMENTO. Própria porque a
+// fase afirma QUAIS unidades aparecem numa ficha pública, e qualquer
+// imóvel a mais numa org compartilhada mudaria essas asserções.
+export const ORG_EMPREENDIMENTO = {
+  slug: "e2e-org-empreendimento",
+  email: "owner-empreendimento@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const ORG_COMISSOES_BRUNO = {
   slug: "e2e-org-comissoes",
   email: "bruno-comissoes@e2e.test",
@@ -276,6 +285,17 @@ export const IDS_E2E = {
   imovelPosseColab: "e2e-imovel-posse-colab",
   // Fase 37 — resultado da visita (Organização U).
   imovelResultado: "e2e-imovel-resultado",
+  // Fase 38 — empreendimento (Organização V). Ids fixos: os specs abrem
+  // a ficha da unidade atual e conferem quais outras aparecem.
+  imovelAlpha1: "e2e-imovel-alpha-1",
+  imovelAlpha2: "e2e-imovel-alpha-2",
+  imovelAlpha3: "e2e-imovel-alpha-3",
+  imovelAlpha4: "e2e-imovel-alpha-4",
+  imovelAlpha5: "e2e-imovel-alpha-5",
+  imovelAlphaVendida: "e2e-imovel-alpha-vendida",
+  imovelBeta1: "e2e-imovel-beta-1",
+  imovelAvulso: "e2e-imovel-avulso",
+  imovelSoloAlpha: "e2e-imovel-solo-alpha",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

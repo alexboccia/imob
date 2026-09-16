@@ -30,6 +30,11 @@ import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 import { GaleriaFotos } from "@/components/GaleriaFotos";
 import { BotaoCompartilhar } from "@/components/BotaoCompartilhar";
 import { EvolucaoObra } from "@/components/EvolucaoObra";
+import { OutrasUnidades } from "@/components/OutrasUnidades";
+import {
+  buscarOutrasUnidades,
+  LIMITE_OUTRAS_UNIDADES,
+} from "@/lib/empreendimento-consultas";
 import { CarrosselPlantas } from "@/components/CarrosselPlantas";
 import { ImovelCard } from "@/components/ImovelCard";
 import { CaracteristicasDoImovel } from "@/components/imovel/Caracteristicas";
@@ -206,26 +211,30 @@ export default async function DetalheImovelPage({
   const organizationId = organization.id;
   const basePath = resolverBasePath(orgSlug);
 
-  const { imovel, configContato, imoveisProximos, materiais } = await withOrganization(
-    organizationId,
-    async () => {
+  const { imovel, configContato, imoveisProximos, materiais, outrasUnidades } =
+    await withOrganization(organizationId, async () => {
       const imovel = await buscarImovel(id, organizationId);
 
       if (!imovel || imovel.status === "DRAFT" || imovel.status === "INACTIVE") {
         notFound();
       }
 
-      const [configContato, imoveisProximos, materiais] = await Promise.all([
+      const [configContato, imoveisProximos, materiais, outrasUnidades] = await Promise.all([
         buscarConfiguracaoContato(organizationId),
         buscarImoveisProximos(organizationId, imovel),
         // Em paralelo com o que a página já buscava — não acrescenta
         // ida e volta à renderização.
         buscarMateriaisAtivos(imovel.id, organizationId),
+        // Fase 38 — outras unidades do MESMO empreendimento. Só consulta
+        // quando esta unidade pertence a um: sem vínculo não existe
+        // pergunta a fazer, e a consulta nem sai.
+        imovel.developmentId
+          ? buscarOutrasUnidades(organizationId, imovel.developmentId, imovel.id)
+          : Promise.resolve([]),
       ]);
 
-      return { imovel, configContato, imoveisProximos, materiais };
-    }
-  );
+      return { imovel, configContato, imoveisProximos, materiais, outrasUnidades };
+    });
 
   const fotos = imovel.media.filter((m) => m.type === "PHOTO");
   const videos = imovel.media.filter((m) => m.type === "VIDEO");
@@ -533,6 +542,21 @@ export default async function DetalheImovelPage({
           idFormulario={idFormulario}
         />
       </div>
+
+      {/* Fase 38 — POSIÇÃO: depois de todo o conteúdo informativo da
+          unidade (descrição, características, obra, plantas, materiais,
+          localização) e ANTES de "Imóveis próximos".
+
+          A ordem entre as duas é deliberada e é a própria hierarquia da
+          informação: primeiro o que existe DENTRO deste empreendimento —
+          a comparação mais relevante para quem já se interessou por ele —
+          e só então o que existe por perto, que é sugestão mais ampla.
+
+          Nenhuma das seções que acabamos de estabilizar mudou de lugar. */}
+      <OutrasUnidades
+        unidades={outrasUnidades.slice(0, LIMITE_OUTRAS_UNIDADES)}
+        basePath={basePath}
+      />
 
       {imoveisProximos.length > 0 && (
         <section className="mt-16 pt-8 border-t">

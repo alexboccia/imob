@@ -346,6 +346,8 @@ export async function limparOrganizacao(
   await prisma.property.deleteMany({ where: { organizationId } });
   await prisma.person.deleteMany({ where: { organizationId } });
 
+  // Fase 38 — mesma ordem da exclusão real: depois das Properties.
+  await prisma.development.deleteMany({ where: { organizationId } });
   await prisma.featureOption.deleteMany({ where: { organizationId } });
   await prisma.propertyTypeOption.deleteMany({ where: { organizationId } });
   // FK restrict pra Organization, precisa sair antes do delete (mesmo

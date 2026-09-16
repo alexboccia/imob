@@ -66,6 +66,17 @@ export const IDS_E2E = {
   imovelPosseColab: "e2e-imovel-posse-colab",
   // Fase 37 — resultado da visita (Organização U).
   imovelResultado: "e2e-imovel-resultado",
+  // Fase 38 — empreendimento (Organização V). Ids fixos: os specs abrem
+  // a ficha da unidade atual e conferem quais outras aparecem.
+  imovelAlpha1: "e2e-imovel-alpha-1",
+  imovelAlpha2: "e2e-imovel-alpha-2",
+  imovelAlpha3: "e2e-imovel-alpha-3",
+  imovelAlpha4: "e2e-imovel-alpha-4",
+  imovelAlpha5: "e2e-imovel-alpha-5",
+  imovelAlphaVendida: "e2e-imovel-alpha-vendida",
+  imovelBeta1: "e2e-imovel-beta-1",
+  imovelAvulso: "e2e-imovel-avulso",
+  imovelSoloAlpha: "e2e-imovel-solo-alpha",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -749,6 +760,8 @@ async function main() {
     // Fase 26 — identidade multi-org e a dona da segunda organização.
     "multi-org@e2e.test",
     "owner-multi-b@e2e.test",
+    // Fase 38 — Organização V (empreendimento).
+    "owner-empreendimento@e2e.test",
     // Fase 37 — Organização U (resultado da visita). A dona encerra as
     // visitas da jornada; organização própria porque a fase afirma
     // ESTADOS de visita, e encerrá-las em qualquer org compartilhada
@@ -2967,6 +2980,131 @@ async function main() {
   await visitaParaResultado("Cliente Resultado NoShow", 4);
   await visitaParaResultado("Cliente Resultado Negativo", 5);
   await visitaParaResultado("Cliente Resultado Intocado", 2);
+
+  // =====================================================================
+  // Fase 38 — EMPREENDIMENTO (Organização V)
+  // =====================================================================
+  // A ficha de Alpha 1 precisa mostrar EXATAMENTE as outras unidades
+  // públicas do empreendimento Alpha — e mais nada. O cenário existe
+  // para que cada exclusão seja provada por um caso real:
+  //
+  //   Alpha 1        unidade atual        -> nunca aparece a si mesma
+  //   Alpha 2..5     mesmo empreendimento -> aparecem (limite mostra 4)
+  //   Alpha vendida  mesmo empreendimento -> fora (política pública)
+  //   Beta 1         OUTRO empreendimento -> fora
+  //   Avulso         sem empreendimento   -> fora
+  //   Solo Alpha     empreendimento só dele -> ficha SEM a seção
+  //   (Org B)        outro tenant          -> fora
+  const orgEmp = await garantirOrganizacaoComDono({
+    slug: "e2e-org-empreendimento",
+    timezone: "UTC",
+    name: "Organização E2E Empreendimento",
+    planId: planoCompleto.id,
+    email: "owner-empreendimento@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+
+  // RESET por rodada: a limpeza geral monta idsOrgs antes daqui, e os
+  // specs administrativos criam/renomeiam empreendimentos.
+  await prisma.property.updateMany({
+    where: { organizationId: orgEmp.organization.id },
+    data: { developmentId: null },
+  });
+  await prisma.development.deleteMany({ where: { organizationId: orgEmp.organization.id } });
+
+  const empreendimentoAlpha = await prisma.development.create({
+    data: { organizationId: orgEmp.organization.id, name: "Residencial Alpha E2E" },
+    select: { id: true },
+  });
+  const empreendimentoBeta = await prisma.development.create({
+    data: { organizationId: orgEmp.organization.id, name: "Residencial Beta E2E" },
+    select: { id: true },
+  });
+  const empreendimentoSolo = await prisma.development.create({
+    data: { organizationId: orgEmp.organization.id, name: "Residencial Solo E2E" },
+    select: { id: true },
+  });
+
+  const unidadeAlpha = async (opcoes: {
+    id: string;
+    titulo: string;
+    developmentId: string | null;
+    status?: "AVAILABLE" | "SOLD";
+    bedrooms?: number | null;
+    totalArea?: number | null;
+    price?: number | null;
+  }) => {
+    const imovel = await garantirImovel({
+      id: opcoes.id,
+      organizationId: orgEmp.organization.id,
+      title: opcoes.titulo,
+      status: opcoes.status ?? "AVAILABLE",
+      bedrooms: opcoes.bedrooms === undefined ? 3 : opcoes.bedrooms,
+      totalArea: opcoes.totalArea === undefined ? 78 : opcoes.totalArea,
+      price: opcoes.price === undefined ? 820000 : opcoes.price,
+    });
+    await prisma.property.updateMany({
+      where: { id: imovel.id, organizationId: orgEmp.organization.id },
+      data: { developmentId: opcoes.developmentId },
+    });
+    return imovel;
+  };
+
+  await unidadeAlpha({
+    id: IDS_E2E.imovelAlpha1,
+    titulo: "Alpha Unidade 1 E2E",
+    developmentId: empreendimentoAlpha.id,
+  });
+  await unidadeAlpha({
+    id: IDS_E2E.imovelAlpha2,
+    titulo: "Alpha Unidade 2 E2E",
+    developmentId: empreendimentoAlpha.id,
+    bedrooms: 3,
+    totalArea: 82,
+    price: 895000,
+  });
+  await unidadeAlpha({
+    id: IDS_E2E.imovelAlpha3,
+    titulo: "Alpha Unidade 3 E2E",
+    developmentId: empreendimentoAlpha.id,
+  });
+  await unidadeAlpha({
+    id: IDS_E2E.imovelAlpha4,
+    titulo: "Alpha Unidade 4 E2E",
+    developmentId: empreendimentoAlpha.id,
+  });
+  // A QUINTA existe para provar o limite: são 5 outras unidades públicas
+  // e a ficha mostra 4.
+  await unidadeAlpha({
+    id: IDS_E2E.imovelAlpha5,
+    titulo: "Alpha Unidade 5 E2E",
+    developmentId: empreendimentoAlpha.id,
+  });
+  // DADOS INCOMPLETOS + política pública num caso só não daria: esta é
+  // só a exclusão por status.
+  await unidadeAlpha({
+    id: IDS_E2E.imovelAlphaVendida,
+    titulo: "Alpha Unidade Vendida E2E",
+    developmentId: empreendimentoAlpha.id,
+    status: "SOLD",
+  });
+  await unidadeAlpha({
+    id: IDS_E2E.imovelBeta1,
+    titulo: "Beta Unidade 1 E2E",
+    developmentId: empreendimentoBeta.id,
+  });
+  await unidadeAlpha({
+    id: IDS_E2E.imovelAvulso,
+    titulo: "Avulso Sem Empreendimento E2E",
+    developmentId: null,
+  });
+  // Empreendimento com UMA unidade: a ficha dela não pode ter a seção.
+  await unidadeAlpha({
+    id: IDS_E2E.imovelSoloAlpha,
+    titulo: "Solo Unidade Unica E2E",
+    developmentId: empreendimentoSolo.id,
+  });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);

@@ -1,4 +1,7 @@
-type ImovelParaCard = {
+// Exportado desde a Fase 38: a seção "Outras unidades" monta o seu
+// próprio select no banco e precisa declarar que ele satisfaz o contrato
+// do card — em vez de repetir a forma numa segunda definição.
+export type ImovelParaCard = {
   id: string;
   title: string;
   type: string;

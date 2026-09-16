@@ -8,6 +8,7 @@ import { buscarOcupacaoVitrine } from "@/lib/vitrine-home-consultas";
 import { atualizarImovel } from "@/app/app/imoveis/actions";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
 import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
+import { listarOpcoesEmpreendimento } from "@/lib/empreendimento-consultas";
 import { ToastSalvo } from "@/components/admin/ToastSalvo";
 import { requireOrganizationId } from "@/lib/tenant";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
@@ -47,6 +48,7 @@ export default async function EditarImovelPage({
   // Ocupação das quatro posições da vitrine — uma consulta, usada só
   // para rotular as opções do seletor.
   const ocupacaoVitrine = await buscarOcupacaoVitrine(organizationId);
+  const opcoesEmpreendimento = await listarOpcoesEmpreendimento(organizationId);
 
   const [
     [imovel, { opcoesImovel, opcoesCondominio }, { opcoesResidencial, opcoesComercial }, interesses],
@@ -124,6 +126,8 @@ export default async function EditarImovelPage({
         propertyId={imovel.id}
         valoresIniciais={{
           titulo: imovel.title,
+          // Fase 38 — o vínculo atual, para o seletor abrir no valor certo.
+          empreendimentoId: imovel.developmentId,
           descricao: imovel.description,
           tipo: imovel.type,
           finalidade: imovel.purpose,
@@ -176,6 +180,7 @@ export default async function EditarImovelPage({
         }))}
         opcoesCaracteristicasImovel={opcoesImovel}
         opcoesCaracteristicasCondominio={opcoesCondominio}
+        opcoesEmpreendimento={opcoesEmpreendimento}
         opcoesTiposResidencial={opcoesResidencial}
         opcoesTiposComercial={opcoesComercial}
         ocupacaoVitrine={ocupacaoVitrine}

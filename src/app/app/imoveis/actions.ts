@@ -17,6 +17,8 @@ import {
   midiasParaCriar,
 } from "@/lib/property-mapper";
 import { tagFacetas } from "@/lib/cache-tags";
+import { interpretarVinculoEmpreendimento } from "@/lib/empreendimento";
+import { empreendimentoDaOrganizacao } from "@/lib/empreendimento-consultas";
 import { parseMateriais } from "@/lib/materiais-imovel";
 
 // SEM STORAGE CONFIGURADO, MATERIAL NÃO SE MEXE.
@@ -38,6 +40,31 @@ function materiaisDoFormulario(
 ): ReturnType<typeof parseMateriais> {
   if (!storageConfigurado()) return [];
   return parseMateriais(json, { organizationId });
+}
+
+// Fase 38 — resolve a que empreendimento esta unidade pertence.
+//
+// O formulário manda um ID, nunca um nome: identidade estrutural, não
+// string livre. E o ID é input do navegador como qualquer outro, então
+// ele é confirmado CONTRA A ORGANIZAÇÃO antes de virar vínculo — um id
+// de outro tenant é recusado, nunca gravado.
+//
+// null = sem empreendimento, um destino legítimo (inclusive para
+// DESVINCULAR uma unidade que já tinha).
+async function resolverEmpreendimento(
+  organizationId: string,
+  bruto: unknown
+): Promise<{ ok: true; developmentId: string | null } | { ok: false; estado: ActionState }> {
+  const developmentId = interpretarVinculoEmpreendimento(bruto);
+  if (developmentId === null) return { ok: true, developmentId: null };
+
+  if (!(await empreendimentoDaOrganizacao(organizationId, developmentId))) {
+    return {
+      ok: false,
+      estado: erroGenerico("Empreendimento não encontrado nesta organização."),
+    };
+  }
+  return { ok: true, developmentId };
 }
 
 export async function criarImovel(
@@ -67,6 +94,9 @@ export async function criarImovel(
   const destaque = await resolverPosicaoDestaque(organizationId, null, formData);
   if (!destaque.ok) return destaque.estado;
 
+  const empreendimento = await resolverEmpreendimento(organizationId, dados.empreendimentoId);
+  if (!empreendimento.ok) return empreendimento.estado;
+
   let imovel: { id: string; title: string };
   try {
     imovel = await withOrganization(organizationId, () =>
@@ -74,6 +104,7 @@ export async function criarImovel(
       data: {
         organizationId,
         ...camposImovel(dados),
+        developmentId: empreendimento.developmentId,
         homeHighlightPosition: destaque.posicao,
         // Só definido na criação: quem cadastra o imóvel vira o
         // responsável inicial. A edição não tem campo de UI para
@@ -200,6 +231,9 @@ export async function atualizarImovel(
   const destaque = await resolverPosicaoDestaque(organizationId, imovelId, formData);
   if (!destaque.ok) return destaque.estado;
 
+  const empreendimento = await resolverEmpreendimento(organizationId, dados.empreendimentoId);
+  if (!empreendimento.ok) return empreendimento.estado;
+
   try {
   await withOrganization(organizationId, async () => {
     const imovelAtual = await prisma.property.findUniqueOrThrow({
@@ -227,6 +261,10 @@ export async function atualizarImovel(
         where: { id: imovelId, organizationId },
         data: {
           ...camposImovel(dados),
+          // Vínculo SEMPRE reescrito na edição (inclusive para null):
+          // é o que permite desvincular uma unidade pelo próprio
+          // formulário, sem uma segunda ação.
+          developmentId: empreendimento.developmentId,
           homeHighlightPosition: destaque.posicao,
           publishedAt:
             dados.status === "AVAILABLE" && !imovelAtual.publishedAt

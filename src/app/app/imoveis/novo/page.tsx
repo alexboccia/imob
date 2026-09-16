@@ -2,6 +2,7 @@ import { ImovelForm } from "@/components/admin/ImovelForm";
 import { criarImovel } from "@/app/app/imoveis/actions";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
 import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
+import { listarOpcoesEmpreendimento } from "@/lib/empreendimento-consultas";
 import { requireOrganizationId } from "@/lib/tenant";
 import { buscarOcupacaoVitrine } from "@/lib/vitrine-home-consultas";
 import { withOrganization } from "@/lib/tenant-context";
@@ -16,6 +17,9 @@ export default async function NovoImovelPage() {
       ])
     );
   const ocupacaoVitrine = await buscarOcupacaoVitrine(organizationId);
+  // Fase 38 — uma consulta por carregamento para o seletor, nunca uma
+  // por opção.
+  const opcoesEmpreendimento = await listarOpcoesEmpreendimento(organizationId);
 
   return (
     <div className="space-y-5">
@@ -29,6 +33,7 @@ export default async function NovoImovelPage() {
         action={criarImovel}
         opcoesCaracteristicasImovel={opcoesImovel}
         opcoesCaracteristicasCondominio={opcoesCondominio}
+        opcoesEmpreendimento={opcoesEmpreendimento}
         opcoesTiposResidencial={opcoesResidencial}
         opcoesTiposComercial={opcoesComercial}
         ocupacaoVitrine={ocupacaoVitrine}

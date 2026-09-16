@@ -14,6 +14,11 @@ import { SecaoLancamentoFields } from "@/components/admin/SecaoLancamentoFields"
 import { BotaoSalvarImovel } from "@/components/admin/BotaoSalvarImovel";
 import { CampoMoeda } from "@/components/admin/CampoMoeda";
 import { ErroCampo } from "@/components/admin/ErroCampo";
+import {
+  SEM_EMPREENDIMENTO,
+  ROTULO_SEM_EMPREENDIMENTO,
+  type OpcaoEmpreendimento,
+} from "@/lib/empreendimento";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -38,6 +43,8 @@ import {
 } from "@/components/ui/select";
 
 type ImovelFormValues = {
+  /** Fase 38 — id do empreendimento, ou ausente para unidade avulsa. */
+  empreendimentoId: string | null;
   titulo: string;
   descricao: string | null;
   tipo: string;
@@ -87,6 +94,7 @@ export function ImovelForm({
   propertyId,
   opcoesCaracteristicasImovel = [],
   opcoesCaracteristicasCondominio = [],
+  opcoesEmpreendimento = [],
   opcoesTiposResidencial = [],
   opcoesTiposComercial = [],
   ocupacaoVitrine = [],
@@ -99,6 +107,8 @@ export function ImovelForm({
   propertyId?: string;
   opcoesCaracteristicasImovel?: string[];
   opcoesCaracteristicasCondominio?: string[];
+  /** Fase 38 — empreendimentos da organização, para o vínculo da unidade. */
+  opcoesEmpreendimento?: OpcaoEmpreendimento[];
   opcoesTiposResidencial?: string[];
   opcoesTiposComercial?: string[];
   /** Quem ocupa cada uma das quatro posições da vitrine da Home hoje. */
@@ -149,6 +159,47 @@ export function ImovelForm({
             <Label htmlFor="titulo">Título</Label>
             <Input id="titulo" name="titulo" defaultValue={v.titulo ?? ""} required />
             <ErroCampo erros={estado.fieldErrors?.titulo} />
+          </div>
+
+          {/* Fase 38 — a que EMPREENDIMENTO esta unidade pertence.
+              Fica em Identificação, junto de tipo e finalidade: é o que
+              o imóvel É, não como ele é divulgado.
+
+              SELETOR, nunca texto livre: o vínculo é um ID estrutural, e
+              digitar o nome criaria empreendimentos fantasma a cada
+              typo. Quem não vê o empreendimento na lista cadastra
+              primeiro em Empreendimentos — é uma ida a mais, e é o preço
+              de a identidade ser confiável.
+
+              <select> NATIVO, e não o Select do design system: é a mesma
+              escolha de SeletorResponsavel, pelo mesmo motivo estrutural
+              — aqui o VALOR é um id e o RÓTULO é o nome, e o Select do
+              projeto exibe o valor cru quando os dois diferem (nos
+              outros campos do formulário valor e rótulo são iguais, o
+              que mascara a diferença). Achado real: o gatilho mostrava
+              o cuid do empreendimento em vez do nome. */}
+          <div className="space-y-1.5">
+            <Label htmlFor="empreendimentoId">Empreendimento</Label>
+            <select
+              id="empreendimentoId"
+              name="empreendimentoId"
+              defaultValue={v.empreendimentoId ?? SEM_EMPREENDIMENTO}
+              className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              {/* "Sem empreendimento" é uma escolha declarada, e o
+                  estado de toda unidade avulsa. */}
+              <option value={SEM_EMPREENDIMENTO}>{ROTULO_SEM_EMPREENDIMENTO}</option>
+              {opcoesEmpreendimento.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.nome}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Agrupa esta unidade com as outras do mesmo empreendimento na
+              página pública. Cadastre em Empreendimentos para que apareça aqui.
+            </p>
+            <ErroCampo erros={estado.fieldErrors?.empreendimentoId} />
           </div>
 
           <div className="space-y-1.5">

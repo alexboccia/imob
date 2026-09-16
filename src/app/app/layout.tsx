@@ -55,6 +55,10 @@ const TODOS_NAV_LINKS: {
     modulo: "crm",
     papeis: PAPEIS_RESOLUCAO_IDENTIDADE,
   },
+  // Fase 38 — junto dos outros catálogos por organização, e com o
+  // mesmo portão de leitura: um corretor precisa reconhecer os
+  // empreendimentos que vai selecionar no cadastro do imóvel.
+  { href: "/app/empreendimentos", label: "Empreendimentos" },
   { href: "/app/caracteristicas", label: "Características" },
   { href: "/app/tipos-imovel", label: "Tipos de imóvel" },
   { href: "/app/usuarios", label: "Usuários" },

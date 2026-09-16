@@ -12,6 +12,14 @@ export const imovelSchema = z.object({
   titulo: z.string().min(3, "Informe um título com ao menos 3 caracteres."),
   descricao: z.string().optional(),
   tipo: z.string().min(1, "Selecione o tipo do imóvel."),
+  // Fase 38 — ID do empreendimento ao qual esta unidade pertence.
+  // Opcional: "sem empreendimento" é o estado de toda Property anterior
+  // à fase e continua sendo uma escolha legítima.
+  //
+  // NÃO entra em camposImovel() de propósito: o valor precisa ser
+  // validado contra a organização antes de ser gravado, e o mapper é
+  // puro (não conhece tenant nem banco). Quem valida são as actions.
+  empreendimentoId: z.string().optional(),
   finalidade: z.enum(["SALE", "RENT", "SALE_AND_RENT"]),
   status: z.enum([
     "DRAFT",

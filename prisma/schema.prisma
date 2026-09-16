@@ -481,6 +481,26 @@ model Property {
   ownerId String?
   owner   Person? @relation("PropertyOwner", fields: [ownerId], references: [id])
 
+  // Fase 38 — A QUE EMPREENDIMENTO ESTA UNIDADE PERTENCE.
+  //
+  // Até aqui o produto não sabia dizer que dois imóveis eram unidades do
+  // mesmo empreendimento: existiam `developer` (texto livre com o nome da
+  // construtora), `isLaunch` (rótulo comercial do imóvel) e o endereço —
+  // nenhum deles é identidade. Chamar de "mesmo empreendimento" duas
+  // Properties parecidas afirmaria uma relação que o banco não tinha.
+  //
+  // NULLABLE E SEM BACKFILL: toda Property anterior a esta fase fica com
+  // null, que é a verdade. Nenhum empreendimento foi inferido de
+  // endereço, CEP, bairro, título, construtora, isLaunch, estágio de obra
+  // nem coordenada — nenhum desses fatos prova pertencimento.
+  //
+  // SET NULL (padrão do Prisma para relação opcional, e o que se quer
+  // aqui): apagar um empreendimento JAMAIS pode apagar imóveis. Na
+  // prática a action recusa a exclusão enquanto houver unidade vinculada
+  // — esta FK é a rede embaixo disso, não o caminho normal.
+  developmentId String?
+  development   Development? @relation(fields: [developmentId], references: [id])
+
   media                 Media[]
   presentationMaterials PropertyPresentationMaterial[]
   leadCaptures          LeadCapture[]
@@ -498,6 +518,11 @@ model Property {
   @@index([organizationId, city, neighborhood])
   @@index([organizationId, purpose, type])
   @@index([organizationId, isLaunch])
+  // Fase 38 — "as outras unidades deste empreendimento": o predicado é
+  // sempre organização + empreendimento. Um índice só, no formato dos
+  // irmãos acima; o filtro de status roda sobre um conjunto já pequeno
+  // (as unidades de um empreendimento), então não entra na chave.
+  @@index([organizationId, developmentId])
   // GIN: propertyFeatures/condoFeatures são filtrados com `hasSome` na
   // busca pública (src/app/[orgSlug]/imoveis/page.tsx) e no cálculo de
   // facetas (filtros-imoveis-data.ts) — mesma justificativa do índice de
@@ -1426,6 +1451,61 @@ model FeatureOption {
   @@map("feature_options")
 }
 
+// =======================================================================
+// Empreendimento (Fase 38)
+// =======================================================================
+// A IDENTIDADE ESTRUTURAL que permite dizer "estas Properties são
+// unidades do mesmo empreendimento" — uma verdade que o domínio não
+// tinha, e sem a qual a seção pública "Outras unidades neste
+// empreendimento" seria heurística por endereço ou por nome parecido.
+//
+// DELIBERADAMENTE MÍNIMO. Nesta fase o Development é só a identidade:
+// endereço, construtora, fotos, materiais, estágio de obra, previsão de
+// entrega, características, preço e finalidade CONTINUAM na Property,
+// exatamente onde estão hoje. Não há herança Development -> Property e
+// não há sincronização de campos: a unidade continua sendo o objeto
+// comercial completo, e o empreendimento não passa a ser dono de nada
+// que já funciona.
+//
+// O QUE ELE NÃO TEM, e por quê: slug, descrição pública, SEO, logo,
+// galeria, book, endereço próprio, telefone, estande, latitude,
+// coordenadas e status comercial ficaram de fora porque nada disso é
+// necessário para AGRUPAR unidades, e cada um deles obrigaria a decidir
+// o que o empreendimento possui — decisão de produto que esta fase não
+// precisa tomar para entregar a comparação entre unidades.
+//
+// NÃO É UMA PROPERTY. Nada de auto-relação (parentPropertyId) nem de
+// Property fantasma representando o empreendimento: um empreendimento
+// não tem preço, não recebe lead, não vai ao catálogo e não tem ficha.
+//
+// CONVENÇÃO: mesmo formato dos catálogos por organização que já existem
+// (FeatureOption, PropertyTypeOption) — id, organizationId, name,
+// createdAt, e unicidade por organização. `updatedAt` entra porque, ao
+// contrário daqueles dois, o empreendimento pode ser RENOMEADO.
+//
+// UNICIDADE POR ORGANIZAÇÃO, nunca global: dois empreendimentos com o
+// mesmo nome em cidades diferentes são comuns no mercado, e são de
+// imobiliárias diferentes. A comparação é pelo nome exato, o mesmo
+// critério que os dois catálogos irmãos já usam — não há normalização
+// aqui porque o produto não tem infraestrutura de nome normalizado para
+// catálogos (só Person tem, para deduplicação de lead, que é outro
+// problema).
+model Development {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  properties Property[]
+
+  // O prefixo esquerdo (organizationId) também serve à listagem por
+  // organização — por isso não há @@index([organizationId]) separado.
+  @@unique([organizationId, name])
+  @@map("developments")
+}
+
 // Catálogo de tipos de imóvel selecionáveis, residencial/comercial (gerenciado em /admin/tipos-imovel).
 model PropertyTypeOption {
   id             String               @id @default(cuid())
@@ -1688,6 +1768,7 @@ model Organization {
   propertyInterestOffers              PropertyInterestOffer[]
   scheduledActivities                 ScheduledActivity[]
   properties                          Property[]
+  developments                        Development[]
   media                               Media[]
   propertyStatusHistory               PropertyStatusHistory[]
   interactions                        Interaction[]

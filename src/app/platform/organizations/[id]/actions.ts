@@ -433,6 +433,10 @@ export async function deletarOrganization(
       await tx.propertyInterest.deleteMany({ where: { organizationId } });
       await tx.property.deleteMany({ where: { organizationId } });
       await tx.person.deleteMany({ where: { organizationId } });
+      // Fase 38 — depois das Properties (a FK delas é SET NULL) e antes
+      // da organização (FK RESTRICT). Sem isto, apagar a organização
+      // esbarraria na constraint.
+      await tx.development.deleteMany({ where: { organizationId } });
       await tx.featureOption.deleteMany({ where: { organizationId } });
       await tx.propertyTypeOption.deleteMany({ where: { organizationId } });
       await tx.inviteToken.deleteMany({ where: { organizationId } });
