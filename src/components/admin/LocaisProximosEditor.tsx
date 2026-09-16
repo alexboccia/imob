@@ -101,8 +101,12 @@ function CamposLocal({
   onEnter: () => void;
 }) {
   const id = (campo: string) => `${prefixo}-${campo}`;
+  // Três colunas só quando o EDITOR tem largura para isso — container
+  // query, não viewport: o menu lateral do admin muda a largura do card
+  // sem mudar a da janela (em 768px o card tem ~450px úteis e a linha
+  // deixava o nome do local com ~64px). Abaixo de 42rem, empilha.
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_minmax(0,12rem)]">
+    <div className="grid min-w-0 grid-cols-1 gap-4 @2xl/locais:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_minmax(0,13rem)]">
       <div className="min-w-0 space-y-2">
         <Label htmlFor={id("categoria")}>Categoria</Label>
         <select
@@ -132,6 +136,9 @@ function CamposLocal({
           maxLength={LIMITE_NOME_LOCAL}
           placeholder="Ex.: Supermercado Pão de Açúcar"
           aria-invalid={erros.nome ? true : undefined}
+          // Mesma altura dos selects da linha (h-9); o Input do design
+          // system nasce com h-8.
+          className="h-9"
           onChange={(e) => onChange({ ...rascunho, nome: e.target.value })}
           onKeyDown={aoEnter(onEnter)}
         />
@@ -140,7 +147,13 @@ function CamposLocal({
 
       <div className="min-w-0 space-y-2">
         <Label htmlFor={id("distancia")}>Distância (opcional)</Label>
-        <div className="flex min-w-0 gap-2">
+        {/* Grupo próprio, em GRADE: o campo fica com a trilha flexível e a
+            unidade com uma trilha fixa de 5rem. A largura de cada controle
+            vem da trilha, e não de qual classe de largura vence no CSS —
+            antes o select carregava `w-full` e `w-20` juntos, o `w-full`
+            vencia, e o campo de distância era espremido até ~22px (0px
+            úteis, com o padding): digitar funcionava, mas nada aparecia. */}
+        <div data-grupo-distancia className="grid min-w-0 grid-cols-[minmax(0,1fr)_5rem] gap-2">
           <Input
             id={id("distancia")}
             inputMode="decimal"
@@ -148,7 +161,7 @@ function CamposLocal({
             value={rascunho.distancia}
             placeholder={rascunho.unidade === "METERS" ? "350" : "1,2"}
             aria-invalid={erros.distancia ? true : undefined}
-            className="min-w-0 flex-1"
+            className="h-9"
             onChange={(e) => onChange({ ...rascunho, distancia: e.target.value })}
             onKeyDown={aoEnter(onEnter)}
           />
@@ -159,7 +172,8 @@ function CamposLocal({
             onChange={(e) =>
               onChange({ ...rascunho, unidade: e.target.value as UnidadeDistancia })
             }
-            className={`${CLASSE_SELECT} w-20 shrink-0`}
+            // `w-full` de CLASSE_SELECT agora preenche a trilha de 5rem.
+            className={CLASSE_SELECT}
           >
             {UNIDADES_DISTANCIA.map((u) => (
               <option key={u} value={u}>
@@ -263,7 +277,7 @@ export function LocaisProximosEditor({
   );
 
   return (
-    <div className="min-w-0 space-y-6" data-testid="editor-locais-proximos">
+    <div className="@container/locais min-w-0 space-y-6" data-testid="editor-locais-proximos">
       <input type="hidden" name="locaisProximosJson" value={json} />
 
       <div className="min-w-0 space-y-4">

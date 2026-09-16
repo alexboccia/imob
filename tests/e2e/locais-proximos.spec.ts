@@ -132,43 +132,218 @@ test.describe("admin — mesma anatomia do card de Características", () => {
     expect(b!.width).toBeCloseTo(a!.width, 0);
   });
 
-  for (const largura of LARGURAS) {
-    test(`${largura}px: sem overflow, e campos em linha só quando cabem`, async ({ page }) => {
+  // O menu lateral muda a largura do card sem mudar a da janela: a linha
+  // Categoria | Nome | Distância depende da largura do EDITOR (container
+  // query de 42rem = 672px), e é ela que o teste consulta.
+  const LINHA_A_PARTIR_DE = 672;
+
+  /** Geometria do controle de distância e dos vizinhos, com hit target. */
+  async function medirControles(card: Locator) {
+    const distancia = card.getByLabel("Distância (opcional)").first();
+    return distancia.evaluate((input) => {
+      const caixa = (el: Element) => el.getBoundingClientRect();
+      // O pai direto é o grupo em qualquer versão do markup.
+      const grupo = input.closest("[data-grupo-distancia]") ?? input.parentElement!;
+      const select = grupo.querySelector("select")!;
+      const editor = input.closest('[data-testid="editor-locais-proximos"]')!;
+      const card = input.closest('[data-slot="card"]')!;
+      const linha = grupo.parentElement!.parentElement!;
+      const categoria = linha.querySelector("select:not([aria-label])")!;
+      const nome = linha.querySelector("input[maxlength]")!;
+      const ri = caixa(input);
+      const rs = caixa(select);
+      const alvo = (r: DOMRect) => document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      const util = ri.width - parseFloat(getComputedStyle(input).paddingLeft) -
+        parseFloat(getComputedStyle(input).paddingRight) -
+        parseFloat(getComputedStyle(input).borderLeftWidth) -
+        parseFloat(getComputedStyle(input).borderRightWidth);
+      return {
+        input: { x: ri.x, y: ri.y, w: ri.width, h: ri.height, util },
+        select: { x: rs.x, y: rs.y, w: rs.width, h: rs.height },
+        grupo: caixa(grupo).toJSON() as DOMRect,
+        card: caixa(card).toJSON() as DOMRect,
+        editorLargura: caixa(editor).width,
+        categoria: caixa(categoria).toJSON() as DOMRect,
+        nome: caixa(nome).toJSON() as DOMRect,
+        alvoInput: alvo(ri) === input,
+        alvoSelect: alvo(rs) === select,
+        overflowPagina: document.documentElement.scrollWidth > window.innerWidth + 1,
+      };
+    });
+  }
+
+  for (const largura of [320, 390, 768, 1024, 1280, 1440]) {
+    test(`${largura}px: distância utilizável, unidade compacta, linha só com espaço real`, async ({
+      page,
+    }) => {
       await page.setViewportSize({ width: largura, height: 900 });
       await page.goto(edicao(IDS_E2E.imovelComLocais));
       const card = cardPorTitulo(page, TITULO);
-      await card.scrollIntoViewIfNeeded();
+      await card.getByLabel("Distância (opcional)").first().scrollIntoViewIfNeeded();
+      const m = await medirControles(card);
 
-      const categoria = await card.getByLabel("Categoria").first().boundingBox();
-      const nome = await card.getByLabel("Nome do local").first().boundingBox();
-      const distancia = await card.getByLabel("Distância (opcional)").first().boundingBox();
-      const unidade = await card.getByLabel("Unidade da distância").first().boundingBox();
-      for (const caixa of [categoria, nome, distancia, unidade]) {
-        expect(caixa).not.toBeNull();
-        expect(caixa!.x + caixa!.width, `campo cortado @ ${largura}px`).toBeLessThanOrEqual(
-          largura + 1
+      // Regressão do colapso: o select carregava `w-full` e `w-20`, o
+      // `w-full` vencia e o campo ficava com 22px — ZERO px úteis depois
+      // do padding. Digitar "funcionava", mas nada aparecia.
+      expect(m.input.w, `campo de distância @ ${largura}px`).toBeGreaterThanOrEqual(100);
+      expect(m.input.util, `área de texto do campo @ ${largura}px`).toBeGreaterThanOrEqual(70);
+      expect(m.select.w, `unidade @ ${largura}px`).toBeGreaterThanOrEqual(72);
+      expect(m.select.w, `unidade @ ${largura}px`).toBeLessThanOrEqual(88);
+      expect(m.input.w).toBeGreaterThan(m.select.w);
+
+      // Lado a lado, mesma altura, sem sobreposição.
+      expect(Math.abs(m.select.y - m.input.y)).toBeLessThan(1);
+      expect(Math.abs(m.select.h - m.input.h)).toBeLessThan(1);
+      expect(m.select.x).toBeGreaterThanOrEqual(m.input.x + m.input.w);
+
+      // O centro de cada controle é dele mesmo — nada o cobre.
+      expect(m.alvoInput, `algo cobre o campo @ ${largura}px`).toBe(true);
+      expect(m.alvoSelect, `algo cobre a unidade @ ${largura}px`).toBe(true);
+
+      // Tudo dentro do grupo, e o grupo dentro do card.
+      for (const [nome, b] of [["campo", m.input], ["unidade", m.select]] as const) {
+        expect(b.x, `${nome} fora do grupo @ ${largura}px`).toBeGreaterThanOrEqual(m.grupo.x - 0.5);
+        expect(b.x + b.w, `${nome} fora do grupo @ ${largura}px`).toBeLessThanOrEqual(
+          m.grupo.x + m.grupo.width + 0.5
         );
       }
-      // Valor e unidade sempre lado a lado.
-      expect(Math.abs(unidade!.y - distancia!.y)).toBeLessThan(2);
-      expect(unidade!.x).toBeGreaterThan(distancia!.x);
+      expect(m.grupo.x + m.grupo.width).toBeLessThanOrEqual(m.card.x + m.card.width);
+      expect(m.overflowPagina, `overflow @ ${largura}px`).toBe(false);
 
-      if (largura >= 1280) {
-        // Categoria | Nome | Distância | Unidade numa linha.
-        expect(Math.abs(nome!.y - categoria!.y)).toBeLessThan(2);
-        expect(Math.abs(distancia!.y - categoria!.y)).toBeLessThan(2);
-        expect(nome!.x).toBeGreaterThan(categoria!.x);
-        expect(distancia!.x).toBeGreaterThan(nome!.x);
-      } else if (largura < 768) {
-        // Empilhado no celular.
-        expect(nome!.y).toBeGreaterThan(categoria!.y);
-        expect(distancia!.y).toBeGreaterThan(nome!.y);
+      // Vizinhos também utilizáveis.
+      expect(m.nome.width, `nome do local @ ${largura}px`).toBeGreaterThanOrEqual(200);
+      expect(m.categoria.width, `categoria @ ${largura}px`).toBeGreaterThanOrEqual(140);
+
+      if (m.editorLargura >= LINHA_A_PARTIR_DE) {
+        // Categoria | Nome | Distância numa linha.
+        expect(Math.abs(m.nome.y - m.categoria.y)).toBeLessThan(1);
+        expect(Math.abs(m.input.y - m.categoria.y)).toBeLessThan(1);
+        expect(m.nome.x).toBeGreaterThan(m.categoria.x);
+        expect(m.input.x).toBeGreaterThan(m.nome.x);
+      } else {
+        expect(m.nome.y).toBeGreaterThan(m.categoria.y);
+        expect(m.input.y).toBeGreaterThan(m.nome.y);
       }
+      // A decisão não é da viewport: em 768 o menu lateral deixa o editor
+      // estreito, em 1024 já cabe a linha.
+      if (largura === 768) expect(m.editorLargura).toBeLessThan(LINHA_A_PARTIR_DE);
+      if (largura >= 1024) expect(m.editorLargura).toBeGreaterThanOrEqual(LINHA_A_PARTIR_DE);
 
       await expect(card.getByTestId("local-proximo")).toHaveCount(3);
-      expect(await semOverflow(page), `overflow @ ${largura}px`).toBe(true);
     });
   }
+
+  for (const largura of [390, 1280]) {
+    test(`${largura}px: o corretor clica, digita, troca a unidade e adiciona`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      // Nada é salvo: o teste só mexe na lista do formulário.
+      await page.goto(edicao(IDS_E2E.imovelComLocais));
+      const card = cardPorTitulo(page, TITULO);
+      const linhas = card.getByTestId("local-proximo");
+      await expect(linhas).toHaveCount(3);
+
+      const categoria = card.getByLabel("Categoria").first();
+      const nome = card.getByLabel("Nome do local").first();
+      const distancia = card.getByLabel("Distância (opcional)").first();
+      const unidade = card.getByLabel("Unidade da distância").first();
+      const adicionar = card.getByRole("button", { name: "Adicionar local" });
+
+      // Clique de verdade no centro do campo: o foco vai para ele.
+      await distancia.scrollIntoViewIfNeeded();
+      await distancia.click();
+      await expect(distancia).toBeFocused();
+
+      // Digitação por teclado (não fill), apagar e redigitar.
+      await page.keyboard.type("350");
+      await expect(distancia).toHaveValue("350");
+      for (let i = 0; i < 3; i++) await page.keyboard.press("Backspace");
+      await expect(distancia).toHaveValue("");
+      await page.keyboard.type("1,2");
+      await expect(distancia).toHaveValue("1,2");
+      await distancia.fill("1,15");
+      await expect(distancia).toHaveValue("1,15");
+      // O texto digitado cabe inteiro na área visível do campo.
+      expect(
+        await distancia.evaluate((el: HTMLInputElement) => el.scrollWidth <= el.clientWidth)
+      ).toBe(true);
+
+      // Tab a partir do nome alcança a distância.
+      await nome.focus();
+      await page.keyboard.press("Tab");
+      await expect(distancia).toBeFocused();
+
+      // 350 m: trocar unidade, categoria e nome não apaga a distância.
+      await distancia.fill("350");
+      await unidade.selectOption("KILOMETERS");
+      await unidade.selectOption("METERS");
+      await categoria.selectOption("PHARMACY");
+      await nome.fill("Farmacia Teclado");
+      await expect(distancia).toHaveValue("350");
+      await adicionar.click();
+      await expect(linhas.last()).toContainText("Farmacia Teclado");
+      await expect(linhas.last()).toContainText("Farmácia · 350 m");
+      // O formulário de adição volta limpo.
+      await expect(distancia).toHaveValue("");
+
+      // 1,2 km
+      await categoria.selectOption("SUBWAY");
+      await nome.fill("Estacao Teclado");
+      await distancia.click();
+      await page.keyboard.type("1,2");
+      await unidade.selectOption("KILOMETERS");
+      await expect(distancia).toHaveValue("1,2");
+      await adicionar.click();
+      await expect(linhas.last()).toContainText("Metrô · 1,2 km");
+
+      // Inválido: mensagem no campo, nada entra na lista...
+      await categoria.selectOption("PARK");
+      await nome.fill("Parque Teclado");
+      await distancia.fill("abc");
+      await adicionar.click();
+      const mensagem = card.getByText("Informe a distância só com números, ex.: 350 ou 1,2.");
+      await expect(mensagem).toBeVisible();
+      await expect(distancia).toHaveAttribute("aria-invalid", "true");
+      await expect(linhas).toHaveCount(5);
+      const campo = (await distancia.boundingBox())!;
+      const msg = (await mensagem.boundingBox())!;
+      expect(msg.y).toBeGreaterThan(campo.y + campo.height);
+      expect(Math.abs(msg.x - campo.x)).toBeLessThan(1);
+
+      // ...e o campo continua utilizável: corrigir e adicionar.
+      await distancia.click();
+      await expect(distancia).toBeFocused();
+      await page.keyboard.press("ControlOrMeta+a");
+      await page.keyboard.type("1,15");
+      await expect(distancia).toHaveValue("1,15");
+      await unidade.selectOption("KILOMETERS");
+      await adicionar.click();
+      await expect(mensagem).toHaveCount(0);
+      await expect(linhas.last()).toContainText("Parque · 1,15 km");
+      await expect(linhas).toHaveCount(6);
+    });
+  }
+
+  test("a edição inline usa o mesmo controle, largo e clicável", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(edicao(IDS_E2E.imovelComLocais));
+    const card = cardPorTitulo(page, TITULO);
+    const linha = card.getByTestId("local-proximo").nth(1);
+    await linha.getByRole("button", { name: /^Editar local/ }).click();
+
+    const distancia = linha.getByLabel("Distância (opcional)");
+    await expect(distancia).toHaveValue("1,2");
+    const m = await medirControles(linha);
+    expect(m.input.w).toBeGreaterThanOrEqual(100);
+    expect(m.alvoInput).toBe(true);
+    expect(m.alvoSelect).toBe(true);
+
+    await distancia.click();
+    await expect(distancia).toBeFocused();
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("1,15");
+    await linha.getByRole("button", { name: "Salvar local" }).click();
+    await expect(linha).toContainText("Metrô · 1,15 km");
+  });
 });
 
 // -----------------------------------------------------------------------
