@@ -7,9 +7,13 @@ import { ORG_RESULTADO, login } from "./helpers";
 // Antes, encerrar uma visita era um clique que dizia apenas "aconteceu".
 // A visita sumia da agenda e não deixava conhecimento nenhum.
 //
-// Organização U (dedicada), com quatro visitas agendadas para hoje num
-// horário que JÁ PASSOU — o estado em que a Agenda pede o resultado. Uma
-// por jornada, para nenhum teste depender do outro.
+// Organização U (dedicada), com quatro visitas agendadas para ONTEM —
+// vencidas, portanto, que é o estado em que a Agenda pede para registrar
+// o que aconteceu. Uma por jornada, para nenhum teste depender do outro.
+//
+// Ontem, e não "agora menos N horas": uma fixture ancorada na hora da
+// parede falha quando a suíte roda logo depois da meia-noite (achado
+// real de CI — as visitas caíam no dia anterior e sumiam da aba Hoje).
 //
 // AS INVARIANTES QUE ESTA SPEC PROTEGE:
 //   no-show não cria fato falso de visita realizada
@@ -17,7 +21,9 @@ import { ORG_RESULTADO, login } from "./helpers";
 //   próxima ação é opcional, e quando pedida vira compromisso de verdade
 //   o resultado sobrevive ao refresh, porque veio do servidor
 
-const AGENDA = "/app/agenda";
+// Visita vencida vive em "Anteriores" — é lá que o corretor encontra o
+// que ficou para trás.
+const AGENDA = "/app/agenda?aba=anteriores";
 
 function cardDe(page: Page, nome: string) {
   return page.locator('[data-slot="card"]').filter({ hasText: nome }).first();
@@ -50,8 +56,10 @@ test.beforeEach(async ({ page }) => {
 test("a visita vencida pede o resultado, e a pergunta é uma só", async ({ page }) => {
   const card = cardDe(page, "Cliente Resultado Intocado");
   await expect(card).toBeVisible();
-  // Este sinal já existia; o que faltava era onde registrar.
-  await expect(card.getByText("Registrar resultado")).toBeVisible();
+  // Este sinal já existia; o que faltava era onde registrar. Numa visita
+  // vencida o rótulo operacional é "Resolver pendência"
+  // (acaoOperacionalDaVisita, período ANTERIORES).
+  await expect(card.getByText("Resolver pendência")).toBeVisible();
 
   const dialogo = await abrirResultado(page, "Cliente Resultado Intocado");
   await expect(dialogo.getByRole("heading", { name: "Resultado da visita" })).toBeVisible();
@@ -67,7 +75,9 @@ test("a visita vencida pede o resultado, e a pergunta é uma só", async ({ page
   // Escape fecha sem gravar nada — a visita continua pendente.
   await page.keyboard.press("Escape");
   await page.reload();
-  await expect(cardDe(page, "Cliente Resultado Intocado").getByText("Registrar resultado")).toBeVisible();
+  await expect(
+    cardDe(page, "Cliente Resultado Intocado").getByText("Resolver pendência")
+  ).toBeVisible();
 });
 
 // -----------------------------------------------------------------------

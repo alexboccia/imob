@@ -2904,10 +2904,9 @@ async function main() {
   // =====================================================================
   // Fase 37 — RESULTADO DA VISITA (Organização U)
   // =====================================================================
-  // Quatro visitas AGENDADAS para hoje, num horário que já passou — que é
-  // exatamente o estado em que o produto pede "Registrar resultado"
-  // (acaoOperacionalDaVisita devolve REGISTRAR_RESULTADO assim que o
-  // horário passa). Uma por jornada, para nenhum teste depender do outro:
+  // Quatro visitas AGENDADAS que já passaram do horário — o estado em que
+  // o produto pede para registrar o que aconteceu. Uma por jornada, para
+  // nenhum teste depender do outro:
   //
   //   positiva   encerrada com resultado + próxima ação
   //   no-show    encerrada como não comparecimento
@@ -2940,7 +2939,24 @@ async function main() {
     price: 520000,
   });
 
-  const visitaParaResultado = async (nome: string, horasAtras: number) => {
+  // ONTEM, em horário fixo — nunca "agora menos N horas".
+  //
+  // Causa raiz de uma falha real de CI: o seed rodava às 00:21 UTC e
+  // "3 horas atrás" caía no dia ANTERIOR, então as visitas sumiam da aba
+  // "Hoje" e a spec inteira quebrava. Uma fixture que depende da hora da
+  // parede é uma fixture que falha uma vez por dia.
+  //
+  // Ontem é determinístico em qualquer horário: sempre passado, sempre na
+  // aba "Anteriores", e sempre com a pendência operacional acesa — que é
+  // justamente o caso "visita vencida sem resultado".
+  const ontemAs = (hora: number) => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - 1);
+    d.setUTCHours(hora, 0, 0, 0);
+    return d;
+  };
+
+  const visitaParaResultado = async (nome: string, horaDeOntem: number) => {
     const organizationId = orgResultado.organization.id;
     const pessoa = await prisma.person.create({
       data: { organizationId, name: nome, roles: ["CLIENT"] },
@@ -2967,19 +2983,17 @@ async function main() {
         propertyInterestId: interesse.id,
         type: "VISIT",
         status: "SCHEDULED",
-        // Hoje, num horário que já passou: o estado em que a Agenda pede
-        // o resultado.
-        scheduledAt: new Date(Date.now() - horasAtras * 60 * 60 * 1000),
+        scheduledAt: ontemAs(horaDeOntem),
         createdByMemberId: orgResultado.membro.id,
       },
     });
     return { pessoaId: pessoa.id, interesseId: interesse.id };
   };
 
-  await visitaParaResultado("Cliente Resultado Positivo", 3);
-  await visitaParaResultado("Cliente Resultado NoShow", 4);
-  await visitaParaResultado("Cliente Resultado Negativo", 5);
-  await visitaParaResultado("Cliente Resultado Intocado", 2);
+  await visitaParaResultado("Cliente Resultado Positivo", 9);
+  await visitaParaResultado("Cliente Resultado NoShow", 11);
+  await visitaParaResultado("Cliente Resultado Negativo", 14);
+  await visitaParaResultado("Cliente Resultado Intocado", 16);
 
   // =====================================================================
   // Fase 38 — EMPREENDIMENTO (Organização V)
