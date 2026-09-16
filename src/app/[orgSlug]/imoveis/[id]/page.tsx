@@ -47,6 +47,7 @@ import { CarrosselPlantas } from "@/components/CarrosselPlantas";
 import { ImovelCard } from "@/components/ImovelCard";
 import { CaracteristicasDoImovel } from "@/components/imovel/Caracteristicas";
 import { CardContatoImovel } from "@/components/imovel/CardContatoImovel";
+import { BlocoComercialImovel } from "@/components/imovel/BlocoComercialImovel";
 import { CardCorretorImovel } from "@/components/imovel/CardCorretorImovel";
 import { MateriaisImovel } from "@/components/imovel/MateriaisImovel";
 import { RastreioVisualizacaoImovel } from "@/components/analytics/RastreioVisualizacaoImovel";
@@ -320,6 +321,13 @@ export default async function DetalheImovelPage({
           é procurado quando alguém já decidiu ligar. Mesmos dados de
           sempre, nenhum campo novo. */}
       <div className="mx-auto max-w-6xl px-4 pt-6">
+        {/* Fase 43 — PRIMEIRA TELA COMERCIAL. A partir de lg o cabeçalho
+            tem duas colunas: identidade à esquerda (o que já existia,
+            intacto) e, à direita, preço + custos + ação. Abaixo de lg a
+            coluna da direita não existe — a barra fixa do rodapé já faz
+            esse papel no celular. */}
+        <div className="lg:flex lg:items-end lg:justify-between lg:gap-10">
+        <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium text-gray-600">
             {imovel.type} · {FINALIDADE_LABEL[imovel.purpose] ?? imovel.purpose}
@@ -334,11 +342,11 @@ export default async function DetalheImovelPage({
             </Badge>
           ))}
         </div>
-        <div className="mt-2 flex items-start justify-between gap-4">
+        <div className="mt-2 flex items-start justify-between gap-4 lg:justify-start">
           <h1 className={TITULO_DETALHE}>{imovel.title}</h1>
-          {/* Compartilhar também aqui, não só dentro da galeria: um imóvel
-              sem foto não renderiza galeria nenhuma e ficava sem nenhuma
-              forma de compartilhar o link. */}
+          {/* O ÚNICO Compartilhar da ficha fora do lightbox (Fase 43). A
+              galeria tinha um segundo, sobre a foto, a poucos pixels
+              deste — saiu. Este fica porque existe mesmo sem foto. */}
           <BotaoCompartilhar
             titulo={imovel.title}
             className="mt-1 flex size-9 shrink-0 items-center justify-center rounded-full border text-gray-600 outline-none transition-colors hover:border-primary hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -397,6 +405,16 @@ export default async function DetalheImovelPage({
             </span>
           )}
         </div>
+        </div>
+
+        <BlocoComercialImovel
+          imovel={imovel}
+          imovelId={imovel.id}
+          orgSlug={orgSlug}
+          whatsappHref={whatsappHref}
+          hrefFormulario={`#${idFormulario}`}
+        />
+        </div>
       </div>
 
       <GaleriaFotos
@@ -405,7 +423,6 @@ export default async function DetalheImovelPage({
         imovelId={imovel.id}
         whatsappHref={whatsappHref}
         mensagemContato={mensagemContato}
-        temVideo={videos.length > 0}
         orgSlug={orgSlug}
         nome={organization.name}
       />
@@ -434,20 +451,6 @@ export default async function DetalheImovelPage({
           unidades) é outro componente — a linha de atributos do
           ImovelCard — e continua lá, porque numa listagem ele serve para
           comparar imóveis lado a lado. */}
-
-      {videos.length > 0 && (
-        <div id={ANCORA_VIDEOS} className="mt-6 space-y-4 scroll-mt-6">
-          {videos.map((video) => (
-            <div key={video.id} className="aspect-video">
-              <iframe
-                src={video.url}
-                className="w-full h-full rounded-lg"
-                allowFullScreen
-              />
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Duas colunas só a partir de lg: entre 640 e 1023px o card
           lateral espremia a coluna de conteúdo em 2/3 de uma tela já
@@ -483,6 +486,36 @@ export default async function DetalheImovelPage({
               quando não há frase cadastrada. */}
           <FraseDestaque frase={imovel.highlightPhrase} />
           <CaracteristicasDoImovel imovel={imovel} />
+
+          {/* Fase 43 — os vídeos moraram em largura total entre a barra de
+              recursos e esta grade: cada um ocupava ~630px a 1280 e
+              empurrava descrição, preço e formulário para longe da
+              primeira tela. Agora são um bloco editorial da coluna, logo
+              depois das características. O id continua o mesmo: é o
+              destino do atalho "Vídeo" da barra de recursos. */}
+          {videos.length > 0 && (
+            <section id={ANCORA_VIDEOS} className="scroll-mt-6">
+              <h2 className={`${TITULO_BLOCO} mb-3`}>
+                {videos.length > 1 ? "Vídeos" : "Vídeo"}
+              </h2>
+              <div className="space-y-4">
+                {videos.map((video, i) => (
+                  <div key={video.id} className="aspect-video">
+                    <iframe
+                      src={video.url}
+                      title={
+                        videos.length > 1
+                          ? `Vídeo do imóvel ${imovel.title} — ${i + 1}`
+                          : `Vídeo do imóvel ${imovel.title}`
+                      }
+                      className="h-full w-full rounded-lg"
+                      allowFullScreen
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* POSIÇÃO ÚNICA da evolução da obra: sempre depois de
               descrição e das duas listas de características (unidade e
@@ -620,6 +653,7 @@ export default async function DetalheImovelPage({
       <BarraCtaImovel
         price={imovel.price}
         rentPrice={imovel.rentPrice}
+        purpose={imovel.purpose}
         whatsappHref={whatsappHref}
         orgSlug={orgSlug}
         imovelId={imovel.id}

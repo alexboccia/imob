@@ -911,8 +911,13 @@ test.describe("Detalhe do imóvel — conteúdo real", () => {
   test("preço, condomínio e IPTU reais; aluguel mostra /mês", async ({ page }) => {
     await page.goto(URL_IMOVEL);
     await expect(page.getByText("R$ 500.000", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Condomínio:")).toBeVisible();
-    await expect(page.getByText("IPTU:")).toBeVisible();
+    // Fase 43 — no desktop os custos aparecem em DOIS lugares, de
+    // propósito: no cabeçalho comercial (primeira tela) e no card lateral
+    // (acompanha a leitura). Antes havia um só, e `getByText` era único.
+    for (const lugar of ["[data-bloco-comercial]", "[data-card-contato]"]) {
+      await expect(page.locator(lugar).getByText("Condomínio:")).toBeVisible();
+      await expect(page.locator(lugar).getByText("IPTU:")).toBeVisible();
+    }
 
     await page.goto(`/imoveis/${IDS_E2E.imovelAluguelOrgA}`);
     await expect(page.getByText("R$ 2.500").first()).toBeVisible();

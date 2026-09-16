@@ -93,6 +93,13 @@ export const IDS_E2E = {
   // fixos para a ficha pública e um vazio que a spec de admin edita.
   imovelComLocais: "e2e-imovel-com-locais",
   imovelLocaisAdmin: "e2e-imovel-locais-admin",
+  // Fase 43 — primeira tela comercial (Organização W, sem WhatsApp). Um
+  // imóvel por regra de preço; o de venda E locação também tem DOIS
+  // vídeos, o pior caso de altura para a primeira dobra.
+  imovelDobraVenda: "e2e-imovel-dobra-venda",
+  imovelDobraAluguel: "e2e-imovel-dobra-aluguel",
+  imovelDobraAmbos: "e2e-imovel-dobra-ambos",
+  imovelDobraSemPreco: "e2e-imovel-dobra-sem-preco",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -255,7 +262,7 @@ async function garantirImovel(opcoes: {
   // Busca do Hero — overrides opcionais, todos com o mesmo default de
   // sempre (nenhum call site existente muda de comportamento).
   type?: string;
-  purpose?: "SALE" | "RENT";
+  purpose?: "SALE" | "RENT" | "SALE_AND_RENT";
   neighborhood?: string;
   city?: string;
   price?: number | null;
@@ -3343,6 +3350,91 @@ async function main() {
     organizationId: orgRecursos.organization.id,
     title: "Imovel Locais Admin E2E",
     price: 650000,
+  });
+
+  // =====================================================================
+  // Fase 43 — PRIMEIRA TELA COMERCIAL (Organização W, reaproveitada)
+  // =====================================================================
+  // A organização não tem WhatsApp configurado: é o caso em que o CTA do
+  // cabeçalho cai para o formulário. O caso COM WhatsApp é exercitado na
+  // Organização de Tracking (analytics-tracking.spec.ts), onde o clique
+  // pode ser interceptado sem contaminar contagens de ninguém.
+  //
+  // Toda ficha tem foto: a primeira dobra precisa provar que a galeria
+  // continua aparecendo junto com preço e ação. As mídias desta
+  // organização já foram resetadas no começo do bloco da Fase 39.
+  const imovelDaDobra = async (opcoes: {
+    id: string;
+    title: string;
+    purpose: "SALE" | "RENT" | "SALE_AND_RENT";
+    price: number | null;
+    rentPrice?: number | null;
+    condoFee?: number | null;
+    propertyTax?: number | null;
+    description?: string | null;
+    highlightPhrase?: string | null;
+    propertyFeatures?: string[];
+    videos?: number;
+  }) => {
+    const organizationId = orgRecursos.organization.id;
+    const { videos = 0, ...dados } = opcoes;
+    const imovel = await garantirImovel({ ...dados, organizationId });
+    await prisma.media.create({
+      data: {
+        organizationId,
+        propertyId: imovel.id,
+        type: "PHOTO",
+        url: "https://pub-ffe40b90a3c34357805314bdf89bef2c.r2.dev/e2e/foto.jpg",
+        isCover: true,
+        order: 0,
+      },
+    });
+    for (let i = 0; i < videos; i++) {
+      await prisma.media.create({
+        data: {
+          organizationId,
+          propertyId: imovel.id,
+          type: "VIDEO",
+          url: `https://www.youtube.com/embed/e2e-video-${i + 1}`,
+          order: i + 1,
+        },
+      });
+    }
+  };
+  await imovelDaDobra({
+    id: IDS_E2E.imovelDobraVenda,
+    title: "Imovel Dobra Venda E2E",
+    purpose: "SALE",
+    price: 850000,
+    condoFee: 720,
+    propertyTax: 310,
+  });
+  await imovelDaDobra({
+    id: IDS_E2E.imovelDobraAluguel,
+    title: "Imovel Dobra Aluguel E2E",
+    purpose: "RENT",
+    price: null,
+    rentPrice: 4500,
+  });
+  await imovelDaDobra({
+    id: IDS_E2E.imovelDobraAmbos,
+    title: "Imovel Dobra Venda e Locacao E2E",
+    purpose: "SALE_AND_RENT",
+    price: 900000,
+    rentPrice: 5000,
+    condoFee: 800,
+    // Descrição, frase e características existem para a spec provar a
+    // ordem da coluna com o vídeo no meio dela.
+    description: "Texto do imovel usado para provar a ordem da coluna.",
+    highlightPhrase: "Frase editorial da ficha de venda e locacao.",
+    propertyFeatures: ["Varanda"],
+    videos: 2,
+  });
+  await imovelDaDobra({
+    id: IDS_E2E.imovelDobraSemPreco,
+    title: "Imovel Dobra Sem Valor E2E",
+    purpose: "SALE",
+    price: null,
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);

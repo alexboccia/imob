@@ -138,7 +138,10 @@ test.describe("Tracking — intenção via WhatsApp", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(URL_IMOVEL);
 
-    const cta = page.getByRole("link", { name: "Falar no WhatsApp" }).first();
+    // Fase 43 — o cabeçalho ganhou um CTA com o mesmo nome, que vem
+    // ANTES no documento; `.first()` passaria a pegar aquele. Este teste é
+    // sobre o card lateral, então o alvo agora é explícito.
+    const cta = page.locator("[data-card-contato]").getByRole("link", { name: "Falar no WhatsApp" });
     await expect(cta).toBeVisible();
 
     // O href continua sendo o link real do WhatsApp, com a mensagem
@@ -158,6 +161,48 @@ test.describe("Tracking — intenção via WhatsApp", () => {
     const clique = eventos.find((e) => e.type === "WHATSAPP_CLICK")!;
     expect(clique.propertyId).toBe(IDS_E2E.imovelTopOrgTracking);
     expect(clique.placement).toBe("SIDEBAR");
+  });
+
+  test("no desktop, o CTA do cabeçalho está na primeira dobra e registra HEADER", async ({
+    page,
+  }) => {
+    const eventos: CorpoEvento[] = [];
+    await page.route(ROTA_EVENTO, async (rota) => {
+      eventos.push(JSON.parse(rota.request().postData() ?? "{}"));
+      await rota.fulfill({ status: 202, body: JSON.stringify({ ok: true }) });
+    });
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(URL_IMOVEL);
+
+    const bloco = page.locator("[data-bloco-comercial]");
+    const cta = bloco.getByRole("link", { name: "Falar no WhatsApp" });
+    await expect(cta).toBeVisible();
+    const caixa = await cta.boundingBox();
+    expect(caixa!.y + caixa!.height).toBeLessThanOrEqual(900);
+
+    // O MESMO link do card lateral: mesma resolução de número, mesma
+    // mensagem com o imóvel — o cabeçalho não tem política própria.
+    const href = await cta.getAttribute("href");
+    const hrefLateral = await page
+      .locator("[data-card-contato]")
+      .getByRole("link", { name: "Falar no WhatsApp" })
+      .getAttribute("href");
+    expect(href).toMatch(/^https:\/\/wa\.me\/\d+/);
+    expect(href).toBe(hrefLateral);
+    expect(new URL(href!).searchParams.get("text")).toContain("Cobertura Tracking mais procurada");
+    expect(await cta.getAttribute("target")).toBe("_blank");
+    expect(await cta.getAttribute("rel")).toContain("noopener");
+    // Com WhatsApp, não há o fallback para o formulário.
+    await expect(bloco.getByRole("link", { name: "Tenho interesse" })).toHaveCount(0);
+
+    await page.route("https://wa.me/**", (rota) => rota.abort());
+    await cta.click();
+
+    await expect.poll(() => eventos.filter((e) => e.type === "WHATSAPP_CLICK").length).toBe(1);
+    const clique = eventos.find((e) => e.type === "WHATSAPP_CLICK")!;
+    expect(clique.propertyId).toBe(IDS_E2E.imovelTopOrgTracking);
+    expect(clique.placement).toBe("HEADER");
   });
 
   test("no mobile, o CTA da barra fixa registra o placement próprio", async ({ page }) => {

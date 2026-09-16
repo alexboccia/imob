@@ -1,10 +1,9 @@
 import { FormularioContato } from "@/components/FormularioContato";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { IconeWhatsApp } from "@/components/icons";
 import { RastreioCliqueWhatsApp } from "@/components/analytics/RastreioCliqueWhatsApp";
-import { formatarPreco } from "@/lib/format";
+import { ValoresDoImovel, type ValoresImovel } from "@/components/imovel/ValoresDoImovel";
 
 // Card lateral de conversão do detalhe do imóvel. A hierarquia é
 // deliberada — preço, CTA de WhatsApp, divisor, formulário — porque é
@@ -19,67 +18,10 @@ import { formatarPreco } from "@/lib/format";
 // para respirar e aqui a hierarquia de conversão volta a ser só preço →
 // CTA → formulário. Não é duplicação removida, é mudança de lugar — ver
 // o cabeçalho daquele arquivo.
-
-export type ValoresImovel = {
-  price: unknown;
-  rentPrice: unknown;
-  condoFee: unknown;
-  propertyTax: unknown;
-  purpose: string;
-};
-
-
-
-// Valores só aparecem quando existem de verdade. Nada de "sob consulta"
-// inventado para condomínio/IPTU: sem o campo preenchido, a linha some.
-export function ValoresDoImovel({ imovel }: { imovel: ValoresImovel }) {
-  const ambos = imovel.purpose === "SALE_AND_RENT";
-  return (
-    <div className="space-y-2">
-      {imovel.price != null && (
-        <div>
-          {ambos && (
-            <Badge variant="secondary" className="mb-1">
-              Para comprar
-            </Badge>
-          )}
-          <p className="text-3xl font-semibold tracking-tight text-gray-900">
-            {formatarPreco(imovel.price)}
-          </p>
-        </div>
-      )}
-      {imovel.rentPrice != null && (
-        <div>
-          {ambos && (
-            <Badge variant="secondary" className="mb-1">
-              Para alugar
-            </Badge>
-          )}
-          <p className="text-3xl font-semibold tracking-tight text-gray-900">
-            {formatarPreco(imovel.rentPrice)}
-            <span className="text-sm font-normal text-gray-500">/mês</span>
-          </p>
-        </div>
-      )}
-      {(imovel.condoFee != null || imovel.propertyTax != null) && (
-        <dl className="flex flex-wrap gap-x-5 gap-y-1 pt-1 text-sm text-gray-500">
-          {imovel.condoFee != null && (
-            <div className="flex gap-1.5">
-              <dt>Condomínio:</dt>
-              <dd>{formatarPreco(imovel.condoFee)}</dd>
-            </div>
-          )}
-          {imovel.propertyTax != null && (
-            <div className="flex gap-1.5">
-              <dt>IPTU:</dt>
-              <dd>{formatarPreco(imovel.propertyTax)}</dd>
-            </div>
-          )}
-        </dl>
-      )}
-    </div>
-  );
-}
+//
+// Fase 43 — o cabeçalho da ficha passou a mostrar os mesmos valores no
+// desktop. A repetição é intencional: lá é a decisão imediata, aqui é a
+// conversão que acompanha a leitura. Os dois usam ValoresDoImovel.
 
 export function CardContatoImovel({
   imovel,
@@ -101,7 +43,7 @@ export function CardContatoImovel({
   idFormulario: string;
 }) {
   return (
-    <Card className="h-fit lg:sticky lg:top-[calc(var(--site-header-height,88px)+1rem)]">
+    <Card data-card-contato className="h-fit lg:sticky lg:top-[calc(var(--site-header-height,88px)+1rem)]">
       <CardContent className="space-y-4">
         <ValoresDoImovel imovel={imovel} />
 

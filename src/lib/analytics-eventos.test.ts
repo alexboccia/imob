@@ -37,11 +37,12 @@ describe("catálogo de tipos de evento", () => {
 });
 
 describe("placement", () => {
-  test("aceita só os três CTAs reais da página do imóvel", () => {
+  test("aceita só os CTAs reais da página do imóvel", () => {
     expect(placementValido("SIDEBAR")).toBe(true);
     expect(placementValido("MOBILE_BAR")).toBe(true);
     expect(placementValido("GALLERY")).toBe(true);
     expect(placementValido("BROKER_CARD")).toBe(true);
+    expect(placementValido("HEADER")).toBe(true);
     // O perfil do corretor NÃO tem placement: o evento exige propertyId
     // e lá não há imóvel. Fixar isso evita que alguém "conserte" o
     // catálogo sem tornar o evento independente de imóvel primeiro.

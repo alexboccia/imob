@@ -19,18 +19,20 @@ import {
   IconeZoomMais,
   IconeZoomMenos,
   IconeGrade,
-  IconePlay,
 } from "@/components/icons";
 
 type Foto = { id: string; url: string };
 
+// Fase 43 — a galeria não carrega mais atalho de vídeo nem Compartilhar
+// sobre a foto: o atalho oficial de vídeo é a barra de recursos logo
+// abaixo, e o Compartilhar da ficha é o do cabeçalho. Dentro do
+// lightbox o Compartilhar continua — ali o cabeçalho não está visível.
 export function GaleriaFotos({
   fotos,
   titulo,
   imovelId,
   whatsappHref,
   mensagemContato,
-  temVideo = false,
   orgSlug,
   nome,
 }: {
@@ -42,7 +44,6 @@ export function GaleriaFotos({
   // segue oferecendo o formulário. Nunca renderiza "wa.me/" vazio.
   whatsappHref: string | null;
   mensagemContato: string;
-  temVideo?: boolean;
   orgSlug: string;
   nome: string;
 }) {
@@ -195,13 +196,6 @@ export function GaleriaFotos({
           Voltar
         </Button>
 
-        <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
-<BotaoCompartilhar
-              titulo={titulo}
-              className="flex size-9 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow hover:bg-white"
-            />
-        </div>
-
         {fotos.length > 1 && (
           <>
             <button
@@ -227,7 +221,7 @@ export function GaleriaFotos({
         )}
       </div>
 
-      {(fotos.length > 1 || temVideo) && (
+      {fotos.length > 1 && (
         <div className="sm:hidden mx-auto max-w-6xl px-4">
           <div className="flex gap-2 mt-3 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-1">
             {fotos.map((foto, i) => (
@@ -262,15 +256,6 @@ export function GaleriaFotos({
               <IconeGrade className="w-4 h-4" />
               Ver galeria ({fotos.length})
             </button>
-            {temVideo && (
-              <a
-                href="#videos"
-                className="flex-shrink-0 w-20 h-20 rounded-md border bg-gray-900 hover:bg-gray-800 active:bg-black transition-colors text-white flex flex-col items-center justify-center gap-1 text-xs font-medium text-center px-1"
-              >
-                <IconePlay className="w-4 h-4" />
-                Vídeo
-              </a>
-            )}
           </div>
         </div>
       )}
@@ -357,22 +342,6 @@ export function GaleriaFotos({
             Voltar
           </Button>
 
-          <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
-<BotaoCompartilhar
-              titulo={titulo}
-              className="flex size-9 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow hover:bg-white"
-            />
-          </div>
-
-          {temVideo && (
-            <a
-              href="#videos"
-              className="absolute bottom-4 left-4 z-20 rounded-full bg-gray-900/90 hover:bg-gray-900 text-white text-xs font-medium px-3 py-2 shadow flex items-center gap-1.5"
-            >
-              <IconePlay className="w-3.5 h-3.5" />
-              Vídeo
-            </a>
-          )}
         </div>
       </div>
 

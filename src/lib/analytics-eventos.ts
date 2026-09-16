@@ -79,6 +79,10 @@ export const PLACEMENTS_ANALYTICS = {
   // um) — separar o placement é o que permite comparar as duas conversas
   // sem inventar um tipo de evento novo.
   BROKER_CARD: "BROKER_CARD",
+  // Fase 43 — CTA do cabeçalho comercial (desktop). Mesmo href dos
+  // demais; o placement próprio é o que permite saber se a ação na
+  // primeira tela converte mais que a do card lateral.
+  HEADER: "HEADER",
 } as const;
 
 // NÃO existe placement para a página pública do corretor, e a ausência é
@@ -99,6 +103,7 @@ export const LABEL_PLACEMENT: Record<string, string> = {
   MOBILE_BAR: "Barra fixa (mobile)",
   GALLERY: "Galeria de fotos",
   BROKER_CARD: "Card do corretor",
+  HEADER: "Cabeçalho da ficha",
 };
 
 export function placementValido(valor: unknown): valor is PlacementAnalytics {

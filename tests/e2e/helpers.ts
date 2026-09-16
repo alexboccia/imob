@@ -321,6 +321,13 @@ export const IDS_E2E = {
   // fixos para a ficha pública e um vazio que a spec de admin edita.
   imovelComLocais: "e2e-imovel-com-locais",
   imovelLocaisAdmin: "e2e-imovel-locais-admin",
+  // Fase 43 — primeira tela comercial (Organização W, sem WhatsApp). Um
+  // imóvel por regra de preço; o de venda E locação também tem DOIS
+  // vídeos, o pior caso de altura para a primeira dobra.
+  imovelDobraVenda: "e2e-imovel-dobra-venda",
+  imovelDobraAluguel: "e2e-imovel-dobra-aluguel",
+  imovelDobraAmbos: "e2e-imovel-dobra-ambos",
+  imovelDobraSemPreco: "e2e-imovel-dobra-sem-preco",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
