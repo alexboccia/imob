@@ -85,6 +85,10 @@ export const IDS_E2E = {
   imovelSoTour: "e2e-imovel-so-tour",
   imovelTresRecursos: "e2e-imovel-tres-recursos",
   imovelTourInseguro: "e2e-imovel-tour-inseguro",
+  // Fase 40 — frase de destaque. Dois imóveis na MESMA organização, para
+  // provar presença e ausência sem depender de outro tenant.
+  imovelComFrase: "e2e-imovel-com-frase",
+  imovelSemFrase: "e2e-imovel-sem-frase",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -271,6 +275,10 @@ async function garantirImovel(opcoes: {
   condoFee?: number | null;
   propertyTax?: number | null;
   developer?: string | null;
+  // Fase 40 — frase de destaque. Só os fixtures que a exercitam passam
+  // este valor; todos os demais imóveis do seed continuam sem frase, que
+  // é o estado normal e o caso "bloco ausente".
+  highlightPhrase?: string | null;
 }) {
   // update reseta os mesmos campos do create — specs de edição (ex: "editar
   // imóvel") mudam o título do imóvel seedado, então sem isso o seed
@@ -306,6 +314,7 @@ async function garantirImovel(opcoes: {
     condoFee: opcoes.condoFee ?? null,
     propertyTax: opcoes.propertyTax ?? null,
     developer: opcoes.developer ?? null,
+    highlightPhrase: opcoes.highlightPhrase ?? null,
   } as const;
 
   return prisma.property.upsert({
@@ -3255,6 +3264,47 @@ async function main() {
     id: IDS_E2E.imovelTourInseguro,
     titulo: "Imovel Tour Inseguro E2E",
     tour: "javascript:alert(1)",
+  });
+
+  // =====================================================================
+  // Fase 40 — FRASE DE DESTAQUE (Organização W, reaproveitada)
+  // =====================================================================
+  // Dois imóveis na mesma organização da barra de recursos: um COM frase
+  // e um SEM. Organização nova seria desnecessária — a frase é um campo
+  // da Property e não afeta contagem, catálogo nem KPI de ninguém.
+  //
+  // A frase é inequívoca de propósito: precisa ser um texto que não
+  // exista em nenhum outro lugar da página, para a asserção provar que
+  // ela apareceu no bloco certo e uma vez só.
+  // Títulos e descrições NEUTROS de propósito: o spec afirma a AUSÊNCIA
+  // de textos como "sem frase" na página, e um fixture chamado "Imovel
+  // Sem Frase" colidiria com a própria asserção.
+  //
+  // As características existem porque a ordem que se quer provar é
+  // Descrição -> frase -> Características: sem elas o bloco de
+  // características não renderiza e não há o que comparar.
+  await garantirImovel({
+    id: IDS_E2E.imovelComFrase,
+    organizationId: orgRecursos.organization.id,
+    title: "Imovel Editorial E2E",
+    description: "Texto longo do imovel, usado para provar a ordem dos blocos.",
+    price: 700000,
+    bedrooms: 3,
+    totalArea: 90,
+    propertyFeatures: ["Varanda"],
+    condoFeatures: ["Piscina"],
+    highlightPhrase: "Vista livre e iluminacao natural durante todo o dia.",
+  });
+  await garantirImovel({
+    id: IDS_E2E.imovelSemFrase,
+    organizationId: orgRecursos.organization.id,
+    title: "Imovel Neutro E2E",
+    description: "Texto longo do imovel, sem destaque editorial cadastrado.",
+    price: 700000,
+    bedrooms: 3,
+    totalArea: 90,
+    propertyFeatures: ["Varanda"],
+    condoFeatures: ["Piscina"],
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);

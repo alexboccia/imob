@@ -460,6 +460,35 @@ model Property {
   developer             String?
 
   // Endereço
+  // Fase 40 — FRASE DE DESTAQUE: o argumento comercial daquele imóvel,
+  // escrito por quem cadastra.
+  //
+  // É conteúdo EDITORIAL e opcional, exibido logo abaixo da descrição na
+  // ficha pública. Não é uma segunda descrição (a descrição é longa e
+  // explica o imóvel; esta é uma frase e destaca UM ponto), não é
+  // depoimento de cliente, não é slogan da imobiliária nem do
+  // empreendimento, e não é gerada nem inferida de nada.
+  //
+  // NÃO CONFUNDIR COM homeHighlightPosition, logo acima: aquele é a
+  // posição na vitrine editorial da Home (1..4). Os dois usam a palavra
+  // "destaque" em português, mas um é onde o imóvel aparece e o outro é
+  // o que se diz sobre ele.
+  //
+  // INDEPENDENTE de isLaunch, constructionStage e developmentId: um
+  // imóvel usado pode ter frase e um lançamento pode não ter. A presença
+  // do bloco é decidida só pelo conteúdo cadastrado.
+  //
+  // TEXTO PURO. A ficha renderiza como texto (React escapa por
+  // construção) — nada de HTML, Markdown ou dangerouslySetInnerHTML. As
+  // aspas do desenho são APRESENTAÇÃO: o banco guarda a frase como o
+  // corretor a escreveu, sem ornamento.
+  //
+  // NULLABLE E SEM BACKFILL: todo imóvel anterior a esta fase fica null,
+  // que é a verdade. Nada foi copiado de description, developer,
+  // endereço ou do empreendimento — uma frase inferida seria o produto
+  // falando no lugar do corretor.
+  highlightPhrase String?
+
   zipCode      String?
   street       String?
   number       String?

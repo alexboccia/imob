@@ -3,6 +3,7 @@ import {
   imovelSchema,
   parseImovelFormData,
   camposImovel,
+  LIMITE_FRASE_DESTAQUE,
   parseMidias,
   midiasParaCriar,
   type DadosImovelFormulario,
@@ -309,5 +310,117 @@ describe("camposImovel — lançamento", () => {
     expect(campos.developer).toBe("Construtora X");
     expect(campos.constructionStage).toBe("UNDER_CONSTRUCTION");
     expect(campos.deliveryForecast).not.toBeNull();
+  });
+});
+
+// =======================================================================
+// Frase de destaque (Fase 40)
+// =======================================================================
+// Conteúdo editorial opcional. O que se protege aqui: o texto é guardado
+// como o corretor escreveu (sem aspas acrescentadas), vazio vira null e
+// não string vazia, e o limite vale sobre o texto já sem espaços nas
+// pontas.
+
+describe("frase de destaque", () => {
+  const base = {
+    titulo: "Apartamento 2 quartos",
+    tipo: "Apartamento",
+    finalidade: "SALE" as const,
+    status: "AVAILABLE" as const,
+    bairro: "Pinheiros",
+    cidade: "São Paulo",
+    estado: "SP",
+  };
+  const comFrase = (fraseDestaque: string) =>
+    imovelSchema.safeParse({ ...base, fraseDestaque });
+
+  test("aceita uma frase normal", () => {
+    const r = comFrase("Vista livre e iluminação natural durante todo o dia.");
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.fraseDestaque).toBe(
+        "Vista livre e iluminação natural durante todo o dia."
+      );
+    }
+  });
+
+  test("remove espaços das pontas", () => {
+    const r = comFrase("   Projeto completo na Zona Norte.   ");
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.fraseDestaque).toBe("Projeto completo na Zona Norte.");
+  });
+
+  test("é opcional: ausente passa", () => {
+    expect(imovelSchema.safeParse(base).success).toBe(true);
+  });
+
+  test("exatamente no limite passa; um caractere a mais é recusado", () => {
+    expect(comFrase("a".repeat(LIMITE_FRASE_DESTAQUE)).success).toBe(true);
+    const excedeu = comFrase("a".repeat(LIMITE_FRASE_DESTAQUE + 1));
+    expect(excedeu.success).toBe(false);
+  });
+
+  test("o limite vale sobre o texto SEM os espaços das pontas", () => {
+    // 180 espaços + uma palavra não é uma frase de 185 caracteres.
+    const r = comFrase(`${" ".repeat(180)}Curta.${" ".repeat(180)}`);
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.fraseDestaque).toBe("Curta.");
+  });
+
+  test("aceita acentos, aspas digitadas e símbolos sem alterá-los", () => {
+    // Se o corretor escreveu aspas, elas são DELE — o produto não
+    // acrescenta nem remove.
+    const original = 'Um "projeto completo" — 100% pronto, à beira do parque.';
+    const r = comFrase(original);
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.fraseDestaque).toBe(original);
+  });
+
+  test("conteúdo parecido com HTML é guardado como TEXTO, não interpretado", () => {
+    // O schema não sanitiza nem recusa: a defesa é a renderização, que
+    // escapa por construção (React, sem dangerouslySetInnerHTML).
+    const r = comFrase("<script>alert(1)</script>");
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.fraseDestaque).toBe("<script>alert(1)</script>");
+  });
+});
+
+describe("camposImovel — frase de destaque", () => {
+  function dados(
+    overrides: Partial<DadosImovelFormulario> = {}
+  ): DadosImovelFormulario {
+    return {
+      titulo: "Apartamento 2 quartos",
+      tipo: "Apartamento",
+      finalidade: "SALE",
+      status: "AVAILABLE",
+      bairro: "Pinheiros",
+      cidade: "São Paulo",
+      estado: "SP",
+      lancamento: false,
+      destaque: false,
+      oportunidade: false,
+      slideshow: false,
+      caracteristicasImovel: [],
+      caracteristicasCondominio: [],
+      ...overrides,
+    };
+  }
+
+  test("grava a frase quando existe", () => {
+    const campos = camposImovel(dados({ fraseDestaque: "Vista definitiva para o parque." }));
+    expect(campos.highlightPhrase).toBe("Vista definitiva para o parque.");
+  });
+
+  test("ausente e vazia viram NULL, nunca string vazia", () => {
+    // Os dois significariam "sem frase", e guardar as duas formas
+    // tornaria a condição de renderização ambígua.
+    expect(camposImovel(dados()).highlightPhrase).toBeNull();
+    expect(camposImovel(dados({ fraseDestaque: "" })).highlightPhrase).toBeNull();
+  });
+
+  test("limpar a frase é possível pelo próprio formulário", () => {
+    // Enviar o campo vazio é o caminho de REMOÇÃO.
+    expect(camposImovel(dados({ fraseDestaque: "" })).highlightPhrase).toBeNull();
   });
 });

@@ -31,6 +31,7 @@ import { GaleriaFotos } from "@/components/GaleriaFotos";
 import { BotaoCompartilhar } from "@/components/BotaoCompartilhar";
 import { EvolucaoObra } from "@/components/EvolucaoObra";
 import { RecursosImovel } from "@/components/RecursosImovel";
+import { FraseDestaque } from "@/components/FraseDestaque";
 import {
   recursosDoImovel,
   ANCORA_PLANTAS,
@@ -468,6 +469,16 @@ export default async function DetalheImovelPage({
               </p>
             </section>
           )}
+
+          {/* Fase 40 — IMEDIATAMENTE abaixo da descrição, e antes das
+              características. Fora da <section> da descrição de
+              propósito: é um bloco editorial próprio, não um parágrafo
+              dela.
+
+              Independente da descrição existir: um imóvel sem texto
+              longo ainda pode ter uma frase, e o componente some sozinho
+              quando não há frase cadastrada. */}
+          <FraseDestaque frase={imovel.highlightPhrase} />
           <CaracteristicasDoImovel imovel={imovel} />
 
           {/* POSIÇÃO ÚNICA da evolução da obra: sempre depois de

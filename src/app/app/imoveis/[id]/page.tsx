@@ -132,6 +132,9 @@ export default async function EditarImovelPage({
           // Fase 38 — o vínculo atual, para o seletor abrir no valor certo.
           empreendimentoId: imovel.developmentId,
           descricao: imovel.description,
+          // Fase 40 — o valor atual, para o formulário abrir com a frase
+          // já cadastrada (e permitir limpá-la apagando o campo).
+          fraseDestaque: imovel.highlightPhrase,
           tipo: imovel.type,
           finalidade: imovel.purpose,
           status: imovel.status,

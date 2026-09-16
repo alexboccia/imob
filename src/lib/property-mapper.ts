@@ -9,9 +9,34 @@ const numeroOpcional = z.preprocess(
 
 const booleanCheckbox = z.preprocess((v) => v === "on", z.boolean());
 
+// Fase 40 — teto da frase de destaque.
+//
+// 180 caracteres: é uma FRASE, não um parágrafo. O limite existe para
+// proteger o desenho (o bloco cresce em duas ou três linhas, nunca vira
+// um segundo texto) e para manter a promessa do campo — quem precisa de
+// mais espaço tem a descrição logo acima.
+//
+// Exportado porque o formulário usa o mesmo número no maxLength do
+// campo: um limite escrito em dois lugares diverge na primeira mudança.
+export const LIMITE_FRASE_DESTAQUE = 180;
+
 export const imovelSchema = z.object({
   titulo: z.string().min(3, "Informe um título com ao menos 3 caracteres."),
   descricao: z.string().optional(),
+  // A validação de tamanho roda sobre o texto JÁ SEM espaços nas pontas:
+  // 180 espaços seguidos de uma palavra não são uma frase de 181
+  // caracteres. O `.trim()` do zod transforma antes do `.max()`.
+  //
+  // Server-side de verdade: o maxLength do navegador é conveniência, e
+  // um POST direto ignora HTML. Esta é a regra que vale.
+  fraseDestaque: z
+    .string()
+    .trim()
+    .max(
+      LIMITE_FRASE_DESTAQUE,
+      `A frase de destaque deve ter no máximo ${LIMITE_FRASE_DESTAQUE} caracteres.`
+    )
+    .optional(),
   tipo: z.string().min(1, "Selecione o tipo do imóvel."),
   // Fase 38 — ID do empreendimento ao qual esta unidade pertence.
   // Opcional: "sem empreendimento" é o estado de toda Property anterior
@@ -155,6 +180,11 @@ export function camposImovel(dados: DadosImovelFormulario) {
     // valor só com espaços era gravado como "   " — truthy no site
     // público, virando "Construtora:   " no cabeçalho do imóvel.
     developer: dados.construtora?.trim() || null,
+    // Vazio (ou só espaços, já removidos pelo schema) vira NULL, nunca
+    // string vazia: os dois significariam "sem frase", e guardar as duas
+    // formas tornaria a condição de renderização ambígua. É também o que
+    // permite LIMPAR a frase pelo próprio formulário.
+    highlightPhrase: dados.fraseDestaque || null,
   };
 }
 

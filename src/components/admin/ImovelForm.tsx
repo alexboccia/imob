@@ -14,6 +14,7 @@ import { SecaoLancamentoFields } from "@/components/admin/SecaoLancamentoFields"
 import { BotaoSalvarImovel } from "@/components/admin/BotaoSalvarImovel";
 import { CampoMoeda } from "@/components/admin/CampoMoeda";
 import { ErroCampo } from "@/components/admin/ErroCampo";
+import { LIMITE_FRASE_DESTAQUE } from "@/lib/property-mapper";
 import {
   SEM_EMPREENDIMENTO,
   ROTULO_SEM_EMPREENDIMENTO,
@@ -43,6 +44,8 @@ import {
 } from "@/components/ui/select";
 
 type ImovelFormValues = {
+  /** Fase 40 — frase editorial opcional, exibida abaixo da descrição. */
+  fraseDestaque: string | null;
   /** Fase 38 — id do empreendimento, ou ausente para unidade avulsa. */
   empreendimentoId: string | null;
   titulo: string;
@@ -211,6 +214,32 @@ export function ImovelForm({
           rows={4}
             />
             <ErroCampo erros={estado.fieldErrors?.descricao} />
+          </div>
+
+          {/* Fase 40 — logo DEPOIS da descrição, que é a ordem em que os
+              dois aparecem na ficha pública: primeiro o texto que explica
+              o imóvel, depois a frase que destaca um ponto dele.
+
+              Textarea de 2 linhas: é uma frase, e um input de uma linha
+              esconderia o fim do texto enquanto se digita. maxLength usa
+              a MESMA constante do schema — o servidor é quem recusa de
+              verdade, isto só evita a viagem. */}
+          <div className="space-y-1.5">
+            <Label htmlFor="fraseDestaque">Frase de destaque</Label>
+            <Textarea
+              id="fraseDestaque"
+              name="fraseDestaque"
+              defaultValue={v.fraseDestaque ?? ""}
+              rows={2}
+              maxLength={LIMITE_FRASE_DESTAQUE}
+              placeholder="Ex.: Vista livre e iluminação natural durante todo o dia."
+            />
+            <p className="text-xs text-muted-foreground">
+              Uma frase curta para destacar o principal diferencial do imóvel.
+              Opcional — sem ela, nada aparece na ficha. Máximo de{" "}
+              {LIMITE_FRASE_DESTAQUE} caracteres.
+            </p>
+            <ErroCampo erros={estado.fieldErrors?.fraseDestaque} />
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

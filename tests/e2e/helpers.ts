@@ -313,6 +313,10 @@ export const IDS_E2E = {
   imovelSoTour: "e2e-imovel-so-tour",
   imovelTresRecursos: "e2e-imovel-tres-recursos",
   imovelTourInseguro: "e2e-imovel-tour-inseguro",
+  // Fase 40 — frase de destaque. Dois imóveis na MESMA organização, para
+  // provar presença e ausência sem depender de outro tenant.
+  imovelComFrase: "e2e-imovel-com-frase",
+  imovelSemFrase: "e2e-imovel-sem-frase",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
