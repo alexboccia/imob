@@ -49,7 +49,6 @@ import { CardContatoImovel } from "@/components/imovel/CardContatoImovel";
 import { CardCorretorImovel } from "@/components/imovel/CardCorretorImovel";
 import { MateriaisImovel } from "@/components/imovel/MateriaisImovel";
 import { RastreioVisualizacaoImovel } from "@/components/analytics/RastreioVisualizacaoImovel";
-import { ResumoComercialImovel } from "@/components/imovel/ResumoComercialImovel";
 import { BarraCtaImovel } from "@/components/imovel/BarraCtaImovel";
 import {
   ehLancamento,
@@ -418,19 +417,15 @@ export default async function DetalheImovelPage({
           experiência externa, não a experiência. */}
       <RecursosImovel recursos={recursosDoImovel(imovel.media)} />
 
-      {/* Leitura rápida logo abaixo da galeria: atributos físicos do
-          imóvel, e some por inteiro quando não há nenhum deles. Obra e
-          entrega ficam DE FORA de propósito — já aparecem em destaque no
-          cabeçalho e voltam, com contexto, na timeline logo abaixo;
-          repetir aqui seria a mesma informação três vezes na mesma tela. */}
-      <ResumoComercialImovel
-        totalArea={imovel.totalArea}
-        privateArea={imovel.privateArea}
-        bedrooms={imovel.bedrooms}
-        suites={imovel.suites}
-        bathrooms={imovel.bathrooms}
-        parkingSpots={imovel.parkingSpots}
-      />
+      {/* Fase 41 — aqui havia uma faixa de "resumo" (área, quartos,
+          suítes, banheiros, vagas). Saiu da FICHA porque repetia, com
+          outro desenho, exatamente o que "Características da unidade"
+          mostra logo abaixo: a mesma informação duas vezes na mesma tela.
+
+          O resumo compacto dos CARDS (Home, /imoveis, próximos, outras
+          unidades) é outro componente — a linha de atributos do
+          ImovelCard — e continua lá, porque numa listagem ele serve para
+          comparar imóveis lado a lado. */}
 
       {videos.length > 0 && (
         <div id={ANCORA_VIDEOS} className="mt-6 space-y-4 scroll-mt-6">

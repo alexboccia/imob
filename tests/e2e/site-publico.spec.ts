@@ -361,6 +361,23 @@ test.describe("Site público — listagem e detalhe", () => {
     expect(total).toBeGreaterThanOrEqual(2);
   });
 
+  // Fase 41 — a faixa de resumo saiu só da FICHA. Na listagem o resumo
+  // compacto de cada card continua, porque é ali que se compara um
+  // imóvel com outro.
+  test("os cards da listagem mantêm o resumo compacto de atributos", async ({ page }) => {
+    await page.goto("/imoveis");
+    const card = page
+      .locator("a")
+      .filter({ has: page.getByText(IMOVEL_COM_BADGES, { exact: true }) })
+      .first();
+    await expect(card).toBeVisible();
+    const texto = (await card.locator("ul li").allInnerTexts()).join(" ");
+    expect(texto).toMatch(/58 m²/);
+    expect(texto).toMatch(/2\s*quartos/);
+    expect(texto).toMatch(/2\s*banheiros/);
+    expect(texto).toMatch(/1\s*vaga/);
+  });
+
   test("detalhe do imóvel mostra título, preço e formulário de contato", async ({ page }) => {
     await page.goto("/imoveis");
     await page.getByText(IMOVEL_COM_BADGES, { exact: true }).first().click();
@@ -1789,15 +1806,39 @@ test.describe("Detalhe — experiência de lançamento", () => {
     await expect(bloco).toContainText("JUN/27");
   });
 
-  test("resumo comercial mostra atributos reais e nenhum contador em zero", async ({ page }) => {
+  // Fase 41 — a faixa de "resumo" logo abaixo da galeria SAIU da ficha:
+  // repetia, com outro desenho, o que "Características da unidade" já
+  // mostra. O teste anterior afirmava que ela existia; este afirma a
+  // regra nova nos dois lados — a faixa não existe mais, e os fatos
+  // continuam na seção que é a fonte detalhada deles.
+  test("a ficha não repete os fatos do imóvel num resumo acima do conteúdo", async ({
+    page,
+  }) => {
     await page.goto(URL_IMOVEL);
-    const resumo = page.getByRole("region", { name: "Resumo do imóvel" });
-    await expect(resumo).toBeVisible();
-    await expect(resumo.getByText("52 m²")).toBeVisible();
-    // suites = 0 no seed.
-    await expect(resumo.getByText("Suítes")).toHaveCount(0);
-    // Sem duplicar o que já está em destaque no cabeçalho.
-    await expect(resumo.getByText("Entrega")).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Resumo do imóvel" })).toHaveCount(0);
+
+    // Os mesmos fatos continuam em Características da unidade.
+    const unidade = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "Características da unidade" }) });
+    await expect(unidade).toBeVisible();
+    await expect(unidade.getByText(/\d+ m²/).first()).toBeVisible();
+    await expect(unidade.getByText(/quartos?/i).first()).toBeVisible();
+    // suites = 0 no seed: contador em zero continua não virando item.
+    await expect(unidade.getByText(/0 su[ií]te/i)).toHaveCount(0);
+
+    // Nenhuma área aparece ACIMA da seção de características: é ali que
+    // a faixa removida ficava. (Os cards de "Imóveis próximos", mais
+    // abaixo, mostram m² de OUTROS imóveis e ficam fora da comparação
+    // por posição; o título do anúncio escreve "58m²" sem espaço.)
+    const topoUnidade = (await page
+      .getByRole("heading", { name: "Características da unidade" })
+      .boundingBox())!.y;
+    for (const area of await page.locator("main").getByText(/\d+ m²/).all()) {
+      if (!(await area.isVisible())) continue;
+      const caixa = await area.boundingBox();
+      expect(caixa!.y, "área repetida acima das características").toBeGreaterThan(topoUnidade);
+    }
   });
 
   test("lançamento MÍNIMO: rótulo aparece, mas nenhum bloco vazio é criado", async ({ page }) => {

@@ -177,6 +177,16 @@ test.describe("card do imóvel", () => {
     // Atributos com a unidade em TEXTO — quem não enxerga o ícone
     // continua sabendo do que se trata.
     await expect(card.getByText(/58 m²/)).toBeVisible();
+    // Fase 41 — a faixa de resumo saiu da FICHA, não dos cards. O resumo
+    // compacto da Home continua inteiro: área, quartos, banheiros e vaga
+    // (seed: 58 m², 2 quartos, 2 banheiros, 1 vaga), cada um com o nome
+    // em texto para leitor de tela.
+    const atributos = card.locator("ul li");
+    await expect(atributos).toHaveCount(4);
+    const textoAtributos = (await atributos.allInnerTexts()).join(" ");
+    expect(textoAtributos).toMatch(/2\s*quartos/);
+    expect(textoAtributos).toMatch(/2\s*banheiros/);
+    expect(textoAtributos).toMatch(/1\s*vaga/);
 
     // Badge comercial legítimo preservado; nenhum badge novo foi criado
     // a partir da vitrine.
