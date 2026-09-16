@@ -100,6 +100,14 @@ export const IDS_E2E = {
   imovelDobraAluguel: "e2e-imovel-dobra-aluguel",
   imovelDobraAmbos: "e2e-imovel-dobra-ambos",
   imovelDobraSemPreco: "e2e-imovel-dobra-sem-preco",
+  // Fase 44 — galeria comercial: um imóvel por quantidade de fotos.
+  imovelGaleria0: "e2e-imovel-galeria-0",
+  imovelGaleria1: "e2e-imovel-galeria-1",
+  imovelGaleria2: "e2e-imovel-galeria-2",
+  imovelGaleria3: "e2e-imovel-galeria-3",
+  imovelGaleria4: "e2e-imovel-galeria-4",
+  imovelGaleria5: "e2e-imovel-galeria-5",
+  imovelGaleria7: "e2e-imovel-galeria-7",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -3436,6 +3444,56 @@ async function main() {
     purpose: "SALE",
     price: null,
   });
+
+  // =====================================================================
+  // Fase 44 — GALERIA COMERCIAL (Organização W, reaproveitada)
+  // =====================================================================
+  // Um imóvel por quantidade de fotos (0, 1, 2, 3, 4, 5 e 7). Cada foto é
+  // um SVG em data URL com o NÚMERO dela desenhado e marcado no <title>
+  // ("foto-N"): a spec prova ordem e ausência de repetição lendo o src, e
+  // as capturas mostram de fato qual foto está em cada célula. data: não
+  // passa pelo otimizador do next/image e a CSP já permite img-src data:.
+  //
+  // As fotos são criadas de trás para frente de propósito: quem ordena é
+  // Media.order (com a capa primeiro), não a ordem de inserção.
+  const CORES_GALERIA = ["#1e3a5f", "#7c2d12", "#14532d", "#581c87", "#713f12", "#134e4a", "#831843"];
+  const fotoDaGaleria = (n: number) =>
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1067" viewBox="0 0 1600 1067">` +
+        `<title>foto-${n}</title>` +
+        `<rect width="1600" height="1067" fill="${CORES_GALERIA[(n - 1) % CORES_GALERIA.length]}"/>` +
+        `<text x="800" y="600" font-size="220" text-anchor="middle" fill="#ffffff" font-family="sans-serif">Foto ${n}</text>` +
+        `</svg>`
+    );
+  const imovelDaGaleria = async (id: string, fotos: number) => {
+    const organizationId = orgRecursos.organization.id;
+    const imovel = await garantirImovel({
+      id,
+      organizationId,
+      title: `Imovel Galeria ${fotos} E2E`,
+      price: 700000,
+    });
+    for (let n = fotos; n >= 1; n--) {
+      await prisma.media.create({
+        data: {
+          organizationId,
+          propertyId: imovel.id,
+          type: "PHOTO",
+          url: fotoDaGaleria(n),
+          isCover: n === 1,
+          order: n - 1,
+        },
+      });
+    }
+  };
+  await imovelDaGaleria(IDS_E2E.imovelGaleria0, 0);
+  await imovelDaGaleria(IDS_E2E.imovelGaleria1, 1);
+  await imovelDaGaleria(IDS_E2E.imovelGaleria2, 2);
+  await imovelDaGaleria(IDS_E2E.imovelGaleria3, 3);
+  await imovelDaGaleria(IDS_E2E.imovelGaleria4, 4);
+  await imovelDaGaleria(IDS_E2E.imovelGaleria5, 5);
+  await imovelDaGaleria(IDS_E2E.imovelGaleria7, 7);
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);

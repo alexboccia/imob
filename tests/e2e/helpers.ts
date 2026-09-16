@@ -328,6 +328,14 @@ export const IDS_E2E = {
   imovelDobraAluguel: "e2e-imovel-dobra-aluguel",
   imovelDobraAmbos: "e2e-imovel-dobra-ambos",
   imovelDobraSemPreco: "e2e-imovel-dobra-sem-preco",
+  // Fase 44 — galeria comercial: um imóvel por quantidade de fotos.
+  imovelGaleria0: "e2e-imovel-galeria-0",
+  imovelGaleria1: "e2e-imovel-galeria-1",
+  imovelGaleria2: "e2e-imovel-galeria-2",
+  imovelGaleria3: "e2e-imovel-galeria-3",
+  imovelGaleria4: "e2e-imovel-galeria-4",
+  imovelGaleria5: "e2e-imovel-galeria-5",
+  imovelGaleria7: "e2e-imovel-galeria-7",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

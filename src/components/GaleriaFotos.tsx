@@ -23,6 +23,10 @@ import {
 
 type Foto = { id: string; url: string };
 
+// Galeria comercial (Fase 44): no desktop, um HERO de uma peça só (foto
+// principal + até 4 complementares); abaixo de lg, carrossel. Os dois
+// abrem o MESMO lightbox, com todas as fotos na ordem cadastrada.
+//
 // Fase 43 — a galeria não carrega mais atalho de vídeo nem Compartilhar
 // sobre a foto: o atalho oficial de vídeo é a barra de recursos logo
 // abaixo, e o Compartilhar da ficha é o do cabeçalho. Dentro do
@@ -51,9 +55,25 @@ export function GaleriaFotos({
   const [indice, setIndice] = useState(0);
   const [aberto, setAberto] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const thumbsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const swiperInlineRef = useRef<SwiperType | null>(null);
   const swiperLightboxRef = useRef<SwiperType | null>(null);
+  const fecharRef = useRef<HTMLButtonElement | null>(null);
+  // Quem abriu o lightbox recebe o foco de volta ao fechar.
+  const origemFocoRef = useRef<HTMLElement | null>(null);
+
+  const total = fotos.length;
+  const rotuloVerGaleria = `Ver galeria (${total} ${total === 1 ? "foto" : "fotos"})`;
+  // Não há descrição cadastrada por foto (Media só tem url, ordem e capa),
+  // então o texto alternativo diz o que é verdade: a posição da foto na
+  // galeria deste imóvel. Nada é deduzido do conteúdo da imagem.
+  const altFoto = (i: number) => `Foto ${i + 1} de ${total} — ${titulo}`;
+
+  function abrir(i: number) {
+    origemFocoRef.current = document.activeElement as HTMLElement | null;
+    setIndice(i);
+    setZoom(1);
+    setAberto(true);
+  }
 
   const anterior = useCallback(() => {
     setIndice((i) => (i - 1 + fotos.length) % fotos.length);
@@ -76,18 +96,15 @@ export function GaleriaFotos({
 
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", handleKeyDown);
+    fecharRef.current?.focus();
     return () => {
       document.body.style.overflow = "";
       window.removeEventListener("keydown", handleKeyDown);
+      origemFocoRef.current?.focus?.();
     };
   }, [aberto, anterior, proxima]);
 
   useEffect(() => {
-    thumbsRef.current[indice]?.scrollIntoView({
-      behavior: "smooth",
-      inline: "center",
-      block: "nearest",
-    });
     swiperInlineRef.current?.slideTo(fotos.length > 1 ? indice + 1 : indice);
     if (aberto) {
       swiperLightboxRef.current?.slideTo(indice);
@@ -102,44 +119,93 @@ export function GaleriaFotos({
     setZoom((z) => Math.max(1, z - 0.5));
   }
 
-  if (fotos.length === 0) {
+  // Sem fotos: um aviso discreto na largura do conteúdo. Antes era um
+  // bloco 16:9 de ponta a ponta (~720px de altura em 1280) que empurrava
+  // a ficha inteira para baixo sem mostrar nada.
+  if (total === 0) {
     return (
-      <div className="aspect-video bg-gray-100 flex items-center justify-center text-gray-400">
-        Sem fotos
+      <div className="mx-auto max-w-6xl px-4 pt-4">
+        <div
+          data-galeria-vazia
+          className="flex h-40 items-center justify-center rounded-xl bg-gray-100 text-sm text-gray-500 sm:h-48"
+        >
+          Sem fotos
+        </div>
       </div>
     );
   }
 
-  const temMultiplas = fotos.length > 1;
+  const temMultiplas = total > 1;
   // Preenche com uma cópia da última foto antes da primeira e uma cópia da
-  // primeira foto depois da última, para o preview lateral nunca ficar vazio
-  // nas pontas. Ao alcançar um desses clones, pulamos (sem animação) para a
-  // posição real correspondente.
+  // primeira foto depois da última, para o carrossel girar sem fim. Ao
+  // alcançar um desses clones, pulamos (sem animação) para a posição real
+  // correspondente. Os clones ficam fora da árvore acessível.
   const slidesInline = temMultiplas
     ? [
-        { foto: fotos[fotos.length - 1], real: fotos.length - 1 },
-        ...fotos.map((foto, i) => ({ foto, real: i })),
-        { foto: fotos[0], real: 0 },
+        { foto: fotos[total - 1], real: total - 1, clone: true },
+        ...fotos.map((foto, i) => ({ foto, real: i, clone: false })),
+        { foto: fotos[0], real: 0, clone: true },
       ]
-    : fotos.map((foto, i) => ({ foto, real: i }));
+    : fotos.map((foto, i) => ({ foto, real: i, clone: false }));
   const slideInicial = temMultiplas ? 1 : 0;
 
-  // Grade de destaque (desktop/tablet): 1 foto grande + até 4 pequenas.
-  // "Ver todas as N fotos" sempre reflete o total real, mesmo quando há
-  // mais fotos além das 5 exibidas na grade.
-  const restoVisivel = fotos.slice(1, 5);
-  const mostrarOverlayVerTudo = fotos.length >= 5;
-  const gridClasseResto =
-    restoVisivel.length === 1
+  // Grade do desktop: 1 principal + até 4 complementares, sem repetir
+  // foto e sem célula vazia. A disposição das complementares depende de
+  // quantas existem:
+  //   1 → ocupa a coluna inteira
+  //   2 → empilhadas
+  //   3 → uma larga em cima, duas embaixo
+  //   4 → 2x2
+  const complementares = fotos.slice(1, 5);
+  const restantes = total - 1 - complementares.length;
+  const gradeComplementares =
+    complementares.length === 1
       ? "grid-cols-1 grid-rows-1"
-      : restoVisivel.length === 2
+      : complementares.length === 2
         ? "grid-cols-1 grid-rows-2"
         : "grid-cols-2 grid-rows-2";
 
+  const botaoVerGaleria = (className: string) => (
+    <button
+      type="button"
+      onClick={() => abrir(indice)}
+      data-ver-galeria
+      className={`inline-flex items-center gap-2 rounded-full bg-white px-4 text-sm font-medium text-gray-900 shadow-md transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/60 ${className}`}
+    >
+      <IconeGrade className="size-4" />
+      {rotuloVerGaleria}
+    </button>
+  );
+
+  const botaoVoltar = (
+    <Button
+      type="button"
+      variant="secondary"
+      onClick={() => router.back()}
+      className="absolute top-4 left-4 z-20 rounded-full bg-white/90 pl-2.5 shadow hover:bg-white"
+    >
+      <IconeChevronEsquerdo className="w-4 h-4" />
+      Voltar
+    </Button>
+  );
+
+  // O foco do teclado sobre a foto precisa aparecer mesmo em foto clara
+  // ou escura: anel branco por dentro, com sombra escura por fora dele.
+  const focoSobreFoto =
+    "outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-white focus-visible:shadow-[inset_0_0_0_6px_rgb(0_0_0/0.35)]";
+
   return (
     <>
-      {/* Mobile: carrossel swipável em tela cheia (comportamento original) */}
-      <div className="sm:hidden relative w-full h-[340px] bg-black overflow-hidden">
+      {/* Celular e tablet (< lg): carrossel próprio, de ponta a ponta. A
+          grade 1+4 só existe quando há largura para ela — em 768px a foto
+          principal ficaria mais alta que larga. As miniaturas que ficavam
+          abaixo saíram: repetiam o carrossel em 80px e empurravam a ficha;
+          swipe, setas, contador, "Ver galeria" e o lightbox continuam
+          levando a todas as fotos. */}
+      <div
+        data-galeria-carrossel
+        className="lg:hidden relative w-full h-[340px] sm:h-[440px] bg-black overflow-hidden"
+      >
         <Swiper
           centeredSlides
           initialSlide={slideInicial}
@@ -153,9 +219,9 @@ export function GaleriaFotos({
             if (!temMultiplas) {
               setIndice(posicao);
             } else if (posicao === 0) {
-              swiper.slideTo(fotos.length, 0, false);
-              setIndice(fotos.length - 1);
-            } else if (posicao === fotos.length + 1) {
+              swiper.slideTo(total, 0, false);
+              setIndice(total - 1);
+            } else if (posicao === total + 1) {
               swiper.slideTo(1, 0, false);
               setIndice(0);
             } else {
@@ -166,37 +232,38 @@ export function GaleriaFotos({
           className="w-full h-full"
         >
           {slidesInline.map((item, posicao) => (
-            <SwiperSlide key={`${item.foto.id}-${posicao}`}>
+            <SwiperSlide
+              key={`${item.foto.id}-${posicao}`}
+              aria-hidden={item.clone || undefined}
+            >
               <button
                 type="button"
-                onClick={() => setAberto(true)}
-                aria-label="Ampliar foto"
-                className="relative block w-full h-full cursor-zoom-in"
+                onClick={() => abrir(item.real)}
+                aria-label={`Ampliar foto ${item.real + 1} de ${total}`}
+                tabIndex={item.clone ? -1 : undefined}
+                className={`relative block w-full h-full cursor-zoom-in ${focoSobreFoto}`}
               >
                 <Image
                   src={item.foto.url}
-                  alt={titulo}
+                  alt={item.clone ? "" : altFoto(item.real)}
                   fill
                   className="object-cover"
                   sizes="100vw"
-                  priority={posicao === slideInicial}
+                  // Candidata a LCP só abaixo de lg. Sem `preload`: a
+                  // imagem que é LCP muda conforme a viewport, e a doc do
+                  // Next 16 pede eager + fetchPriority nesse caso.
+                  {...(posicao === slideInicial
+                    ? { loading: "eager" as const, fetchPriority: "high" as const }
+                    : {})}
                 />
               </button>
             </SwiperSlide>
           ))}
         </Swiper>
 
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => router.back()}
-          className="absolute top-4 left-4 z-20 rounded-full bg-white/90 pl-2.5 shadow hover:bg-white"
-        >
-          <IconeChevronEsquerdo className="w-4 h-4" />
-          Voltar
-        </Button>
+        {botaoVoltar}
 
-        {fotos.length > 1 && (
+        {temMultiplas && (
           <>
             <button
               type="button"
@@ -214,134 +281,106 @@ export function GaleriaFotos({
             >
               <IconeChevronDireito className="w-5 h-5" />
             </button>
-            <span className="absolute bottom-4 right-4 z-20 bg-black/60 text-white text-xs rounded-full px-2.5 py-1">
-              {indice + 1} / {fotos.length}
+            <span
+              data-contador-fotos
+              className="absolute bottom-4 right-4 z-20 bg-black/60 text-white text-xs rounded-full px-2.5 py-1"
+            >
+              {indice + 1} / {total}
             </span>
           </>
         )}
+
+        {botaoVerGaleria("absolute bottom-4 left-4 z-20 min-h-11")}
       </div>
 
-      {fotos.length > 1 && (
-        <div className="sm:hidden mx-auto max-w-6xl px-4">
-          <div className="flex gap-2 mt-3 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-1">
-            {fotos.map((foto, i) => (
-              <button
-                key={foto.id}
-                ref={(el) => {
-                  thumbsRef.current[i] = el;
-                }}
-                type="button"
-                onClick={() => {
-                  setIndice(i);
-                  setZoom(1);
-                }}
-                className={`relative w-20 h-20 flex-shrink-0 snap-start rounded-md overflow-hidden border-2 ${
-                  i === indice ? "border-primary" : "border-transparent"
-                }`}
-              >
-                <Image
-                  src={foto.url}
-                  alt=""
-                  fill
-                  className="object-cover"
-                  sizes="80px"
-                />
-              </button>
-            ))}
+      {/* Desktop (>= lg): HERO em uma peça só — foto principal com ~54% da
+          largura e as complementares ao lado, separadas por um vão fino e
+          com os cantos arredondados só por fora. A altura vem da
+          proporção (21:10): ~533px na largura máxima da ficha, ~472px em
+          1024. Baixa o bastante para o cabeçalho comercial da Fase 43 e
+          parte boa da galeria caberem juntos na primeira tela. */}
+      <div className="hidden lg:block mx-auto max-w-6xl px-4 pt-4">
+        <div
+          data-galeria-hero
+          className="grid aspect-[21/10] gap-2 overflow-hidden rounded-xl"
+          style={{
+            gridTemplateColumns: temMultiplas
+              ? "minmax(0, 54fr) minmax(0, 46fr)"
+              : "minmax(0, 1fr)",
+          }}
+        >
+          <div data-foto-principal className="relative min-h-0 min-w-0">
             <button
               type="button"
-              onClick={() => setAberto(true)}
-              className="flex-shrink-0 w-20 h-20 rounded-md border bg-gray-50 hover:bg-gray-100 text-gray-600 flex flex-col items-center justify-center gap-1 text-xs font-medium text-center px-1"
-            >
-              <IconeGrade className="w-4 h-4" />
-              Ver galeria ({fotos.length})
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Desktop/tablet: 1 foto grande + até 4 pequenas, no padrão de
-          destaque (ex.: Airbnb) — abre o mesmo lightbox de sempre ao
-          clicar em qualquer foto. */}
-      <div className="hidden sm:block mx-auto max-w-6xl px-4 pt-4">
-        <div className="relative">
-          <div className="flex gap-2 h-[420px] lg:h-[520px]">
-            <button
-              type="button"
-              onClick={() => {
-                setIndice(0);
-                setZoom(1);
-                setAberto(true);
-              }}
-              aria-label="Ampliar foto"
-              className={`relative cursor-zoom-in rounded-xl overflow-hidden ${
-                restoVisivel.length > 0 ? "w-1/2" : "w-full"
-              } h-full`}
+              onClick={() => abrir(0)}
+              aria-label={`Ampliar foto 1 de ${total}`}
+              className={`group absolute inset-0 cursor-zoom-in overflow-hidden ${focoSobreFoto}`}
             >
               <Image
                 src={fotos[0].url}
-                alt={titulo}
+                alt={altFoto(0)}
                 fill
-                className="object-cover"
-                sizes="50vw"
-                priority
+                className="object-cover transition-[filter] duration-200 group-hover:brightness-95"
+                sizes={temMultiplas ? "(min-width: 1152px) 605px, 54vw" : "(min-width: 1152px) 1120px, 100vw"}
+                loading="eager"
+                fetchPriority="high"
               />
             </button>
-
-            {restoVisivel.length > 0 && (
-              <div className={`w-1/2 h-full grid gap-2 ${gridClasseResto}`}>
-                {restoVisivel.map((foto, i) => {
-                  const realIndex = i + 1;
-                  const ehTilheDeVerTudo =
-                    mostrarOverlayVerTudo && i === restoVisivel.length - 1;
-                  return (
-                    <button
-                      key={foto.id}
-                      type="button"
-                      onClick={() => {
-                        setIndice(ehTilheDeVerTudo ? 0 : realIndex);
-                        setZoom(1);
-                        setAberto(true);
-                      }}
-                      aria-label={
-                        ehTilheDeVerTudo
-                          ? `Ver todas as ${fotos.length} fotos`
-                          : "Ampliar foto"
-                      }
-                      className="relative cursor-zoom-in rounded-xl overflow-hidden"
-                    >
-                      <Image
-                        src={foto.url}
-                        alt={titulo}
-                        fill
-                        className="object-cover"
-                        sizes="25vw"
-                      />
-                      {ehTilheDeVerTudo && (
-                        <span className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                          <span className="flex items-center gap-1.5 bg-white text-gray-900 text-xs font-medium rounded-full px-3 py-1.5 shadow">
-                            <IconeGrade className="w-3.5 h-3.5" />
-                            Ver todas as {fotos.length} fotos
-                          </span>
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            {botaoVoltar}
+            {botaoVerGaleria("absolute bottom-4 left-4 z-20 min-h-10")}
           </div>
 
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => router.back()}
-            className="absolute top-4 left-4 z-20 rounded-full bg-white/90 pl-2.5 shadow hover:bg-white"
-          >
-            <IconeChevronEsquerdo className="w-4 h-4" />
-            Voltar
-          </Button>
-
+          {complementares.length > 0 && (
+            <div
+              data-fotos-complementares
+              className={`grid min-h-0 min-w-0 gap-2 ${gradeComplementares}`}
+            >
+              {complementares.map((foto, i) => {
+                const indiceReal = i + 1;
+                const ultima = i === complementares.length - 1;
+                // Com mais de 5 fotos, a última célula avisa que a galeria
+                // continua e abre direto na primeira foto que a grade não
+                // mostrou.
+                const continua = ultima && restantes > 0;
+                return (
+                  <button
+                    key={foto.id}
+                    type="button"
+                    data-foto-complementar
+                    onClick={() => abrir(continua ? indiceReal + 1 : indiceReal)}
+                    aria-label={
+                      continua
+                        ? `Ver mais ${restantes} ${restantes === 1 ? "foto" : "fotos"}`
+                        : `Ampliar foto ${indiceReal + 1} de ${total}`
+                    }
+                    className={`group relative min-h-0 min-w-0 cursor-zoom-in overflow-hidden ${
+                      complementares.length === 3 && i === 0 ? "col-span-2" : ""
+                    } ${focoSobreFoto}`}
+                  >
+                    <Image
+                      src={foto.url}
+                      alt={altFoto(indiceReal)}
+                      fill
+                      className="object-cover transition-[filter] duration-200 group-hover:brightness-95"
+                      sizes={
+                        complementares.length === 1
+                          ? "(min-width: 1152px) 515px, 46vw"
+                          : "(min-width: 1152px) 256px, 23vw"
+                      }
+                    />
+                    {continua && (
+                      <span
+                        aria-hidden
+                        className="absolute inset-0 flex items-center justify-center bg-black/60 text-3xl font-semibold tracking-tight text-white"
+                      >
+                        +{restantes}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -354,8 +393,13 @@ export function GaleriaFotos({
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-md p-4 sm:p-8"
             onClick={() => setAberto(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Galeria de fotos — ${titulo}`}
+            data-lightbox
           >
           <button
+            ref={fecharRef}
             type="button"
             onClick={() => setAberto(false)}
             aria-label="Fechar"
@@ -406,7 +450,7 @@ export function GaleriaFotos({
               }}
               className="w-full h-full"
             >
-              {fotos.map((foto) => (
+              {fotos.map((foto, i) => (
                 <SwiperSlide key={foto.id}>
                   <div
                     className="relative w-full h-full transition-transform duration-200"
@@ -414,7 +458,7 @@ export function GaleriaFotos({
                   >
                     <Image
                       src={foto.url}
-                      alt={titulo}
+                      alt={altFoto(i)}
                       fill
                       className="object-contain"
                       sizes="100vw"
