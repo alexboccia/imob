@@ -317,6 +317,10 @@ export const IDS_E2E = {
   // provar presença e ausência sem depender de outro tenant.
   imovelComFrase: "e2e-imovel-com-frase",
   imovelSemFrase: "e2e-imovel-sem-frase",
+  // Fase 42 — o que tem por perto (Organização W). Um imóvel com locais
+  // fixos para a ficha pública e um vazio que a spec de admin edita.
+  imovelComLocais: "e2e-imovel-com-locais",
+  imovelLocaisAdmin: "e2e-imovel-locais-admin",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

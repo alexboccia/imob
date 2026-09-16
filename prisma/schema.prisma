@@ -547,6 +547,9 @@ model Property {
 
   media                 Media[]
   presentationMaterials PropertyPresentationMaterial[]
+  // Fase 42 — o que tem por perto: serviços, comércios e pontos de
+  // interesse que a imobiliária declara ao redor do imóvel.
+  nearbyPlaces          NearbyPlace[]
   leadCaptures          LeadCapture[]
   statusHistory         PropertyStatusHistory[]
   interactions          Interaction[]
@@ -642,6 +645,85 @@ model PropertyPresentationMaterial {
   // ordem" — o índice cobre exatamente isso.
   @@index([propertyId, active, sortOrder])
   @@map("property_presentation_materials")
+}
+
+// =======================================================================
+// O que tem por perto (Fase 42)
+// =======================================================================
+// Os pontos de interesse que a imobiliária DECLARA ao redor do imóvel:
+// a farmácia da esquina, o metrô, a escola, o parque.
+//
+// DECLARADO, NUNCA CALCULADO. Não há integração com mapas nem busca por
+// raio: quem cadastra sabe o que importa para aquele imóvel, e um
+// "hospital a 3,4 km" calculado por API seria um número que ninguém
+// conferiu. A distância, quando existe, é a que o corretor escreveu.
+//
+// Coleção pequena e editorial, da PROPERTY — não do empreendimento
+// (duas unidades do mesmo prédio têm, sim, a mesma vizinhança, mas
+// herança é decisão de fase futura, não um efeito colateral desta).
+model NearbyPlace {
+  id             String       @id @default(cuid())
+  // Redundante com property.organizationId de propósito, como em Media:
+  // a guarda de tenant (src/lib/prisma.ts) só reconhece organizationId
+  // como chave direta do where.
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // CASCADE, como Media: o local não existe sem o imóvel.
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  category NearbyPlaceCategory
+  name     String
+
+  // DISTÂNCIA OPCIONAL, em par: os dois são null ou os dois estão
+  // preenchidos. Nunca uma unidade sem número (a UI poderia mandar "km"
+  // de um campo vazio) nem um número sem unidade (350 o quê?).
+  //
+  // Float, e não Decimal, pela mesma razão das áreas do imóvel
+  // (totalArea/privateArea): é MEDIDA, não dinheiro.
+  //
+  // A invariante do par é garantida na escrita (src/lib/locais-proximos.ts),
+  // o mesmo lugar onde o projeto garante as outras invariantes de
+  // formulário — não há CHECK constraint em nenhuma migration do
+  // projeto, e esta fase não inaugura o padrão.
+  distance     Float?
+  distanceUnit DistanceUnit?
+
+  // Ordem editorial escolhida pelo corretor (mover para cima/baixo).
+  order Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // A única leitura: os locais de UM imóvel, na ordem editorial.
+  @@index([propertyId, order])
+  @@map("nearby_places")
+}
+
+// Categorias fechadas: é a categoria que decide o ícone, e o corretor
+// não escolhe ícone. "OTHER" existe para o que não cabe nas demais —
+// sem ele, a lista forçaria uma classificação errada.
+enum NearbyPlaceCategory {
+  MARKET
+  BAKERY
+  PHARMACY
+  HEALTH
+  SCHOOL
+  UNIVERSITY
+  SUBWAY
+  TRANSPORT
+  PARK
+  SHOPPING
+  GYM
+  RESTAURANT
+  PET_SHOP
+  OTHER
+}
+
+enum DistanceUnit {
+  METERS
+  KILOMETERS
 }
 
 model PropertyStatusHistory {
@@ -1813,6 +1895,7 @@ model Organization {
   scheduledActivities                 ScheduledActivity[]
   properties                          Property[]
   developments                        Development[]
+  nearbyPlaces                        NearbyPlace[]
   media                               Media[]
   propertyStatusHistory               PropertyStatusHistory[]
   interactions                        Interaction[]

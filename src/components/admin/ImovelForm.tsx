@@ -14,6 +14,8 @@ import { SecaoLancamentoFields } from "@/components/admin/SecaoLancamentoFields"
 import { BotaoSalvarImovel } from "@/components/admin/BotaoSalvarImovel";
 import { CampoMoeda } from "@/components/admin/CampoMoeda";
 import { ErroCampo } from "@/components/admin/ErroCampo";
+import { LocaisProximosEditor } from "@/components/admin/LocaisProximosEditor";
+import type { LocalProximo } from "@/lib/locais-proximos";
 import { LIMITE_FRASE_DESTAQUE } from "@/lib/property-mapper";
 import {
   SEM_EMPREENDIMENTO,
@@ -94,6 +96,7 @@ export function ImovelForm({
   valoresIniciais,
   midiasIniciais,
   materiaisIniciais,
+  locaisProximosIniciais,
   propertyId,
   opcoesCaracteristicasImovel = [],
   opcoesCaracteristicasCondominio = [],
@@ -106,6 +109,8 @@ export function ImovelForm({
   valoresIniciais?: Partial<ImovelFormValues>;
   midiasIniciais?: MidiaItem[];
   materiaisIniciais?: MaterialItem[];
+  /** Fase 42 — o que tem por perto, na ordem salva. */
+  locaisProximosIniciais?: LocalProximo[];
   /** Id do imóvel sendo editado, se já existir (imóvel novo ainda não tem id). */
   propertyId?: string;
   opcoesCaracteristicasImovel?: string[];
@@ -600,6 +605,24 @@ export function ImovelForm({
           <MateriaisUploader
             materiaisIniciais={materiaisIniciais}
             propertyId={propertyId}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Mesma anatomia do card de Características: título, uma linha do
+          que o bloco decide e o editor direto no conteúdo, sem card
+          dentro de card. */}
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="min-w-0 break-words">O que tem por perto</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            Cadastre os principais serviços, comércios e pontos de interesse próximos ao imóvel.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="min-w-0">
+          <LocaisProximosEditor
+            locaisIniciais={locaisProximosIniciais}
+            erros={estado.fieldErrors?.locaisProximos}
           />
         </CardContent>
       </Card>

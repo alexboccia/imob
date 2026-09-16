@@ -88,6 +88,9 @@ export const imovelSchema = z.object({
   previsaoEntrega: z.string().optional(),
   construtora: z.string().optional(),
   midiasJson: z.string().optional(),
+  // Fase 42 — a lista COMPLETA de locais próximos, como o formulário a
+  // montou. Validada item a item em locais-proximos.ts.
+  locaisProximosJson: z.string().optional(),
   // Lista de materiais de apresentação, mesmo padrão de midiasJson. O
   // conteúdo é validado em materiais-imovel.ts (URL do próprio bucket e
   // do próprio tenant) — aqui só se garante que é texto.

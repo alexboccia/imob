@@ -59,6 +59,7 @@ test("o formulário do imóvel é uma pilha de seções, como as Configurações
     "Características",
     "Fotos",
     "Materiais de apresentação",
+    "O que tem por perto",
   ]) {
     await expect(page.getByText(secao, { exact: true }).first()).toBeVisible();
   }

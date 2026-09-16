@@ -18,6 +18,11 @@ import {
 } from "@/lib/property-mapper";
 import { tagFacetas } from "@/lib/cache-tags";
 import { interpretarVinculoEmpreendimento } from "@/lib/empreendimento";
+import {
+  interpretarLocaisProximos,
+  colunasDoLocal,
+  type LocalProximo,
+} from "@/lib/locais-proximos";
 import { empreendimentoDaOrganizacao } from "@/lib/empreendimento-consultas";
 import { parseMateriais } from "@/lib/materiais-imovel";
 
@@ -51,6 +56,25 @@ function materiaisDoFormulario(
 //
 // null = sem empreendimento, um destino legítimo (inclusive para
 // DESVINCULAR uma unidade que já tinha).
+// Fase 42 — a coleção de locais próximos, validada antes de qualquer
+// escrita. Inválida = nada é gravado e o erro aparece na seção.
+function resolverLocaisProximos(
+  json: string | undefined
+): { ok: true; locais: LocalProximo[] } | { ok: false; estado: ActionState } {
+  const r = interpretarLocaisProximos(json);
+  if (!r.ok) {
+    return {
+      ok: false,
+      estado: {
+        success: false,
+        message: "Verifique os campos destacados.",
+        fieldErrors: { locaisProximos: [r.erro] },
+      },
+    };
+  }
+  return { ok: true, locais: r.locais };
+}
+
 async function resolverEmpreendimento(
   organizationId: string,
   bruto: unknown
@@ -97,6 +121,9 @@ export async function criarImovel(
   const empreendimento = await resolverEmpreendimento(organizationId, dados.empreendimentoId);
   if (!empreendimento.ok) return empreendimento.estado;
 
+  const locais = resolverLocaisProximos(dados.locaisProximosJson);
+  if (!locais.ok) return locais.estado;
+
   let imovel: { id: string; title: string };
   try {
     imovel = await withOrganization(organizationId, () =>
@@ -121,6 +148,13 @@ export async function criarImovel(
               },
             }
           : {}),
+        // Fase 42 — na criação não há identidade a preservar: tudo é novo.
+        nearbyPlaces: {
+          create: locais.locais.map((local, ordem) => ({
+            ...colunasDoLocal(local, ordem),
+            organizationId,
+          })),
+        },
         statusHistory: {
           create: { previousStatus: null, newStatus: dados.status, organizationId },
         },
@@ -234,6 +268,9 @@ export async function atualizarImovel(
   const empreendimento = await resolverEmpreendimento(organizationId, dados.empreendimentoId);
   if (!empreendimento.ok) return empreendimento.estado;
 
+  const locais = resolverLocaisProximos(dados.locaisProximosJson);
+  if (!locais.ok) return locais.estado;
+
   try {
   await withOrganization(organizationId, async () => {
     const imovelAtual = await prisma.property.findUniqueOrThrow({
@@ -243,12 +280,63 @@ export async function atualizarImovel(
 
     const statusMudou = imovelAtual.status !== dados.status;
 
+    // Fase 42 — LOCAIS PRÓXIMOS: sincronização, não apagar-e-recriar.
+    //
+    // Diferente de mídias e materiais, cada local mantém a sua identidade
+    // entre edições: editar a distância de "Parque Ibirapuera" atualiza
+    // AQUELA linha, e apagar só a distância nunca remove o local.
+    //
+    // Um id vindo do formulário só é tratado como "o mesmo local" se
+    // pertencer a ESTE imóvel nesta organização — conferido aqui, contra
+    // o banco. Qualquer outro id (de outro imóvel, de outro tenant,
+    // inventado) é ignorado e o item vira um local NOVO deste imóvel: os
+    // dados são do próprio corretor, mas a linha alheia nunca é tocada.
+    const idsExistentes = new Set(
+      (
+        await prisma.nearbyPlace.findMany({
+          where: { propertyId: imovelId, organizationId },
+          select: { id: true },
+        })
+      ).map((l) => l.id)
+    );
+    const listaLocais = locais.locais;
+    const mantidos = listaLocais
+      .map((local, ordem) => ({ local, ordem }))
+      .filter(({ local }) => local.id !== undefined && idsExistentes.has(local.id));
+    const novos = listaLocais
+      .map((local, ordem) => ({ local, ordem }))
+      .filter(({ local }) => local.id === undefined || !idsExistentes.has(local.id));
+    const idsMantidos = mantidos.map(({ local }) => local.id as string);
+
     // Materiais seguem o mesmo contrato das mídias: a submissão é sempre
     // a lista COMPLETA, então apagar e recriar dentro da mesma transação
     // é o que mantém banco e formulário idênticos. Remover um material
     // aqui não apaga o objeto no R2 — exatamente como já acontece com
     // foto removida (ver comentário do MediaUploader).
     await prisma.$transaction([
+      // Sai o que o corretor removeu da lista — e só isso.
+      prisma.nearbyPlace.deleteMany({
+        where: { propertyId: imovelId, organizationId, id: { notIn: idsMantidos } },
+      }),
+      // updateMany com propertyId + organizationId no WHERE: mesmo que a
+      // conferência acima falhasse, nenhuma linha de outro imóvel casaria.
+      ...mantidos.map(({ local, ordem }) =>
+        prisma.nearbyPlace.updateMany({
+          where: { id: local.id, propertyId: imovelId, organizationId },
+          data: colunasDoLocal(local, ordem),
+        })
+      ),
+      ...(novos.length > 0
+        ? [
+            prisma.nearbyPlace.createMany({
+              data: novos.map(({ local, ordem }) => ({
+                ...colunasDoLocal(local, ordem),
+                propertyId: imovelId,
+                organizationId,
+              })),
+            }),
+          ]
+        : []),
       prisma.media.deleteMany({ where: { propertyId: imovelId, organizationId } }),
       ...(storageConfigurado()
         ? [

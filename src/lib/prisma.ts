@@ -43,6 +43,10 @@ const TENANT_SCOPED_MODELS = new Set([
   // (nome, e-mail, telefone, mensagem) e pertence a exatamente uma
   // organização: entra na guarda como todo o resto.
   "LeadCapture",
+  // Fase 42 — locais próximos declarados no imóvel. Tem organizationId
+  // próprio (como Media) e entra na guarda pelo mesmo motivo: toda
+  // leitura e escrita deve declarar o tenant.
+  "NearbyPlace",
 ]);
 
 const WHERE_OPERATIONS = new Set([

@@ -68,6 +68,9 @@ export default async function EditarImovelPage({
             // que está desativado pra poder reativar. Quem filtra por
             // `active` é a ficha pública.
             presentationMaterials: { orderBy: { sortOrder: "asc" } },
+            // Fase 42 — escopado também pela organização, como os demais
+            // modelos do tenant.
+            nearbyPlaces: { where: { organizationId }, orderBy: { order: "asc" } },
           },
         }),
         buscarOpcoesCaracteristicas(organizationId),
@@ -127,6 +130,13 @@ export default async function EditarImovelPage({
       <ImovelForm
         action={atualizarComId}
         propertyId={imovel.id}
+        locaisProximosIniciais={imovel.nearbyPlaces.map((l) => ({
+          id: l.id,
+          categoria: l.category,
+          nome: l.name,
+          distancia: l.distance,
+          unidade: l.distanceUnit,
+        }))}
         valoresIniciais={{
           titulo: imovel.title,
           // Fase 38 — o vínculo atual, para o seletor abrir no valor certo.

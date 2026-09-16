@@ -38,6 +38,7 @@ import {
   ANCORA_VIDEOS,
 } from "@/lib/recursos-imovel";
 import { OutrasUnidades } from "@/components/OutrasUnidades";
+import { LocaisProximos } from "@/components/LocaisProximos";
 import {
   buscarOutrasUnidades,
   LIMITE_OUTRAS_UNIDADES,
@@ -73,6 +74,13 @@ const buscarImovel = cache(async (id: string, organizationId: string) => {
     where: { id, organizationId },
     include: {
       media: { orderBy: [{ isCover: "desc" }, { order: "asc" }] },
+      // Fase 42 — escopado pela organização além do imóvel, e só as
+      // colunas que a ficha mostra.
+      nearbyPlaces: {
+        where: { organizationId },
+        orderBy: { order: "asc" },
+        select: { id: true, category: true, name: true, distance: true, distanceUnit: true },
+      },
       // Só o que pode ser publicado. O WhatsApp operacional do membro,
       // o contactEmail e o User.avatarUrl (foto do painel) ficam
       // deliberadamente FORA do select: se não chegam à página, não há
@@ -540,6 +548,10 @@ export default async function DetalheImovelPage({
               Ver no Google Maps
             </a>
           </section>
+
+          {/* Fase 42 — logo depois da Localização: o endereço diz onde,
+              esta seção diz o que há em volta. Some sozinha sem locais. */}
+          <LocaisProximos locais={imovel.nearbyPlaces} />
 
           {/* Fecha a coluna de conteúdo: o visitante já viu o imóvel
               inteiro, e aqui fica quem pode mostrá-lo. No mobile esta é

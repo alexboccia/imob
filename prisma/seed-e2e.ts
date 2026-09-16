@@ -89,6 +89,10 @@ export const IDS_E2E = {
   // provar presença e ausência sem depender de outro tenant.
   imovelComFrase: "e2e-imovel-com-frase",
   imovelSemFrase: "e2e-imovel-sem-frase",
+  // Fase 42 — o que tem por perto (Organização W). Um imóvel com locais
+  // fixos para a ficha pública e um vazio que a spec de admin edita.
+  imovelComLocais: "e2e-imovel-com-locais",
+  imovelLocaisAdmin: "e2e-imovel-locais-admin",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -3305,6 +3309,40 @@ async function main() {
     totalArea: 90,
     propertyFeatures: ["Varanda"],
     condoFeatures: ["Piscina"],
+  });
+
+  // =====================================================================
+  // Fase 42 — O QUE TEM POR PERTO (Organização W, reaproveitada)
+  // =====================================================================
+  // RESET por rodada: a spec de admin edita a lista, e a limpeza geral
+  // não alcança esta organização.
+  await prisma.nearbyPlace.deleteMany({ where: { organizationId: orgRecursos.organization.id } });
+
+  const imovelComLocais = await garantirImovel({
+    id: IDS_E2E.imovelComLocais,
+    organizationId: orgRecursos.organization.id,
+    title: "Imovel Vizinhanca E2E",
+    price: 650000,
+  });
+  // Três casos numa lista só: metros, km com vírgula e SEM distância —
+  // este último é o que prova que a ficha não inventa placeholder.
+  await prisma.nearbyPlace.createMany({
+    data: ([
+      { category: "MARKET", name: "Mercado Central E2E", distance: 350, distanceUnit: "METERS" },
+      { category: "SUBWAY", name: "Estacao Paraiso E2E", distance: 1.2, distanceUnit: "KILOMETERS" },
+      { category: "PARK", name: "Praca das Arvores E2E", distance: null, distanceUnit: null },
+    ] as const).map((local, order) => ({
+      ...local,
+      order,
+      organizationId: orgRecursos.organization.id,
+      propertyId: imovelComLocais.id,
+    })),
+  });
+  await garantirImovel({
+    id: IDS_E2E.imovelLocaisAdmin,
+    organizationId: orgRecursos.organization.id,
+    title: "Imovel Locais Admin E2E",
+    price: 650000,
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
