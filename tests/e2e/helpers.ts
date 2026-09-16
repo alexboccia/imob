@@ -239,6 +239,15 @@ export const ORG_EMPREENDIMENTO = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Fase 39 — organização dedicada à BARRA DE RECURSOS. Própria porque a
+// fase afirma QUAIS botões aparecem por imóvel, e o seed não cria mídia
+// em nenhuma outra organização.
+export const ORG_RECURSOS = {
+  slug: "e2e-org-recursos",
+  email: "owner-recursos@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const ORG_COMISSOES_BRUNO = {
   slug: "e2e-org-comissoes",
   email: "bruno-comissoes@e2e.test",
@@ -296,6 +305,14 @@ export const IDS_E2E = {
   imovelBeta1: "e2e-imovel-beta-1",
   imovelAvulso: "e2e-imovel-avulso",
   imovelSoloAlpha: "e2e-imovel-solo-alpha",
+  // Fase 39 — barra de recursos (Organização W). Um imóvel por
+  // combinação, para cada asserção ter um caso real.
+  imovelSemRecursos: "e2e-imovel-sem-recursos",
+  imovelSoPlanta: "e2e-imovel-so-planta",
+  imovelSoVideo: "e2e-imovel-so-video",
+  imovelSoTour: "e2e-imovel-so-tour",
+  imovelTresRecursos: "e2e-imovel-tres-recursos",
+  imovelTourInseguro: "e2e-imovel-tour-inseguro",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

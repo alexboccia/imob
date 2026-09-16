@@ -33,6 +33,9 @@ const MEDIA_TYPE_PARA_TIPO_MIDIA = {
   PHOTO: "FOTO",
   VIDEO: "VIDEO",
   FLOOR_PLAN: "PLANTA",
+  // Fase 39 — o tour percorre o MESMO caminho do vídeo: uma URL colada
+  // no formulário, serializada com as demais mídias.
+  VIRTUAL_TOUR: "TOUR",
 } as const;
 
 export default async function EditarImovelPage({

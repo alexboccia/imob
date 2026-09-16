@@ -5,9 +5,10 @@ import Image from "next/image";
 import { IconeFechar } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { urlTourSegura } from "@/lib/recursos-imovel";
 
 export type MidiaItem = {
-  tipo: "FOTO" | "VIDEO" | "PLANTA";
+  tipo: "FOTO" | "VIDEO" | "PLANTA" | "TOUR";
   url: string;
   ehCapa: boolean;
 };
@@ -29,6 +30,9 @@ export function MediaUploader({
   } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [urlVideo, setUrlVideo] = useState("");
+  // Fase 39 — o tour segue o MESMO caminho do vídeo: uma URL colada.
+  const [urlTour, setUrlTour] = useState("");
+  const [erroTour, setErroTour] = useState<string | null>(null);
   const [indiceArrastado, setIndiceArrastado] = useState<number | null>(null);
   const [indicePlantaArrastada, setIndicePlantaArrastada] = useState<
     number | null
@@ -106,6 +110,22 @@ export function MediaUploader({
     setUrlVideo("");
   }
 
+  function adicionarTour() {
+    const bruto = urlTour.trim();
+    if (!bruto) return;
+    // Validado JÁ NO FORMULÁRIO, com erro visível: o tour vira o href de
+    // um link na ficha pública, e href aceita javascript:. A action
+    // revalida no servidor — esconder o erro aqui só faria o corretor
+    // salvar e descobrir depois que o botão não apareceu.
+    if (urlTourSegura(bruto) === null) {
+      setErroTour("Informe um endereço começando com http:// ou https://");
+      return;
+    }
+    setErroTour(null);
+    setMidias((atual) => [...atual, { tipo: "TOUR", url: bruto, ehCapa: false }]);
+    setUrlTour("");
+  }
+
   function definirCapa(index: number) {
     setMidias((atual) =>
       atual.map((m, i) => ({ ...m, ehCapa: i === index }))
@@ -136,6 +156,7 @@ export function MediaUploader({
   const fotos = midias.filter((m) => m.tipo === "FOTO");
   const videos = midias.filter((m) => m.tipo === "VIDEO");
   const plantas = midias.filter((m) => m.tipo === "PLANTA");
+  const tours = midias.filter((m) => m.tipo === "TOUR");
 
   return (
     <div className="space-y-4">
@@ -337,6 +358,60 @@ export function MediaUploader({
               })}
             </div>
           </>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1" htmlFor="url-tour">
+          Tour virtual 360° (link)
+        </label>
+        <div className="flex gap-2">
+          <Input
+            id="url-tour"
+            type="text"
+            value={urlTour}
+            onChange={(e) => {
+              setUrlTour(e.target.value);
+              if (erroTour) setErroTour(null);
+            }}
+            placeholder="https://..."
+            aria-invalid={erroTour ? true : undefined}
+            aria-describedby={erroTour ? "erro-url-tour" : undefined}
+            className="flex-1"
+          />
+          <Button type="button" variant="outline" onClick={adicionarTour}>
+            Adicionar
+          </Button>
+        </div>
+        {erroTour && (
+          <p id="erro-url-tour" role="alert" className="mt-1 text-sm text-destructive">
+            {erroTour}
+          </p>
+        )}
+        <p className="mt-1 text-xs text-muted-foreground">
+          O tour abre no site onde está hospedado. O botão só aparece na
+          ficha pública quando há um link cadastrado.
+        </p>
+        {tours.length > 0 && (
+          <ul className="mt-2 space-y-1 text-sm">
+            {tours.map((tour) => {
+              const index = midias.indexOf(tour);
+              return (
+                <li key={tour.url} className="flex items-center justify-between">
+                  <span className="truncate">{tour.url}</span>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    onClick={() => remover(index)}
+                    className="text-destructive h-auto p-0 ml-2"
+                  >
+                    Remover
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
 

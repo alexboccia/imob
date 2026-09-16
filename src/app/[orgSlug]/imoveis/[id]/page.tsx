@@ -30,6 +30,12 @@ import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 import { GaleriaFotos } from "@/components/GaleriaFotos";
 import { BotaoCompartilhar } from "@/components/BotaoCompartilhar";
 import { EvolucaoObra } from "@/components/EvolucaoObra";
+import { RecursosImovel } from "@/components/RecursosImovel";
+import {
+  recursosDoImovel,
+  ANCORA_PLANTAS,
+  ANCORA_VIDEOS,
+} from "@/lib/recursos-imovel";
 import { OutrasUnidades } from "@/components/OutrasUnidades";
 import {
   buscarOutrasUnidades,
@@ -400,6 +406,17 @@ export default async function DetalheImovelPage({
           (ver globals.css), não aqui: o rodapé fica fora deste container
           e também precisa escapar da barra. */}
       <div className="mx-auto max-w-6xl px-4 py-10">
+      {/* Fase 39 — IMEDIATAMENTE abaixo da galeria: os recursos que este
+          imóvel tem para explorar. Só aparecem os que existem de fato, e
+          a barra inteira some quando não há nenhum.
+
+          Planta e vídeo são ATALHOS para as seções que já vivem mais
+          abaixo nesta mesma página (ancoradas com scroll-mt), nunca uma
+          segunda exibição do mesmo material. O tour abre onde ele está
+          hospedado, porque o produto guarda o endereço de uma
+          experiência externa, não a experiência. */}
+      <RecursosImovel recursos={recursosDoImovel(imovel.media)} />
+
       {/* Leitura rápida logo abaixo da galeria: atributos físicos do
           imóvel, e some por inteiro quando não há nenhum deles. Obra e
           entrega ficam DE FORA de propósito — já aparecem em destaque no
@@ -415,7 +432,7 @@ export default async function DetalheImovelPage({
       />
 
       {videos.length > 0 && (
-        <div id="videos" className="mt-6 space-y-4 scroll-mt-6">
+        <div id={ANCORA_VIDEOS} className="mt-6 space-y-4 scroll-mt-6">
           {videos.map((video) => (
             <div key={video.id} className="aspect-video">
               <iframe
@@ -470,7 +487,10 @@ export default async function DetalheImovelPage({
           />
 
           {plantas.length > 0 && (
-            <div>
+            // Fase 39 — id + scroll-mt no MESMO padrão da seção de
+            // vídeos, que já era ancorada: é o destino do atalho
+            // "Planta" da barra logo abaixo da galeria.
+            <div id={ANCORA_PLANTAS} className="scroll-mt-6">
               <CarrosselPlantas plantas={plantas} />
             </div>
           )}

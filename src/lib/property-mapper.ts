@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { erroValidacao, type ActionState } from "@/lib/action-result";
+import { urlTourSegura } from "@/lib/recursos-imovel";
 
 const numeroOpcional = z.preprocess(
   (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
@@ -161,10 +162,11 @@ const TIPO_MIDIA_PARA_MEDIA_TYPE = {
   FOTO: "PHOTO",
   VIDEO: "VIDEO",
   PLANTA: "FLOOR_PLAN",
+  TOUR: "VIRTUAL_TOUR",
 } as const;
 
 export type MidiaParaCriar = {
-  type: "PHOTO" | "VIDEO" | "FLOOR_PLAN";
+  type: "PHOTO" | "VIDEO" | "FLOOR_PLAN" | "VIRTUAL_TOUR";
   url: string;
   isCover: boolean;
   order: number;
@@ -174,11 +176,17 @@ export function parseMidias(json: string | undefined): MidiaParaCriar[] {
   if (!json) return [];
   try {
     const midias = JSON.parse(json) as {
-      tipo: "FOTO" | "VIDEO" | "PLANTA";
+      tipo: "FOTO" | "VIDEO" | "PLANTA" | "TOUR";
       url: string;
       ehCapa: boolean;
     }[];
-    return midias.map((m, i) => ({
+    return midias
+      // Fase 39 — TOUR com endereço inseguro é DESCARTADO na escrita,
+      // além da guarda que a leitura pública já aplica. O href de um
+      // link aceita javascript:, e nenhuma das duas pontas deve confiar
+      // na outra.
+      .filter((m) => m.tipo !== "TOUR" || urlTourSegura(m.url) !== null)
+      .map((m, i) => ({
       type: TIPO_MIDIA_PARA_MEDIA_TYPE[m.tipo],
       url: m.url,
       isCover: m.ehCapa,

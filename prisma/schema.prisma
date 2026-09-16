@@ -41,6 +41,21 @@ enum MediaType {
   PHOTO
   VIDEO
   FLOOR_PLAN
+  // Fase 39 — TOUR VIRTUAL: a URL de uma experiência 360° hospedada
+  // fora do produto.
+  //
+  // Entra em Media, e não numa coluna de Property, porque é exatamente o
+  // que VIDEO já é aqui: um endereço externo que o imóvel possui, não um
+  // arquivo no storage. O caminho administrativo (colar uma URL) e a
+  // serialização já existem para vídeo e passam a servir aos dois.
+  //
+  // GENÉRICO POR DECISÃO: "tour virtual", nunca o nome de um fornecedor.
+  // O produto não tem integração com Matterport nem com ninguém — tem um
+  // link que a imobiliária cola — e nomear a marca no schema amarraria o
+  // domínio a um contrato que não existe.
+  //
+  // Nada de engine 360° própria: o tour abre onde ele vive.
+  VIRTUAL_TOUR
 }
 
 enum PersonRole {

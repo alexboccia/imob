@@ -77,6 +77,14 @@ export const IDS_E2E = {
   imovelBeta1: "e2e-imovel-beta-1",
   imovelAvulso: "e2e-imovel-avulso",
   imovelSoloAlpha: "e2e-imovel-solo-alpha",
+  // Fase 39 — barra de recursos (Organização W). Um imóvel por
+  // combinação, para cada asserção ter um caso real.
+  imovelSemRecursos: "e2e-imovel-sem-recursos",
+  imovelSoPlanta: "e2e-imovel-so-planta",
+  imovelSoVideo: "e2e-imovel-so-video",
+  imovelSoTour: "e2e-imovel-so-tour",
+  imovelTresRecursos: "e2e-imovel-tres-recursos",
+  imovelTourInseguro: "e2e-imovel-tour-inseguro",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -760,6 +768,8 @@ async function main() {
     // Fase 26 — identidade multi-org e a dona da segunda organização.
     "multi-org@e2e.test",
     "owner-multi-b@e2e.test",
+    // Fase 39 — Organização W (barra de recursos).
+    "owner-recursos@e2e.test",
     // Fase 38 — Organização V (empreendimento).
     "owner-empreendimento@e2e.test",
     // Fase 37 — Organização U (resultado da visita). A dona encerra as
@@ -3118,6 +3128,133 @@ async function main() {
     id: IDS_E2E.imovelSoloAlpha,
     titulo: "Solo Unidade Unica E2E",
     developmentId: empreendimentoSolo.id,
+  });
+
+  // =====================================================================
+  // Fase 39 — BARRA DE RECURSOS (Organização W)
+  // =====================================================================
+  // Um imóvel por combinação, para cada asserção da barra ter um caso
+  // real e nenhum teste depender do estado deixado por outro:
+  //
+  //   sem recursos    só fotos            -> barra AUSENTE
+  //   só planta       FLOOR_PLAN          -> [ Planta ]
+  //   só vídeo        VIDEO               -> [ Vídeo ]
+  //   só tour         VIRTUAL_TOUR        -> [ Tour 360° ]
+  //   três recursos   os três             -> ordem fixa Tour/Planta/Vídeo
+  //   tour inseguro   javascript: na URL  -> botão AUSENTE
+  //
+  // O último existe porque a guarda de URL é na LEITURA pública, não só
+  // na escrita: o dado pode ter entrado por outro caminho, e a página é
+  // o último lugar onde ele é usado.
+  const orgRecursos = await garantirOrganizacaoComDono({
+    slug: "e2e-org-recursos",
+    timezone: "UTC",
+    name: "Organização E2E Recursos",
+    planId: planoCompleto.id,
+    email: "owner-recursos@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+
+  // RESET por rodada: a limpeza geral monta idsOrgs antes daqui.
+  await prisma.media.deleteMany({ where: { organizationId: orgRecursos.organization.id } });
+
+  const imovelComRecursos = async (opcoes: {
+    id: string;
+    titulo: string;
+    planta?: boolean;
+    video?: boolean;
+    tour?: string | null;
+  }) => {
+    const organizationId = orgRecursos.organization.id;
+    const imovel = await garantirImovel({
+      id: opcoes.id,
+      organizationId,
+      title: opcoes.titulo,
+      price: 600000,
+    });
+    // Toda ficha tem foto: a galeria é o contexto da barra, e um imóvel
+    // sem foto exercitaria outro caminho.
+    await prisma.media.create({
+      data: {
+        organizationId,
+        propertyId: imovel.id,
+        type: "PHOTO",
+        url: "https://pub-ffe40b90a3c34357805314bdf89bef2c.r2.dev/e2e/foto.jpg",
+        isCover: true,
+        order: 0,
+      },
+    });
+    if (opcoes.planta) {
+      await prisma.media.create({
+        data: {
+          organizationId,
+          propertyId: imovel.id,
+          type: "FLOOR_PLAN",
+          url: "https://pub-ffe40b90a3c34357805314bdf89bef2c.r2.dev/e2e/planta.jpg",
+          order: 1,
+        },
+      });
+    }
+    if (opcoes.video) {
+      await prisma.media.create({
+        data: {
+          organizationId,
+          propertyId: imovel.id,
+          type: "VIDEO",
+          // Host permitido pelo frame-src da CSP do projeto.
+          url: "https://www.youtube.com/embed/e2e-video",
+          order: 2,
+        },
+      });
+    }
+    if (opcoes.tour) {
+      await prisma.media.create({
+        data: {
+          organizationId,
+          propertyId: imovel.id,
+          type: "VIRTUAL_TOUR",
+          url: opcoes.tour,
+          order: 3,
+        },
+      });
+    }
+    return imovel;
+  };
+
+  await imovelComRecursos({
+    id: IDS_E2E.imovelSemRecursos,
+    titulo: "Imovel Sem Recursos E2E",
+  });
+  await imovelComRecursos({
+    id: IDS_E2E.imovelSoPlanta,
+    titulo: "Imovel So Planta E2E",
+    planta: true,
+  });
+  await imovelComRecursos({
+    id: IDS_E2E.imovelSoVideo,
+    titulo: "Imovel So Video E2E",
+    video: true,
+  });
+  await imovelComRecursos({
+    id: IDS_E2E.imovelSoTour,
+    titulo: "Imovel So Tour E2E",
+    tour: "https://tour.exemplo-e2e.com/360/abc",
+  });
+  await imovelComRecursos({
+    id: IDS_E2E.imovelTresRecursos,
+    titulo: "Imovel Tres Recursos E2E",
+    planta: true,
+    video: true,
+    tour: "https://tour.exemplo-e2e.com/360/completo",
+  });
+  // URL insegura gravada DIRETO no banco — é exatamente o caso que a
+  // validação do formulário impede e que a leitura pública precisa
+  // continuar recusando.
+  await imovelComRecursos({
+    id: IDS_E2E.imovelTourInseguro,
+    titulo: "Imovel Tour Inseguro E2E",
+    tour: "javascript:alert(1)",
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
