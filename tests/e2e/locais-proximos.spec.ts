@@ -84,6 +84,24 @@ test.describe("ficha pública — responsivo", () => {
       expect(caixa, `sem seção @ ${largura}px`).not.toBeNull();
       expect(caixa!.x + caixa!.width).toBeLessThanOrEqual(largura + 1);
       expect(await semOverflow(page), `overflow @ ${largura}px`).toBe(true);
+
+      // Colunas: três por linha a partir de 768 (md), uma no celular.
+      const itens = secaoPublica(page).getByRole("listitem");
+      await expect(itens).toHaveCount(3);
+      const caixas = await Promise.all([0, 1, 2].map(async (i) => (await itens.nth(i).boundingBox())!));
+      if (largura >= 768) {
+        expect(Math.abs(caixas[1].y - caixas[0].y)).toBeLessThan(1);
+        expect(Math.abs(caixas[2].y - caixas[0].y)).toBeLessThan(1);
+        expect(caixas[1].x).toBeGreaterThan(caixas[0].x + caixas[0].width);
+        expect(caixas[2].x).toBeGreaterThan(caixas[1].x + caixas[1].width);
+        // Resumo inteiro numa linha: "Metrô · 1,2 km" não quebra.
+        const resumo = itens.nth(1).locator("p").nth(1);
+        const alturaLinha = await resumo.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+        expect((await resumo.boundingBox())!.height).toBeLessThan(alturaLinha * 1.5);
+      } else {
+        expect(caixas[1].y).toBeGreaterThan(caixas[0].y);
+        expect(caixas[2].y).toBeGreaterThan(caixas[1].y);
+      }
     });
   }
 });

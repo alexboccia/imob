@@ -27,7 +27,12 @@ export function LocaisProximos({ locais }: { locais: LocalProximoPublico[] }) {
   return (
     <section data-locais-proximos>
       <h2 className={`${TITULO_BLOCO} mb-4`}>O que tem por perto</h2>
-      <ul className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+      {/* Três por linha a partir de md. A seção vive na coluna principal
+          da ficha: ~736px em md (página ainda de coluna única) e ~640px em
+          lg (2/3 do grid), o que dá ~190px de texto por local — cabe
+          "Farmácia · 1,2 km" numa linha, e nome longo quebra em vez de
+          cortar. Entre sm e md, duas; no celular, uma. */}
+      <ul className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 md:grid-cols-3">
         {locais.map((local) => {
           // Mesmo texto do painel: "Farmácia · 350 m", ou só "Parque".
           const resumo = resumoDoLocal({
