@@ -52,11 +52,13 @@ export function BotaoContatoFlutuante({
   whatsapp,
   telefone,
   orgSlug,
+  basePath,
 }: {
   nome: string;
   whatsapp: string;
   telefone: string;
   orgSlug: string;
+  basePath: string;
 }) {
   const [aberto, setAberto] = useState(false);
 
@@ -126,6 +128,7 @@ export function BotaoContatoFlutuante({
             aoAbrir={() => setAberto(false)}
             className="w-full flex items-center gap-3 border rounded-xl p-3 hover:bg-gray-50 transition-colors text-left"
             orgSlug={orgSlug}
+            basePath={basePath}
             nome={nome}
           >
             <span className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">

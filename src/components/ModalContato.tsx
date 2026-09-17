@@ -16,6 +16,7 @@ export function ModalContato({
   aoAbrir,
   children,
   orgSlug,
+  basePath,
   nome,
 }: {
   imovelId?: string;
@@ -25,6 +26,7 @@ export function ModalContato({
   aoAbrir?: () => void;
   children: React.ReactNode;
   orgSlug: string;
+  basePath: string;
   nome: string;
 }) {
   return (
@@ -60,6 +62,7 @@ export function ModalContato({
             mensagemPreenchida={mensagemPreenchida}
             idPrefixo="modal-"
             orgSlug={orgSlug}
+            basePath={basePath}
           />
         </div>
       </DialogContent>

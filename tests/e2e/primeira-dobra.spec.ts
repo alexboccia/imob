@@ -246,7 +246,8 @@ const BLOCOS_DA_COLUNA: [string, (page: Page) => Locator][] = [
   ["Materiais", (p) => p.locator("[data-materiais-imovel]")],
   ["Localização", (p) => p.getByRole("heading", { name: "Localização", exact: true })],
   ["Por perto", (p) => p.locator("[data-locais-proximos]")],
-  ["Corretor", (p) => p.locator("[data-card-corretor]")],
+  // Fase 51 — o corretor saiu da coluna de conteúdo para a lateral,
+  // logo acima do formulário (ver lateral-imovel.spec.ts).
 ];
 
 /** Os blocos presentes, na ordem do documento — e em y crescente. */

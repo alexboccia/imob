@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import {
   IconeEmail,
@@ -19,7 +18,8 @@ import {
 } from "@/lib/perfil-publico-corretor";
 import { formatarTelefone } from "@/lib/telefone";
 
-// Card do corretor responsável, na coluna de conteúdo da ficha.
+// Corretor responsável — dentro do card lateral de conversão (Fase 51),
+// entre os CTAs e o formulário.
 //
 // Só existe quando resolverCorretorPublico devolveu alguém — ou seja, só
 // com opt-in explícito do profissional. Papel (OWNER/ADMIN), ser
@@ -27,12 +27,15 @@ import { formatarTelefone } from "@/lib/telefone";
 // publica ninguém. Sem perfil publicado, a ficha inteira segue como a
 // identidade institucional que ela já era.
 //
-// POR QUE AQUI, E NÃO NO CARD LATERAL: esta identidade morava dentro do
-// card de conversão, espremida entre o CTA de WhatsApp e o formulário —
-// os dois elementos que fazem o visitante agir. Numa coluna larga ela
-// respira, a bio deixa de precisar de line-clamp, e o card lateral
-// recupera a hierarquia que ele tinha sido desenhado para ter (preço,
-// CTA, formulário). A identidade não foi duplicada: ela mudou de lugar.
+// POR QUE AQUI: a lateral responde, de cima para baixo, "quanto custa",
+// "quem atende" e "como falar" — e quem atende vem logo antes do
+// formulário, para o visitante saber com quem está falando ao preencher.
+// Na Fase 43 esta identidade tinha ido para a coluna de conteúdo, onde
+// ficava longe do formulário; agora volta, e a coluna de conteúdo não a
+// repete: ela mudou de lugar de novo, não foi duplicada.
+//
+// Seção, não Card: já está DENTRO do card lateral, e um card aninhado
+// não acrescentaria nada além de moldura.
 //
 // O QUE NÃO ESTÁ AQUI, E POR QUÊ:
 //
@@ -70,133 +73,131 @@ export function CardCorretorImovel({
   const telefoneHref = hrefTelefone(contatos.telefone);
   const emailHref = hrefEmail(contatos.email);
   return (
-    <Card data-card-corretor>
-      <CardContent>
-        <h2 className={`${TITULO_BLOCO} mb-4`}>Corretor(a) responsável</h2>
+    <section data-card-corretor className="space-y-4 border-t pt-4">
+      <h2 className={TITULO_BLOCO}>Corretor(a) responsável</h2>
 
-        {/* items-start e min-w-0: nome longo quebra em vez de empurrar a
-            foto ou estourar a largura no mobile estreito. */}
-        <div className="flex items-start gap-4">
-          <span className="relative size-16 shrink-0 overflow-hidden rounded-full border bg-secondary">
-            {corretor.foto ? (
-              <Image
-                src={corretor.foto}
-                alt={`Foto de ${corretor.nome}`}
-                fill
-                sizes="64px"
-                className="object-cover"
-              />
-            ) : (
-              // Placeholder neutro, nunca as iniciais do usuário interno:
-              // sem foto pública enviada, não há foto para mostrar.
-              <span
-                aria-hidden
-                className="flex size-full items-center justify-center text-primary"
-              >
-                <IconePessoa className="size-7" />
-              </span>
-            )}
-          </span>
+      {/* items-start e min-w-0: nome longo quebra em vez de empurrar a
+          foto ou estourar a largura no mobile estreito. */}
+      <div className="flex items-start gap-4">
+        <span className="relative size-16 shrink-0 overflow-hidden rounded-full border bg-secondary">
+          {corretor.foto ? (
+            <Image
+              src={corretor.foto}
+              alt={`Foto de ${corretor.nome}`}
+              fill
+              sizes="64px"
+              className="object-cover"
+            />
+          ) : (
+            // Placeholder neutro, nunca as iniciais do usuário interno:
+            // sem foto pública enviada, não há foto para mostrar.
+            <span
+              aria-hidden
+              className="flex size-full items-center justify-center text-primary"
+            >
+              <IconePessoa className="size-7" />
+            </span>
+          )}
+        </span>
 
-          <div className="min-w-0 flex-1">
-            <p className="text-base font-semibold text-gray-900">{corretor.nome}</p>
-            {/* O CRECI é o registro profissional: quando existe, é ele que
-                sustenta a confiança que este card inteiro existe para
-                gerar. Sem ele, a linha some — nada de rótulo vazio. */}
-            {corretor.creci && (
-              <p className="mt-0.5 text-sm text-gray-500">{corretor.creci}</p>
-            )}
-          </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-semibold text-gray-900">{corretor.nome}</p>
+          {/* O CRECI é o registro profissional: quando existe, é ele que
+              sustenta a confiança que este card inteiro existe para
+              gerar. Sem ele, a linha some — nada de rótulo vazio. */}
+          {corretor.creci && (
+            <p className="mt-0.5 text-sm text-gray-500">{corretor.creci}</p>
+          )}
         </div>
+      </div>
 
-        {corretor.bio && (
-          <p className="mt-4 max-w-prose text-[0.9375rem] leading-relaxed whitespace-pre-line text-gray-700">
-            {corretor.bio}
-          </p>
+      {corretor.bio && (
+        <p className="max-w-prose text-[0.9375rem] leading-relaxed whitespace-pre-line text-gray-700">
+          {corretor.bio}
+        </p>
+      )}
+
+      {/* O perfil público existe exatamente quando este card existe:
+          os dois exigem publicProfileEnabled, e a rota devolve 404 sem
+          ele. Por isso o CTA não precisa de condição própria — e não
+          há como ele apontar para uma página inexistente. O caminho sai
+          do helper central; nenhum componente concatena rota à mão. */}
+      {/* Até quatro ações: empilham no mobile e quebram em linha a
+          partir de sm, em vez de virarem quatro botões ilegíveis lado a
+          lado numa tela estreita. */}
+      <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <Link
+          href={caminhoPerfilCorretor(basePath, membroId)}
+          className={buttonVariants({ size: "lg", className: "w-full" })}
+        >
+          Ver perfil completo
+        </Link>
+
+        {telefoneHref && (
+          <a
+            href={telefoneHref}
+            aria-label={`Ligar para ${corretor.nome}`}
+            className={buttonVariants({
+              variant: "outline",
+              size: "lg",
+              className: "w-full",
+            })}
+          >
+            <IconeTelefone className="size-5" aria-hidden />
+            {formatarTelefone(contatos.telefone!)}
+          </a>
         )}
 
-        {/* O perfil público existe exatamente quando este card existe:
-            os dois exigem publicProfileEnabled, e a rota devolve 404 sem
-            ele. Por isso o CTA não precisa de condição própria — e não
-            há como ele apontar para uma página inexistente. O caminho sai
-            do helper central; nenhum componente concatena rota à mão. */}
-        {/* Até quatro ações: empilham no mobile e quebram em linha a
-            partir de sm, em vez de virarem quatro botões ilegíveis lado a
-            lado numa tela estreita. */}
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          <Link
-            href={caminhoPerfilCorretor(basePath, membroId)}
-            className={buttonVariants({ size: "lg", className: "w-full sm:w-auto" })}
+        {whatsappHref && (
+          <>
+          <RastreioCliqueWhatsApp
+            orgSlug={orgSlug}
+            imovelId={imovelId}
+            placement="BROKER_CARD"
           >
-            Ver perfil completo
-          </Link>
-
-          {telefoneHref && (
             <a
-              href={telefoneHref}
-              aria-label={`Ligar para ${corretor.nome}`}
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              // O texto acompanha o ícone: quem usa leitor de tela, e
+              // quem simplesmente não reconhece o glifo, recebe a mesma
+              // informação. O aria-label nomeia a pessoa, porque a
+              // página tem outros CTAs de WhatsApp e "Falar no WhatsApp"
+              // sozinho não distinguiria este.
+              aria-label={`Falar no WhatsApp com ${corretor.nome}`}
+              // size "lg" é o maior da escala deste design system (36px,
+              // a mesma altura do CTA principal do card lateral) — e no
+              // mobile a largura total dá o alvo de toque confortável.
+              // Inventar um botão mais alto só aqui deixaria o card com
+              // cara de peça estrangeira.
               className={buttonVariants({
                 variant: "outline",
                 size: "lg",
-                className: "w-full sm:w-auto",
+                className: "w-full",
               })}
             >
-              <IconeTelefone className="size-5" aria-hidden />
-              {formatarTelefone(contatos.telefone!)}
+              <IconeWhatsApp className="size-5" aria-hidden />
+              Falar no WhatsApp
             </a>
-          )}
+          </RastreioCliqueWhatsApp>
+          </>
+        )}
 
-          {whatsappHref && (
-            <>
-            <RastreioCliqueWhatsApp
-              orgSlug={orgSlug}
-              imovelId={imovelId}
-              placement="BROKER_CARD"
-            >
-              <a
-                href={whatsappHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                // O texto acompanha o ícone: quem usa leitor de tela, e
-                // quem simplesmente não reconhece o glifo, recebe a mesma
-                // informação. O aria-label nomeia a pessoa, porque a
-                // página tem outros CTAs de WhatsApp e "Falar no WhatsApp"
-                // sozinho não distinguiria este.
-                aria-label={`Falar no WhatsApp com ${corretor.nome}`}
-                // size "lg" é o maior da escala deste design system (36px,
-                // a mesma altura do CTA principal do card lateral) — e no
-                // mobile a largura total dá o alvo de toque confortável.
-                // Inventar um botão mais alto só aqui deixaria o card com
-                // cara de peça estrangeira.
-                className={buttonVariants({
-                  variant: "outline",
-                  size: "lg",
-                  className: "w-full sm:w-auto",
-                })}
-              >
-                <IconeWhatsApp className="size-5" aria-hidden />
-                Falar no WhatsApp
-              </a>
-            </RastreioCliqueWhatsApp>
-            </>
-          )}
-
-          {emailHref && (
-            <a
-              href={emailHref}
-              aria-label={`Enviar e-mail para ${corretor.nome}`}
-              className={buttonVariants({
-                variant: "outline",
-                size: "lg",
-                className: "w-full sm:w-auto",
-              })}
-            >
-              <IconeEmail className="size-5" aria-hidden />
-              E-mail
-            </a>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+        {emailHref && (
+          <a
+            href={emailHref}
+            aria-label={`Enviar e-mail para ${corretor.nome}`}
+            className={buttonVariants({
+              variant: "outline",
+              size: "lg",
+              className: "w-full",
+            })}
+          >
+            <IconeEmail className="size-5" aria-hidden />
+            E-mail
+          </a>
+        )}
+      </div>
+    </section>
   );
 }

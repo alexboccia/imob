@@ -481,6 +481,7 @@ export default async function DetalheImovelPage({
         whatsappHref={whatsappHref}
         mensagemContato={mensagemContato}
         orgSlug={orgSlug}
+        basePath={basePath}
         nome={organization.name}
         urlCompartilhamento={urlCanonica}
         // Fase 45 — conteúdo editorial da foto de destaque. O selo de
@@ -649,31 +650,31 @@ export default async function DetalheImovelPage({
               esta seção diz o que há em volta. Some sozinha sem locais. */}
           <LocaisProximos locais={imovel.nearbyPlaces} />
 
-          {/* Fecha a coluna de conteúdo: o visitante já viu o imóvel
-              inteiro, e aqui fica quem pode mostrá-lo. No mobile esta é
-              também a última coisa antes do card de contato, o que
-              encadeia "quem atende" com "falar com a imobiliária". Só
-              existe com opt-in do profissional. */}
-          {corretorPublico && (
-            <CardCorretorImovel
-              corretor={corretorPublico}
-              membroId={imovel.responsibleMember!.id}
-              basePath={basePath}
-              contatos={contatosPublicosDoCorretor(imovel.responsibleMember)}
-              whatsappHref={whatsappCorretorHref}
-              imovelId={imovel.id}
-              orgSlug={orgSlug}
-            />
-          )}
         </div>
 
+        {/* Fase 51 — a lateral inteira: preço e CTAs, o corretor
+            responsável, o formulário e a política de privacidade. */}
         <CardContatoImovel
           imovel={imovel}
           imovelId={imovel.id}
           orgSlug={orgSlug}
+          basePath={basePath}
           whatsappHref={whatsappHref}
           mensagemFormulario={mensagemContato}
           idFormulario={idFormulario}
+          corretor={
+            corretorPublico && (
+              <CardCorretorImovel
+                corretor={corretorPublico}
+                membroId={imovel.responsibleMember!.id}
+                basePath={basePath}
+                contatos={contatosPublicosDoCorretor(imovel.responsibleMember)}
+                whatsappHref={whatsappCorretorHref}
+                imovelId={imovel.id}
+                orgSlug={orgSlug}
+              />
+            )
+          }
         />
       </div>
 

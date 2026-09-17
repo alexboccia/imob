@@ -6,6 +6,7 @@ import { buscarBranding } from "@/lib/branding";
 import { resolverTemaEfetivo } from "@/lib/branding/temas";
 import { getOrganizationBySlug } from "@/lib/tenant";
 import { resolverBasePath } from "@/lib/site-url";
+import { caminhoPoliticaPrivacidade } from "@/lib/politica-privacidade";
 import { withOrganization } from "@/lib/tenant-context";
 import { DESCRICAO_PADRAO_SITE } from "@/lib/site-config";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -172,7 +173,14 @@ export default async function PublicLayout({
         // Contato acrescentado só no footer (rota pública real,
         // /[orgSlug]/contato) — o menu principal continua com os mesmos
         // 3 links de sempre, não mexido aqui.
-        navLinks={[...navLinks(basePath), { href: `${basePath}/contato`, label: "Contato" }]}
+        // Fase 51 — a política entra no rodapé (e só nele, fora do
+        // formulário): é onde se procura por informação institucional, e
+        // o menu principal continua sendo sobre imóveis.
+        navLinks={[
+          ...navLinks(basePath),
+          { href: `${basePath}/contato`, label: "Contato" },
+          { href: caminhoPoliticaPrivacidade(basePath), label: "Política de Privacidade" },
+        ]}
         redesSociais={{
           instagram: config.instagram,
           facebook: config.facebook,
@@ -185,6 +193,7 @@ export default async function PublicLayout({
         whatsapp={config.whatsapp}
         telefone={config.telefone || config.whatsapp}
         orgSlug={orgSlug}
+        basePath={basePath}
       />
     </div>
   );

@@ -4,6 +4,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { IconeWhatsApp } from "@/components/icons";
 import { RastreioCliqueWhatsApp } from "@/components/analytics/RastreioCliqueWhatsApp";
 import { ValoresDoImovel, type ValoresImovel } from "@/components/imovel/ValoresDoImovel";
+import { TITULO_BLOCO } from "@/lib/site-typography";
 
 // Card lateral de conversão do detalhe do imóvel. A hierarquia é
 // deliberada — preço, CTA de WhatsApp, divisor, formulário — porque é
@@ -13,11 +14,11 @@ import { ValoresDoImovel, type ValoresImovel } from "@/components/imovel/Valores
 // Extraído do detalhe porque a página de lançamento precisa do mesmo
 // card, com os mesmos dois modos (com e sem WhatsApp configurado).
 //
-// A identidade do corretor MOROU aqui, entre o CTA e o formulário. Saiu
-// para CardCorretorImovel, na coluna de conteúdo: ali ela tem largura
-// para respirar e aqui a hierarquia de conversão volta a ser só preço →
-// CTA → formulário. Não é duplicação removida, é mudança de lugar — ver
-// o cabeçalho daquele arquivo.
+// Fase 51 — a hierarquia passou a ser preço/CTAs → corretor responsável
+// → "Receba mais informações" (o formulário) → política de privacidade.
+// O corretor está aqui de novo (saíra para a coluna de conteúdo na Fase
+// 43): quem atende vem logo antes de quem pergunta. A coluna de conteúdo
+// não o repete.
 //
 // Fase 43 — o cabeçalho da ficha passou a mostrar os mesmos valores no
 // desktop. A repetição é intencional: lá é a decisão imediata, aqui é a
@@ -27,9 +28,11 @@ export function CardContatoImovel({
   imovel,
   imovelId,
   orgSlug,
+  basePath,
   whatsappHref,
   mensagemFormulario,
   idFormulario,
+  corretor,
 }: {
   imovel: ValoresImovel;
   imovelId: string;
@@ -41,6 +44,9 @@ export function CardContatoImovel({
   whatsappHref: string | null;
   mensagemFormulario: string;
   idFormulario: string;
+  basePath: string;
+  /** O corretor responsável, quando ele publicou o perfil. */
+  corretor?: React.ReactNode;
 }) {
   return (
     <Card data-card-contato className="h-fit lg:sticky lg:top-[calc(var(--site-header-height,88px)+1rem)]">
@@ -67,13 +73,16 @@ export function CardContatoImovel({
           </RastreioCliqueWhatsApp>
         )}
 
+        {corretor}
+
         <div id={idFormulario} className="space-y-3 border-t pt-4 scroll-mt-24">
-          <p className="text-sm font-medium">Enviar mensagem</p>
+          <h2 className={TITULO_BLOCO}>Receba mais informações</h2>
           <FormularioContato
             imovelId={imovelId}
             mensagemPreenchida={mensagemFormulario}
             idPrefixo="aside-"
             orgSlug={orgSlug}
+            basePath={basePath}
           />
         </div>
       </CardContent>

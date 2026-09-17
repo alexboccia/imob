@@ -2262,6 +2262,24 @@ async function main() {
     });
   }
 
+  // Fase 51 — a Sônia é o corretor COMPLETO do seed: CRECI, bio, foto e
+  // os três contatos públicos. É com ela que a lateral da ficha prova o
+  // bloco inteiro sem depender do painel. Continua despublicada por
+  // padrão (publicProfileEnabled só muda pelo spec que a publica).
+  await prisma.organizationMember.update({
+    where: { id: IDS_E2E.membroPortfolioSonia },
+    data: {
+      publicCreci: "CRECI-SP 111.222-J",
+      publicBio: "Atende Centro e Jardins há dez anos, com foco em apartamentos para morar.",
+      publicPhotoUrl: `data:image/svg+xml;utf8,${encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><title>foto-sonia</title><rect width="200" height="200" fill="#0f766e"/><text x="100" y="120" font-family="sans-serif" font-size="72" fill="#fff" text-anchor="middle">S</text></svg>'
+      )}`,
+      publicPhone: "1133224455",
+      publicEmail: "sonia.publico@e2e.test",
+      publicWhatsapp: "11955550000",
+    },
+  });
+
   await garantirImovel({
     id: IDS_E2E.imovelPortfolioSonia,
     organizationId: orgPortfolio.organization.id,

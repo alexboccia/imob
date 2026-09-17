@@ -1382,7 +1382,7 @@ test.describe("Card do corretor responsável", () => {
   const CRECI = "CRECI 33.221-J";
   const BIO = "Atendo a zona sul ha dez anos, com foco em apartamentos de familia.";
 
-  test("publicado: card aparece com nome, CRECI e bio, na coluna de conteúdo", async ({
+  test("publicado: card aparece com nome, CRECI e bio, na lateral", async ({
     page,
   }) => {
     await login(page, ORG_A);
@@ -1397,7 +1397,7 @@ test.describe("Card do corretor responsável", () => {
       ).toBeVisible();
       await expect(card.getByText(CRECI)).toBeVisible();
       await expect(card.getByText(BIO)).toBeVisible();
-      // Uma identidade só na página: ela saiu do card lateral.
+      // Uma identidade só na página (Fase 51: dentro do card lateral).
       await expect(page.getByText(CRECI)).toHaveCount(1);
     } finally {
       // Rede de segurança: num timeout a página já está fechada e a

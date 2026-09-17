@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { CheckCircle2, AlertCircle } from "lucide-react";
 import { enviarContato } from "@/app/[orgSlug]/actions";
 import { CamposAntiSpam } from "@/components/CamposAntiSpam";
@@ -11,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { caminhoPoliticaPrivacidade } from "@/lib/politica-privacidade";
 
 const estadoInicial = { sucesso: false, erro: undefined as string | undefined };
 
@@ -19,11 +21,19 @@ export function FormularioContato({
   mensagemPreenchida = "",
   idPrefixo = "",
   orgSlug,
+  basePath,
 }: {
   imovelId?: string;
   mensagemPreenchida?: string;
   idPrefixo?: string;
   orgSlug: string;
+  /**
+   * Prefixo público da organização. Vem de fora porque PUBLIC_ORG_SLUG é
+   * variável de servidor: no navegador ela não existe, e resolver o
+   * caminho aqui daria o prefixo errado. Sem ele, o texto de privacidade
+   * continua, só não vira link.
+   */
+  basePath?: string;
 }) {
   const [estado, formAction, pendente] = useActionState(
     enviarContato.bind(null, orgSlug),
@@ -86,9 +96,26 @@ export function FormularioContato({
       <Button type="submit" disabled={pendente} className="w-full">
         {pendente ? "Enviando..." : "Enviar mensagem"}
       </Button>
+      {/* Fase 51 — o mesmo texto de sempre, agora com o caminho para a
+          página que explica o tratamento dos dados. Link de verdade, com
+          o próprio nome da política como texto — nada de "clique aqui". */}
       <p className="text-xs text-gray-400">
         Seus dados serão usados apenas para retornarmos seu contato
         {imovelId ? " sobre este imóvel" : ""}.
+        {basePath !== undefined && (
+          <>
+            {" "}
+            Consulte a{" "}
+            <Link
+              href={caminhoPoliticaPrivacidade(basePath)}
+              data-link-politica
+              className="text-link underline underline-offset-2 hover:no-underline"
+            >
+              Política de Privacidade
+            </Link>
+            .
+          </>
+        )}
       </p>
     </form>
   );

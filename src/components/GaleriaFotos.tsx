@@ -84,6 +84,7 @@ export function GaleriaFotos({
   whatsappHref,
   mensagemContato,
   orgSlug,
+  basePath,
   nome,
   tituloDestaque = null,
   subtituloDestaque = null,
@@ -99,6 +100,7 @@ export function GaleriaFotos({
   whatsappHref: string | null;
   mensagemContato: string;
   orgSlug: string;
+  basePath: string;
   nome: string;
   /** Fase 45 — conteúdo do IMÓVEL exibido sobre a foto de destaque. */
   tituloDestaque?: string | null;
@@ -693,6 +695,7 @@ export function GaleriaFotos({
               whatsappHref={whatsappHref ?? undefined}
               className="bg-white text-gray-900 rounded-md px-4 py-2 text-sm font-medium hover:bg-gray-100"
               orgSlug={orgSlug}
+              basePath={basePath}
               nome={nome}
             >
               Enviar mensagem
