@@ -16,7 +16,11 @@ import { CampoMoeda } from "@/components/admin/CampoMoeda";
 import { ErroCampo } from "@/components/admin/ErroCampo";
 import { LocaisProximosEditor } from "@/components/admin/LocaisProximosEditor";
 import type { LocalProximo } from "@/lib/locais-proximos";
-import { LIMITE_FRASE_DESTAQUE } from "@/lib/property-mapper";
+import {
+  LIMITE_FRASE_DESTAQUE,
+  LIMITE_SUBTITULO_DESTAQUE,
+  LIMITE_TITULO_DESTAQUE,
+} from "@/lib/property-mapper";
 import {
   SEM_EMPREENDIMENTO,
   ROTULO_SEM_EMPREENDIMENTO,
@@ -46,6 +50,9 @@ import {
 } from "@/components/ui/select";
 
 type ImovelFormValues = {
+  /** Fase 45 — título/subtítulo exibidos sobre a foto de destaque. */
+  tituloDestaque: string | null;
+  subtituloDestaque: string | null;
   /** Fase 40 — frase editorial opcional, exibida abaixo da descrição. */
   fraseDestaque: string | null;
   /** Fase 38 — id do empreendimento, ou ausente para unidade avulsa. */
@@ -589,8 +596,54 @@ export function ImovelForm({
             A primeira foto é a capa nas listagens e no compartilhamento.
           </CardDescription>
         </CardHeader>
-        <CardContent className="min-w-0">
+        <CardContent className="min-w-0 space-y-6">
+          {/* Fase 45 — conteúdo da FOTO DE DESTAQUE. Fica aqui, junto da
+              explicação da capa, e acima da lista de fotos de propósito:
+              pertence ao imóvel, não a uma foto — trocar a capa não muda
+              este texto. Separado da lista por uma linha, como as
+              Configurações dividem assuntos próximos dentro de um card. */}
+          <div data-conteudo-destaque className="min-w-0 space-y-4 border-b pb-6">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Conteúdo da foto de destaque</p>
+              <p className="text-xs text-muted-foreground">
+                Exibidos sobre a foto de destaque na página pública. Em
+                lançamentos, a previsão de entrega informada em Divulgação
+                também aparece sobre ela.
+              </p>
+            </div>
+            <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="tituloDestaque">Título (opcional)</Label>
+                <Input
+                  id="tituloDestaque"
+                  name="tituloDestaque"
+                  defaultValue={v.tituloDestaque ?? ""}
+                  maxLength={LIMITE_TITULO_DESTAQUE}
+                  placeholder="Ex.: Um novo jeito de viver no bairro"
+                  autoComplete="off"
+                />
+                <ErroCampo erros={estado.fieldErrors?.tituloDestaque} />
+              </div>
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="subtituloDestaque">Subtítulo (opcional)</Label>
+                {/* Duas linhas: com até 160 caracteres, um campo de uma
+                    linha esconderia o fim do texto. Quebras digitadas
+                    viram espaço no servidor. */}
+                <Textarea
+                  id="subtituloDestaque"
+                  name="subtituloDestaque"
+                  defaultValue={v.subtituloDestaque ?? ""}
+                  maxLength={LIMITE_SUBTITULO_DESTAQUE}
+                  rows={2}
+                  placeholder="Ex.: Conforto, lazer e boa localização."
+                />
+                <ErroCampo erros={estado.fieldErrors?.subtituloDestaque} />
+              </div>
+            </div>
+          </div>
+
           <MediaUploader midiasIniciais={midiasIniciais} propertyId={propertyId} />
+          <ErroCampo erros={estado.fieldErrors?.midiasJson} />
         </CardContent>
       </Card>
 

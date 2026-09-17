@@ -108,6 +108,16 @@ export const IDS_E2E = {
   imovelGaleria4: "e2e-imovel-galeria-4",
   imovelGaleria5: "e2e-imovel-galeria-5",
   imovelGaleria7: "e2e-imovel-galeria-7",
+  // Fase 45 — conteúdo editorial da galeria (título, subtítulo, selo de
+  // entrega e legendas), um imóvel por combinação.
+  imovelEditorialTitulo: "e2e-imovel-editorial-titulo",
+  imovelEditorialSubtitulo: "e2e-imovel-editorial-subtitulo",
+  imovelEditorialAmbos: "e2e-imovel-editorial-ambos",
+  imovelEditorialEntrega: "e2e-imovel-editorial-entrega",
+  imovelEditorialDataSemLancamento: "e2e-imovel-editorial-data-pronto",
+  imovelEditorialLancamentoSemData: "e2e-imovel-editorial-lancamento-sem-data",
+  imovelEditorialCompleto: "e2e-imovel-editorial-completo",
+  imovelEditorialAdmin: "e2e-imovel-editorial-admin",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -298,6 +308,10 @@ async function garantirImovel(opcoes: {
   // este valor; todos os demais imóveis do seed continuam sem frase, que
   // é o estado normal e o caso "bloco ausente".
   highlightPhrase?: string | null;
+  // Fase 45 — conteúdo editorial da foto de destaque. Default null em
+  // todos os demais fixtures (e resetado a cada seed pelo update).
+  heroTitle?: string | null;
+  heroSubtitle?: string | null;
 }) {
   // update reseta os mesmos campos do create — specs de edição (ex: "editar
   // imóvel") mudam o título do imóvel seedado, então sem isso o seed
@@ -334,6 +348,8 @@ async function garantirImovel(opcoes: {
     propertyTax: opcoes.propertyTax ?? null,
     developer: opcoes.developer ?? null,
     highlightPhrase: opcoes.highlightPhrase ?? null,
+    heroTitle: opcoes.heroTitle ?? null,
+    heroSubtitle: opcoes.heroSubtitle ?? null,
   } as const;
 
   return prisma.property.upsert({
@@ -3466,13 +3482,28 @@ async function main() {
         `<text x="800" y="600" font-size="220" text-anchor="middle" fill="#ffffff" font-family="sans-serif">Foto ${n}</text>` +
         `</svg>`
     );
-  const imovelDaGaleria = async (id: string, fotos: number) => {
+  const imovelDaGaleria = async (
+    id: string,
+    fotos: number,
+    extra: {
+      title?: string;
+      heroTitle?: string | null;
+      heroSubtitle?: string | null;
+      isLaunch?: boolean;
+      constructionStage?: "PRE_CONSTRUCTION" | "UNDER_CONSTRUCTION" | "READY_TO_MOVE" | null;
+      deliveryForecast?: Date | null;
+      // Fase 45 — legenda da foto N em legendas[N-1].
+      legendas?: (string | null)[];
+    } = {}
+  ) => {
     const organizationId = orgRecursos.organization.id;
+    const { legendas = [], title, ...campos } = extra;
     const imovel = await garantirImovel({
       id,
       organizationId,
-      title: `Imovel Galeria ${fotos} E2E`,
+      title: title ?? `Imovel Galeria ${fotos} E2E`,
       price: 700000,
+      ...campos,
     });
     for (let n = fotos; n >= 1; n--) {
       await prisma.media.create({
@@ -3483,6 +3514,7 @@ async function main() {
           url: fotoDaGaleria(n),
           isCover: n === 1,
           order: n - 1,
+          caption: legendas[n - 1] ?? null,
         },
       });
     }
@@ -3494,6 +3526,80 @@ async function main() {
   await imovelDaGaleria(IDS_E2E.imovelGaleria4, 4);
   await imovelDaGaleria(IDS_E2E.imovelGaleria5, 5);
   await imovelDaGaleria(IDS_E2E.imovelGaleria7, 7);
+
+  // =====================================================================
+  // Fase 45 — CONTEÚDO EDITORIAL DA GALERIA (Organização W)
+  // =====================================================================
+  // Textos de FIXTURE, escolhidos para o teste — nada disto existe no
+  // produto. Novembro/2027 gravado como o formulário grava: dia 1, UTC.
+  const NOV_2027 = new Date(Date.UTC(2027, 10, 1));
+  const TITULO_HERO = "Um novo jeito de viver em Santana";
+  const SUBTITULO_HERO = "Conforto, modernidade e localização privilegiada.";
+  await imovelDaGaleria(IDS_E2E.imovelEditorialTitulo, 5, {
+    title: "Imovel Editorial Titulo E2E",
+    heroTitle: TITULO_HERO,
+    // A capa tem legenda, mas há título: a legenda da capa não aparece
+    // sobre o destaque.
+    legendas: ["Fachada"],
+  });
+  await imovelDaGaleria(IDS_E2E.imovelEditorialSubtitulo, 5, {
+    title: "Imovel Editorial Subtitulo E2E",
+    heroSubtitle: SUBTITULO_HERO,
+  });
+  await imovelDaGaleria(IDS_E2E.imovelEditorialAmbos, 5, {
+    title: "Imovel Editorial Ambos E2E",
+    heroTitle: TITULO_HERO,
+    heroSubtitle: SUBTITULO_HERO,
+    legendas: [
+      "Fachada",
+      "Áreas comuns",
+      null,
+      "Suíte máster com varanda gourmet integrada, vista livre e acabamento premium",
+      "<script>alert(1)</script>",
+    ],
+  });
+  await imovelDaGaleria(IDS_E2E.imovelEditorialEntrega, 5, {
+    title: "Imovel Editorial Entrega E2E",
+    isLaunch: true,
+    deliveryForecast: NOV_2027,
+    // Sem título/subtítulo: a legenda da capa pode aparecer.
+    legendas: ["Fachada"],
+  });
+  await imovelDaGaleria(IDS_E2E.imovelEditorialDataSemLancamento, 5, {
+    title: "Imovel Editorial Pronto E2E",
+    isLaunch: false,
+    constructionStage: "READY_TO_MOVE",
+    deliveryForecast: NOV_2027,
+  });
+  await imovelDaGaleria(IDS_E2E.imovelEditorialLancamentoSemData, 5, {
+    title: "Imovel Editorial Sem Data E2E",
+    isLaunch: true,
+    deliveryForecast: null,
+  });
+  await imovelDaGaleria(IDS_E2E.imovelEditorialCompleto, 7, {
+    title: "Imovel Editorial Completo E2E",
+    heroTitle: TITULO_HERO,
+    heroSubtitle: SUBTITULO_HERO,
+    isLaunch: true,
+    constructionStage: "UNDER_CONSTRUCTION",
+    deliveryForecast: NOV_2027,
+    legendas: [
+      "Fachada",
+      "Áreas comuns",
+      "Apartamento decorado",
+      "Academia",
+      "Espaço gourmet",
+      "Piscina",
+      null,
+    ],
+  });
+  // Ponto de partida do fluxo admin → público: lançamento com data, sem
+  // nenhum texto editorial. A spec preenche tudo pelo formulário.
+  await imovelDaGaleria(IDS_E2E.imovelEditorialAdmin, 5, {
+    title: "Imovel Editorial Admin E2E",
+    isLaunch: true,
+    deliveryForecast: NOV_2027,
+  });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);

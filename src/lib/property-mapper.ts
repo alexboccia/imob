@@ -20,6 +20,44 @@ const booleanCheckbox = z.preprocess((v) => v === "on", z.boolean());
 // campo: um limite escrito em dois lugares diverge na primeira mudança.
 export const LIMITE_FRASE_DESTAQUE = 180;
 
+// Fase 45 — conteúdo editorial da galeria. Mesma lógica da frase: são
+// textos curtos que vivem SOBRE uma foto, e o limite protege a foto.
+export const LIMITE_TITULO_DESTAQUE = 80;
+export const LIMITE_SUBTITULO_DESTAQUE = 160;
+export const LIMITE_LEGENDA_FOTO = 80;
+
+/**
+ * Legenda de uma foto como será gravada: texto de uma linha, sem espaços
+ * nas pontas nem quebras internas. Vazio (ou só espaços) vira null — as
+ * duas formas significariam "sem legenda".
+ */
+export function normalizarLegenda(bruto: unknown): string | null {
+  if (typeof bruto !== "string") return null;
+  const texto = bruto.replace(/\s+/g, " ").trim();
+  return texto || null;
+}
+
+function textoDeUmaLinha(valor: unknown) {
+  return typeof valor === "string" ? valor.replace(/\s+/g, " ").trim() : valor;
+}
+
+type ItemMidiaBruto = {
+  tipo?: unknown;
+  url?: unknown;
+  ehCapa?: unknown;
+  legenda?: unknown;
+};
+
+function lerMidiasBrutas(json: string | undefined): ItemMidiaBruto[] {
+  if (!json) return [];
+  try {
+    const lista = JSON.parse(json);
+    return Array.isArray(lista) ? lista : [];
+  } catch {
+    return [];
+  }
+}
+
 export const imovelSchema = z.object({
   titulo: z.string().min(3, "Informe um título com ao menos 3 caracteres."),
   descricao: z.string().optional(),
@@ -87,7 +125,49 @@ export const imovelSchema = z.object({
     .or(z.literal("")),
   previsaoEntrega: z.string().optional(),
   construtora: z.string().optional(),
-  midiasJson: z.string().optional(),
+  // Fase 45 — título e subtítulo da foto de destaque. Mesma regra da
+  // frase: trim antes do limite, vazio vira null em camposImovel.
+  // Uma linha de texto puro: quebras e espaços repetidos viram um espaço
+  // ANTES do limite — o layout decide onde quebrar, não o cadastro.
+  tituloDestaque: z.preprocess(
+    textoDeUmaLinha,
+    z
+      .string()
+      .max(
+        LIMITE_TITULO_DESTAQUE,
+        `O título do destaque deve ter no máximo ${LIMITE_TITULO_DESTAQUE} caracteres.`
+      )
+      .optional()
+  ),
+  subtituloDestaque: z.preprocess(
+    textoDeUmaLinha,
+    z
+      .string()
+      .max(
+        LIMITE_SUBTITULO_DESTAQUE,
+        `O subtítulo do destaque deve ter no máximo ${LIMITE_SUBTITULO_DESTAQUE} caracteres.`
+      )
+      .optional()
+  ),
+  // Fase 45 — a legenda de cada foto viaja DENTRO do item da mídia (o
+  // mesmo objeto que carrega a url), então acompanha a foto em qualquer
+  // reordenação ou troca de capa. O limite é validado aqui, no servidor:
+  // uma legenda longa demais recusa o salvamento em vez de ser cortada.
+  midiasJson: z
+    .string()
+    .optional()
+    .superRefine((json, ctx) => {
+      const longa = lerMidiasBrutas(json).some((m) => {
+        const legenda = normalizarLegenda(m.legenda);
+        return m.tipo === "FOTO" && legenda !== null && legenda.length > LIMITE_LEGENDA_FOTO;
+      });
+      if (longa) {
+        ctx.addIssue({
+          code: "custom",
+          message: `Cada legenda de foto deve ter no máximo ${LIMITE_LEGENDA_FOTO} caracteres.`,
+        });
+      }
+    }),
   // Fase 42 — a lista COMPLETA de locais próximos, como o formulário a
   // montou. Validada item a item em locais-proximos.ts.
   locaisProximosJson: z.string().optional(),
@@ -188,6 +268,10 @@ export function camposImovel(dados: DadosImovelFormulario) {
     // formas tornaria a condição de renderização ambígua. É também o que
     // permite LIMPAR a frase pelo próprio formulário.
     highlightPhrase: dados.fraseDestaque || null,
+    // Fase 45 — vazio (ou só espaços, já removidos pelo schema) = NULL:
+    // é o que permite limpar o título/subtítulo pelo próprio formulário.
+    heroTitle: dados.tituloDestaque || null,
+    heroSubtitle: dados.subtituloDestaque || null,
   };
 }
 
@@ -203,6 +287,7 @@ export type MidiaParaCriar = {
   url: string;
   isCover: boolean;
   order: number;
+  caption: string | null;
 };
 
 export function parseMidias(json: string | undefined): MidiaParaCriar[] {
@@ -212,6 +297,7 @@ export function parseMidias(json: string | undefined): MidiaParaCriar[] {
       tipo: "FOTO" | "VIDEO" | "PLANTA" | "TOUR";
       url: string;
       ehCapa: boolean;
+      legenda?: unknown;
     }[];
     return midias
       // Fase 39 — TOUR com endereço inseguro é DESCARTADO na escrita,
@@ -219,11 +305,15 @@ export function parseMidias(json: string | undefined): MidiaParaCriar[] {
       // link aceita javascript:, e nenhuma das duas pontas deve confiar
       // na outra.
       .filter((m) => m.tipo !== "TOUR" || urlTourSegura(m.url) !== null)
+      // Só os campos listados aqui chegam ao banco: um `id`,
+      // `organizationId` ou `propertyId` injetado no JSON é ignorado.
       .map((m, i) => ({
       type: TIPO_MIDIA_PARA_MEDIA_TYPE[m.tipo],
       url: m.url,
       isCover: m.ehCapa,
       order: i,
+      // Fase 45 — legenda é só de foto; nos demais tipos, nada é gravado.
+      caption: m.tipo === "FOTO" ? normalizarLegenda(m.legenda) : null,
     }));
   } catch {
     return [];

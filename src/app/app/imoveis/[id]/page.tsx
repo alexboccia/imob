@@ -145,6 +145,9 @@ export default async function EditarImovelPage({
           // Fase 40 — o valor atual, para o formulário abrir com a frase
           // já cadastrada (e permitir limpá-la apagando o campo).
           fraseDestaque: imovel.highlightPhrase,
+          // Fase 45 — conteúdo editorial da foto de destaque.
+          tituloDestaque: imovel.heroTitle,
+          subtituloDestaque: imovel.heroSubtitle,
           tipo: imovel.type,
           finalidade: imovel.purpose,
           status: imovel.status,
@@ -188,6 +191,8 @@ export default async function EditarImovelPage({
           tipo: MEDIA_TYPE_PARA_TIPO_MIDIA[m.type],
           url: m.url,
           ehCapa: m.isCover,
+          // Fase 45 — a legenda volta no mesmo item da foto.
+          ...(m.type === "PHOTO" && m.caption ? { legenda: m.caption } : {}),
         }))}
         materiaisIniciais={imovel.presentationMaterials.map((m) => ({
           name: m.name,

@@ -5,12 +5,20 @@ import Image from "next/image";
 import { IconeFechar } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { urlTourSegura } from "@/lib/recursos-imovel";
+import { LIMITE_LEGENDA_FOTO } from "@/lib/property-mapper";
 
 export type MidiaItem = {
   tipo: "FOTO" | "VIDEO" | "PLANTA" | "TOUR";
   url: string;
   ehCapa: boolean;
+  /**
+   * Fase 45 — legenda opcional da foto. Mora no MESMO objeto que a url:
+   * reordenar ou trocar a capa move o objeto inteiro, então a legenda
+   * nunca se separa da foto (não há mapeamento por posição).
+   */
+  legenda?: string;
 };
 
 export function MediaUploader({
@@ -132,6 +140,12 @@ export function MediaUploader({
     );
   }
 
+  function definirLegenda(url: string, legenda: string) {
+    setMidias((atual) =>
+      atual.map((m) => (m.tipo === "FOTO" && m.url === url ? { ...m, legenda } : m))
+    );
+  }
+
   function remover(index: number) {
     setMidias((atual) => atual.filter((_, i) => i !== index));
   }
@@ -201,16 +215,24 @@ export function MediaUploader({
         {fotos.length > 0 && (
           <>
             <p className="text-xs text-gray-400 mt-3">
-              Arraste as fotos para reordenar.
+              Arraste as fotos (pela imagem) para reordenar.
             </p>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mt-1">
+            {/* Colunas pela largura do próprio bloco: cada foto agora tem um
+                campo de legenda, que precisa de espaço para ser digitável
+                (em 320px, três colunas deixariam ~75px por campo). */}
+            <div className="@container/fotos">
+            <div className="grid grid-cols-2 @md/fotos:grid-cols-3 @2xl/fotos:grid-cols-4 gap-3 mt-1">
               {fotos.map((foto, indexFoto) => {
                 const index = midias.indexOf(foto);
+                const idLegenda = `legenda-foto-${indexFoto}`;
                 return (
+                  // Só a IMAGEM é arrastável; o item inteiro continua sendo
+                  // área de soltar. Com o item todo `draggable`, clicar e
+                  // arrastar dentro do campo de legenda (para selecionar
+                  // texto) iniciava um arraste da foto.
                   <div
                     key={foto.url}
-                    draggable
-                    onDragStart={() => setIndiceArrastado(indexFoto)}
+                    data-foto-admin
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={() => {
                       if (
@@ -221,15 +243,20 @@ export function MediaUploader({
                       }
                       setIndiceArrastado(null);
                     }}
-                    onDragEnd={() => setIndiceArrastado(null)}
-                    className={`relative cursor-move ${
+                    className={`relative min-w-0 ${
                       indiceArrastado === indexFoto ? "opacity-40" : ""
                     }`}
                   >
-                    <div className="relative aspect-square bg-gray-100 rounded-md overflow-hidden border">
+                    <div
+                      draggable
+                      onDragStart={() => setIndiceArrastado(indexFoto)}
+                      onDragEnd={() => setIndiceArrastado(null)}
+                      data-arrastar-foto
+                      className="relative aspect-square cursor-move bg-gray-100 rounded-md overflow-hidden border"
+                    >
                       <Image
                         src={foto.url}
-                        alt="Foto do imóvel"
+                        alt={`Foto ${indexFoto + 1}`}
                         fill
                         className="object-cover pointer-events-none"
                       />
@@ -256,9 +283,28 @@ export function MediaUploader({
                         Capa
                       </label>
                     </div>
+                    <div className="mt-2 min-w-0 space-y-1">
+                      <Label htmlFor={idLegenda} className="text-xs font-normal text-gray-600">
+                        Legenda (opcional)
+                      </Label>
+                      <Input
+                        id={idLegenda}
+                        value={foto.legenda ?? ""}
+                        maxLength={LIMITE_LEGENDA_FOTO}
+                        placeholder="Ex.: Academia"
+                        autoComplete="off"
+                        className="h-8 text-sm md:text-sm"
+                        onChange={(e) => definirLegenda(foto.url, e.target.value)}
+                        // Enter aqui não pode enviar o formulário do imóvel.
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.preventDefault();
+                        }}
+                      />
+                    </div>
                   </div>
                 );
               })}
+            </div>
             </div>
           </>
         )}

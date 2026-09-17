@@ -54,6 +54,7 @@ import { RastreioVisualizacaoImovel } from "@/components/analytics/RastreioVisua
 import { BarraCtaImovel } from "@/components/imovel/BarraCtaImovel";
 import {
   ehLancamento,
+  entregaPrevistaDoDestaque,
   previsaoEntregaPorExtenso,
   rotuloEstagioObra,
 } from "@/lib/imovel-lancamento";
@@ -425,6 +426,11 @@ export default async function DetalheImovelPage({
         mensagemContato={mensagemContato}
         orgSlug={orgSlug}
         nome={organization.name}
+        // Fase 45 — conteúdo editorial da foto de destaque. O selo de
+        // entrega usa a MESMA regra do cabeçalho (lançamento + data).
+        tituloDestaque={imovel.heroTitle}
+        subtituloDestaque={imovel.heroSubtitle}
+        entregaPrevista={entregaPrevistaDoDestaque(imovel)}
       />
 
       {/* O espaço pra barra fixa de conversão é reservado no <body>

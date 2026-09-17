@@ -74,3 +74,23 @@ export function previsaoEntregaPorExtenso(data: Date | null): string | null {
 }
 
 export { formatarMesAno };
+
+// Fase 45 — "Nov/2027" para o selo da foto de destaque. Mês abreviado
+// com inicial maiúscula e ano completo; getUTC* pelo mesmo motivo de
+// previsaoEntregaPorExtenso (o mês é gravado em UTC, dia 1).
+export function previsaoEntregaMesAno(data: Date | null): string | null {
+  if (!data) return null;
+  const mes = MESES_EXTENSO[data.getUTCMonth()];
+  if (!mes) return null;
+  return `${mes.slice(0, 3)}/${data.getUTCFullYear()}`;
+}
+
+// Fase 45 — o selo "Entrega prevista" da galeria segue a MESMA regra do
+// cabeçalho da ficha: só em lançamento (rótulo ou obra em andamento) e só
+// com data cadastrada. Uma data num imóvel pronto não vira selo.
+export function entregaPrevistaDoDestaque(
+  imovel: Pick<ImovelLancamento, "isLaunch" | "constructionStage" | "deliveryForecast">
+): string | null {
+  if (!ehLancamento(imovel)) return null;
+  return previsaoEntregaMesAno(imovel.deliveryForecast);
+}

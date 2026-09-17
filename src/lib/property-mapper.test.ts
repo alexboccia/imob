@@ -186,18 +186,29 @@ describe("parseMidias", () => {
     ]);
     const midias = parseMidias(json);
     expect(midias).toEqual([
-      { type: "PHOTO", url: "https://x/1.jpg", isCover: true, order: 0 },
-      { type: "FLOOR_PLAN", url: "https://x/2.jpg", isCover: false, order: 1 },
-      { type: "VIDEO", url: "https://x/3.mp4", isCover: false, order: 2 },
+      // Fase 45 — sem legenda informada, caption é null (e nunca existe
+      // fora de foto).
+      { type: "PHOTO", url: "https://x/1.jpg", isCover: true, order: 0, caption: null },
+      { type: "FLOOR_PLAN", url: "https://x/2.jpg", isCover: false, order: 1, caption: null },
+      { type: "VIDEO", url: "https://x/3.mp4", isCover: false, order: 2, caption: null },
     ]);
   });
 });
 
 describe("midiasParaCriar", () => {
   test("injeta organizationId em cada mídia, sem alterar os demais campos", () => {
-    const midias = [{ type: "PHOTO" as const, url: "https://x/1.jpg", isCover: true, order: 0 }];
+    const midias = [
+      { type: "PHOTO" as const, url: "https://x/1.jpg", isCover: true, order: 0, caption: "Fachada" },
+    ];
     expect(midiasParaCriar(midias, "org-a")).toEqual([
-      { type: "PHOTO", url: "https://x/1.jpg", isCover: true, order: 0, organizationId: "org-a" },
+      {
+        type: "PHOTO",
+        url: "https://x/1.jpg",
+        isCover: true,
+        order: 0,
+        caption: "Fachada",
+        organizationId: "org-a",
+      },
     ]);
   });
 });

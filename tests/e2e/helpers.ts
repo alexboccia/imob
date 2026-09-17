@@ -336,6 +336,16 @@ export const IDS_E2E = {
   imovelGaleria4: "e2e-imovel-galeria-4",
   imovelGaleria5: "e2e-imovel-galeria-5",
   imovelGaleria7: "e2e-imovel-galeria-7",
+  // Fase 45 — conteúdo editorial da galeria (título, subtítulo, selo de
+  // entrega e legendas), um imóvel por combinação.
+  imovelEditorialTitulo: "e2e-imovel-editorial-titulo",
+  imovelEditorialSubtitulo: "e2e-imovel-editorial-subtitulo",
+  imovelEditorialAmbos: "e2e-imovel-editorial-ambos",
+  imovelEditorialEntrega: "e2e-imovel-editorial-entrega",
+  imovelEditorialDataSemLancamento: "e2e-imovel-editorial-data-pronto",
+  imovelEditorialLancamentoSemData: "e2e-imovel-editorial-lancamento-sem-data",
+  imovelEditorialCompleto: "e2e-imovel-editorial-completo",
+  imovelEditorialAdmin: "e2e-imovel-editorial-admin",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

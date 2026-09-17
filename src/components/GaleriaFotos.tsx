@@ -7,6 +7,7 @@ import { Swiper, SwiperSlide } from "swiper/react";
 import type { Swiper as SwiperType } from "swiper";
 import "swiper/css";
 import { AnimatePresence, motion } from "motion/react";
+import { CalendarDays } from "lucide-react";
 import { ModalContato } from "@/components/ModalContato";
 import { BotaoCompartilhar } from "@/components/BotaoCompartilhar";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -21,7 +22,52 @@ import {
   IconeGrade,
 } from "@/components/icons";
 
-type Foto = { id: string; url: string };
+type Foto = {
+  id: string;
+  url: string;
+  /** Fase 45 — legenda cadastrada pelo corretor; null = nenhum rótulo. */
+  caption?: string | null;
+};
+
+// Rótulo de uma foto (Fase 45): texto puro, uma linha, nunca inventado.
+function LegendaFoto({ texto, className = "" }: { texto: string; className?: string }) {
+  return (
+    <span
+      data-legenda-foto
+      className={`pointer-events-none max-w-[calc(100%-1.5rem)] truncate rounded-md bg-black/65 px-2 py-1 text-xs font-medium text-white ${className}`}
+    >
+      {texto}
+    </span>
+  );
+}
+
+// Selo "Entrega prevista" (Fase 45). O texto do mês/ano chega pronto do
+// servidor, com a mesma regra do cabeçalho da ficha.
+function SeloEntrega({ entrega, compacto }: { entrega: string; compacto: boolean }) {
+  return (
+    <div
+      data-selo-entrega
+      className={`inline-flex items-center rounded-lg bg-black/60 text-white backdrop-blur-sm ${
+        compacto ? "gap-2 px-2.5 py-1.5" : "gap-2.5 px-3 py-2"
+      }`}
+    >
+      <CalendarDays className={compacto ? "size-4 shrink-0" : "size-5 shrink-0"} />
+      {compacto ? (
+        <p className="text-xs">
+          <span className="text-white/80">Entrega prevista</span>{" "}
+          <span className="font-semibold">{entrega}</span>
+        </p>
+      ) : (
+        <div className="leading-tight">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-white/75">
+            Entrega prevista
+          </p>
+          <p className="text-sm font-semibold">{entrega}</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Galeria comercial (Fase 44): no desktop, um HERO de uma peça só (foto
 // principal + até 4 complementares); abaixo de lg, carrossel. Os dois
@@ -39,6 +85,9 @@ export function GaleriaFotos({
   mensagemContato,
   orgSlug,
   nome,
+  tituloDestaque = null,
+  subtituloDestaque = null,
+  entregaPrevista = null,
 }: {
   fotos: Foto[];
   titulo: string;
@@ -50,6 +99,11 @@ export function GaleriaFotos({
   mensagemContato: string;
   orgSlug: string;
   nome: string;
+  /** Fase 45 — conteúdo do IMÓVEL exibido sobre a foto de destaque. */
+  tituloDestaque?: string | null;
+  subtituloDestaque?: string | null;
+  /** "Nov/2027" quando o imóvel é lançamento com data; senão null. */
+  entregaPrevista?: string | null;
 }) {
   const router = useRouter();
   const [indice, setIndice] = useState(0);
@@ -165,6 +219,14 @@ export function GaleriaFotos({
         ? "grid-cols-1 grid-rows-2"
         : "grid-cols-2 grid-rows-2";
 
+  // Fase 45 — camada editorial da foto de destaque. Prioridade: selo de
+  // entrega, título, subtítulo, "Ver galeria". A legenda da capa só
+  // aparece quando NÃO há título nem subtítulo — os dois juntos com uma
+  // legenda seriam três textos disputando a mesma foto.
+  const temTextoDestaque = Boolean(tituloDestaque || subtituloDestaque);
+  const temEditorial = temTextoDestaque || Boolean(entregaPrevista);
+  const legendaDaCapa = temTextoDestaque ? null : (fotos[0].caption ?? null);
+
   const botaoVerGaleria = (className: string) => (
     <button
       type="button"
@@ -204,7 +266,12 @@ export function GaleriaFotos({
           levando a todas as fotos. */}
       <div
         data-galeria-carrossel
-        className="lg:hidden relative w-full h-[340px] sm:h-[440px] bg-black overflow-hidden"
+        // Com conteúdo editorial no primeiro slide, o carrossel ganha altura
+        // e as setas sobem: o texto fica na parte de baixo, entre as setas
+        // e o "Ver galeria", sem encostar em nenhum dos dois.
+        className={`lg:hidden relative w-full bg-black overflow-hidden ${
+          temEditorial ? "h-[420px] sm:h-[460px]" : "h-[340px] sm:h-[440px]"
+        }`}
       >
         <Swiper
           centeredSlides
@@ -257,6 +324,40 @@ export function GaleriaFotos({
                     : {})}
                 />
               </button>
+              {/* O conteúdo vive DENTRO do slide: acompanha a foto no
+                  arraste e nunca fica sobre a foto seguinte. */}
+              {item.real === 0 && temEditorial && (
+                <div
+                  data-conteudo-destaque-carrossel
+                  className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/45 to-transparent px-4 pt-16 pb-[4.25rem]"
+                >
+                  <div className="flex max-w-[34rem] flex-col items-start gap-1.5">
+                    {entregaPrevista && <SeloEntrega entrega={entregaPrevista} compacto />}
+                    {tituloDestaque && (
+                      <p
+                        data-titulo-destaque
+                        className="line-clamp-2 text-lg font-bold leading-snug tracking-tight text-white sm:text-2xl"
+                      >
+                        {tituloDestaque}
+                      </p>
+                    )}
+                    {subtituloDestaque && (
+                      <p
+                        data-subtitulo-destaque
+                        className="line-clamp-2 text-sm leading-snug text-white/90"
+                      >
+                        {subtituloDestaque}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+              {(item.real === 0 ? legendaDaCapa : (item.foto.caption ?? null)) && (
+                <LegendaFoto
+                  texto={(item.real === 0 ? legendaDaCapa : item.foto.caption)!}
+                  className="absolute top-4 right-4 z-10"
+                />
+              )}
             </SwiperSlide>
           ))}
         </Swiper>
@@ -269,7 +370,7 @@ export function GaleriaFotos({
               type="button"
               onClick={anterior}
               aria-label="Foto anterior"
-              className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow"
+              className={`absolute left-3 ${temEditorial ? "top-[38%]" : "top-1/2"} -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow`}
             >
               <IconeChevronEsquerdo className="w-5 h-5" />
             </button>
@@ -277,7 +378,7 @@ export function GaleriaFotos({
               type="button"
               onClick={proxima}
               aria-label="Próxima foto"
-              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow"
+              className={`absolute right-3 ${temEditorial ? "top-[38%]" : "top-1/2"} -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-gray-900 flex items-center justify-center shadow`}
             >
               <IconeChevronDireito className="w-5 h-5" />
             </button>
@@ -326,8 +427,44 @@ export function GaleriaFotos({
                 fetchPriority="high"
               />
             </button>
+            {temEditorial && (
+              // Legibilidade sem apagar a foto: escurece só a base e um
+              // pouco da esquerda, onde o texto mora.
+              <div
+                aria-hidden
+                data-gradiente-destaque
+                className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgb(0_0_0/0.72),rgb(0_0_0/0.25)_45%,transparent_70%),linear-gradient(to_right,rgb(0_0_0/0.3),transparent_60%)]"
+              />
+            )}
             {botaoVoltar}
-            {botaoVerGaleria("absolute bottom-4 left-4 z-20 min-h-10")}
+            <div
+              data-conteudo-destaque
+              className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-start gap-3 p-5 xl:p-6"
+            >
+              {entregaPrevista && <SeloEntrega entrega={entregaPrevista} compacto={false} />}
+              {temTextoDestaque && (
+                <div className="space-y-1.5">
+                  {tituloDestaque && (
+                    <p
+                      data-titulo-destaque
+                      className="max-w-[26rem] text-balance text-2xl font-bold leading-tight tracking-tight text-white xl:text-[1.75rem]"
+                    >
+                      {tituloDestaque}
+                    </p>
+                  )}
+                  {subtituloDestaque && (
+                    <p
+                      data-subtitulo-destaque
+                      className="max-w-[24rem] text-pretty text-sm leading-snug text-white/90 xl:text-base"
+                    >
+                      {subtituloDestaque}
+                    </p>
+                  )}
+                </div>
+              )}
+              {legendaDaCapa && <LegendaFoto texto={legendaDaCapa} />}
+              <div className="pointer-events-auto pt-1">{botaoVerGaleria("min-h-10")}</div>
+            </div>
           </div>
 
           {complementares.length > 0 && (
@@ -368,6 +505,12 @@ export function GaleriaFotos({
                           : "(min-width: 1152px) 256px, 23vw"
                       }
                     />
+                    {/* Na célula do "+N", a continuação da galeria tem
+                        prioridade: a legenda daquela foto não aparece ali
+                        (continua visível no lightbox). */}
+                    {!continua && foto.caption && (
+                      <LegendaFoto texto={foto.caption} className="absolute bottom-2.5 left-2.5" />
+                    )}
                     {continua && (
                       <span
                         aria-hidden
@@ -464,6 +607,12 @@ export function GaleriaFotos({
                       sizes="100vw"
                     />
                   </div>
+                  {foto.caption && (
+                    <LegendaFoto
+                      texto={foto.caption}
+                      className="absolute bottom-3 left-3 z-10 text-sm"
+                    />
+                  )}
                 </SwiperSlide>
               ))}
             </Swiper>

@@ -488,6 +488,13 @@ model Property {
   // endereço ou do empreendimento — uma frase inferida seria o produto
   // falando no lugar do corretor.
   highlightPhrase String?
+  // Fase 45 — conteúdo editorial do HERO da galeria (título e subtítulo
+  // exibidos sobre a foto de destaque). Pertencem ao IMÓVEL, não à foto:
+  // a capa pode mudar e a mensagem comercial continua. Opcionais, texto
+  // puro, vazio = NULL. A previsão de entrega do hero NÃO é campo novo —
+  // vem de deliveryForecast.
+  heroTitle       String?
+  heroSubtitle    String?
 
   zipCode      String?
   street       String?
@@ -590,6 +597,10 @@ model Media {
   url     String
   isCover Boolean   @default(false)
   order   Int       @default(0)
+  // Fase 45 — legenda editorial opcional da foto ("Fachada", "Academia"),
+  // cadastrada pelo corretor. Só PHOTO usa. Nunca é derivada da imagem e
+  // não substitui o texto alternativo.
+  caption String?
 
   createdAt DateTime @default(now())
 
