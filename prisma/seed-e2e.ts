@@ -126,6 +126,13 @@ export const IDS_E2E = {
   imovelBreadcrumbSemContexto: "e2e-imovel-breadcrumb-sem-contexto",
   // Fase 47 — título longo, para provar que título e ações não colidem.
   imovelTituloLongo: "e2e-imovel-titulo-longo",
+  // Fase 48 — organização dedicada à NAVEGAÇÃO entre fichas (Org Y).
+  imovelNavegacaoAntigo: "e2e-imovel-navegacao-1",
+  imovelNavegacaoMeio: "e2e-imovel-navegacao-2",
+  imovelNavegacaoRecente: "e2e-imovel-navegacao-3",
+  imovelNavegacaoRascunho: "e2e-imovel-navegacao-rascunho",
+  imovelNavegacaoInativo: "e2e-imovel-navegacao-inativo",
+  imovelNavegacaoReservado: "e2e-imovel-navegacao-reservado",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -320,6 +327,9 @@ async function garantirImovel(opcoes: {
   // todos os demais fixtures (e resetado a cada seed pelo update).
   heroTitle?: string | null;
   heroSubtitle?: string | null;
+  // Fase 48 — data de publicação, que ordena a listagem pública. Só os
+  // fixtures da navegação passam: os demais continuam como sempre foram.
+  publishedAt?: Date | null;
 }) {
   // update reseta os mesmos campos do create — specs de edição (ex: "editar
   // imóvel") mudam o título do imóvel seedado, então sem isso o seed
@@ -358,6 +368,7 @@ async function garantirImovel(opcoes: {
     highlightPhrase: opcoes.highlightPhrase ?? null,
     heroTitle: opcoes.heroTitle ?? null,
     heroSubtitle: opcoes.heroSubtitle ?? null,
+    ...(opcoes.publishedAt !== undefined ? { publishedAt: opcoes.publishedAt } : {}),
   } as const;
 
   return prisma.property.upsert({
@@ -822,6 +833,8 @@ async function main() {
     "owner-multi-b@e2e.test",
     // Fase 39 — Organização W (barra de recursos).
     "owner-recursos@e2e.test",
+    // Fase 48 — Organização Y (navegação entre fichas).
+    "owner-navegacao@e2e.test",
     // Fase 38 — Organização V (empreendimento).
     "owner-empreendimento@e2e.test",
     // Fase 37 — Organização U (resultado da visita). A dona encerra as
@@ -2469,6 +2482,16 @@ async function main() {
     where: { id: { startsWith: "e2e-imovel-negocio-" } },
     data: { createdAt: new Date("2020-01-01T00:00:00.000Z") },
   });
+  // Fase 48 — o mesmo motivo na LISTAGEM PÚBLICA, agora com ordem
+  // determinística (publishedAt DESC NULLS FIRST, id DESC): sem data, os
+  // "e2e-imovel-negocio-*" ordenavam antes de todos os outros imóveis sem
+  // data e empurravam os que o site público clica para a página 2. Com a
+  // data do seed eles vão para depois deles. Data de AGORA, não antiga:
+  // uma data velha os contaria como "Imóveis parados" no dashboard.
+  await prisma.property.updateMany({
+    where: { id: { startsWith: "e2e-imovel-negocio-" } },
+    data: { publishedAt: new Date() },
+  });
 
   // Fase 34 — duas negociações prontas para fechar: uma para ganhar
   // (o imóvel precisa sair de circulação) e outra para perder (o imóvel
@@ -3673,6 +3696,45 @@ async function main() {
     type: "",
     neighborhood: "",
     status: "RESERVED",
+  });
+
+  // =====================================================================
+  // Fase 48 — IMÓVEL ANTERIOR / PRÓXIMO IMÓVEL (Organização Y)
+  // =====================================================================
+  // Organização própria: a sequência é a listagem pública INTEIRA da
+  // organização, então qualquer imóvel criado por outro spec mudaria os
+  // vizinhos. Aqui ninguém mais escreve. Listagem padrão (mais recente
+  // primeiro): Recente, Meio, Antigo. Rascunho, inativo e reservado têm
+  // datas ENTRE eles — se a visibilidade falhasse, apareceriam.
+  const orgNavegacao = await garantirOrganizacaoComDono({
+    slug: "e2e-org-navegacao",
+    timezone: "UTC",
+    name: "Organização E2E Navegação",
+    planId: planoCompleto.id,
+    email: "owner-navegacao@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+  const orgY = orgNavegacao.organization.id;
+  await prisma.media.deleteMany({ where: { organizationId: orgY } });
+  const diaNavegacao = (d: number) => new Date(Date.UTC(2026, 0, d, 12));
+  for (const [id, title, dia, status] of [
+    [IDS_E2E.imovelNavegacaoAntigo, "Imovel Navegacao Antigo E2E", 1, "AVAILABLE"],
+    [IDS_E2E.imovelNavegacaoRascunho, "Imovel Navegacao Rascunho E2E", 2, "DRAFT"],
+    [IDS_E2E.imovelNavegacaoMeio, "Imovel Navegacao Meio E2E", 3, "AVAILABLE"],
+    [IDS_E2E.imovelNavegacaoInativo, "Imovel Navegacao Inativo E2E", 4, "INACTIVE"],
+    [IDS_E2E.imovelNavegacaoReservado, "Imovel Navegacao Reservado E2E", 5, "RESERVED"],
+    [IDS_E2E.imovelNavegacaoRecente, "Imovel Navegacao Recente E2E", 6, "AVAILABLE"],
+  ] as const) {
+    await garantirImovel({ id, organizationId: orgY, title, status, publishedAt: diaNavegacao(dia) });
+    await prisma.media.create({
+      data: { organizationId: orgY, propertyId: id, type: "PHOTO", url: fotoDaGaleria(dia), isCover: true, order: 0 },
+    });
+  }
+  // Nada além destes seis: um imóvel criado aqui por engano em rodada
+  // anterior mudaria a sequência.
+  await prisma.property.deleteMany({
+    where: { organizationId: orgY, id: { notIn: Object.values(IDS_E2E).filter((v) => v.startsWith("e2e-imovel-navegacao")) } },
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { Link2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -13,7 +14,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
-import { IconeCompartilhar, IconeCoracao, IconeWhatsApp } from "@/components/icons";
+import {
+  IconeChevronDireito,
+  IconeChevronEsquerdo,
+  IconeCompartilhar,
+  IconeCoracao,
+  IconeWhatsApp,
+} from "@/components/icons";
 import { IconeFacebook, IconeLinkedin, IconeX } from "@/components/icones-sociais";
 import {
   ROTULO_REDE,
@@ -31,6 +38,8 @@ import {
 import { cn } from "@/lib/utils";
 
 // Ações da ficha ao lado do título (Fase 47): Compartilhar e Salvar.
+// Fase 48: Imóvel anterior / Próximo imóvel, no mesmo grupo — são
+// navegação entre FICHAS (a ordem da listagem pública), não entre fotos.
 //
 // Ilha de cliente pequena — a página continua sendo Server Component.
 // Nenhuma das duas ações fala com o servidor: compartilhar abre a rede
@@ -39,7 +48,13 @@ import { cn } from "@/lib/utils";
 
 const CLASSE_ACAO = cn(
   buttonVariants({ variant: "outline" }),
-  "h-10 gap-2 rounded-lg bg-background px-3 text-sm font-medium lg:h-9"
+  "h-10 gap-2 rounded-lg bg-background px-3 text-sm font-medium"
+);
+
+// Setas: redondas, 40x40 em qualquer largura (alvo de toque).
+const CLASSE_SETA = cn(
+  buttonVariants({ variant: "outline" }),
+  "size-10 shrink-0 rounded-full bg-background p-0"
 );
 
 const ICONE_REDE: Record<RedeCompartilhamento, (p: { className?: string }) => React.ReactNode> = {
@@ -210,11 +225,41 @@ function SalvarImovel({ imovelId, orgSlug }: { imovelId: string; orgSlug: string
   );
 }
 
+// Sem vizinho, a seta continua lá — um <button disabled> no mesmo
+// lugar e do mesmo tamanho — para o grupo não mudar de forma entre fichas.
+function SetaImovel({
+  href,
+  rotulo,
+  direcao,
+}: {
+  href: string | null;
+  rotulo: string;
+  direcao: "anterior" | "proximo";
+}) {
+  const Icone = direcao === "anterior" ? IconeChevronEsquerdo : IconeChevronDireito;
+  const icone = <Icone className="size-5" />;
+  const dados = { "data-seta-imovel": direcao };
+  if (!href) {
+    return (
+      <button type="button" disabled aria-label={rotulo} className={CLASSE_SETA} {...dados}>
+        {icone}
+      </button>
+    );
+  }
+  return (
+    <Link href={href} aria-label={rotulo} title={rotulo} className={CLASSE_SETA} {...dados}>
+      {icone}
+    </Link>
+  );
+}
+
 export function AcoesImovel({
   imovelId,
   orgSlug,
   titulo,
   url,
+  anteriorHref,
+  proximoHref,
   className,
 }: {
   imovelId: string;
@@ -222,12 +267,23 @@ export function AcoesImovel({
   titulo: string;
   /** URL canônica da ficha (a mesma do <link rel="canonical">). */
   url: string;
+  /** Ficha anterior/seguinte na ordem da listagem pública; null nas pontas. */
+  anteriorHref: string | null;
+  proximoHref: string | null;
   className?: string;
 }) {
   return (
     <div data-acoes-imovel className={cn("flex flex-wrap items-center gap-2", className)}>
       <CompartilharImovel url={url} titulo={titulo} />
       <SalvarImovel imovelId={imovelId} orgSlug={orgSlug} />
+      {/* ml-auto: quando o grupo tem a largura toda (abaixo de lg), as
+          setas vão para a direita — na mesma linha se couberem, na
+          seguinte se não. No desktop o grupo tem a largura do conteúdo e
+          as quatro ações ficam juntas. */}
+      <div data-navegacao-imoveis className="ml-auto flex items-center gap-2">
+        <SetaImovel href={anteriorHref} rotulo="Imóvel anterior" direcao="anterior" />
+        <SetaImovel href={proximoHref} rotulo="Próximo imóvel" direcao="proximo" />
+      </div>
     </div>
   );
 }

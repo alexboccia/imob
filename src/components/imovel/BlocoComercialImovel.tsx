@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { IconeWhatsApp } from "@/components/icons";
 import { RastreioCliqueWhatsApp } from "@/components/analytics/RastreioCliqueWhatsApp";
@@ -24,6 +25,7 @@ export function BlocoComercialImovel({
   orgSlug,
   whatsappHref,
   hrefFormulario,
+  className,
 }: {
   imovel: ValoresImovel;
   imovelId: string;
@@ -31,13 +33,14 @@ export function BlocoComercialImovel({
   whatsappHref: string | null;
   /** Âncora do formulário do card lateral, ex.: "#contato-imovel". */
   hrefFormulario: string;
+  className?: string;
 }) {
   const classeCta = "w-full";
 
   return (
     <div
       data-bloco-comercial
-      className="hidden shrink-0 space-y-4 lg:block lg:w-80 xl:w-96"
+      className={cn("hidden shrink-0 space-y-4 lg:block lg:w-80 xl:w-96", className)}
     >
       <ValoresDoImovel imovel={imovel} variante="cabecalho" />
 

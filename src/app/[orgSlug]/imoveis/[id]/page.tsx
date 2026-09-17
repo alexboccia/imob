@@ -1,5 +1,7 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
+import { buscarVizinhosPublicos } from "@/lib/navegacao-imoveis-data";
+import { hrefDoImovel } from "@/lib/navegacao-imoveis";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import {
@@ -237,7 +239,7 @@ export default async function DetalheImovelPage({
   const organizationId = organization.id;
   const basePath = resolverBasePath(orgSlug);
 
-  const { imovel, configContato, imoveisProximos, materiais, outrasUnidades } =
+  const { imovel, configContato, imoveisProximos, materiais, outrasUnidades, vizinhos } =
     await withOrganization(organizationId, async () => {
       const imovel = await buscarImovel(id, organizationId);
 
@@ -245,7 +247,7 @@ export default async function DetalheImovelPage({
         notFound();
       }
 
-      const [configContato, imoveisProximos, materiais, outrasUnidades] = await Promise.all([
+      const [configContato, imoveisProximos, materiais, outrasUnidades, vizinhos] = await Promise.all([
         buscarConfiguracaoContato(organizationId),
         buscarImoveisProximos(organizationId, imovel),
         // Em paralelo com o que a página já buscava — não acrescenta
@@ -257,9 +259,12 @@ export default async function DetalheImovelPage({
         imovel.developmentId
           ? buscarOutrasUnidades(organizationId, imovel.developmentId, imovel.id)
           : Promise.resolve([]),
+        // Fase 48 — anterior/próximo na ordem da listagem pública: duas
+        // consultas de uma linha, no mesmo lote.
+        buscarVizinhosPublicos(organizationId, imovel),
       ]);
 
-      return { imovel, configContato, imoveisProximos, materiais, outrasUnidades };
+      return { imovel, configContato, imoveisProximos, materiais, outrasUnidades, vizinhos };
     });
 
   const fotos = imovel.media.filter((m) => m.type === "PHOTO");
@@ -369,31 +374,34 @@ export default async function DetalheImovelPage({
             conteúdo. */}
         <BreadcrumbImovel migalhas={migalhas} selos={selosContexto} />
 
-        <div className="mt-3 lg:flex lg:items-end lg:justify-between lg:gap-10">
-        <div data-identidade-imovel className="min-w-0 flex-1">
-        {/* Fase 47 — título e ações na MESMA faixa: a partir de lg, as
-            ações ficam à direita do título (coluna auto, sem encolher) e
-            o título ocupa o resto, quebrando em quantas linhas precisar —
-            nunca truncado. Abaixo de lg, as ações descem para depois do
-            endereço. Este é o único Compartilhar fora do lightbox (Fase
-            43), e existe mesmo sem foto. */}
-        <div className="grid gap-y-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-x-6">
-          <div className="min-w-0">
+        {/* Fase 48 — UMA grade para o cabeçalho inteiro. A partir de lg:
+            identidade à esquerda (ocupando as duas linhas) e, à direita,
+            as ações na linha do título e o bloco comercial embaixo. Com
+            as ações na MESMA coluna do bloco, o último botão termina na
+            borda direita do conteúdo — antes elas moravam dentro da
+            coluna da identidade e terminavam no meio da página.
+            Abaixo de lg a grade tem uma coluna e a identidade vira
+            `contents`: título e endereço, ações, e só então prazo e
+            metadado (texto sem foco — a ordem de leitura não perde
+            nada). */}
+        <div
+          data-cabecalho-imovel
+          className="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-x-10 lg:gap-y-3"
+        >
+        <div
+          data-identidade-imovel
+          className="contents lg:col-start-1 lg:row-span-2 lg:row-start-1 lg:block lg:min-w-0"
+        >
+          {/* Título nunca truncado: quebra em quantas linhas precisar. */}
+          <div className="order-1 min-w-0">
             <h1 className={`${TITULO_DETALHE} break-words`}>{imovel.title}</h1>
             <p className="mt-2 text-base text-gray-600">
               {enderecoCompleto ? `${enderecoCompleto}, ` : ""}
               {imovel.city} - {imovel.state}
             </p>
           </div>
-          <AcoesImovel
-            imovelId={imovel.id}
-            orgSlug={orgSlug}
-            titulo={imovel.title}
-            url={urlCanonica}
-            className="lg:justify-end"
-          />
-        </div>
 
+          <div className="order-3 min-w-0">
         {/* Num lançamento, estágio e prazo saem do metadado e viram
             informação de primeira linha: quem olha um imóvel que ainda
             não existe decide por "quando fica pronto" tanto quanto por
@@ -438,7 +446,21 @@ export default async function DetalheImovelPage({
           )}
         </div>
         )}
+          </div>
         </div>
+
+        {/* Fase 47/48 — Compartilhar, Salvar, Imóvel anterior e Próximo
+            imóvel. Este é o único Compartilhar fora do lightbox (Fase
+            43), e existe mesmo sem foto. */}
+        <AcoesImovel
+          imovelId={imovel.id}
+          orgSlug={orgSlug}
+          titulo={imovel.title}
+          url={urlCanonica}
+          anteriorHref={vizinhos.anteriorId ? hrefDoImovel(basePath, vizinhos.anteriorId) : null}
+          proximoHref={vizinhos.proximoId ? hrefDoImovel(basePath, vizinhos.proximoId) : null}
+          className="order-2 mt-3 lg:order-none lg:col-start-2 lg:row-start-1 lg:mt-0 lg:justify-self-end lg:self-start"
+        />
 
         <BlocoComercialImovel
           imovel={imovel}
@@ -446,6 +468,7 @@ export default async function DetalheImovelPage({
           orgSlug={orgSlug}
           whatsappHref={whatsappHref}
           hrefFormulario={`#${idFormulario}`}
+          className="lg:col-start-2 lg:row-start-2 lg:self-end lg:justify-self-end"
         />
         </div>
       </div>

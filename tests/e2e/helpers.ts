@@ -248,6 +248,12 @@ export const ORG_RECURSOS = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Fase 48 — organização dedicada à NAVEGAÇÃO entre fichas: a sequência
+// é a listagem pública inteira dela, então ninguém mais escreve lá.
+export const ORG_NAVEGACAO = {
+  slug: "e2e-org-navegacao",
+};
+
 export const ORG_COMISSOES_BRUNO = {
   slug: "e2e-org-comissoes",
   email: "bruno-comissoes@e2e.test",
@@ -354,6 +360,13 @@ export const IDS_E2E = {
   imovelBreadcrumbSemContexto: "e2e-imovel-breadcrumb-sem-contexto",
   // Fase 47 — título longo, para provar que título e ações não colidem.
   imovelTituloLongo: "e2e-imovel-titulo-longo",
+  // Fase 48 — organização dedicada à NAVEGAÇÃO entre fichas (Org Y).
+  imovelNavegacaoAntigo: "e2e-imovel-navegacao-1",
+  imovelNavegacaoMeio: "e2e-imovel-navegacao-2",
+  imovelNavegacaoRecente: "e2e-imovel-navegacao-3",
+  imovelNavegacaoRascunho: "e2e-imovel-navegacao-rascunho",
+  imovelNavegacaoInativo: "e2e-imovel-navegacao-inativo",
+  imovelNavegacaoReservado: "e2e-imovel-navegacao-reservado",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

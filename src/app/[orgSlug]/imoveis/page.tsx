@@ -21,6 +21,7 @@ import { withOrganization } from "@/lib/tenant-context";
 import { interpretarPaginacao, normalizarBusca, totalDePaginas } from "@/lib/pagination";
 import { metadataPaginaPublica } from "@/lib/seo";
 import { TITULO_PAGINA } from "@/lib/site-typography";
+import { ORDEM_PUBLICA_PADRAO, visibilidadePublica } from "@/lib/navegacao-imoveis";
 import type { Prisma } from "@/generated/prisma/client";
 
 // Canonical aponta sempre pra URL base, sem os parâmetros de
@@ -137,8 +138,7 @@ export default async function ListaImoveisPage({
         : [];
 
     const where: Prisma.PropertyWhereInput = {
-      organizationId,
-      status: "AVAILABLE",
+      ...visibilidadePublica(organizationId),
       ...(buscaTexto
         ? {
             OR: [
@@ -209,7 +209,9 @@ export default async function ListaImoveisPage({
       ...(params.oportunidade === "1" ? { isOpportunity: true } : {}),
     };
 
-    const orderBy = ORDENACOES[params.ordenar ?? ""] ?? { publishedAt: "desc" };
+    // Sem ordenação escolhida: a ordem padrão pública, a mesma que a
+    // ficha usa para "Imóvel anterior / Próximo imóvel" (Fase 48).
+    const orderBy = ORDENACOES[params.ordenar ?? ""] ?? ORDEM_PUBLICA_PADRAO;
 
     const [imoveis, totalCount] = await Promise.all([
       prisma.property.findMany({

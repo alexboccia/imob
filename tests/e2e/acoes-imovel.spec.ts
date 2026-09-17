@@ -414,7 +414,9 @@ test.describe("faixa título + ações", () => {
       await page.setViewportSize({ width: largura, height: DOBRA });
       await page.goto(fichaW(IDS_E2E.imovelTituloLongo));
 
-      const coluna = await caixa(page.locator("[data-identidade-imovel]"));
+      // Fase 48 — as ações saíram da coluna da identidade: o limite é o
+      // cabeçalho inteiro (a grade que tem as duas colunas).
+      const coluna = await caixa(page.locator("[data-cabecalho-imovel]"));
       const h1 = page.getByRole("heading", { level: 1 });
       const titulo = await caixa(h1);
       const endereco = await caixa(page.getByText("Centro, São Paulo - SP", { exact: true }).first());
@@ -444,9 +446,11 @@ test.describe("faixa título + ações", () => {
       expect(salvar.x).toBeGreaterThan(compartilhar.x);
 
       if (largura >= 1024) {
-        // À direita do título, alinhadas ao topo dele.
+        // À direita do título, alinhadas ao topo dele, terminando na
+        // borda direita do conteúdo (Fase 48).
         expect(acoes.x).toBeGreaterThanOrEqual(titulo.x + titulo.width);
         expect(Math.abs(acoes.y - titulo.y)).toBeLessThan(8);
+        expect(Math.abs(acoes.x + acoes.width - (coluna.x + coluna.width))).toBeLessThan(1);
       } else {
         expect(acoes.y).toBeGreaterThanOrEqual(endereco.y + endereco.height);
         if (largura < 768) for (const b of [compartilhar, salvar]) expect(b.height).toBeGreaterThanOrEqual(40);
