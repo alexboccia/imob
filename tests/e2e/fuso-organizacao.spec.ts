@@ -1,5 +1,19 @@
+import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { test, expect } from "@playwright/test";
 import { ORG_FUSO, login } from "./helpers";
+
+// As duas visitas são criadas pelo seed com o "hoje" de quando ELE rodou,
+// minutos antes desta spec. Se a meia-noite de São Paulo cair nesse
+// intervalo (CI às 03:00 UTC), "hoje" já é outro dia e a spec falha sem
+// nenhuma mudança no produto. Reancorá-las aqui, no começo desta spec,
+// reduz esse intervalo a segundos — as asserções continuam as mesmas.
+test.beforeAll(() => {
+  execFileSync("npx", ["tsx", "scripts/e2e-reancorar-visitas-fuso.ts"], {
+    stdio: "inherit",
+    cwd: path.resolve(__dirname, "..", ".."),
+  });
+});
 
 // =======================================================================
 // Fuso horário da organização (Fase 18)
