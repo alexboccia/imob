@@ -828,18 +828,23 @@ test.describe("Detalhe do imóvel — conteúdo real", () => {
   }) => {
     await page.goto(URL_IMOVEL);
     await expect(page.getByRole("heading", { level: 1, name: IMOVEL_COM_BADGES })).toBeVisible();
-    // Escopado ao cabeçalho: os cards de "imóveis próximos" repetem o
-    // mesmo par tipo/finalidade mais abaixo na página.
-    const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
-    await expect(cabecalho.getByText("Apartamento · Comprar")).toBeVisible();
+    // Fase 46 — tipo e contexto comercial saíram da linha "tipo ·
+    // finalidade" e viraram o breadcrumb; rótulos e código viraram selos
+    // ao lado dele. Mesmos dados, agora escopados à faixa de contexto (os
+    // cards de "imóveis próximos" repetem o par tipo/finalidade abaixo).
+    const breadcrumb = page.getByRole("navigation", { name: "Breadcrumb" });
+    await expect(breadcrumb.getByRole("link", { name: "Apartamento", exact: true })).toBeVisible();
+    // Lançamento: o nível comercial é a listagem de lançamentos.
+    await expect(breadcrumb.getByRole("link", { name: "Lançamentos", exact: true })).toBeVisible();
+    const selos = page.getByRole("list", { name: "Situação do imóvel" });
     for (const rotulo of ["Lançamento", "Destaque", "Oportunidade"]) {
-      await expect(page.getByText(rotulo, { exact: true }).first()).toBeVisible();
+      await expect(selos.getByText(rotulo, { exact: true })).toBeVisible();
     }
     // O código pode ou não ter prefixo — configuracoes.spec.ts grava um
     // propertyCodePrefix no MESMO tenant, e o prefixo é um recurso real
     // do produto. O teste prova que o código está na página, sem acoplar
     // ao formato que outro spec pode ter deixado configurado.
-    await expect(cabecalho.getByText(/Cód\.\s*\S+/)).toBeVisible();
+    await expect(selos.getByText(/^Código:\s*\S+$/)).toBeVisible();
     await expect(page.getByText("Centro, São Paulo - SP").first()).toBeVisible();
   });
 
@@ -1732,8 +1737,11 @@ test.describe("Detalhe — experiência de lançamento", () => {
   }) => {
     await page.goto(URL_IMOVEL);
     const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
-    await expect(cabecalho.getByText("Obra:")).toBeVisible();
-    await expect(cabecalho.getByText("Em construção")).toBeVisible();
+    // Fase 46 — o estágio virou selo na faixa de contexto (uma vez só);
+    // prazo e construtora continuam na linha de lançamento.
+    const selos = page.getByRole("list", { name: "Situação do imóvel" });
+    await expect(selos.locator('[data-selo="obra"]')).toHaveText("Em construção");
+    await expect(cabecalho.getByText("Obra:")).toHaveCount(0);
     await expect(cabecalho.getByText("Previsão de entrega:")).toBeVisible();
     await expect(cabecalho.getByText("Construtora:")).toBeVisible();
   });
@@ -1851,9 +1859,12 @@ test.describe("Detalhe — experiência de lançamento", () => {
     await expect(page.getByText("Lançamento", { exact: true }).first()).toBeVisible();
 
     const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
-    await expect(cabecalho.getByText("Obra:")).toHaveCount(0);
     await expect(cabecalho.getByText("Previsão de entrega:")).toHaveCount(0);
     await expect(cabecalho.getByText("Construtora:")).toHaveCount(0);
+    // Sem estágio cadastrado, nenhum selo de obra é inventado.
+    const selos = page.getByRole("list", { name: "Situação do imóvel" });
+    await expect(selos.getByText("Lançamento", { exact: true })).toBeVisible();
+    await expect(selos.locator('[data-selo="obra"]')).toHaveCount(0);
 
     await expect(page.getByRole("heading", { name: /Evolução da obra/ })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Plantas e imagens" })).toHaveCount(0);
@@ -1863,8 +1874,10 @@ test.describe("Detalhe — experiência de lançamento", () => {
   test("imóvel comum NÃO recebe a UI de lançamento", async ({ page }) => {
     await page.goto(URL_IMOVEL_PRONTO);
     const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
-    await expect(cabecalho.getByText("Obra:")).toHaveCount(0);
     await expect(cabecalho.getByText("Previsão de entrega:")).toHaveCount(0);
+    const selos = page.getByRole("list", { name: "Situação do imóvel" });
+    await expect(selos.getByText("Lançamento", { exact: true })).toHaveCount(0);
+    await expect(selos.locator('[data-selo="obra"]')).toHaveCount(0);
     await expect(page.getByRole("heading", { name: /Evolução da obra/ })).toHaveCount(0);
   });
 

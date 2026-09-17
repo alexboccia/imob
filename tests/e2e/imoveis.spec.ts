@@ -477,7 +477,9 @@ test.describe("Imóveis — cadastro de lançamento", () => {
     //    deslocamento de timezone (junho não pode virar maio).
     await page.goto(`/imoveis/${idImovel}`);
     const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
-    await expect(cabecalho.getByText("Em construção")).toBeVisible();
+    // Fase 46 — o estágio é um selo na faixa de contexto, acima do título.
+    const selos = page.getByRole("list", { name: "Situação do imóvel" });
+    await expect(selos.locator('[data-selo="obra"]')).toHaveText("Em construção");
     await expect(cabecalho.getByText("Junho de 2027")).toBeVisible();
     await expect(cabecalho.getByText(construtora)).toBeVisible();
 
@@ -501,7 +503,13 @@ test.describe("Imóveis — cadastro de lançamento", () => {
     //    construção. Desmarcar um não apaga o outro.
     await page.goto(`/imoveis/${idImovel}`);
     const cab = page.locator("h1").locator("xpath=ancestor::div[2]");
-    await expect(cab.getByText("Lançamento", { exact: true })).toHaveCount(0);
+    const selosSemRotulo = page.getByRole("list", { name: "Situação do imóvel" });
+    await expect(selosSemRotulo.getByText("Lançamento", { exact: true })).toHaveCount(0);
+    await expect(selosSemRotulo.locator('[data-selo="obra"]')).toHaveText("Em construção");
+    // E o breadcrumb não leva a "Lançamentos": o imóvel não está lá.
+    await expect(
+      page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Lançamentos" })
+    ).toHaveCount(0);
     await expect(cab.getByText("Previsão de entrega:")).toBeVisible();
     await expect(cab.getByText("Junho de 2027")).toBeVisible();
   });

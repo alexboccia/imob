@@ -346,6 +346,12 @@ export const IDS_E2E = {
   imovelEditorialLancamentoSemData: "e2e-imovel-editorial-lancamento-sem-data",
   imovelEditorialCompleto: "e2e-imovel-editorial-completo",
   imovelEditorialAdmin: "e2e-imovel-editorial-admin",
+  // Fase 46 — breadcrumb comercial: um imóvel por composição.
+  imovelBreadcrumbLancamento: "e2e-imovel-breadcrumb-lancamento",
+  imovelBreadcrumbCasa: "e2e-imovel-breadcrumb-casa",
+  imovelBreadcrumbAluguel: "e2e-imovel-breadcrumb-aluguel",
+  imovelBreadcrumbVendaLocacao: "e2e-imovel-breadcrumb-venda-locacao",
+  imovelBreadcrumbSemContexto: "e2e-imovel-breadcrumb-sem-contexto",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

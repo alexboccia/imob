@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import {
-  FINALIDADE_LABEL,
   formatarCodigoImovel,
   formatarTempoRelativo,
   rotulosAtivos,
@@ -48,6 +47,8 @@ import { ImovelCard } from "@/components/ImovelCard";
 import { CaracteristicasDoImovel } from "@/components/imovel/Caracteristicas";
 import { CardContatoImovel } from "@/components/imovel/CardContatoImovel";
 import { BlocoComercialImovel } from "@/components/imovel/BlocoComercialImovel";
+import { BreadcrumbImovel, type SeloContexto } from "@/components/imovel/BreadcrumbImovel";
+import { migalhasDoImovel } from "@/lib/breadcrumb-imovel";
 import { CardCorretorImovel } from "@/components/imovel/CardCorretorImovel";
 import { MateriaisImovel } from "@/components/imovel/MateriaisImovel";
 import { RastreioVisualizacaoImovel } from "@/components/analytics/RastreioVisualizacaoImovel";
@@ -58,7 +59,6 @@ import {
   previsaoEntregaPorExtenso,
   rotuloEstagioObra,
 } from "@/lib/imovel-lancamento";
-import { Badge } from "@/components/ui/badge";
 import { TITULO_DETALHE, TITULO_BLOCO, TITULO_SECAO } from "@/lib/site-typography";
 import { blocoDeMateriaisVisivel } from "@/lib/materiais-imovel";
 import { buscarMateriaisAtivos } from "@/lib/materiais-consultas";
@@ -312,38 +312,49 @@ export default async function DetalheImovelPage({
   const estagioObra = rotuloEstagioObra(imovel);
   const previsaoEntrega = previsaoEntregaPorExtenso(imovel.deliveryForecast);
 
+  // Fase 46 — breadcrumb e selos, só com dados já carregados.
+  const migalhas = migalhasDoImovel(basePath, imovel);
+  // Selos, na ordem: rótulos comerciais (a MESMA fonte de sempre —
+  // "Lançamento" é o rótulo isLaunch, como no filtro ?lancamento=1),
+  // estágio real da obra e o código público do imóvel.
+  const selosContexto: SeloContexto[] = [
+    ...rotulosAtivos({
+      lancamento: imovel.isLaunch,
+      destaque: imovel.isFeatured,
+      oportunidade: imovel.isOpportunity,
+    }).map((r) => ({ chave: r.chave, label: r.label, className: r.className, tipo: "rotulo" as const })),
+    ...(estagioObra ? [{ chave: "obra", label: estagioObra, tipo: "obra" as const }] : []),
+    {
+      chave: "codigo",
+      label: `Código: ${formatarCodigoImovel(imovel.code, configContato.codigoImovelPrefixo)}`,
+      tipo: "codigo" as const,
+    },
+  ];
+
   return (
     <>
-      {/* Hierarquia do topo: tipo/finalidade e rótulos primeiro (o que o
-          visitante usa pra saber se a página é pra ele), título e
-          localização em seguida, e a data de publicação por último, mais
-          discreta — antes ela competia em peso com o endereço. O código
-          saiu da mesma linha dos rótulos e virou item de metadado, onde
-          é procurado quando alguém já decidiu ligar. Mesmos dados de
-          sempre, nenhum campo novo. */}
+      {/* Hierarquia do topo: contexto primeiro (breadcrumb com tipo e
+          bairro, e os selos — rótulos, obra, código — que dizem ao
+          visitante se a página é pra ele), título e localização em
+          seguida, e a data de publicação por último, mais discreta. */}
       <div className="mx-auto max-w-6xl px-4 pt-6">
         {/* Fase 43 — PRIMEIRA TELA COMERCIAL. A partir de lg o cabeçalho
             tem duas colunas: identidade à esquerda (o que já existia,
             intacto) e, à direita, preço + custos + ação. Abaixo de lg a
             coluna da direita não existe — a barra fixa do rodapé já faz
             esse papel no celular. */}
-        <div className="lg:flex lg:items-end lg:justify-between lg:gap-10">
+        {/* Fase 46 — BREADCRUMB COMERCIAL. Ocupa o lugar da antiga linha
+            "tipo · finalidade + rótulos", que dizia a mesma coisa sem
+            levar a lugar nenhum: o tipo virou um nível navegável, os
+            rótulos continuam como selos, e estágio da obra e código saem
+            de mais abaixo no cabeçalho para cá — no mesmo lugar, uma vez
+            só. Largura toda, acima das duas colunas, alinhado ao
+            conteúdo. */}
+        <BreadcrumbImovel migalhas={migalhas} selos={selosContexto} />
+
+        <div className="mt-3 lg:flex lg:items-end lg:justify-between lg:gap-10">
         <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium text-gray-600">
-            {imovel.type} · {FINALIDADE_LABEL[imovel.purpose] ?? imovel.purpose}
-          </p>
-          {rotulosAtivos({
-            lancamento: imovel.isLaunch,
-            destaque: imovel.isFeatured,
-            oportunidade: imovel.isOpportunity,
-          }).map((rotulo) => (
-            <Badge key={rotulo.chave} className={rotulo.className}>
-              {rotulo.label}
-            </Badge>
-          ))}
-        </div>
-        <div className="mt-2 flex items-start justify-between gap-4 lg:justify-start">
+        <div className="flex items-start justify-between gap-4 lg:justify-start">
           <h1 className={TITULO_DETALHE}>{imovel.title}</h1>
           {/* O ÚNICO Compartilhar da ficha fora do lightbox (Fase 43). A
               galeria tinha um segundo, sobre a foto, a poucos pixels
@@ -364,14 +375,10 @@ export default async function DetalheImovelPage({
             preço. Cada item só existe se o campo estiver preenchido —
             estágio vem do enum real (três valores, sem percentual) e a
             entrega respeita a granularidade mês/ano do formulário. */}
-        {lancamento && (estagioObra || previsaoEntrega || imovel.developer) && (
+        {/* Fase 46 — o estágio da obra agora é um selo no breadcrumb; aqui
+            ficam prazo e construtora. */}
+        {lancamento && (previsaoEntrega || imovel.developer) && (
           <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-            {estagioObra && (
-              <p className="text-gray-700">
-                <span className="text-gray-500">Obra:</span>{" "}
-                <strong className="font-semibold">{estagioObra}</strong>
-              </p>
-            )}
             {previsaoEntrega && (
               <p className="text-gray-700">
                 <span className="text-gray-500">Previsão de entrega:</span>{" "}
@@ -387,11 +394,10 @@ export default async function DetalheImovelPage({
           </div>
         )}
 
+        {/* Fase 46 — o código saiu daqui e é um selo no breadcrumb; sem
+            ele, a linha pode não ter o que mostrar e não reserva espaço. */}
+        {((!lancamento && imovel.developer) || imovel.publishedAt) && (
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
-          <span>
-            Cód.{" "}
-            {formatarCodigoImovel(imovel.code, configContato.codigoImovelPrefixo)}
-          </span>
           {/* Construtora continua aqui SÓ pra imóvel que não é lançamento
               (o campo é opcional e pode estar preenchido de qualquer
               forma) — no lançamento ela já apareceu acima, e repetir
@@ -406,6 +412,7 @@ export default async function DetalheImovelPage({
             </span>
           )}
         </div>
+        )}
         </div>
 
         <BlocoComercialImovel

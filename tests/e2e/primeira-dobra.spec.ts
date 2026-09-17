@@ -51,7 +51,10 @@ test.describe("desktop — primeira dobra", () => {
       await page.goto(ficha(IDS_E2E.imovelDobraVenda));
 
       await acimaDaDobra(page.getByRole("heading", { level: 1 }), "título");
-      await acimaDaDobra(page.getByText("Apartamento · Comprar").first(), "tipo · finalidade");
+      // Fase 46 — tipo e finalidade agora vêm no breadcrumb.
+      const breadcrumb = page.getByRole("navigation", { name: "Breadcrumb" });
+      await acimaDaDobra(breadcrumb.getByRole("link", { name: "Comprar", exact: true }), "finalidade");
+      await acimaDaDobra(breadcrumb.getByRole("link", { name: "Apartamento", exact: true }), "tipo");
 
       const preco = bloco(page).locator('[data-preco="venda"]');
       await acimaDaDobra(preco, "preço");

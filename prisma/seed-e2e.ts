@@ -118,6 +118,12 @@ export const IDS_E2E = {
   imovelEditorialLancamentoSemData: "e2e-imovel-editorial-lancamento-sem-data",
   imovelEditorialCompleto: "e2e-imovel-editorial-completo",
   imovelEditorialAdmin: "e2e-imovel-editorial-admin",
+  // Fase 46 — breadcrumb comercial: um imóvel por composição.
+  imovelBreadcrumbLancamento: "e2e-imovel-breadcrumb-lancamento",
+  imovelBreadcrumbCasa: "e2e-imovel-breadcrumb-casa",
+  imovelBreadcrumbAluguel: "e2e-imovel-breadcrumb-aluguel",
+  imovelBreadcrumbVendaLocacao: "e2e-imovel-breadcrumb-venda-locacao",
+  imovelBreadcrumbSemContexto: "e2e-imovel-breadcrumb-sem-contexto",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -3599,6 +3605,66 @@ async function main() {
     title: "Imovel Editorial Admin E2E",
     isLaunch: true,
     deliveryForecast: NOV_2027,
+  });
+
+  // =====================================================================
+  // Fase 46 — BREADCRUMB COMERCIAL (Organização W)
+  // =====================================================================
+  // Uma composição por imóvel. Bairros próprios (Santana, Moema,
+  // Pinheiros, Tatuapé) para a spec provar que o link do bairro lista o
+  // imóvel certo.
+  const orgW = orgRecursos.organization.id;
+  await garantirImovel({
+    id: IDS_E2E.imovelBreadcrumbLancamento,
+    organizationId: orgW,
+    title: "Imovel Breadcrumb Lancamento E2E",
+    type: "Apartamento",
+    neighborhood: "Santana",
+    city: "São Paulo",
+    isLaunch: true,
+    constructionStage: "UNDER_CONSTRUCTION",
+    deliveryForecast: NOV_2027,
+    price: 790000,
+  });
+  await garantirImovel({
+    id: IDS_E2E.imovelBreadcrumbCasa,
+    organizationId: orgW,
+    title: "Imovel Breadcrumb Casa E2E",
+    type: "Casa",
+    neighborhood: "Moema",
+    constructionStage: "READY_TO_MOVE",
+    price: 1500000,
+  });
+  await garantirImovel({
+    id: IDS_E2E.imovelBreadcrumbAluguel,
+    organizationId: orgW,
+    title: "Imovel Breadcrumb Aluguel E2E",
+    type: "Studio",
+    neighborhood: "Pinheiros",
+    purpose: "RENT",
+    price: null,
+    rentPrice: 3200,
+  });
+  await garantirImovel({
+    id: IDS_E2E.imovelBreadcrumbVendaLocacao,
+    organizationId: orgW,
+    title: "Imovel Breadcrumb Venda Locacao E2E",
+    type: "Apartamento",
+    neighborhood: "Tatuapé",
+    purpose: "SALE_AND_RENT",
+    price: 640000,
+    rentPrice: 3500,
+  });
+  // Sem tipo e sem bairro (strings vazias, como um cadastro antigo
+  // poderia ter). RESERVED: a ficha é pública, mas o imóvel fica fora das
+  // facetas de filtro — um tipo vazio viraria uma opção vazia na busca.
+  await garantirImovel({
+    id: IDS_E2E.imovelBreadcrumbSemContexto,
+    organizationId: orgW,
+    title: "Imovel Breadcrumb Sem Contexto E2E",
+    type: "",
+    neighborhood: "",
+    status: "RESERVED",
   });
 
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
