@@ -25,6 +25,7 @@ export function SecaoImoveis({
   // quase idêntico só por causa de uma coluna.
   colunas = 3,
   basePath,
+  orgSlugFavorito,
   id,
 }: {
   titulo: string;
@@ -34,6 +35,8 @@ export function SecaoImoveis({
   verTudoRotulo?: string;
   colunas?: 3 | 4;
   basePath: string;
+  /** Fase 50 — liga o coração dos cards (ver ImovelCard). */
+  orgSlugFavorito?: string;
   id?: string;
 }) {
   if (imoveis.length === 0) return null;
@@ -75,7 +78,12 @@ export function SecaoImoveis({
         }
       >
         {imoveis.map((imovel) => (
-          <ImovelCard key={imovel.id} imovel={imovel} basePath={basePath} />
+          <ImovelCard
+            key={imovel.id}
+            imovel={imovel}
+            basePath={basePath}
+            orgSlugFavorito={orgSlugFavorito}
+          />
         ))}
       </div>
     </section>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ImovelCard } from "@/components/ImovelCard";
 import { buttonVariants } from "@/components/ui/button";
 import { IconeCoracao } from "@/components/icons";
+import { BotaoFavoritoImovel } from "@/components/favoritos/BotaoFavoritoImovel";
 import { favoritosMaisRecentesPrimeiro, idImovelValido } from "@/lib/favoritos";
 import { removerFavorito, useFavoritos } from "@/lib/favoritos-store";
 import type { ImovelFavorito } from "@/lib/favoritos-data";
@@ -84,7 +85,7 @@ export function ListaFavoritos({ orgSlug, basePath }: { orgSlug: string; basePat
     setAviso(`${imovel.titulo} removido dos favoritos.`);
     requestAnimationFrame(() => {
       const alvo = vizinho
-        ? document.querySelector<HTMLElement>(`[data-remover-favorito="${CSS.escape(vizinho.id)}"]`)
+        ? document.querySelector<HTMLElement>(`[data-favorito-imovel="${CSS.escape(vizinho.id)}"]`)
         : document.querySelector<HTMLElement>("[data-explorar-imoveis]");
       alvo?.focus();
     });
@@ -117,16 +118,14 @@ export function ListaFavoritos({ orgSlug, basePath }: { orgSlug: string; basePat
                 basePath={basePath}
                 situacao={imovel.situacao}
                 acao={
-                  <button
-                    type="button"
-                    data-remover-favorito={imovel.id}
-                    aria-label={`Remover ${imovel.titulo} dos favoritos`}
-                    title="Remover dos favoritos"
-                    onClick={() => remover(imovel)}
-                    className="flex size-10 items-center justify-center rounded-full bg-white/95 text-primary shadow-sm outline-none transition-colors hover:bg-white focus-visible:ring-3 focus-visible:ring-ring/50"
-                  >
-                    <IconeCoracao preenchido className="size-5" />
-                  </button>
+                  // O mesmo coração dos outros cards; aqui a ação é
+                  // remover com foco e aviso próprios.
+                  <BotaoFavoritoImovel
+                    orgSlug={orgSlug}
+                    imovelId={imovel.id}
+                    titulo={imovel.titulo}
+                    aoClicar={() => remover(imovel)}
+                  />
                 }
               />
             </li>

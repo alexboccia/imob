@@ -193,11 +193,18 @@ test.describe("card do imóvel", () => {
     await expect(card.getByText("Destaque", { exact: true })).toBeVisible();
   });
 
-  test("não existe coração/favorito — o produto não tem favoritos", async ({ page }) => {
+  // Fase 50 — o produto passou a ter favoritos (Fases 47–49), e a
+  // vitrine ganhou o coração dos cards: um por card, fora do link.
+  test("cada card tem exatamente um coração de favorito, fora do link", async ({ page }) => {
     await page.goto("/");
     const secao = vitrine(page);
-    await expect(secao.getByRole("button", { name: /favorit/i })).toHaveCount(0);
-    await expect(secao.locator("[aria-label*='avorit']")).toHaveCount(0);
+    const cards = secao.locator("a[href*='/imoveis/']");
+    const coracoes = secao.getByRole("button", { name: /aos favoritos$/ });
+    await expect(cards.first()).toBeVisible();
+    await expect(coracoes).toHaveCount(await cards.count());
+    for (const coracao of await coracoes.all()) {
+      expect(await coracao.evaluate((el) => el.closest("a") === null)).toBe(true);
+    }
   });
 
   test("o card inteiro é um link crawlável para a ficha", async ({ page }) => {

@@ -690,6 +690,7 @@ export default async function DetalheImovelPage({
       <OutrasUnidades
         unidades={outrasUnidades.slice(0, LIMITE_OUTRAS_UNIDADES)}
         basePath={basePath}
+        orgSlugFavorito={orgSlug}
       />
 
       {imoveisProximos.length > 0 && (
@@ -706,6 +707,7 @@ export default async function DetalheImovelPage({
                   distanciaKm != null ? formatarDistancia(distanciaKm) : undefined
                 }
                 basePath={basePath}
+                orgSlugFavorito={orgSlug}
               />
             ))}
           </div>

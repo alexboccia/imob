@@ -22,6 +22,7 @@ import {
 import { TITULO_CARD } from "@/lib/site-typography";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BotaoFavoritoImovel } from "@/components/favoritos/BotaoFavoritoImovel";
 
 type ImovelCardProps = {
   imovel: {
@@ -56,6 +57,13 @@ type ImovelCardProps = {
    * interativo aninhado, e o clique nele abriria a ficha.
    */
   acao?: React.ReactNode;
+  /**
+   * Fase 50 — organização cujos favoritos o coração do card alterna.
+   * Explícito de propósito: só as vitrines de imóveis à procura de
+   * comprador/inquilino passam (listagem, Home, corretor, ficha). Sem
+   * ele, o card não tem coração (ex.: /vendidos). `acao` tem prioridade.
+   */
+  orgSlugFavorito?: string;
 };
 
 export function ImovelCard({
@@ -63,8 +71,14 @@ export function ImovelCard({
   distancia,
   basePath,
   situacao,
-  acao,
+  acao: acaoInformada,
+  orgSlugFavorito,
 }: ImovelCardProps & { basePath: string }) {
+  const acao =
+    acaoInformada ??
+    (orgSlugFavorito ? (
+      <BotaoFavoritoImovel orgSlug={orgSlugFavorito} imovelId={imovel.id} titulo={imovel.titulo} />
+    ) : undefined);
   const [indice, setIndice] = useState(0);
   const fotos = imovel.midias;
   const swiperRef = useRef<SwiperType | null>(null);
@@ -88,7 +102,7 @@ export function ImovelCard({
       // preço/atributos é empurrado para baixo com mt-auto.
       className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
     >
-      <div className="relative aspect-[4/3] bg-gray-100 group">
+      <div data-foto-card className="relative aspect-[4/3] bg-gray-100 group">
         {fotos.length > 0 ? (
           <Swiper
             onSwiper={(swiper) => {
@@ -133,7 +147,9 @@ export function ImovelCard({
         {distancia && (
           <Badge
             variant="secondary"
-            className="absolute top-2 right-2 z-10 bg-white/90 text-gray-700"
+            // Com o coração no canto, a distância fica logo à esquerda
+            // dele (40px do botão + os dois respiros de 8px).
+            className={`absolute top-2 z-10 bg-white/90 text-gray-700 ${acao ? "right-14" : "right-2"}`}
           >
             {distancia}
           </Badge>
@@ -250,10 +266,13 @@ export function ImovelCard({
   );
 
   if (!acao) return card;
+  // A ação vem ANTES do link no DOM: é o primeiro foco do card (coração,
+  // depois a ficha), e o posicionamento absoluto a mantém no canto da
+  // foto. Irmã do link, não filha: o carrossel nunca recebe o clique.
   return (
     <div className="relative h-full">
-      {card}
       <div className="absolute top-2 right-2 z-20">{acao}</div>
+      {card}
     </div>
   );
 }

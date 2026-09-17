@@ -237,6 +237,12 @@ test.describe("compartilhar (desktop)", () => {
     // Teclado: Enter abre, setas percorrem.
     await page.keyboard.press("Enter");
     await expect(menu).toBeVisible();
+    // O menu leva o foco para dentro de si logo DEPOIS de abrir (não no
+    // mesmo quadro). Uma seta antes disso vai para o botão, não para o
+    // menu — com a máquina ocupada, isso já aconteceu duas vezes.
+    await expect
+      .poll(() => page.evaluate(() => !!document.activeElement?.closest('[role="menu"]')))
+      .toBe(true);
     await page.keyboard.press("ArrowDown");
     const focado = () => page.evaluate(() => document.activeElement?.textContent?.trim());
     const primeiro = await focado();

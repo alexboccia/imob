@@ -12,6 +12,7 @@ import {
   chaveFavoritos,
   favoritosMaisRecentesPrimeiro,
   idImovelValido,
+  rotulosBotaoFavorito,
 } from "@/lib/favoritos";
 
 // =======================================================================
@@ -161,5 +162,32 @@ describe("ordem e ids", () => {
     ["longo demais", "x".repeat(65), false],
   ])("id público válido? %s", (_n, id, esperado) => {
     expect(idImovelValido(id)).toBe(esperado);
+  });
+});
+
+describe("coração dos cards (Fase 50)", () => {
+  test("nome acessível e dica seguem o estado", () => {
+    expect(rotulosBotaoFavorito("Casa Azul", false)).toEqual({
+      nome: "Adicionar Casa Azul aos favoritos",
+      dica: "Adicionar aos favoritos",
+    });
+    expect(rotulosBotaoFavorito("Casa Azul", true)).toEqual({
+      nome: "Remover Casa Azul dos favoritos",
+      dica: "Remover dos favoritos",
+    });
+  });
+
+  test("não salvo → alternar → salvo → alternar → não salvo, só na organização do card", () => {
+    const { storage } = localStorageFalso();
+    montarJanela(storage);
+    const salvo = (org: string, id: string) => listaFavoritosAtual(org).includes(id);
+
+    expect(salvo("org-a", "a1")).toBe(false);
+    alternarFavorito("org-a", "a1");
+    expect(salvo("org-a", "a1")).toBe(true);
+    // O mesmo id em outra organização continua não salvo.
+    expect(salvo("org-b", "a1")).toBe(false);
+    alternarFavorito("org-a", "a1");
+    expect(salvo("org-a", "a1")).toBe(false);
   });
 });

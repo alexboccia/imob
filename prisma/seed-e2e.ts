@@ -3742,6 +3742,16 @@ async function main() {
       data: { organizationId: orgY, propertyId: id, type: "PHOTO", url: fotoDaGaleria(dia), isCover: true, order: 0 },
     });
   }
+  // Fase 50 — coordenadas: é o que faz "Imóveis próximos" da ficha
+  // mostrar o selo de distância, que divide o canto da foto com o
+  // coração do card.
+  for (const [id, latitude, longitude] of [
+    [IDS_E2E.imovelNavegacaoRecente, -23.55, -46.63],
+    [IDS_E2E.imovelNavegacaoMeio, -23.555, -46.635],
+    [IDS_E2E.imovelNavegacaoAntigo, -23.56, -46.64],
+  ] as const) {
+    await prisma.property.update({ where: { id }, data: { latitude, longitude } });
+  }
   // Nada além destes seis: um imóvel criado aqui por engano em rodada
   // anterior mudaria a sequência.
   await prisma.property.deleteMany({

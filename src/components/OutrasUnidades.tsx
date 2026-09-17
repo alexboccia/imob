@@ -28,9 +28,11 @@ import { TITULO_SECAO } from "@/lib/site-typography";
 export function OutrasUnidades({
   unidades,
   basePath,
+  orgSlugFavorito,
 }: {
   unidades: ImovelParaCard[];
   basePath: string;
+  orgSlugFavorito?: string;
 }) {
   // Sem outras unidades, a seção não existe — nunca um bloco vazio
   // dizendo "nenhuma outra unidade", que seria ruído numa página de
@@ -50,6 +52,7 @@ export function OutrasUnidades({
             key={unidade.id}
             imovel={paraImovelCard(unidade)}
             basePath={basePath}
+            orgSlugFavorito={orgSlugFavorito}
           />
         ))}
       </div>

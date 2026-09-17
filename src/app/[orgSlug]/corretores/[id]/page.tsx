@@ -336,6 +336,7 @@ export default async function PerfilCorretorPage({
             }
             verTudoRotulo="Ver todos os imóveis"
             basePath={basePath}
+            orgSlugFavorito={orgSlug}
           />
         ) : (
           // Estado vazio honesto: o profissional existe e está publicado,

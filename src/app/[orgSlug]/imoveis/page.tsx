@@ -331,6 +331,7 @@ export default async function ListaImoveisPage({
                 key={imovel.id}
                 imovel={paraImovelCard(imovel)}
                 basePath={basePath}
+                orgSlugFavorito={orgSlug}
               />
             ))}
           </div>

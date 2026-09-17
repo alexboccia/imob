@@ -159,6 +159,7 @@ export default async function HomePage({
         verTudoRotulo="Ver todos"
         colunas={4}
         basePath={basePath}
+        orgSlugFavorito={orgSlug}
       />
 
       {temVitrine ? null : geral.length === 0 ? (
@@ -175,6 +176,7 @@ export default async function HomePage({
           imoveis={geral.map(paraImovelCard)}
           verTudoHref={`${basePath}/imoveis`}
           basePath={basePath}
+          orgSlugFavorito={orgSlug}
         />
       )}
 

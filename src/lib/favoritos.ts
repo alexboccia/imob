@@ -77,6 +77,13 @@ export function favoritosMaisRecentesPrimeiro(ids: string[]): string[] {
   return ids.slice(-LIMITE_FAVORITOS).reverse();
 }
 
+/** Nome acessível e dica do coração dos cards (Fase 50). */
+export function rotulosBotaoFavorito(titulo: string, salvo: boolean): { nome: string; dica: string } {
+  return salvo
+    ? { nome: `Remover ${titulo} dos favoritos`, dica: "Remover dos favoritos" }
+    : { nome: `Adicionar ${titulo} aos favoritos`, dica: "Adicionar aos favoritos" };
+}
+
 /** Nova lista com o imóvel adicionado (no fim) ou removido. */
 export function alternarNaLista(ids: string[], imovelId: string): string[] {
   return ids.includes(imovelId) ? ids.filter((id) => id !== imovelId) : [...ids, imovelId];
