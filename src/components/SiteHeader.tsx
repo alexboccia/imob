@@ -5,9 +5,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { IconeMenu, IconeFechar } from "@/components/icons";
+import { IconeMenu, IconeFechar, IconeCoracao } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { larguraCaixaLogo } from "@/lib/logo";
+import { useFavoritos } from "@/lib/favoritos-store";
+import { cn } from "@/lib/utils";
 
 type NavLink = { href: string; label: string };
 
@@ -30,18 +32,45 @@ function estaAtivo(href: string, pathname: string, searchAtual: string): boolean
   );
 }
 
+// Fase 49 — contador da central de favoritos: a quantidade SALVA neste
+// navegador (a mesma lista do Salvar da ficha), sem consulta nenhuma. Um
+// id que deixou de ser público continua contando até sair da lista; a
+// página de favoritos é quem filtra. Zero não aparece.
+function ContadorFavoritos({ total, className }: { total: number; className?: string }) {
+  if (total === 0) return null;
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        data-contador-favoritos
+        className={cn(
+          "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground",
+          className
+        )}
+      >
+        {total}
+      </span>
+      <span className="sr-only">
+        , {total} {total === 1 ? "imóvel salvo" : "imóveis salvos"}
+      </span>
+    </>
+  );
+}
+
 export function SiteHeader({
   nome,
   logo,
   logoAltura,
   navLinks,
   basePath,
+  orgSlug,
 }: {
   nome: string;
   logo?: string | null;
   logoAltura?: number | null;
   navLinks: NavLink[];
   basePath: string;
+  orgSlug: string;
 }) {
   const [aberto, setAberto] = useState(false);
   const altura = logoAltura && logoAltura > 0 ? logoAltura : 48;
@@ -50,6 +79,10 @@ export function SiteHeader({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchAtual = searchParams.toString();
+  const favoritos = useFavoritos(orgSlug);
+  const totalFavoritos = favoritos?.length ?? 0;
+  const hrefFavoritos = `${basePath}/favoritos`;
+  const favoritosAtivo = estaAtivo(hrefFavoritos, pathname, searchAtual);
 
   // A altura real do header varia com logoAltura (configurável por
   // organização) e com a quebra do menu mobile — outros elementos sticky
@@ -80,15 +113,21 @@ export function SiteHeader({
       // por cima dele durante o scroll.
       className="border-b sticky top-0 bg-background z-30"
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:py-6">
+      {/* Fase 49 — gap + min-w-0 no logo: a caixa do logo tem largura
+          fixa (até 280px) e, em 320px, ela mais o botão do menu passavam
+          da largura útil (288px) — o botão saía 8px para fora da tela.
+          Agora a caixa encolhe até caber (a imagem é object-contain, só
+          fica menor, nunca cortada) e o botão nunca encolhe. */}
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-5 sm:py-6">
         <Link
           href={basePath || "/"}
-          className="flex items-center"
+          className="flex min-w-0 items-center"
           onClick={() => setAberto(false)}
+          data-logo-site
         >
           {logo ? (
             <span
-              className="relative block shrink-0"
+              className="relative block max-w-full"
               style={{ height: altura, width: largura }}
             >
               <Image
@@ -121,7 +160,13 @@ export function SiteHeader({
             linhas, esticando o header. Abaixo de md o mesmo menu aparece
             no Sheet, que já existia — nenhum link some, muda só onde ele
             é mostrado. */}
-        <nav className="hidden items-center gap-1 md:flex">
+        {/* Fase 49 — Favoritos é o último item, à direita, com o mesmo
+            estilo e o mesmo estado ativo dos demais. Entre md e lg não há
+            espaço para o rótulo (o "Anuncie seu imóvel" já quebra em
+            768px): só o coração, com o nome acessível completo; a partir
+            de lg, coração + "Favoritos". Por isso também o padding dos
+            itens é menor até lg. */}
+        <nav className="hidden shrink-0 items-center gap-1 md:flex">
           {navLinks.map((link) => {
             const ativo = estaAtivo(link.href, pathname, searchAtual);
             return (
@@ -129,7 +174,7 @@ export function SiteHeader({
                 key={link.href}
                 href={link.href}
                 aria-current={ativo ? "page" : undefined}
-                className={`rounded-lg border px-4 py-2 text-base font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+                className={`rounded-lg border px-3 py-2 text-base font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:px-4 ${
                   ativo
                     ? "border-primary text-primary"
                     : "border-transparent text-gray-700 hover:bg-primary/5 hover:text-primary"
@@ -139,6 +184,28 @@ export function SiteHeader({
               </Link>
             );
           })}
+          <Link
+            href={hrefFavoritos}
+            data-link-favoritos
+            aria-current={favoritosAtivo ? "page" : undefined}
+            title="Favoritos"
+            className={cn(
+              "relative flex items-center gap-2 rounded-lg border px-3 py-2 text-base font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:px-4",
+              favoritosAtivo
+                ? "border-primary text-primary"
+                : "border-transparent text-gray-700 hover:bg-primary/5 hover:text-primary"
+            )}
+          >
+            {/* size-6 enquanto o ícone está sozinho: a mesma altura de
+                linha (24px) dos rótulos, para o item ter a altura dos
+                outros. */}
+            <IconeCoracao className="size-6 shrink-0 lg:size-5" />
+            <span className="sr-only lg:not-sr-only">Favoritos</span>
+            <ContadorFavoritos
+              total={totalFavoritos}
+              className="absolute -top-1 -right-1 lg:static"
+            />
+          </Link>
         </nav>
 
         <Button
@@ -148,7 +215,7 @@ export function SiteHeader({
           onClick={() => setAberto((a) => !a)}
           aria-label={aberto ? "Fechar menu" : "Abrir menu"}
           aria-expanded={aberto}
-          className="md:hidden"
+          className="shrink-0 md:hidden"
         >
           {aberto ? (
             <IconeFechar className="w-6 h-6" />
@@ -184,6 +251,19 @@ export function SiteHeader({
                 </Link>
                 );
               })}
+              <Link
+                href={hrefFavoritos}
+                data-link-favoritos
+                aria-current={favoritosAtivo ? "page" : undefined}
+                className={`flex items-center gap-2 rounded-md px-2 py-2.5 text-base font-medium ${
+                  favoritosAtivo ? "bg-primary/10 text-primary" : "text-gray-700"
+                }`}
+                onClick={() => setAberto(false)}
+              >
+                <IconeCoracao className="size-5 shrink-0" />
+                Favoritos
+                <ContadorFavoritos total={totalFavoritos} />
+              </Link>
             </nav>
           </motion.div>
         )}

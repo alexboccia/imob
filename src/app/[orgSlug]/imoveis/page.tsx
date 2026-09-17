@@ -6,7 +6,7 @@ import { ImovelCard } from "@/components/ImovelCard";
 import { SeletorOrdenacao } from "@/components/SeletorOrdenacao";
 import { FiltrosImoveis } from "@/components/FiltrosImoveis";
 import { PaginacaoPublica } from "@/components/PaginacaoPublica";
-import { paraImovelCard } from "@/lib/imovel-card";
+import { SELECT_IMOVEL_CARD, paraImovelCard } from "@/lib/imovel-card";
 import { buscarDadosFiltros, resolverCorretorDoFiltro } from "@/lib/filtros-imoveis-data";
 import { campoPrecoPorFinalidade } from "@/lib/imovel-filtros";
 import {
@@ -219,30 +219,7 @@ export default async function ListaImoveisPage({
         orderBy,
         skip,
         take,
-        select: {
-          id: true,
-          title: true,
-          type: true,
-          purpose: true,
-          neighborhood: true,
-          city: true,
-          state: true,
-          price: true,
-          rentPrice: true,
-          bedrooms: true,
-          totalArea: true,
-          bathrooms: true,
-          parkingSpots: true,
-          isLaunch: true,
-          isFeatured: true,
-          isOpportunity: true,
-          media: {
-            where: { type: "PHOTO" },
-            orderBy: [{ isCover: "desc" }, { order: "asc" }],
-            take: 5,
-            select: { url: true },
-          },
-        },
+        select: SELECT_IMOVEL_CARD,
       }),
       prisma.property.count({ where }),
     ]);

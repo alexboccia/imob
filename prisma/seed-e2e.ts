@@ -3716,6 +3716,17 @@ async function main() {
     role: "OWNER",
   });
   const orgY = orgNavegacao.organization.id;
+  // Fase 49 — logo LARGO (caixa de 280px, o teto do cabeçalho), como o
+  // da organização de produção: é com ele que o cabeçalho estourava em
+  // 320px. As outras organizações do seed não têm logo.
+  const logoLargo = `data:image/svg+xml;utf8,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="700" height="200" viewBox="0 0 700 200"><title>logo-largo</title><rect width="700" height="200" rx="24" fill="#1e3a8a"/><text x="350" y="125" font-family="sans-serif" font-size="80" fill="#fff" text-anchor="middle">Navegação</text></svg>'
+  )}`;
+  await prisma.organizationSettings.upsert({
+    where: { organizationId: orgY },
+    update: { logoUrl: logoLargo, logoHeight: 80 },
+    create: { organizationId: orgY, logoUrl: logoLargo, logoHeight: 80 },
+  });
   await prisma.media.deleteMany({ where: { organizationId: orgY } });
   const diaNavegacao = (d: number) => new Date(Date.UTC(2026, 0, d, 12));
   for (const [id, title, dia, status] of [

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Link2 } from "lucide-react";
 import {
@@ -29,12 +29,7 @@ import {
   textoDeCompartilhamento,
   type RedeCompartilhamento,
 } from "@/lib/compartilhar-imovel";
-import {
-  alternarNaLista,
-  armazenamentoDoNavegador,
-  gravarFavoritos,
-  lerFavoritos,
-} from "@/lib/favoritos";
+import { alternarFavorito, useEhFavorito } from "@/lib/favoritos-store";
 import { cn } from "@/lib/utils";
 
 // Ações da ficha ao lado do título (Fase 47): Compartilhar e Salvar.
@@ -171,40 +166,14 @@ function CompartilharImovel({ url, titulo }: { url: string; titulo: string }) {
 // ---------------------------------------------------------------------
 // Favorito
 // ---------------------------------------------------------------------
-// Quando o navegador bloqueia o localStorage, o favorito vale só enquanto
-// a página estiver aberta (memória) — o botão continua funcionando.
-const memoria = new Map<string, string[]>();
-const EVENTO_FAVORITOS = "easymob:favoritos-alterados";
-
-function favoritosAtuais(orgSlug: string): string[] {
-  return memoria.get(orgSlug) ?? lerFavoritos(armazenamentoDoNavegador(), orgSlug);
-}
-
-function inscrever(aoMudar: () => void) {
-  // "storage" chega quando OUTRA aba altera a lista; o evento próprio,
-  // quando esta aba altera.
-  window.addEventListener("storage", aoMudar);
-  window.addEventListener(EVENTO_FAVORITOS, aoMudar);
-  return () => {
-    window.removeEventListener("storage", aoMudar);
-    window.removeEventListener(EVENTO_FAVORITOS, aoMudar);
-  };
-}
-
+// Fonte única no cliente: src/lib/favoritos-store.ts (Fase 49).
 function SalvarImovel({ imovelId, orgSlug }: { imovelId: string; orgSlug: string }) {
   // O servidor não conhece o navegador: renderiza "Salvar" e o cliente
   // corrige logo após hidratar — sem divergência de hidratação.
-  const salvo = useSyncExternalStore(
-    inscrever,
-    () => favoritosAtuais(orgSlug).includes(imovelId),
-    () => false
-  );
+  const salvo = useEhFavorito(orgSlug, imovelId);
 
   function alternar() {
-    const nova = alternarNaLista(favoritosAtuais(orgSlug), imovelId);
-    if (gravarFavoritos(armazenamentoDoNavegador(), orgSlug, nova)) memoria.delete(orgSlug);
-    else memoria.set(orgSlug, nova);
-    window.dispatchEvent(new Event(EVENTO_FAVORITOS));
+    alternarFavorito(orgSlug, imovelId);
   }
 
   return (

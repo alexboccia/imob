@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { MemoriaInsuficienteParaE2E, tetoDeHeapMB } from "../src/test/heap-e2e";
 
@@ -59,6 +60,15 @@ function main(): void {
   }
 
   const raiz = path.resolve(__dirname, "..");
+
+  // O cache de dados do Next (unstable_cache) sobrevive entre builds em
+  // .next/cache/fetch-cache, e o seed da suíte grava direto no banco —
+  // sem passar pelas actions que invalidam as tags. Uma entrada de uma
+  // rodada anterior serviria o dado VELHO (aconteceu na Fase 49: o logo
+  // novo de uma organização do seed não aparecia). O CI parte de um
+  // diretório limpo; aqui, limpa-se antes do build.
+  fs.rmSync(path.join(raiz, ".next", "cache", "fetch-cache"), { recursive: true, force: true });
+
   const resultado = spawnSync("npm", ["run", "build"], {
     cwd: raiz,
     stdio: "inherit",

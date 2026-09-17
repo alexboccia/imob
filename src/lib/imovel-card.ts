@@ -1,3 +1,5 @@
+import type { Prisma } from "@/generated/prisma/client";
+
 // Exportado desde a Fase 38: a seção "Outras unidades" monta o seu
 // próprio select no banco e precisa declarar que ele satisfaz o contrato
 // do card — em vez de repetir a forma numa segunda definição.
@@ -46,3 +48,30 @@ export function paraImovelCard(imovel: ImovelParaCard) {
     midias: imovel.media.map((m) => ({ url: m.url })),
   };
 }
+
+// As colunas que o card público usa — a listagem e a página de favoritos
+// (Fase 49) pedem exatamente isto, para o card ser o mesmo nas duas.
+export const SELECT_IMOVEL_CARD = {
+  id: true,
+  title: true,
+  type: true,
+  purpose: true,
+  neighborhood: true,
+  city: true,
+  state: true,
+  price: true,
+  rentPrice: true,
+  bedrooms: true,
+  totalArea: true,
+  bathrooms: true,
+  parkingSpots: true,
+  isLaunch: true,
+  isFeatured: true,
+  isOpportunity: true,
+  media: {
+    where: { type: "PHOTO" },
+    orderBy: [{ isCover: "desc" }, { order: "asc" }],
+    take: 5,
+    select: { url: true },
+  },
+} satisfies Prisma.PropertySelect;

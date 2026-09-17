@@ -44,12 +44,26 @@ type ImovelCardProps = {
     midias: { url: string }[];
   };
   distancia?: string;
+  /**
+   * Fase 49 — situação do imóvel quando não está mais disponível
+   * ("Vendido", "Reservado"...). Só a página de favoritos passa: nas
+   * outras listas todo card já é de imóvel disponível.
+   */
+  situacao?: string | null;
+  /**
+   * Fase 49 — ação sobre o card (ex.: remover dos favoritos). Fica FORA
+   * do link, no canto da foto: um botão dentro de <a> seria conteúdo
+   * interativo aninhado, e o clique nele abriria a ficha.
+   */
+  acao?: React.ReactNode;
 };
 
 export function ImovelCard({
   imovel,
   distancia,
   basePath,
+  situacao,
+  acao,
 }: ImovelCardProps & { basePath: string }) {
   const [indice, setIndice] = useState(0);
   const fotos = imovel.midias;
@@ -65,7 +79,7 @@ export function ImovelCard({
     swiperRef.current?.slideNext();
   }
 
-  return (
+  const card = (
     <Link
       href={`${basePath}/imoveis/${imovel.id}`}
       // flex-col + h-full: numa grade de quatro colunas os cards
@@ -102,8 +116,13 @@ export function ImovelCard({
             Sem foto
           </div>
         )}
-        {rotulosAtivos(imovel).length > 0 && (
+        {(situacao || rotulosAtivos(imovel).length > 0) && (
           <div className="absolute top-2 left-2 z-10 flex flex-col gap-1 items-start">
+            {situacao && (
+              <Badge data-situacao-imovel className="bg-gray-900/85 text-white">
+                {situacao}
+              </Badge>
+            )}
             {rotulosAtivos(imovel).map((rotulo) => (
               <Badge key={rotulo.chave} className={rotulo.className}>
                 {rotulo.label}
@@ -228,5 +247,13 @@ export function ImovelCard({
         )}
       </div>
     </Link>
+  );
+
+  if (!acao) return card;
+  return (
+    <div className="relative h-full">
+      {card}
+      <div className="absolute top-2 right-2 z-20">{acao}</div>
+    </div>
   );
 }

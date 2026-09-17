@@ -159,6 +159,7 @@ export default async function PublicLayout({
         logoAltura={config.logoAltura}
         navLinks={navLinks(basePath)}
         basePath={basePath}
+        orgSlug={orgSlug}
       />
       <main className="flex-1">{children}</main>
       <SiteFooter

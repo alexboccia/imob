@@ -793,12 +793,14 @@ test.describe("Site público — Home comercial: responsividade", () => {
     expect(linhas).toBeLessThanOrEqual(1);
   });
 
-  test("768px: menu horizontal volta, com os quatro itens em uma linha só", async ({ page }) => {
+  // Fase 49 — o quinto item é Favoritos (só o coração até lg).
+  test("768px: menu horizontal volta, com os cinco itens em uma linha só", async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 800 });
     await page.goto("/");
     const nav = page.locator("header nav");
     await expect(nav).toBeVisible();
-    await expect(nav.locator("a")).toHaveCount(4);
+    await expect(nav.locator("a")).toHaveCount(5);
+    await expect(nav.locator("a").last()).toHaveAccessibleName("Favoritos");
     const linhas = await page.evaluate(() => {
       const links = [...document.querySelectorAll("header nav a")];
       return new Set(links.map((l) => Math.round(l.getBoundingClientRect().top))).size;

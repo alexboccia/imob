@@ -47,6 +47,8 @@ export const SLUGS_RESERVADOS = new Set([
   // "corretores" entrou justamente assim: a rota foi criada na fase
   // anterior e ninguém lembrou daqui.
   "corretores",
+  // Fase 49 — central de favoritos do visitante.
+  "favoritos",
   // Fase 26 — /cadastro é uma rota REAL de topo (o self-service). Um
   // segmento estático vence o dinâmico [orgSlug] no roteador, então uma
   // organização com este slug ficaria permanentemente inacessível pelo

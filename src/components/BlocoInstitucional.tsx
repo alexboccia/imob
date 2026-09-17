@@ -126,8 +126,11 @@ export function BlocoInstitucional({
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-12">
           <div className="min-w-0 lg:flex-1">
             {logo ? (
+              // max-w-full (Fase 49): a caixa de até 280px não cabe na
+              // coluna em 320px; encolhe junto, a arte segue inteira
+              // (object-contain), como no cabeçalho.
               <span
-                className="relative block"
+                className="relative block max-w-full"
                 style={{ height: altura, width: larguraCaixaLogo(altura) }}
               >
                 <Image

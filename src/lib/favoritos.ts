@@ -19,7 +19,20 @@
 // =======================================================================
 
 export const PREFIXO_FAVORITOS = "easymob:favoritos:v1:";
-export const LIMITE_FAVORITOS = 200;
+// Fase 49 — o mesmo teto vale para a lista gravada e para a consulta da
+// página de favoritos: o servidor nunca recebe mais do que o navegador
+// pode guardar. Lista antiga maior é cortada (mantendo as mais recentes)
+// na próxima gravação, e a página só pede as mais recentes.
+export const LIMITE_FAVORITOS = 100;
+
+// Formato de um id público de imóvel (cuid, ou os fixos do seed). O
+// storage pode ter qualquer coisa; só o que tem este formato vai ao
+// servidor, e o servidor confere de novo.
+const ID_IMOVEL = /^[A-Za-z0-9_-]{1,64}$/;
+
+export function idImovelValido(id: string): boolean {
+  return ID_IMOVEL.test(id);
+}
 
 export function chaveFavoritos(orgSlug: string): string {
   return `${PREFIXO_FAVORITOS}${orgSlug}`;
@@ -53,6 +66,15 @@ export function gravarFavoritos(
   } catch {
     return false;
   }
+}
+
+/**
+ * A ordem da página de favoritos: mais recente primeiro. A lista gravada
+ * cresce pelo fim (alternarNaLista), então basta invertê-la — sem data
+ * nenhuma guardada. Limitada ao teto, mantendo as mais recentes.
+ */
+export function favoritosMaisRecentesPrimeiro(ids: string[]): string[] {
+  return ids.slice(-LIMITE_FAVORITOS).reverse();
 }
 
 /** Nova lista com o imóvel adicionado (no fim) ou removido. */

@@ -2,6 +2,7 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import { buscarVizinhosPublicos } from "@/lib/navegacao-imoveis-data";
 import { hrefDoImovel } from "@/lib/navegacao-imoveis";
+import { fichaEhPublica } from "@/lib/visibilidade-imovel";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import {
@@ -187,7 +188,7 @@ export async function generateMetadata({
     buscarImovel(id, organizationId)
   );
 
-  if (!imovel || imovel.status === "DRAFT" || imovel.status === "INACTIVE") {
+  if (!imovel || !fichaEhPublica(imovel.status)) {
     return {};
   }
 
@@ -243,7 +244,7 @@ export default async function DetalheImovelPage({
     await withOrganization(organizationId, async () => {
       const imovel = await buscarImovel(id, organizationId);
 
-      if (!imovel || imovel.status === "DRAFT" || imovel.status === "INACTIVE") {
+      if (!imovel || !fichaEhPublica(imovel.status)) {
         notFound();
       }
 

@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { visibilidadePublica } from "@/lib/visibilidade-imovel";
 
 // =======================================================================
 // Imóvel anterior / próximo imóvel (Fase 48)
@@ -29,10 +30,7 @@ const ORDEM_PUBLICA_INVERSA = [
   { id: "asc" },
 ] satisfies Prisma.PropertyOrderByWithRelationInput[];
 
-/** Quem aparece na listagem pública sem filtro. */
-export function visibilidadePublica(organizationId: string) {
-  return { organizationId, status: "AVAILABLE" } satisfies Prisma.PropertyWhereInput;
-}
+export { visibilidadePublica };
 
 export type PosicaoNaOrdem = { id: string; publishedAt: Date | null };
 
