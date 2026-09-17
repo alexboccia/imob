@@ -264,9 +264,24 @@ test.describe("largura", () => {
         await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
         `política @ ${largura}`
       ).toBe(true);
-      // Linha de leitura confortável: o texto não estica com a tela.
+      // Linha de leitura confortável, medida em CARACTERES da própria
+      // fonte da página — pixels dependeriam da fonte da máquina (a do
+      // CI é mais larga que a daqui).
+      const caracteresPorLinha = await page.locator("main p").nth(1).evaluate((el) => {
+        const regua = document.createElement("span");
+        regua.textContent = "0".repeat(100);
+        regua.style.font = getComputedStyle(el).font;
+        regua.style.position = "absolute";
+        regua.style.whiteSpace = "pre";
+        el.after(regua);
+        const larguraDoCaractere = regua.getBoundingClientRect().width / 100;
+        regua.remove();
+        return el.getBoundingClientRect().width / larguraDoCaractere;
+      });
+      expect(caracteresPorLinha, `caracteres por linha @ ${largura}`).toBeLessThanOrEqual(90);
+      // E o texto não acompanha a largura da tela nas telas largas.
       const paragrafo = await caixa(page.locator("main p").nth(1));
-      expect(paragrafo.width).toBeLessThanOrEqual(Math.min(largura, 700));
+      if (largura >= 1024) expect(paragrafo.width).toBeLessThan(largura - 200);
       // Título e conteúdo dentro da viewport.
       const h1 = await caixa(page.getByRole("heading", { level: 1 }));
       expect(h1.x).toBeGreaterThanOrEqual(0);
