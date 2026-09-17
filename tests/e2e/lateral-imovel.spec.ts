@@ -157,6 +157,172 @@ test.describe("composição da lateral", () => {
 });
 
 // -----------------------------------------------------------------------
+// Toolbar do corretor (Fase 53)
+// -----------------------------------------------------------------------
+test.describe("ações do corretor", () => {
+  const FICHA_SEM_CONTATOS = `${BASE}/imoveis/e2e-imovel-portfolio-rui-1`;
+  const acao = (page: Page, chave: string) => page.locator(`[data-acao-corretor="${chave}"]`);
+
+  /** Largura que a toolbar precisaria para caber numa linha. */
+  async function larguraNecessaria(page: Page) {
+    return corretor(page)
+      .locator("[data-acao-corretor]")
+      .first()
+      .evaluate((perfil) => {
+        const toolbar = perfil.parentElement!;
+        const clone = perfil.cloneNode(true) as HTMLElement;
+        clone.style.position = "absolute";
+        clone.style.flex = "none";
+        clone.style.minWidth = "0";
+        perfil.after(clone);
+        const intrinseca = clone.getBoundingClientRect().width;
+        clone.remove();
+        const vao = parseFloat(getComputedStyle(toolbar).columnGap || "0");
+        const contatos = [...toolbar.querySelectorAll("[data-acao-corretor]")].slice(1);
+        const larguraContatos = contatos.reduce((total, c) => total + c.getBoundingClientRect().width, 0);
+        return intrinseca + larguraContatos + vao * contatos.length;
+      });
+  }
+
+  for (const largura of [320, 390, 768, 1024, 1280, 1440]) {
+    test(`${largura}px: perfil e contatos compactos, na mesma linha quando cabem`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: largura, height: 1000 });
+      await page.goto(FICHA_COM_CORRETOR);
+
+      const card = await caixa(corretor(page));
+      const caixas: { chave: string; x: number; y: number; width: number; height: number }[] = [];
+      for (const chave of ["perfil", "telefone", "whatsapp", "email"]) {
+        caixas.push({ chave, ...(await caixa(acao(page, chave))) });
+      }
+
+      // Todos com a MESMA altura, em qualquer largura.
+      for (const b of caixas) {
+        expect(Math.abs(b.height - caixas[0].height), `altura de ${b.chave} @ ${largura}`).toBeLessThan(1);
+      }
+      // Ordem: perfil, telefone, WhatsApp, e-mail — nessa sequência de leitura.
+      for (let i = 1; i < caixas.length; i++) {
+        const anterior = caixas[i - 1];
+        const atual = caixas[i];
+        const mesmaLinha = Math.abs(atual.y - anterior.y) < 1;
+        if (mesmaLinha) expect(atual.x, `${atual.chave} @ ${largura}`).toBeGreaterThanOrEqual(anterior.x + anterior.width);
+        else expect(atual.y, `${atual.chave} @ ${largura}`).toBeGreaterThan(anterior.y);
+      }
+      // Contatos quadrados, com alvo de toque do projeto.
+      const [perfil, ...contatos] = caixas;
+      for (const b of contatos) {
+        expect(Math.abs(b.width - b.height), `${b.chave} não é quadrado @ ${largura}`).toBeLessThan(1);
+        expect(b.width, `alvo de toque de ${b.chave} @ ${largura}`).toBeGreaterThanOrEqual(36);
+      }
+      expect(perfil.width, `perfil @ ${largura}`).toBeGreaterThan(contatos[0].width);
+      // Os três contatos sempre juntos, na mesma linha entre si.
+      for (const b of contatos) expect(Math.abs(b.y - contatos[0].y), `${b.chave} @ ${largura}`).toBeLessThan(1);
+      // Vãos iguais entre os contatos.
+      const vaos = contatos.slice(1).map((b, i) => b.x - (contatos[i].x + contatos[i].width));
+      for (const v of vaos) expect(Math.abs(v - vaos[0]), `vão @ ${largura}`).toBeLessThan(1);
+
+      // Dentro do card e sem estouro da página.
+      for (const b of caixas) {
+        expect(b.x, `${b.chave} @ ${largura}`).toBeGreaterThanOrEqual(card.x - 0.5);
+        expect(b.x + b.width, `${b.chave} @ ${largura}`).toBeLessThanOrEqual(card.x + card.width + 0.5);
+      }
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+        `estouro @ ${largura}`
+      ).toBe(true);
+      // Nada cortado dentro dos botões.
+      for (const { chave } of caixas) {
+        expect(
+          await acao(page, chave).evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+          `conteúdo cortado em ${chave} @ ${largura}`
+        ).toBe(true);
+      }
+
+      // Uma linha só quando a largura comporta — medido com a fonte
+      // desta máquina, nunca com pixels fixos. Acima de lg isso é
+      // obrigatório: a coluna sempre comporta.
+      const necessaria = await larguraNecessaria(page);
+      const umaLinha = caixas.every((b) => Math.abs(b.y - perfil.y) < 1);
+      if (largura >= 1280) {
+        expect(necessaria, `a coluna deveria comportar @ ${largura}`).toBeLessThanOrEqual(card.width + 0.5);
+      }
+      if (necessaria <= card.width + 0.5) {
+        expect(umaLinha, `deveria caber numa linha @ ${largura}`).toBe(true);
+        expect(Math.abs(perfil.x - card.x)).toBeLessThan(1);
+        expect(Math.abs(caixas[3].x + caixas[3].width - (card.x + card.width))).toBeLessThan(1);
+      } else {
+        // Degradação controlada: o grupo de contatos desce inteiro.
+        expect(umaLinha, `não cabia numa linha @ ${largura}`).toBe(false);
+        expect(contatos[0].y).toBeGreaterThan(perfil.y);
+      }
+    });
+  }
+
+  test("contatos são só ícone: nenhum número ou rótulo visível, hrefs intactos", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.goto(FICHA_COM_CORRETOR);
+
+    const toolbar = corretor(page).locator("[data-acao-corretor]");
+    await expect(toolbar).toHaveCount(4);
+    for (const chave of ["telefone", "whatsapp", "email"]) {
+      // Nenhum texto visível dentro do botão.
+      expect((await acao(page, chave).innerText()).trim(), chave).toBe("");
+      await expect(acao(page, chave).locator("svg")).toHaveAttribute("aria-hidden", "true");
+    }
+    const textoDaToolbar = await corretor(page).locator("[data-acao-corretor]").last().locator("xpath=../..").innerText();
+    expect(textoDaToolbar).not.toContain("(11)");
+    expect(textoDaToolbar).not.toContain("1133224455");
+    expect(textoDaToolbar).not.toContain("Falar no WhatsApp");
+    expect(textoDaToolbar).not.toContain("sonia.publico@e2e.test");
+    expect(textoDaToolbar.trim()).toBe("Ver perfil completo");
+
+    // Os dados continuam nos hrefs e nos nomes acessíveis.
+    await expect(acao(page, "perfil")).toHaveAttribute("href", `${BASE}/corretores/${SONIA}`);
+    await expect(acao(page, "telefone")).toHaveAttribute("href", "tel:1133224455");
+    await expect(acao(page, "telefone")).toHaveAccessibleName("Ligar para Sônia Portfolio");
+    await expect(acao(page, "email")).toHaveAttribute("href", "mailto:sonia.publico@e2e.test");
+    await expect(acao(page, "email")).toHaveAccessibleName("Enviar e-mail para Sônia Portfolio");
+    const whatsapp = acao(page, "whatsapp");
+    expect(await whatsapp.getAttribute("href")).toContain("wa.me/11955550000");
+    expect(await whatsapp.getAttribute("href")).toContain("text=");
+    await expect(whatsapp).toHaveAttribute("target", "_blank");
+    await expect(whatsapp).toHaveAttribute("rel", /noopener/);
+    await expect(whatsapp).toHaveAccessibleName("Falar no WhatsApp com Sônia Portfolio");
+
+    // O perfil é o botão de contorno na cor do tenant, não um botão cheio.
+    const cores = await acao(page, "perfil").evaluate((el) => {
+      const e = getComputedStyle(el);
+      return { fundo: e.backgroundColor, borda: e.borderTopColor, texto: e.color };
+    });
+    expect(cores.borda).toBe(cores.texto);
+    expect(cores.fundo).not.toBe(cores.borda);
+  });
+
+  test("sem contatos publicados: só o perfil, sem espaço reservado", async ({ page }) => {
+    publicarPerfisNoBanco(IDS_E2E.membroPortfolioRui);
+    try {
+      await page.setViewportSize({ width: 1280, height: 1000 });
+      await page.goto(FICHA_SEM_CONTATOS);
+      await expect(corretor(page)).toBeVisible();
+      await expect(corretor(page).locator("[data-acao-corretor]")).toHaveCount(1);
+      await expect(acao(page, "perfil")).toBeVisible();
+      for (const chave of ["telefone", "whatsapp", "email"]) {
+        await expect(acao(page, chave)).toHaveCount(0);
+      }
+      // Sem botão desabilitado só para preencher a linha.
+      await expect(corretor(page).locator("button, [aria-disabled='true']")).toHaveCount(0);
+      const card = await caixa(corretor(page));
+      const perfil = await caixa(acao(page, "perfil"));
+      expect(Math.abs(perfil.x + perfil.width - (card.x + card.width))).toBeLessThan(1);
+    } finally {
+      despublicarPerfisNoBanco(ORG_PORTFOLIO.slug);
+      publicarPerfisNoBanco(SONIA);
+    }
+  });
+});
+
+// -----------------------------------------------------------------------
 // Política de privacidade
 // -----------------------------------------------------------------------
 test.describe("política de privacidade", () => {

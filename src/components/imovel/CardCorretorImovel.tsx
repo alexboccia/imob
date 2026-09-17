@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   IconeEmail,
   IconePessoa,
@@ -16,7 +17,6 @@ import {
   type ContatosPublicosCorretor,
   type CorretorPublico,
 } from "@/lib/perfil-publico-corretor";
-import { formatarTelefone } from "@/lib/telefone";
 
 // Corretor responsável — dentro do card lateral de conversão (Fase 51),
 // entre os CTAs e o formulário.
@@ -122,80 +122,89 @@ export function CardCorretorImovel({
           ele. Por isso o CTA não precisa de condição própria — e não
           há como ele apontar para uma página inexistente. O caminho sai
           do helper central; nenhum componente concatena rota à mão. */}
-      {/* Até quatro ações: empilham no mobile e quebram em linha a
-          partir de sm, em vez de virarem quatro botões ilegíveis lado a
-          lado numa tela estreita. */}
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      {/* Fase 53 — UMA linha: o perfil ocupa o espaço que sobra e os
+          contatos são botões quadrados só com ícone. Antes cada ação
+          era `w-full` e a toolbar virava quatro faixas empilhadas (e o
+          telefone exibia o número, que o href já carrega). O número, o
+          endereço e o link do WhatsApp continuam iguais — mudou a
+          apresentação, não o dado nem a regra de quem pode aparecer.
+          Em telas muito estreitas o grupo de contatos desce inteiro
+          para a linha de baixo, sem voltar a ser texto. */}
+      <div className="flex flex-wrap items-center gap-1.5">
         <Link
           href={caminhoPerfilCorretor(basePath, membroId)}
-          className={buttonVariants({ size: "lg", className: "w-full" })}
+          data-acao-corretor="perfil"
+          // cn() e não a className do buttonVariants: só a mescla do
+          // tailwind-merge tira o `border-transparent` da base, que de
+          // outro modo vence a cor do tenant.
+          className={cn(
+            buttonVariants({ variant: "outline", size: "lg" }),
+            // Contorno na cor do tenant (nada de azul fixo): as mesmas
+            // classes de item ativo do menu do site.
+            //
+            // min-w-fit: o rótulo nunca é cortado nem quebrado. Quando
+            // a coluna não comporta os quatro (a lateral tem ~277px em
+            // 1024, e a fonte varia entre máquinas), quem desce para a
+            // linha de baixo é o GRUPO de contatos inteiro — os quatro
+            // continuam com a mesma altura e os contatos, quadrados.
+            "min-w-fit flex-1 border-primary text-primary hover:bg-primary/5 hover:text-primary"
+          )}
         >
           Ver perfil completo
         </Link>
 
-        {telefoneHref && (
-          <a
-            href={telefoneHref}
-            aria-label={`Ligar para ${corretor.nome}`}
-            className={buttonVariants({
-              variant: "outline",
-              size: "lg",
-              className: "w-full",
-            })}
-          >
-            <IconeTelefone className="size-5" aria-hidden />
-            {formatarTelefone(contatos.telefone!)}
-          </a>
-        )}
-
-        {whatsappHref && (
-          <>
-          <RastreioCliqueWhatsApp
-            orgSlug={orgSlug}
-            imovelId={imovelId}
-            placement="BROKER_CARD"
-          >
+        {/* Só existe quando há contato publicado: um contêiner vazio
+            deixaria um vão à direita do perfil. */}
+        {(telefoneHref || whatsappHref || emailHref) && (
+        <div className="flex shrink-0 items-center gap-1.5">
+          {telefoneHref && (
             <a
-              href={whatsappHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              // O texto acompanha o ícone: quem usa leitor de tela, e
-              // quem simplesmente não reconhece o glifo, recebe a mesma
-              // informação. O aria-label nomeia a pessoa, porque a
-              // página tem outros CTAs de WhatsApp e "Falar no WhatsApp"
-              // sozinho não distinguiria este.
-              aria-label={`Falar no WhatsApp com ${corretor.nome}`}
-              // size "lg" é o maior da escala deste design system (36px,
-              // a mesma altura do CTA principal do card lateral) — e no
-              // mobile a largura total dá o alvo de toque confortável.
-              // Inventar um botão mais alto só aqui deixaria o card com
-              // cara de peça estrangeira.
-              className={buttonVariants({
-                variant: "outline",
-                size: "lg",
-                className: "w-full",
-              })}
+              href={telefoneHref}
+              data-acao-corretor="telefone"
+              aria-label={`Ligar para ${corretor.nome}`}
+              title={`Ligar para ${corretor.nome}`}
+              className={buttonVariants({ variant: "outline", size: "icon-lg" })}
             >
-              <IconeWhatsApp className="size-5" aria-hidden />
-              Falar no WhatsApp
+              <IconeTelefone className="size-5" aria-hidden="true" />
             </a>
-          </RastreioCliqueWhatsApp>
-          </>
-        )}
+          )}
 
-        {emailHref && (
-          <a
-            href={emailHref}
-            aria-label={`Enviar e-mail para ${corretor.nome}`}
-            className={buttonVariants({
-              variant: "outline",
-              size: "lg",
-              className: "w-full",
-            })}
-          >
-            <IconeEmail className="size-5" aria-hidden />
-            E-mail
-          </a>
+          {whatsappHref && (
+            <RastreioCliqueWhatsApp orgSlug={orgSlug} imovelId={imovelId} placement="BROKER_CARD">
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-acao-corretor="whatsapp"
+                // O nome acessível nomeia a PESSOA: a ficha tem outro CTA
+                // de WhatsApp (o da imobiliária, no topo do card).
+                aria-label={`Falar no WhatsApp com ${corretor.nome}`}
+                title={`Falar no WhatsApp com ${corretor.nome}`}
+                className={buttonVariants({
+                  variant: "outline",
+                  size: "icon-lg",
+                  // Verde do canal só no ícone — o botão continua sendo
+                  // um contato discreto, não um CTA comercial.
+                  className: "text-whatsapp-brand hover:text-whatsapp-brand",
+                })}
+              >
+                <IconeWhatsApp className="size-5" aria-hidden="true" />
+              </a>
+            </RastreioCliqueWhatsApp>
+          )}
+
+          {emailHref && (
+            <a
+              href={emailHref}
+              data-acao-corretor="email"
+              aria-label={`Enviar e-mail para ${corretor.nome}`}
+              title={`Enviar e-mail para ${corretor.nome}`}
+              className={buttonVariants({ variant: "outline", size: "icon-lg" })}
+            >
+              <IconeEmail className="size-5" aria-hidden="true" />
+            </a>
+          )}
+        </div>
         )}
       </div>
     </section>

@@ -1470,8 +1470,12 @@ test.describe("Card do corretor responsável", () => {
       // de propósito: o WhatsApp institucional da Org A é ligado e
       // desligado por outros testes deste mesmo arquivo, e depender dele
       // tornaria esta asserção refém da ordem de execução.
-      // Ícone sozinho não carrega a informação: há texto e aria-label.
-      await expect(botao).toContainText("Falar no WhatsApp");
+      // Fase 53 — na toolbar do corretor o contato é só ícone: quem
+      // carrega a informação é o nome acessível, e o ícone é
+      // decorativo. O texto visível saiu (o número também).
+      expect((await botao.innerText()).trim()).toBe("");
+      await expect(botao).toHaveAccessibleName(/^Falar no WhatsApp com /);
+      await expect(botao.locator("svg")).toHaveAttribute("aria-hidden", "true");
     } finally {
       // Rede de segurança: num timeout a página já está fechada e a
       // restauração pela UI falharia em silêncio, deixando o perfil
