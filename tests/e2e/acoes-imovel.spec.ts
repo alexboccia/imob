@@ -469,11 +469,17 @@ test.describe("faixa título + ações", () => {
         const b = await caixa(alvo);
         expect(b.y + b.height).toBeLessThanOrEqual(DOBRA);
       }
-      // Referência da Fase 46 com o mesmo fixture: preço até 199, galeria
-      // em 267. As ações dividem a linha do título e não somam altura.
-      const preco = await caixa(bloco.locator('[data-preco="venda"]'));
-      expect(preco.y + preco.height).toBeLessThanOrEqual(199);
-      expect((await caixa(page.locator("[data-galeria-hero]"))).y).toBeLessThanOrEqual(267);
+      // As ações dividem a linha do título e não somam altura: cabem na
+      // altura do próprio título. (Comparar com pixels absolutos de uma
+      // máquina não vale: a fonte do CI é mais larga e quebra o título em
+      // outro ponto.)
+      const titulo = await caixa(page.getByRole("heading", { level: 1 }));
+      const acoes = await caixa(page.locator("[data-acoes-imovel]"));
+      expect(acoes.y).toBeGreaterThanOrEqual(titulo.y - 1);
+      expect(acoes.y + acoes.height).toBeLessThanOrEqual(titulo.y + Math.max(titulo.height, acoes.height) + 1);
+      // E a galeria continua com a maior parte na primeira tela.
+      const galeria = await caixa(page.locator("[data-galeria-hero]"));
+      expect(DOBRA - galeria.y).toBeGreaterThanOrEqual(500);
     });
   }
 });
