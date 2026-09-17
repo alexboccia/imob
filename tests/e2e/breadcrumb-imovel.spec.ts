@@ -279,15 +279,13 @@ test.describe("responsivo", () => {
   }
 
   for (const largura of [1280, 1440]) {
-    test(`${largura}px: a faixa não tira título, preço e ação da primeira dobra`, async ({ page }) => {
+    test(`${largura}px: a faixa não tira título, ações e galeria da primeira dobra`, async ({ page }) => {
       await page.setViewportSize({ width: largura, height: DOBRA });
       await page.goto(fichaW(IDS_E2E.imovelEditorialCompleto));
-      const bloco = page.locator("[data-bloco-comercial]");
       const alvos = [
         contexto(page),
         page.getByRole("heading", { level: 1 }),
-        bloco.locator('[data-preco="venda"]'),
-        bloco.getByRole("link", { name: "Tenho interesse" }),
+        page.locator("[data-acoes-imovel]"),
         page.locator("[data-foto-principal] [data-ver-galeria]"),
       ];
       for (const alvo of alvos) {

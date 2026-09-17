@@ -207,13 +207,10 @@ test.describe("H) composição completa", () => {
 
       expect(await semOverflow(page)).toBe(true);
 
-      // Fase 43 — preço e ação continuam na primeira dobra.
+      // Fase 52 — o topo não tem comercial; o CTA da própria foto
+      // continua na primeira dobra.
       if (largura >= 1280) {
-        const bloco = page.locator("[data-bloco-comercial]");
-        for (const el of [bloco.locator('[data-preco="venda"]'), bloco.getByRole("link", { name: "Tenho interesse" })]) {
-          const b = await caixa(el);
-          expect(b.y + b.height).toBeLessThanOrEqual(DOBRA);
-        }
+        await expect(page.locator("[data-cabecalho-imovel] [data-preco]")).toHaveCount(0);
         const cta = caixas[3];
         expect(cta.y + cta.height).toBeLessThanOrEqual(DOBRA);
       }

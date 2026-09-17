@@ -465,15 +465,12 @@ test.describe("faixa título + ações", () => {
   }
 
   for (const largura of [1280, 1440]) {
-    test(`${largura}px: a faixa não tira preço, ação e galeria da primeira dobra`, async ({ page }) => {
+    test(`${largura}px: a faixa não tira título, ações e galeria da primeira dobra`, async ({ page }) => {
       await page.setViewportSize({ width: largura, height: DOBRA });
       await page.goto(fichaW(IDS_E2E.imovelEditorialCompleto));
-      const bloco = page.locator("[data-bloco-comercial]");
       for (const alvo of [
         page.getByRole("heading", { level: 1 }),
         page.locator("[data-acoes-imovel]"),
-        bloco.locator('[data-preco="venda"]'),
-        bloco.getByRole("link", { name: "Tenho interesse" }),
         page.locator("[data-foto-principal] [data-ver-galeria]"),
       ]) {
         const b = await caixa(alvo);

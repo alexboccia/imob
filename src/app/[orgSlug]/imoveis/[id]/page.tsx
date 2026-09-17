@@ -50,7 +50,6 @@ import { CarrosselPlantas } from "@/components/CarrosselPlantas";
 import { ImovelCard } from "@/components/ImovelCard";
 import { CaracteristicasDoImovel } from "@/components/imovel/Caracteristicas";
 import { CardContatoImovel } from "@/components/imovel/CardContatoImovel";
-import { BlocoComercialImovel } from "@/components/imovel/BlocoComercialImovel";
 import { BreadcrumbImovel, type SeloContexto } from "@/components/imovel/BreadcrumbImovel";
 import { migalhasDoImovel } from "@/lib/breadcrumb-imovel";
 import { CardCorretorImovel } from "@/components/imovel/CardCorretorImovel";
@@ -375,23 +374,22 @@ export default async function DetalheImovelPage({
             conteúdo. */}
         <BreadcrumbImovel migalhas={migalhas} selos={selosContexto} />
 
-        {/* Fase 48 — UMA grade para o cabeçalho inteiro. A partir de lg:
-            identidade à esquerda (ocupando as duas linhas) e, à direita,
-            as ações na linha do título e o bloco comercial embaixo. Com
-            as ações na MESMA coluna do bloco, o último botão termina na
-            borda direita do conteúdo — antes elas moravam dentro da
-            coluna da identidade e terminavam no meio da página.
-            Abaixo de lg a grade tem uma coluna e a identidade vira
-            `contents`: título e endereço, ações, e só então prazo e
-            metadado (texto sem foco — a ordem de leitura não perde
-            nada). */}
+        {/* Fase 52 — o cabeçalho é só identidade e ações. O bloco
+            comercial que morava aqui (preço + CTA, coluna da direita,
+            Fase 43) saiu: preço e WhatsApp já vivem no card lateral da
+            Fase 51, e repeti-los acima da galeria empurrava as fotos
+            para baixo e criava duas áreas comerciais na mesma tela.
+            A grade continua a mesma, com uma linha só: título à
+            esquerda, as quatro ações à direita, terminando na borda do
+            conteúdo. Abaixo de lg a identidade vira `contents` para as
+            ações ficarem entre o endereço e o metadado. */}
         <div
           data-cabecalho-imovel
-          className="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-x-10 lg:gap-y-3"
+          className="mt-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-x-10"
         >
         <div
           data-identidade-imovel
-          className="contents lg:col-start-1 lg:row-span-2 lg:row-start-1 lg:block lg:min-w-0"
+          className="contents lg:col-start-1 lg:row-start-1 lg:block lg:min-w-0"
         >
           {/* Título nunca truncado: quebra em quantas linhas precisar. */}
           <div className="order-1 min-w-0">
@@ -460,16 +458,7 @@ export default async function DetalheImovelPage({
           url={urlCanonica}
           anteriorHref={vizinhos.anteriorId ? hrefDoImovel(basePath, vizinhos.anteriorId) : null}
           proximoHref={vizinhos.proximoId ? hrefDoImovel(basePath, vizinhos.proximoId) : null}
-          className="order-2 mt-3 lg:order-none lg:col-start-2 lg:row-start-1 lg:mt-0 lg:justify-self-end lg:self-start"
-        />
-
-        <BlocoComercialImovel
-          imovel={imovel}
-          imovelId={imovel.id}
-          orgSlug={orgSlug}
-          whatsappHref={whatsappHref}
-          hrefFormulario={`#${idFormulario}`}
-          className="lg:col-start-2 lg:row-start-2 lg:self-end lg:justify-self-end"
+          className="order-2 mt-3 lg:order-none lg:col-start-2 lg:row-start-1 lg:mt-0 lg:justify-self-end"
         />
         </div>
       </div>

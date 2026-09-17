@@ -3,12 +3,9 @@ import { custosPublicos, precosPublicos } from "@/lib/valores-publicos";
 
 // Preços e custos recorrentes da ficha pública.
 //
-// Extraído do card lateral na Fase 43: o cabeçalho comercial mostra os
-// MESMOS valores, com a MESMA regra (valores-publicos.ts). O que muda
-// entre os dois lugares é só a disposição:
-//
-//   lateral    — coluna estreita: os preços empilham.
-//   cabecalho  — faixa larga: venda e aluguel lado a lado.
+// Fase 52 — voltou a ter um lugar só: o card lateral da ficha. A
+// variante "cabecalho" (faixa larga, preços lado a lado) existia para o
+// bloco comercial do topo, que saiu junto com ele.
 //
 // Valores só aparecem quando existem de verdade. Nada de "sob consulta"
 // inventado: sem preço nem custo cadastrado, o componente não renderiza.
@@ -21,23 +18,15 @@ export type ValoresImovel = {
   purpose: string;
 };
 
-export function ValoresDoImovel({
-  imovel,
-  variante = "lateral",
-}: {
-  imovel: ValoresImovel;
-  variante?: "lateral" | "cabecalho";
-}) {
+export function ValoresDoImovel({ imovel }: { imovel: ValoresImovel }) {
   const precos = precosPublicos(imovel);
   const custos = custosPublicos(imovel);
   if (precos.length === 0 && custos.length === 0) return null;
 
-  const cabecalho = variante === "cabecalho";
-
   return (
-    <div data-valores-imovel={variante} className="space-y-2">
+    <div data-valores-imovel="lateral" className="space-y-2">
       {precos.length > 0 && (
-        <div className={cabecalho ? "flex flex-wrap gap-x-8 gap-y-2" : "space-y-2"}>
+        <div className="space-y-2">
           {precos.map((preco) => (
             <div key={preco.chave} data-preco={preco.chave}>
               {preco.rotulo && (

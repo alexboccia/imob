@@ -136,24 +136,28 @@ test.describe("desktop — hero 1 + 4", () => {
   }
 
   for (const largura of [1280, 1440]) {
-    test(`${largura}px: a galeria não tira preço e CTA da primeira dobra (Fase 43)`, async ({
+    // Fase 52 — o topo não tem mais preço nem CTA: identidade e galeria
+    // dividem a primeira tela, e a galeria ganhou o espaço deles.
+    test(`${largura}px: identidade e galeria na primeira dobra, sem comercial no topo`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: largura, height: DOBRA });
       await page.goto(ficha(IDS_E2E.imovelGaleria7));
 
-      const bloco = page.locator("[data-bloco-comercial]");
+      const cabecalho = page.locator("[data-cabecalho-imovel]");
+      await expect(cabecalho.locator("[data-preco]")).toHaveCount(0);
+      await expect(cabecalho.locator('a[href*="wa.me"]')).toHaveCount(0);
+
       for (const el of [
         page.getByRole("heading", { level: 1 }),
-        bloco.locator('[data-preco="venda"]'),
-        bloco.getByRole("link", { name: "Tenho interesse" }),
+        page.locator("[data-acoes-imovel]"),
         hero(page).getByRole("button", { name: rotulo(7) }),
       ]) {
         const b = await caixa(el);
         expect(b.y + b.height).toBeLessThanOrEqual(DOBRA);
       }
       const h = await caixa(hero(page));
-      expect(DOBRA - h.y).toBeGreaterThanOrEqual(400);
+      expect(DOBRA - h.y).toBeGreaterThanOrEqual(500);
     });
   }
 });
@@ -175,9 +179,12 @@ test.describe("quantidade de fotos (1280px)", () => {
     await expect(hero(page)).toHaveCount(0);
     await expect(carrossel(page)).toHaveCount(0);
     await expect(page.locator("[data-ver-galeria]")).toHaveCount(0);
-    // O preço e o CTA seguem na dobra mesmo sem foto.
-    const cta = await caixa(page.locator("[data-bloco-comercial]").getByRole("link"));
-    expect(cta.y + cta.height).toBeLessThanOrEqual(DOBRA);
+    // Sem foto, o cabeçalho continua sendo só identidade e ações, e o
+    // comercial segue no card lateral (Fase 52).
+    const acoes = await caixa(page.locator("[data-acoes-imovel]"));
+    expect(acoes.y + acoes.height).toBeLessThanOrEqual(DOBRA);
+    await expect(page.locator("[data-cabecalho-imovel] [data-preco]")).toHaveCount(0);
+    await expect(page.locator("[data-card-contato] [data-valores-imovel]")).toHaveCount(1);
   });
 
   for (const n of [1, 2, 3, 4, 5, 7]) {

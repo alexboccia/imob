@@ -2,16 +2,22 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
 import { IDS_E2E } from "./helpers";
 
 // =======================================================================
-// Primeira tela comercial da ficha (Fase 43)
+// Primeira tela da ficha (Fases 43 e 52)
 // =======================================================================
-// No desktop, IDENTIDADE + PREÇO + AÇÃO + IMAGEM sem rolar. A prova é por
-// bounding box contra a altura real da janela (900px) — `toBeVisible()`
-// sozinho aceitaria um preço lá embaixo, que é exatamente o defeito que
-// esta fase corrige.
+// A Fase 43 colocou preço e CTA ao lado do título, acima da galeria. A
+// Fase 52 os tirou dali: o topo é identidade + ações, e o comercial vive
+// só no card lateral. O que esta spec prova agora:
 //
-// Organização W não tem WhatsApp: aqui o CTA do cabeçalho é o fallback
-// para o formulário. O caso com WhatsApp (href e placement HEADER) vive
-// em analytics-tracking.spec.ts, na organização dedicada a cliques.
+//   - identidade e galeria na primeira tela, com a galeria mais alta do
+//     que antes (o bloco comercial não a empurra mais);
+//   - NADA de preço ou CTA comercial dentro do cabeçalho;
+//   - os mesmos valores, com as mesmas regras, no card lateral.
+//
+// A prova continua por bounding box contra a altura real da janela.
+//
+// Organização W não tem WhatsApp: o card lateral dela não tem CTA de
+// WhatsApp, e o formulário é o canal. O caso com WhatsApp vive em
+// analytics-tracking.spec.ts.
 
 const BASE = "/e2e-org-recursos";
 const ficha = (id: string) => `${BASE}/imoveis/${id}`;
@@ -19,7 +25,17 @@ const DOBRA = 900;
 const DESKTOP = [1280, 1440];
 const MOBILE = [320, 390, 768];
 
-const bloco = (page: Page) => page.locator("[data-bloco-comercial]");
+const bloco = (page: Page) => page.locator("[data-card-contato]");
+const cabecalho = (page: Page) => page.locator("[data-cabecalho-imovel]");
+
+/** O cabeçalho não pode ter nada comercial (Fase 52). */
+async function cabecalhoSemComercial(page: Page) {
+  await expect(cabecalho(page).locator("[data-preco]")).toHaveCount(0);
+  await expect(cabecalho(page).locator("[data-valores-imovel]")).toHaveCount(0);
+  await expect(cabecalho(page).locator('a[href*="wa.me"]')).toHaveCount(0);
+  await expect(cabecalho(page).getByRole("link", { name: /Tenho interesse|Falar no WhatsApp/ })).toHaveCount(0);
+  expect(await cabecalho(page).innerText()).not.toMatch(/R\$/);
+}
 const semEspacoEspecial = (s: string) => s.replace(/\s+/g, " ");
 
 async function caixa(locator: Locator) {
@@ -57,10 +73,10 @@ test.describe("desktop — primeira dobra", () => {
       await acimaDaDobra(breadcrumb.getByRole("link", { name: "Apartamento", exact: true }), "tipo");
 
       const preco = bloco(page).locator('[data-preco="venda"]');
-      await acimaDaDobra(preco, "preço");
+      await expect(preco).toBeVisible();
       expect(semEspacoEspecial(await preco.innerText())).toBe("R$ 850.000");
 
-      // Custos com o rótulo e o formato do card lateral — sem "/mês"
+      // Custos com o rótulo e o formato de sempre — sem "/mês"
       // inventado: o cadastro não diz a periodicidade.
       const custos = semEspacoEspecial(await bloco(page).locator("dl").innerText());
       expect(custos).toContain("Condomínio:");
@@ -69,12 +85,15 @@ test.describe("desktop — primeira dobra", () => {
       expect(custos).toContain("R$ 310");
       expect(custos).not.toMatch(/mês|ano/);
 
-      await acimaDaDobra(bloco(page).getByRole("link", { name: "Tenho interesse" }), "CTA");
-
-      // Parte significativa da galeria também está na primeira tela.
+      // Fase 52 — nada de preço/CTA no cabeçalho, e a galeria sobe.
+      await cabecalhoSemComercial(page);
       const foto = await caixa(page.getByRole("button", { name: "Ampliar foto" }).first());
+      const identidade = await caixa(page.locator("[data-identidade-imovel] p").first());
       expect(foto.y).toBeLessThan(DOBRA);
-      expect(DOBRA - foto.y, "galeria quase toda abaixo da dobra").toBeGreaterThanOrEqual(300);
+      // A galeria começa logo depois dos metadados da identidade, e a
+      // maior parte dela cabe na primeira tela.
+      expect(foto.y - (identidade.y + identidade.height), "vão entre identidade e galeria").toBeLessThan(120);
+      expect(DOBRA - foto.y, "galeria quase toda abaixo da dobra").toBeGreaterThanOrEqual(500);
 
       // Sem vídeo: nenhuma seção de vídeo, layout coerente.
       await expect(page.locator("#videos")).toHaveCount(0);
@@ -88,9 +107,9 @@ test.describe("desktop — primeira dobra", () => {
       await page.goto(ficha(IDS_E2E.imovelDobraAmbos));
 
       await acimaDaDobra(page.getByRole("heading", { level: 1 }), "título");
-      await acimaDaDobra(bloco(page).locator('[data-preco="venda"]'), "preço de venda");
-      await acimaDaDobra(bloco(page).locator('[data-preco="aluguel"]'), "preço de aluguel");
-      await acimaDaDobra(bloco(page).getByRole("link", { name: "Tenho interesse" }), "CTA");
+      await cabecalhoSemComercial(page);
+      await expect(bloco(page).locator('[data-preco="venda"]')).toBeVisible();
+      await expect(bloco(page).locator('[data-preco="aluguel"]')).toBeVisible();
 
       // O vídeo mora na coluna principal: começa depois da dobra e não
       // invade a coluna do card lateral.
@@ -103,13 +122,13 @@ test.describe("desktop — primeira dobra", () => {
       expect(await semOverflow(page)).toBe(true);
     });
 
-    test(`${largura}px com vídeo, tour e planta: preço e ação continuam na dobra`, async ({
+    test(`${largura}px com vídeo, tour e planta: o topo continua sem comercial e o preço está no card`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: largura, height: DOBRA });
       await page.goto(ficha(IDS_E2E.imovelTresRecursos));
-      await acimaDaDobra(bloco(page).locator('[data-preco="venda"]'), "preço");
-      await acimaDaDobra(bloco(page).getByRole("link", { name: "Tenho interesse" }), "CTA");
+      await cabecalhoSemComercial(page);
+      await expect(bloco(page).locator('[data-preco="venda"]')).toBeVisible();
     });
   }
 
@@ -122,10 +141,10 @@ test.describe("desktop — primeira dobra", () => {
     const precos = bloco(page).locator("[data-preco]");
     await expect(precos).toHaveCount(1);
     const aluguel = bloco(page).locator('[data-preco="aluguel"]');
-    await acimaDaDobra(aluguel, "aluguel");
+    await expect(aluguel).toBeVisible();
     expect(semEspacoEspecial(await aluguel.innerText())).toBe("R$ 4.500/mês");
     await expect(bloco(page).getByText(/Para (comprar|alugar)/)).toHaveCount(0);
-    await acimaDaDobra(bloco(page).getByRole("link", { name: "Tenho interesse" }), "CTA");
+    await cabecalhoSemComercial(page);
   });
 
   test("SALE_AND_RENT: os dois valores, cada um com o seu rótulo", async ({ page }) => {
@@ -139,12 +158,9 @@ test.describe("desktop — primeira dobra", () => {
       /^Para alugar\s*R\$ 5\.000\/mês$/
     );
 
-    // Mesma regra do card lateral: os mesmos dois valores lá.
-    const lateral = page.locator("[data-card-contato]");
-    await expect(lateral.locator("[data-preco]")).toHaveCount(2);
-    expect(semEspacoEspecial(await lateral.locator('[data-preco="aluguel"]').innerText())).toBe(
-      semEspacoEspecial(await aluguel.innerText())
-    );
+    // Um lugar só: o cabeçalho não repete valor nenhum (Fase 52).
+    await expect(bloco(page).locator("[data-preco]")).toHaveCount(2);
+    await cabecalhoSemComercial(page);
   });
 
   test("sem preço cadastrado: nenhum valor inventado, e a ação continua", async ({ page }) => {
@@ -153,29 +169,23 @@ test.describe("desktop — primeira dobra", () => {
 
     await expect(bloco(page).locator("[data-preco]")).toHaveCount(0);
     await expect(bloco(page).locator("[data-valores-imovel]")).toHaveCount(0);
-    expect(await bloco(page).innerText()).not.toMatch(/consult|a partir|R\$/i);
-    await acimaDaDobra(bloco(page).getByRole("link", { name: "Tenho interesse" }), "CTA");
+    expect(await bloco(page).innerText()).not.toMatch(/R\$|sob consulta|a partir de/i);
+    // Sem preço, o card continua sendo o canal: título do formulário lá.
+    await expect(bloco(page).getByRole("heading", { name: "Receba mais informações" })).toBeVisible();
   });
 
-  test("sem WhatsApp, o CTA leva ao formulário do card lateral (teclado incluso)", async ({
+  test("sem WhatsApp, o formulário do card lateral é o canal (e a barra do rodapé leva a ele)", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: DOBRA });
     await page.goto(ficha(IDS_E2E.imovelDobraVenda));
 
-    await expect(bloco(page).locator('a[href*="wa.me"]')).toHaveCount(0);
-    const cta = bloco(page).getByRole("link", { name: "Tenho interesse" });
-    await expect(cta).toHaveAttribute("href", "#contato-imovel");
+    // Organização sem WhatsApp: nenhum link wa.me na página inteira.
+    await expect(page.locator('a[href*="wa.me"]')).toHaveCount(0);
+    // O formulário existe, com a âncora que os atalhos usam.
     await expect(page.locator("#contato-imovel")).toHaveCount(1);
-
-    // Navegável por teclado, com foco visível.
-    await cta.focus();
-    await expect(cta).toBeFocused();
-    const anel = await cta.evaluate((el) => getComputedStyle(el).boxShadow);
-    expect(anel).not.toBe("none");
-    await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/#contato-imovel$/);
-    await expect(page.locator("#contato-imovel")).toBeInViewport();
+    await expect(bloco(page).getByRole("heading", { name: "Receba mais informações" })).toBeVisible();
+    await expect(bloco(page).getByRole("button", { name: "Enviar mensagem" })).toBeVisible();
   });
 });
 
@@ -357,17 +367,17 @@ test.describe("vídeos — acessibilidade e largura", () => {
 });
 
 // -----------------------------------------------------------------------
-// Mobile e tablet — a barra fixa continua sendo o bloco comercial
+// Mobile e tablet — a barra fixa é o canal comercial
 // -----------------------------------------------------------------------
 test.describe("abaixo de lg", () => {
   for (const largura of MOBILE) {
-    test(`${largura}px: sem bloco comercial no topo; barra fixa com preço e contato`, async ({
+    test(`${largura}px: nada de comercial no topo; barra fixa com preço e contato`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: largura, height: 800 });
       await page.goto(ficha(IDS_E2E.imovelDobraVenda));
 
-      await expect(bloco(page)).toBeHidden();
+      await cabecalhoSemComercial(page);
       const barra = page.locator("[data-cta-imovel]");
       await expect(barra).toBeVisible();
       await expect(barra.locator("[data-precos-barra] p")).toHaveCount(1);
