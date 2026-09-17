@@ -352,6 +352,8 @@ export const IDS_E2E = {
   imovelBreadcrumbAluguel: "e2e-imovel-breadcrumb-aluguel",
   imovelBreadcrumbVendaLocacao: "e2e-imovel-breadcrumb-venda-locacao",
   imovelBreadcrumbSemContexto: "e2e-imovel-breadcrumb-sem-contexto",
+  // Fase 47 — título longo, para provar que título e ações não colidem.
+  imovelTituloLongo: "e2e-imovel-titulo-longo",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor

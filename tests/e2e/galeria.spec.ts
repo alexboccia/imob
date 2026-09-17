@@ -393,7 +393,7 @@ test.describe("acessibilidade, duplicidades e carregamento", () => {
     await expect(lb.getByRole("button", { name: "Enviar mensagem" })).toBeVisible();
     // Fora do lightbox segue existindo um único Compartilhar visível.
     await page.keyboard.press("Escape");
-    await expect(page.locator('button[aria-label="Compartilhar"] >> visible=true')).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Compartilhar", exact: true })).toHaveCount(1);
   });
 
   for (const largura of [390, 1280]) {

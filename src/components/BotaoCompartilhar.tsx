@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { IconeCompartilhar } from "@/components/icons";
+import { copiarTexto, textoDeCompartilhamento } from "@/lib/compartilhar-imovel";
 
 // Compartilhar a URL da página. Web Share API quando o navegador tem
 // (celular: abre a folha nativa com WhatsApp, e-mail, etc.), e cópia pro
@@ -13,15 +14,17 @@ import { IconeCompartilhar } from "@/components/icons";
 // caso. Extraído pra um componente único, usado tanto pela galeria
 // quanto pelo cabeçalho do detalhe, que existe sempre.
 //
-// window.location.href é a URL canônica do imóvel: o site público serve
-// cada tenant no domínio dele (ou no caminho com slug), então o link
-// copiado é sempre o endereço que o visitante deve receber.
+// Fase 47 — hoje só o lightbox usa este botão (o cabeçalho tem o menu de
+// compartilhamento). A URL vem do servidor, a MESMA canônica do
+// cabeçalho; sem ela, cai no endereço atual sem query nem fragmento.
 export function BotaoCompartilhar({
   titulo,
+  url: urlCanonica,
   className,
   children,
 }: {
   titulo: string;
+  url?: string;
   className?: string;
   children?: React.ReactNode;
 }) {
@@ -31,17 +34,17 @@ export function BotaoCompartilhar({
     // Sem o fragmento: se o visitante acabou de usar a âncora "Contato"
     // da barra, location.href carrega "#contato-imovel" e o link
     // compartilhado abriria rolado no formulário, não no topo do imóvel.
-    const { origin, pathname, search } = window.location;
-    const url = `${origin}${pathname}${search}`;
+    const { origin, pathname } = window.location;
+    const url = urlCanonica ?? `${origin}${pathname}`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: titulo, url });
+        await navigator.share({ title: titulo, text: textoDeCompartilhamento(titulo), url });
       } catch {
         // usuário cancelou o compartilhamento
       }
       return;
     }
-    await navigator.clipboard.writeText(url);
+    if (!(await copiarTexto(url))) return;
     setCopiado(true);
     setTimeout(() => setCopiado(false), 2000);
   }
@@ -65,7 +68,7 @@ export function BotaoCompartilhar({
           aria-live="polite"
           className="absolute top-full right-0 mt-1 whitespace-nowrap rounded bg-white px-2 py-1 text-xs text-gray-900 shadow"
         >
-          Link copiado!
+          Link copiado
         </span>
       )}
     </div>

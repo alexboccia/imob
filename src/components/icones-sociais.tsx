@@ -43,3 +43,13 @@ export function IconeLinkedin({ className }: IconeProps) {
     </svg>
   );
 }
+
+// Fase 47 — X (antigo Twitter), usado no menu de compartilhamento da
+// ficha. Mesmo critério dos demais: glifo genérico, não o logotipo.
+export function IconeX({ className }: IconeProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className={className}>
+      <path d="M5 4l14 16M19 4L5 20" />
+    </svg>
+  );
+}

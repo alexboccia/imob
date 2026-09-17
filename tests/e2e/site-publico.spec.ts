@@ -962,16 +962,21 @@ test.describe("Detalhe do imóvel — conteúdo real", () => {
     await page.evaluate(() => {
       delete (window.navigator as unknown as { share?: unknown }).share;
     });
-    await page.locator('button[aria-label="Compartilhar"]').first().click();
-    await expect(page.getByText("Link copiado!")).toBeVisible();
+    // Fase 47 — o botão do cabeçalho abre o menu de compartilhamento; a
+    // cópia é o item "Copiar link", e o que vai para o clipboard é a URL
+    // canônica da página (nunca o endereço com #âncora).
+    await page.getByRole("button", { name: "Compartilhar", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Copiar link" }).click();
+    await expect(page.getByText("Link copiado", { exact: true })).toBeVisible();
     const copiado = await page.evaluate(() => navigator.clipboard.readText());
     expect(copiado).toContain(`/imoveis/${IDS_E2E.imovelComBadgesOrgA}`);
     expect(copiado).not.toContain("#");
+    expect(copiado).toBe(await page.locator('link[rel="canonical"]').getAttribute("href"));
   });
 
   test("compartilhar existe mesmo em imóvel sem foto (fora da galeria)", async ({ page }) => {
     await page.goto(`/imoveis/${IDS_E2E.imovelAluguelOrgA}`);
-    await expect(page.locator('button[aria-label="Compartilhar"]').first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Compartilhar", exact: true })).toBeVisible();
   });
 });
 
@@ -1736,7 +1741,7 @@ test.describe("Detalhe — experiência de lançamento", () => {
     page,
   }) => {
     await page.goto(URL_IMOVEL);
-    const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
+    const cabecalho = page.locator("[data-identidade-imovel]");
     // Fase 46 — o estágio virou selo na faixa de contexto (uma vez só);
     // prazo e construtora continuam na linha de lançamento.
     const selos = page.getByRole("list", { name: "Situação do imóvel" });
@@ -1858,7 +1863,7 @@ test.describe("Detalhe — experiência de lançamento", () => {
     await page.goto(URL_LANCAMENTO_MINIMO);
     await expect(page.getByText("Lançamento", { exact: true }).first()).toBeVisible();
 
-    const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
+    const cabecalho = page.locator("[data-identidade-imovel]");
     await expect(cabecalho.getByText("Previsão de entrega:")).toHaveCount(0);
     await expect(cabecalho.getByText("Construtora:")).toHaveCount(0);
     // Sem estágio cadastrado, nenhum selo de obra é inventado.
@@ -1873,7 +1878,7 @@ test.describe("Detalhe — experiência de lançamento", () => {
 
   test("imóvel comum NÃO recebe a UI de lançamento", async ({ page }) => {
     await page.goto(URL_IMOVEL_PRONTO);
-    const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
+    const cabecalho = page.locator("[data-identidade-imovel]");
     await expect(cabecalho.getByText("Previsão de entrega:")).toHaveCount(0);
     const selos = page.getByRole("list", { name: "Situação do imóvel" });
     await expect(selos.getByText("Lançamento", { exact: true })).toHaveCount(0);

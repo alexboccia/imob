@@ -124,6 +124,8 @@ export const IDS_E2E = {
   imovelBreadcrumbAluguel: "e2e-imovel-breadcrumb-aluguel",
   imovelBreadcrumbVendaLocacao: "e2e-imovel-breadcrumb-venda-locacao",
   imovelBreadcrumbSemContexto: "e2e-imovel-breadcrumb-sem-contexto",
+  // Fase 47 — título longo, para provar que título e ações não colidem.
+  imovelTituloLongo: "e2e-imovel-titulo-longo",
   interesseNegociacao: "e2e-interesse-negociacao",
   imovelInbox: "e2e-imovel-inbox",
   // Fase 29 — organização dedicada ao PORTFÓLIO PÚBLICO do corretor
@@ -3655,6 +3657,12 @@ async function main() {
     price: 640000,
     rentPrice: 3500,
   });
+  // Fase 47 — título longo (três linhas ou mais no desktop), com fotos.
+  await imovelDaGaleria(IDS_E2E.imovelTituloLongo, 5, {
+    title:
+      "Apartamento amplo com três suítes, varanda gourmet integrada, vista livre para o parque e duas vagas cobertas no coração de Santana",
+  });
+
   // Sem tipo e sem bairro (strings vazias, como um cadastro antigo
   // poderia ter). RESERVED: a ficha é pública, mas o imóvel fica fora das
   // facetas de filtro — um tipo vazio viraria uma opção vazia na busca.

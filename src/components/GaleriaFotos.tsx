@@ -88,6 +88,7 @@ export function GaleriaFotos({
   tituloDestaque = null,
   subtituloDestaque = null,
   entregaPrevista = null,
+  urlCompartilhamento,
 }: {
   fotos: Foto[];
   titulo: string;
@@ -104,6 +105,8 @@ export function GaleriaFotos({
   subtituloDestaque?: string | null;
   /** "Nov/2027" quando o imóvel é lançamento com data; senão null. */
   entregaPrevista?: string | null;
+  /** Fase 47 — URL canônica da ficha, a mesma do menu do cabeçalho. */
+  urlCompartilhamento?: string;
 }) {
   const router = useRouter();
   const [indice, setIndice] = useState(0);
@@ -620,6 +623,7 @@ export function GaleriaFotos({
             <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
 <BotaoCompartilhar
               titulo={titulo}
+              url={urlCompartilhamento}
               className="flex size-9 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow hover:bg-white"
             />
             </div>

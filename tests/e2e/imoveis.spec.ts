@@ -476,7 +476,7 @@ test.describe("Imóveis — cadastro de lançamento", () => {
     // 2) Os dados chegam à página pública com o mês certo — sem
     //    deslocamento de timezone (junho não pode virar maio).
     await page.goto(`/imoveis/${idImovel}`);
-    const cabecalho = page.locator("h1").locator("xpath=ancestor::div[2]");
+    const cabecalho = page.locator("[data-identidade-imovel]");
     // Fase 46 — o estágio é um selo na faixa de contexto, acima do título.
     const selos = page.getByRole("list", { name: "Situação do imóvel" });
     await expect(selos.locator('[data-selo="obra"]')).toHaveText("Em construção");
@@ -502,7 +502,7 @@ test.describe("Imóveis — cadastro de lançamento", () => {
     //    rótulo é posicionamento comercial e o estágio é fato sobre a
     //    construção. Desmarcar um não apaga o outro.
     await page.goto(`/imoveis/${idImovel}`);
-    const cab = page.locator("h1").locator("xpath=ancestor::div[2]");
+    const cab = page.locator("[data-identidade-imovel]");
     const selosSemRotulo = page.getByRole("list", { name: "Situação do imóvel" });
     await expect(selosSemRotulo.getByText("Lançamento", { exact: true })).toHaveCount(0);
     await expect(selosSemRotulo.locator('[data-selo="obra"]')).toHaveText("Em construção");

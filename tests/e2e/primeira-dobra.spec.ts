@@ -190,7 +190,8 @@ test.describe("um controle por função fora do lightbox", () => {
       await page.setViewportSize({ width: largura, height: DOBRA });
       await page.goto(ficha(IDS_E2E.imovelTresRecursos));
 
-      await expect(page.locator('button[aria-label="Compartilhar"] >> visible=true')).toHaveCount(1);
+      // Fase 47 — o Compartilhar do cabeçalho agora tem texto visível.
+      await expect(page.getByRole("button", { name: "Compartilhar", exact: true })).toHaveCount(1);
       await expect(page.locator('a[href="#videos"] >> visible=true')).toHaveCount(1);
       // O atalho que sobra é o da barra de recursos.
       await expect(
@@ -212,12 +213,14 @@ test.describe("um controle por função fora do lightbox", () => {
     await expect(fechar).toBeVisible();
 
     // Dentro do lightbox há um segundo contexto de compartilhamento.
-    const compartilhar = page.locator('button[aria-label="Compartilhar"] >> visible=true');
+    const compartilhar = page.getByRole("button", { name: "Compartilhar", exact: true });
     await expect(compartilhar).toHaveCount(2);
-    await compartilhar.last().click();
-    await expect(page.getByText("Link copiado!")).toBeVisible();
+    await page.locator("[data-lightbox]").getByRole("button", { name: "Compartilhar" }).click();
+    await expect(page.getByText("Link copiado", { exact: true })).toBeVisible();
     const copiado = await page.evaluate(() => navigator.clipboard.readText());
     expect(copiado).toContain(`/imoveis/${IDS_E2E.imovelTresRecursos}`);
+    // Fase 47 — a mesma URL canônica do menu do cabeçalho.
+    expect(copiado).toBe(await page.locator('link[rel="canonical"]').getAttribute("href"));
 
     // As demais ações do lightbox seguem ali.
     const lightbox = page.locator("div.fixed.inset-0", {

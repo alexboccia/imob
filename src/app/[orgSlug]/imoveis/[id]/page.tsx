@@ -27,7 +27,8 @@ import { resolverBasePath } from "@/lib/site-url";
 import { withOrganization } from "@/lib/tenant-context";
 import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 import { GaleriaFotos } from "@/components/GaleriaFotos";
-import { BotaoCompartilhar } from "@/components/BotaoCompartilhar";
+import { AcoesImovel } from "@/components/imovel/AcoesImovel";
+import { urlCanonicaDoImovel } from "@/lib/compartilhar-imovel";
 import { EvolucaoObra } from "@/components/EvolucaoObra";
 import { RecursosImovel } from "@/components/RecursosImovel";
 import { FraseDestaque } from "@/components/FraseDestaque";
@@ -70,6 +71,11 @@ import { buscarMateriaisAtivos } from "@/lib/materiais-consultas";
 // evita que um imóvel vendido/alterado continue aparecendo desatualizado
 // por tempo indefinido.
 export const revalidate = 60;
+
+// Fase 47 — a metadata e a página precisam da MESMA URL canônica (a da
+// tag e a do botão de compartilhar); o cache faz as duas usarem uma única
+// consulta por requisição.
+const hostnameCustomAtivo = cache(buscarHostnameCustomAtivo);
 
 const buscarImovel = cache(async (id: string, organizationId: string) => {
   return prisma.property.findUnique({
@@ -189,12 +195,14 @@ export async function generateMetadata({
     : `${imovel.type} em ${imovel.neighborhood}, ${imovel.city} - ${imovel.state}.`;
 
   // Correção AU — mesma decisão de src/app/[orgSlug]/page.tsx: URL
-  // absoluta sob o domínio customizado ACTIVE (ignora metadataBase),
-  // preserva o formato relativo original em qualquer outro caso.
-  const hostnameCustom = await buscarHostnameCustomAtivo(organizationId);
-  const canonical = hostnameCustom
-    ? `https://${hostnameCustom}/imoveis/${id}`
-    : `${basePath}/imoveis/${id}`;
+  // absoluta sob o domínio customizado ACTIVE. Nos demais casos, a Fase 47
+  // monta a absoluta sobre o mesmo NEXT_PUBLIC_SITE_URL do metadataBase —
+  // o HTML final é o mesmo de antes, e o botão Compartilhar usa esta URL.
+  const canonical = urlCanonicaDoImovel({
+    hostnameCustom: await hostnameCustomAtivo(organizationId),
+    basePath,
+    imovelId: id,
+  });
 
   return {
     title: imovel.title,
@@ -204,6 +212,8 @@ export async function generateMetadata({
       title: imovel.title,
       description: descricao,
       type: "website",
+      // Fase 47 — a URL que o botão Compartilhar envia é esta mesma.
+      url: canonical,
       siteName: organization.name,
       images: capa ? [{ url: capa, width: 1200, height: 900 }] : undefined,
     },
@@ -312,6 +322,13 @@ export default async function DetalheImovelPage({
   const estagioObra = rotuloEstagioObra(imovel);
   const previsaoEntrega = previsaoEntregaPorExtenso(imovel.deliveryForecast);
 
+  // Fase 47 — o endereço que Compartilhar envia: o canônico da ficha.
+  const urlCanonica = urlCanonicaDoImovel({
+    hostnameCustom: await hostnameCustomAtivo(organizationId),
+    basePath,
+    imovelId: imovel.id,
+  });
+
   // Fase 46 — breadcrumb e selos, só com dados já carregados.
   const migalhas = migalhasDoImovel(basePath, imovel);
   // Selos, na ordem: rótulos comerciais (a MESMA fonte de sempre —
@@ -353,21 +370,29 @@ export default async function DetalheImovelPage({
         <BreadcrumbImovel migalhas={migalhas} selos={selosContexto} />
 
         <div className="mt-3 lg:flex lg:items-end lg:justify-between lg:gap-10">
-        <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-4 lg:justify-start">
-          <h1 className={TITULO_DETALHE}>{imovel.title}</h1>
-          {/* O ÚNICO Compartilhar da ficha fora do lightbox (Fase 43). A
-              galeria tinha um segundo, sobre a foto, a poucos pixels
-              deste — saiu. Este fica porque existe mesmo sem foto. */}
-          <BotaoCompartilhar
+        <div data-identidade-imovel className="min-w-0 flex-1">
+        {/* Fase 47 — título e ações na MESMA faixa: a partir de lg, as
+            ações ficam à direita do título (coluna auto, sem encolher) e
+            o título ocupa o resto, quebrando em quantas linhas precisar —
+            nunca truncado. Abaixo de lg, as ações descem para depois do
+            endereço. Este é o único Compartilhar fora do lightbox (Fase
+            43), e existe mesmo sem foto. */}
+        <div className="grid gap-y-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start lg:gap-x-6">
+          <div className="min-w-0">
+            <h1 className={`${TITULO_DETALHE} break-words`}>{imovel.title}</h1>
+            <p className="mt-2 text-base text-gray-600">
+              {enderecoCompleto ? `${enderecoCompleto}, ` : ""}
+              {imovel.city} - {imovel.state}
+            </p>
+          </div>
+          <AcoesImovel
+            imovelId={imovel.id}
+            orgSlug={orgSlug}
             titulo={imovel.title}
-            className="mt-1 flex size-9 shrink-0 items-center justify-center rounded-full border text-gray-600 outline-none transition-colors hover:border-primary hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50"
+            url={urlCanonica}
+            className="lg:justify-end"
           />
         </div>
-        <p className="mt-2 text-base text-gray-600">
-          {enderecoCompleto ? `${enderecoCompleto}, ` : ""}
-          {imovel.city} - {imovel.state}
-        </p>
 
         {/* Num lançamento, estágio e prazo saem do metadado e viram
             informação de primeira linha: quem olha um imóvel que ainda
@@ -433,6 +458,7 @@ export default async function DetalheImovelPage({
         mensagemContato={mensagemContato}
         orgSlug={orgSlug}
         nome={organization.name}
+        urlCompartilhamento={urlCanonica}
         // Fase 45 — conteúdo editorial da foto de destaque. O selo de
         // entrega usa a MESMA regra do cabeçalho (lançamento + data).
         tituloDestaque={imovel.heroTitle}
