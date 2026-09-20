@@ -100,6 +100,10 @@ export const IDS_E2E = {
   imovelDobraAluguel: "e2e-imovel-dobra-aluguel",
   imovelDobraAmbos: "e2e-imovel-dobra-ambos",
   imovelDobraSemPreco: "e2e-imovel-dobra-sem-preco",
+  // Fase 54 — observação sobre o valor: um imóvel com o texto cadastrado
+  // e outro com o texto no tamanho máximo (prova a quebra sem estouro).
+  imovelObservacaoValor: "e2e-imovel-observacao-valor",
+  imovelObservacaoLonga: "e2e-imovel-observacao-longa",
   // Fase 44 — galeria comercial: um imóvel por quantidade de fotos.
   imovelGaleria0: "e2e-imovel-galeria-0",
   imovelGaleria1: "e2e-imovel-galeria-1",
@@ -323,6 +327,8 @@ async function garantirImovel(opcoes: {
   // este valor; todos os demais imóveis do seed continuam sem frase, que
   // é o estado normal e o caso "bloco ausente".
   highlightPhrase?: string | null;
+  // Fase 54 — observação editorial sobre o valor (abaixo do preço).
+  priceNote?: string | null;
   // Fase 45 — conteúdo editorial da foto de destaque. Default null em
   // todos os demais fixtures (e resetado a cada seed pelo update).
   heroTitle?: string | null;
@@ -366,6 +372,7 @@ async function garantirImovel(opcoes: {
     propertyTax: opcoes.propertyTax ?? null,
     developer: opcoes.developer ?? null,
     highlightPhrase: opcoes.highlightPhrase ?? null,
+    priceNote: opcoes.priceNote ?? null,
     heroTitle: opcoes.heroTitle ?? null,
     heroSubtitle: opcoes.heroSubtitle ?? null,
     ...(opcoes.publishedAt !== undefined ? { publishedAt: opcoes.publishedAt } : {}),
@@ -3446,6 +3453,7 @@ async function main() {
     propertyTax?: number | null;
     description?: string | null;
     highlightPhrase?: string | null;
+    priceNote?: string | null;
     propertyFeatures?: string[];
     videos?: number;
   }) => {
@@ -3508,6 +3516,27 @@ async function main() {
     title: "Imovel Dobra Sem Valor E2E",
     purpose: "SALE",
     price: null,
+  });
+
+  // Fase 54 — o par que a spec compara: mesmo card, um com observação e
+  // outro sem. O "Imovel Dobra Venda E2E" acima é o caso SEM texto.
+  await imovelDaDobra({
+    id: IDS_E2E.imovelObservacaoValor,
+    title: "Imovel Observacao Valor E2E",
+    purpose: "SALE",
+    price: 820000,
+    priceNote: "Previsão de valorização: +25% até a entrega",
+  });
+  // Texto no teto (160 caracteres): prova que a observação quebra em
+  // várias linhas sem estourar o card em nenhuma largura.
+  await imovelDaDobra({
+    id: IDS_E2E.imovelObservacaoLonga,
+    title: "Imovel Observacao Longa E2E",
+    purpose: "SALE",
+    price: 1250000,
+    priceNote:
+      "Condições especiais de lançamento com entrada facilitada em até trinta e seis meses, " +
+      "valores sujeitos a alteração sem aviso previo conforme tabela vigente.",
   });
 
   // =====================================================================

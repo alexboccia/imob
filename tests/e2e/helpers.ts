@@ -334,6 +334,9 @@ export const IDS_E2E = {
   imovelDobraAluguel: "e2e-imovel-dobra-aluguel",
   imovelDobraAmbos: "e2e-imovel-dobra-ambos",
   imovelDobraSemPreco: "e2e-imovel-dobra-sem-preco",
+  // Fase 54 — observação sobre o valor (ver prisma/seed-e2e.ts).
+  imovelObservacaoValor: "e2e-imovel-observacao-valor",
+  imovelObservacaoLonga: "e2e-imovel-observacao-longa",
   // Fase 44 — galeria comercial: um imóvel por quantidade de fotos.
   imovelGaleria0: "e2e-imovel-galeria-0",
   imovelGaleria1: "e2e-imovel-galeria-1",

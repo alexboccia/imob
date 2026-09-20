@@ -119,11 +119,13 @@ test.describe("Atribuição — jornada", () => {
   test("clique no WhatsApp carrega a MESMA atribuição da visualização", async ({ page }) => {
     const eventos = await coletarEventos(page);
 
-    await page.setViewportSize({ width: 1280, height: 900 });
+    // Fase 54 — o CTA de WhatsApp do tenant vive na barra fixa do
+    // celular; o card comercial não tem mais um.
+    await page.setViewportSize({ width: 375, height: 800 });
     await page.goto(`${URL_IMOVEL}?utm_source=google&utm_medium=cpc&utm_campaign=verao`);
     await page.context().route("https://wa.me/**", (rota) => rota.abort());
 
-    const cta = page.getByRole("link", { name: "Falar no WhatsApp" }).first();
+    const cta = page.locator("[data-cta-imovel]").getByRole("link", { name: /WhatsApp/ });
     await expect(cta).toBeVisible();
     await Promise.all([page.waitForEvent("popup"), cta.click()]);
 
@@ -137,7 +139,9 @@ test.describe("Atribuição — fail-open e formulário", () => {
   test("sessionStorage bloqueado: página, CTA e formulário continuam funcionando", async ({
     browser,
   }) => {
-    const contexto = await browser.newContext();
+    // Viewport de celular no CONTEXTO: é lá que fica o CTA do tenant
+    // (Fase 54). context.newPage() não recebe opções.
+    const contexto = await browser.newContext({ viewport: { width: 375, height: 800 } });
     const pagina = await contexto.newPage();
     // Simula storage bloqueado do jeito que um navegador real faz: os
     // MÉTODOS lançam. Substituir o próprio getter de window.sessionStorage
@@ -171,7 +175,7 @@ test.describe("Atribuição — fail-open e formulário", () => {
     await pagina.goto(`${URL_IMOVEL}?utm_source=google&utm_campaign=verao`);
     await expect(pagina.getByRole("heading", { level: 1 })).toBeVisible();
 
-    const cta = pagina.getByRole("link", { name: "Falar no WhatsApp" }).first();
+    const cta = pagina.locator("[data-cta-imovel]").getByRole("link", { name: /WhatsApp/ });
     await expect(cta).toBeVisible();
     expect(await cta.getAttribute("href")).toMatch(/^https:\/\/wa\.me\/\d+/);
 

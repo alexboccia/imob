@@ -1037,6 +1037,9 @@ test.describe("Detalhe do imóvel — WhatsApp", () => {
     await expect(page.getByRole("button", { name: "Enviar mensagem" })).toBeVisible();
   });
 
+  // Fase 54 — o CTA do card comercial saiu. A superfície institucional
+  // de WhatsApp que restou é a barra fixa do celular, e é nela que o
+  // número do tenant e a mensagem contextual são provados.
   test("com WhatsApp configurado: CTA usa o número do tenant e mensagem com o imóvel", async ({
     page,
   }) => {
@@ -1045,8 +1048,9 @@ test.describe("Detalhe do imóvel — WhatsApp", () => {
     try {
       await definirContato(page, { whatsapp });
 
+      await page.setViewportSize({ width: 375, height: 800 });
       await page.goto(URL_IMOVEL);
-      const cta = page.locator('a[href*="wa.me"]').first();
+      const cta = page.locator("[data-cta-imovel]").locator('a[href*="wa.me"]').first();
       await expect(cta).toBeVisible();
 
       const href = await cta.getAttribute("href");

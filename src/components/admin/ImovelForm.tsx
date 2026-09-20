@@ -18,6 +18,7 @@ import { LocaisProximosEditor } from "@/components/admin/LocaisProximosEditor";
 import type { LocalProximo } from "@/lib/locais-proximos";
 import {
   LIMITE_FRASE_DESTAQUE,
+  LIMITE_OBSERVACAO_VALOR,
   LIMITE_SUBTITULO_DESTAQUE,
   LIMITE_TITULO_DESTAQUE,
 } from "@/lib/property-mapper";
@@ -55,6 +56,8 @@ type ImovelFormValues = {
   subtituloDestaque: string | null;
   /** Fase 40 — frase editorial opcional, exibida abaixo da descrição. */
   fraseDestaque: string | null;
+  /** Fase 54 — observação opcional exibida logo abaixo do valor. */
+  observacaoValor: string | null;
   /** Fase 38 — id do empreendimento, ou ausente para unidade avulsa. */
   empreendimentoId: string | null;
   titulo: string;
@@ -484,6 +487,27 @@ export function ImovelForm({
           />
           <ErroCampo erros={estado.fieldErrors?.precoIptu} />
             </div>
+          </div>
+
+          {/* Fase 54 — observação sobre o valor. Fica AQUI, no card dos
+              preços, porque é sobre eles: na ficha pública ela aparece
+              colada no valor. Texto do anunciante — o sistema não calcula
+              valorização nem sugere condição comercial, e o campo começa
+              vazio sempre (o placeholder é exemplo, não valor inicial). */}
+          <div className="mt-4 space-y-1.5">
+            <Label htmlFor="observacaoValor">Observação sobre o valor</Label>
+            <Input
+              id="observacaoValor"
+              name="observacaoValor"
+              defaultValue={v.observacaoValor ?? ""}
+              maxLength={LIMITE_OBSERVACAO_VALOR}
+              placeholder="Ex.: Previsão de valorização: +25% até a entrega"
+            />
+            <p className="text-xs text-muted-foreground">
+              Texto opcional exibido logo abaixo do valor na página pública do
+              imóvel. Máximo de {LIMITE_OBSERVACAO_VALOR} caracteres.
+            </p>
+            <ErroCampo erros={estado.fieldErrors?.observacaoValor} />
           </div>
 
         </CardContent>

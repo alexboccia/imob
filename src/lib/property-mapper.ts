@@ -22,6 +22,13 @@ export const LIMITE_FRASE_DESTAQUE = 180;
 
 // Fase 45 — conteúdo editorial da galeria. Mesma lógica da frase: são
 // textos curtos que vivem SOBRE uma foto, e o limite protege a foto.
+// Fase 54 — observação editorial sobre o VALOR, logo abaixo do preço.
+// 160 caracteres, o mesmo teto do subtítulo do destaque: é uma linha
+// colada no preço ("Previsão de valorização: +25% até a entrega"), não
+// um parágrafo de condições comerciais. Quem precisa de mais espaço tem
+// a descrição e a frase de destaque.
+export const LIMITE_OBSERVACAO_VALOR = 160;
+
 export const LIMITE_TITULO_DESTAQUE = 80;
 export const LIMITE_SUBTITULO_DESTAQUE = 160;
 export const LIMITE_LEGENDA_FOTO = 80;
@@ -109,6 +116,21 @@ export const imovelSchema = z.object({
   precoAluguel: numeroOpcional,
   precoCondominio: numeroOpcional,
   precoIptu: numeroOpcional,
+  // Fase 54 — uma linha de texto puro: quebras e espaços repetidos viram
+  // um espaço ANTES do limite, e o trim acontece antes do .max() (160
+  // espaços seguidos de uma palavra não são uma observação de 161
+  // caracteres). Server-side de verdade: o maxLength do navegador é
+  // conveniência, um POST direto ignora HTML.
+  observacaoValor: z.preprocess(
+    textoDeUmaLinha,
+    z
+      .string()
+      .max(
+        LIMITE_OBSERVACAO_VALOR,
+        `A observação sobre o valor deve ter no máximo ${LIMITE_OBSERVACAO_VALOR} caracteres.`
+      )
+      .optional()
+  ),
   areaTotal: numeroOpcional,
   areaPrivativa: numeroOpcional,
   quartos: numeroOpcional,
@@ -245,6 +267,10 @@ export function camposImovel(dados: DadosImovelFormulario) {
     rentPrice: dados.precoAluguel ?? null,
     condoFee: dados.precoCondominio ?? null,
     propertyTax: dados.precoIptu ?? null,
+    // Fase 54 — vazio (ou só espaços, já removidos pelo preprocess) vira
+    // NULL: é o que permite LIMPAR a observação pelo próprio formulário,
+    // e o que faz a ficha pública não reservar espaço nenhum.
+    priceNote: dados.observacaoValor || null,
     totalArea: dados.areaTotal ?? null,
     privateArea: dados.areaPrivativa ?? null,
     bedrooms: dados.quartos ?? null,

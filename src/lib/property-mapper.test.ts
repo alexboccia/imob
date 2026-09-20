@@ -4,6 +4,7 @@ import {
   parseImovelFormData,
   camposImovel,
   LIMITE_FRASE_DESTAQUE,
+  LIMITE_OBSERVACAO_VALOR,
   parseMidias,
   midiasParaCriar,
   type DadosImovelFormulario,
@@ -393,6 +394,105 @@ describe("frase de destaque", () => {
     const r = comFrase("<script>alert(1)</script>");
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.fraseDestaque).toBe("<script>alert(1)</script>");
+  });
+});
+
+// =======================================================================
+// Fase 54 — observação sobre o valor
+// =======================================================================
+// Texto editorial do anunciante, exibido colado no preço. O que se
+// protege: uma linha só (quebras viram espaço), o limite vale sobre o
+// texto já aparado, vazio vira null, e NADA é calculado nem
+// interpretado — "+25%" é texto, não número.
+
+describe("observação sobre o valor", () => {
+  const base = {
+    titulo: "Apartamento 2 quartos",
+    tipo: "Apartamento",
+    finalidade: "SALE" as const,
+    status: "AVAILABLE" as const,
+    bairro: "Pinheiros",
+    cidade: "São Paulo",
+    estado: "SP",
+  };
+  const comObservacao = (observacaoValor: unknown) =>
+    imovelSchema.safeParse({ ...base, observacaoValor });
+
+  test("aceita a observação da referência, sem alterá-la", () => {
+    const r = comObservacao("Previsão de valorização: +25% até a entrega");
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.observacaoValor).toBe("Previsão de valorização: +25% até a entrega");
+    }
+  });
+
+  test("é opcional: ausente passa", () => {
+    expect(imovelSchema.safeParse(base).success).toBe(true);
+  });
+
+  test("uma linha só: quebras e espaços repetidos viram um espaço", () => {
+    const r = comObservacao("  Entrada facilitada\n\n   durante o lançamento  ");
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.observacaoValor).toBe("Entrada facilitada durante o lançamento");
+  });
+
+  test("exatamente no limite passa; um caractere a mais é recusado", () => {
+    expect(comObservacao("a".repeat(LIMITE_OBSERVACAO_VALOR)).success).toBe(true);
+    expect(comObservacao("a".repeat(LIMITE_OBSERVACAO_VALOR + 1)).success).toBe(false);
+  });
+
+  test("o limite vale sobre o texto SEM os espaços das pontas", () => {
+    const r = comObservacao(`${" ".repeat(200)}Valor sujeito a alteração.${" ".repeat(200)}`);
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.observacaoValor).toBe("Valor sujeito a alteração.");
+  });
+
+  test("conteúdo parecido com HTML é guardado como TEXTO, não interpretado", () => {
+    // A defesa é a renderização, que escapa por construção (React).
+    const r = comObservacao("<b>+25%</b>");
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.observacaoValor).toBe("<b>+25%</b>");
+  });
+});
+
+describe("camposImovel — observação sobre o valor", () => {
+  function dados(
+    overrides: Partial<DadosImovelFormulario> = {}
+  ): DadosImovelFormulario {
+    return {
+      titulo: "Apartamento 2 quartos",
+      tipo: "Apartamento",
+      finalidade: "SALE",
+      status: "AVAILABLE",
+      bairro: "Pinheiros",
+      cidade: "São Paulo",
+      estado: "SP",
+      lancamento: false,
+      destaque: false,
+      oportunidade: false,
+      slideshow: false,
+      caracteristicasImovel: [],
+      caracteristicasCondominio: [],
+      ...overrides,
+    };
+  }
+
+  test("grava a observação quando existe", () => {
+    const campos = camposImovel(dados({ observacaoValor: "Condições especiais de lançamento" }));
+    expect(campos.priceNote).toBe("Condições especiais de lançamento");
+  });
+
+  test("ausente e vazia viram NULL, nunca string vazia", () => {
+    expect(camposImovel(dados()).priceNote).toBeNull();
+    expect(camposImovel(dados({ observacaoValor: "" })).priceNote).toBeNull();
+  });
+
+  test("não é preço: os campos numéricos seguem intocados", () => {
+    const campos = camposImovel(
+      dados({ preco: 820000, observacaoValor: "Previsão de valorização: +25% até a entrega" })
+    );
+    expect(campos.price).toBe(820000);
+    expect(campos.priceNote).toBe("Previsão de valorização: +25% até a entrega");
   });
 });
 

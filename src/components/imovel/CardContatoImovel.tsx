@@ -1,15 +1,11 @@
 import { FormularioContato } from "@/components/FormularioContato";
 import { Card, CardContent } from "@/components/ui/card";
-import { buttonVariants } from "@/components/ui/button";
-import { IconeWhatsApp } from "@/components/icons";
-import { RastreioCliqueWhatsApp } from "@/components/analytics/RastreioCliqueWhatsApp";
 import { ValoresDoImovel, type ValoresImovel } from "@/components/imovel/ValoresDoImovel";
 import { TITULO_BLOCO } from "@/lib/site-typography";
 
 // Card lateral de conversão do detalhe do imóvel. A hierarquia é
-// deliberada — preço, CTA de WhatsApp, divisor, formulário — porque é
-// esse o caminho que o visitante percorre; qualquer coisa entre o preço e
-// o CTA compete com a conversão.
+// deliberada — valor, quem atende, formulário — porque é esse o caminho
+// que o visitante percorre.
 //
 // Extraído do detalhe porque a página de lançamento precisa do mesmo
 // card, com os mesmos dois modos (com e sem WhatsApp configurado).
@@ -20,16 +16,18 @@ import { TITULO_BLOCO } from "@/lib/site-typography";
 // 43): quem atende vem logo antes de quem pergunta. A coluna de conteúdo
 // não o repete.
 //
-// Fase 43 — o cabeçalho da ficha passou a mostrar os mesmos valores no
-// desktop. A repetição é intencional: lá é a decisão imediata, aqui é a
-// conversão que acompanha a leitura. Os dois usam ValoresDoImovel.
+// Fase 54 — o CTA grande "Falar no WhatsApp" saiu daqui. Ele era o
+// terceiro convite de WhatsApp da mesma tela (barra fixa no celular,
+// toolbar do corretor) e separava o preço de quem atende. O que fica
+// abaixo do valor é a observação do anunciante sobre ele, quando
+// houver. O canal continua existindo: WhatsApp do corretor logo abaixo,
+// formulário no fim do card e barra fixa no celular.
 
 export function CardContatoImovel({
   imovel,
   imovelId,
   orgSlug,
   basePath,
-  whatsappHref,
   mensagemFormulario,
   idFormulario,
   corretor,
@@ -37,11 +35,6 @@ export function CardContatoImovel({
   imovel: ValoresImovel;
   imovelId: string;
   orgSlug: string;
-  // null quando o tenant não configurou WhatsApp (nem no imóvel, nem nas
-  // configurações). Nesse caso NENHUM botão é renderizado: o formulário
-  // logo abaixo já é o canal, e um botão a mais aqui só empurraria ele
-  // pra baixo.
-  whatsappHref: string | null;
   mensagemFormulario: string;
   idFormulario: string;
   basePath: string;
@@ -52,26 +45,6 @@ export function CardContatoImovel({
     <Card data-card-contato className="h-fit lg:sticky lg:top-[calc(var(--site-header-height,88px)+1rem)]">
       <CardContent className="space-y-4">
         <ValoresDoImovel imovel={imovel} />
-
-        {whatsappHref && (
-          // A âncora abaixo está intocada — mesmo href, target, rel e
-          // classes de antes. O wrapper só escuta o clique borbulhando.
-          <RastreioCliqueWhatsApp orgSlug={orgSlug} imovelId={imovelId} placement="SIDEBAR">
-            <a
-              href={whatsappHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonVariants({
-                size: "lg",
-                className:
-                  "w-full bg-whatsapp-brand text-white hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active",
-              })}
-            >
-              <IconeWhatsApp className="size-5" />
-              Falar no WhatsApp
-            </a>
-          </RastreioCliqueWhatsApp>
-        )}
 
         {corretor}
 

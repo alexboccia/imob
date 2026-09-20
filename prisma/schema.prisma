@@ -512,6 +512,28 @@ model Property {
   condoFee    Decimal? @db.Decimal(14, 2)
   propertyTax Decimal? @db.Decimal(14, 2)
 
+  // Fase 54 — OBSERVAÇÃO EDITORIAL SOBRE O VALOR, exibida logo abaixo do
+  // preço no card comercial da ficha pública.
+  //
+  // É texto escrito por quem cadastra ("Previsão de valorização: +25% até
+  // a entrega", "Entrada facilitada durante o lançamento"). O produto não
+  // calcula, não infere de deliveryForecast, não interpreta percentual e
+  // não valida a promessa comercial: guarda e mostra o que o anunciante
+  // escreveu, e nada aparece quando o campo é nulo.
+  //
+  // NÃO É PREÇO: nenhuma tela soma, compara ou ordena por este campo.
+  // Desconto, condição de pagamento e financiamento continuam não
+  // existindo como dado estruturado — inventá-los aqui, em texto livre,
+  // seria pior que não tê-los.
+  //
+  // NÃO CONFUNDIR com highlightPhrase: aquela é o argumento comercial do
+  // IMÓVEL, mora abaixo da descrição e fala do imóvel inteiro; esta fala
+  // só do valor e mora colada nele.
+  //
+  // NULLABLE E SEM BACKFILL: todo imóvel anterior à fase fica null, que é
+  // a verdade. Texto puro (React escapa), vazio vira NULL.
+  priceNote String?
+
   // Características
   totalArea        Float?
   privateArea      Float?

@@ -16,11 +16,16 @@ export type ValoresImovel = {
   condoFee: unknown;
   propertyTax: unknown;
   purpose: string;
+  /** Fase 54 — observação editorial sobre o valor, quando cadastrada. */
+  priceNote?: string | null;
 };
 
 export function ValoresDoImovel({ imovel }: { imovel: ValoresImovel }) {
   const precos = precosPublicos(imovel);
   const custos = custosPublicos(imovel);
+  // Fase 54 — a observação é do VALOR: sem valor nenhum na tela ela não
+  // teria a que se referir, e some junto.
+  const observacao = imovel.priceNote?.trim() || null;
   if (precos.length === 0 && custos.length === 0) return null;
 
   return (
@@ -43,6 +48,15 @@ export function ValoresDoImovel({ imovel }: { imovel: ValoresImovel }) {
             </div>
           ))}
         </div>
+      )}
+      {/* Fase 54 — colada no preço e visualmente secundária a ele: é uma
+          observação do anunciante, não um segundo título nem um selo. O
+          texto é exibido como veio (React escapa), sem interpretar
+          percentual, data ou condição — nada aqui é calculado. */}
+      {observacao && (
+        <p data-observacao-valor className="text-sm text-gray-500">
+          {observacao}
+        </p>
       )}
       {custos.length > 0 && (
         <dl className="flex flex-wrap gap-x-5 gap-y-1 pt-1 text-sm text-gray-500">

@@ -648,7 +648,6 @@ export default async function DetalheImovelPage({
           imovelId={imovel.id}
           orgSlug={orgSlug}
           basePath={basePath}
-          whatsappHref={whatsappHref}
           mensagemFormulario={mensagemContato}
           idFormulario={idFormulario}
           corretor={

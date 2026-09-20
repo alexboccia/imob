@@ -126,6 +126,10 @@ test.describe("Tracking — visualização", () => {
 });
 
 test.describe("Tracking — intenção via WhatsApp", () => {
+  // Fase 54 — o CTA institucional do card lateral saiu da ficha (o do
+  // cabeçalho já tinha saído na 52). A superfície de WhatsApp do TENANT
+  // que restou é a barra fixa do celular; o WhatsApp do corretor é outro
+  // número e tem placement próprio.
   test("clique no CTA dispara WHATSAPP_CLICK com placement e NÃO altera o link", async ({
     page,
   }) => {
@@ -135,13 +139,10 @@ test.describe("Tracking — intenção via WhatsApp", () => {
       await rota.fulfill({ status: 202, body: JSON.stringify({ ok: true }) });
     });
 
-    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.setViewportSize({ width: 375, height: 800 });
     await page.goto(URL_IMOVEL);
 
-    // Fase 43 — o cabeçalho ganhou um CTA com o mesmo nome, que vem
-    // ANTES no documento; `.first()` passaria a pegar aquele. Este teste é
-    // sobre o card lateral, então o alvo agora é explícito.
-    const cta = page.locator("[data-card-contato]").getByRole("link", { name: "Falar no WhatsApp" });
+    const cta = page.locator("[data-cta-imovel]").getByRole("link", { name: /WhatsApp/ });
     await expect(cta).toBeVisible();
 
     // O href continua sendo o link real do WhatsApp, com a mensagem
@@ -160,14 +161,15 @@ test.describe("Tracking — intenção via WhatsApp", () => {
     await expect.poll(() => eventos.filter((e) => e.type === "WHATSAPP_CLICK").length).toBe(1);
     const clique = eventos.find((e) => e.type === "WHATSAPP_CLICK")!;
     expect(clique.propertyId).toBe(IDS_E2E.imovelTopOrgTracking);
-    expect(clique.placement).toBe("SIDEBAR");
+    expect(clique.placement).toBe("MOBILE_BAR");
   });
 
-  // Fase 52 — o CTA do cabeçalho (placement HEADER) saiu da ficha junto
-  // com o bloco comercial do topo. O que resta no desktop é o do card
-  // lateral, já coberto acima; aqui se prova que o topo não tem CTA e
-  // que nenhum evento HEADER é mais emitido.
-  test("no desktop, o cabeçalho não tem CTA comercial e nenhum evento HEADER é emitido", async ({
+  // Fase 52 tirou o CTA do cabeçalho (HEADER); a Fase 54 tirou o do card
+  // comercial (SIDEBAR). No desktop a ficha não tem mais CTA de WhatsApp
+  // do tenant — o canal ali é o formulário do card (e o WhatsApp do
+  // corretor, que é outro número). Os dois placements seguem definidos
+  // para não invalidar o histórico já gravado, mas nada os emite.
+  test("no desktop, nenhum CTA comercial de WhatsApp e nenhum evento HEADER ou SIDEBAR", async ({
     page,
   }) => {
     const eventos: CorpoEvento[] = [];
@@ -184,22 +186,18 @@ test.describe("Tracking — intenção via WhatsApp", () => {
     await expect(cabecalho.getByRole("link", { name: "Tenho interesse" })).toHaveCount(0);
     await expect(cabecalho.locator("[data-preco]")).toHaveCount(0);
 
-    // O CTA do card lateral continua sendo o link do WhatsApp da ficha.
-    const cta = page.locator("[data-card-contato]").getByRole("link", { name: "Falar no WhatsApp" });
-    const href = await cta.getAttribute("href");
-    expect(href).toMatch(/^https:\/\/wa\.me\/\d+/);
-    expect(new URL(href!).searchParams.get("text")).toContain("Cobertura Tracking mais procurada");
-    expect(await cta.getAttribute("target")).toBe("_blank");
-    expect(await cta.getAttribute("rel")).toContain("noopener");
+    // O card comercial mostra o valor e nenhum CTA de WhatsApp.
+    const comercial = page.locator("[data-card-contato]");
+    await expect(comercial.locator("[data-preco]").first()).toBeVisible();
+    await expect(comercial.getByRole("link", { name: "Falar no WhatsApp" })).toHaveCount(0);
+    await expect(comercial.locator('a[href*="wa.me"]')).toHaveCount(0);
+    // E a barra fixa não aparece no desktop.
+    await expect(page.locator("[data-cta-imovel]")).toBeHidden();
 
-    await page.route("https://wa.me/**", (rota) => rota.abort());
-    await cta.click();
-
-    await expect.poll(() => eventos.filter((e) => e.type === "WHATSAPP_CLICK").length).toBe(1);
-    const clique = eventos.find((e) => e.type === "WHATSAPP_CLICK")!;
-    expect(clique.propertyId).toBe(IDS_E2E.imovelTopOrgTracking);
-    expect(clique.placement).toBe("SIDEBAR");
-    expect(eventos.some((e) => e.placement === "HEADER")).toBe(false);
+    // A visualização é registrada; clique de WhatsApp, nenhum.
+    await expect.poll(() => eventos.filter((e) => e.type === "PROPERTY_VIEW").length).toBeGreaterThan(0);
+    expect(eventos.filter((e) => e.type === "WHATSAPP_CLICK")).toEqual([]);
+    expect(eventos.some((e) => e.placement === "HEADER" || e.placement === "SIDEBAR")).toBe(false);
   });
 
   test("no mobile, o CTA da barra fixa registra o placement próprio", async ({ page }) => {
@@ -233,13 +231,15 @@ test.describe("Tracking — FAIL-OPEN (analytics nunca bloqueia conversão)", ()
     const errosConsole: string[] = [];
     page.on("pageerror", (e) => errosConsole.push(e.message));
 
-    await page.setViewportSize({ width: 1280, height: 900 });
+    // Fase 54 — a superfície de WhatsApp do tenant é a barra fixa do
+    // celular; o card comercial não tem mais CTA.
+    await page.setViewportSize({ width: 375, height: 800 });
     await page.goto(URL_IMOVEL);
 
     // A página do imóvel renderiza normalmente.
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-    const cta = page.getByRole("link", { name: "Falar no WhatsApp" }).first();
+    const cta = page.locator("[data-cta-imovel]").getByRole("link", { name: /WhatsApp/ });
     await expect(cta).toBeVisible();
     const href = await cta.getAttribute("href");
     expect(href).toMatch(/^https:\/\/wa\.me\/\d+/);
@@ -291,7 +291,9 @@ test.describe("Tracking — FAIL-OPEN (analytics nunca bloqueia conversão)", ()
     // Bloqueia o acesso a localStorage antes de qualquer script da página
     // — é o cenário de navegação privada/política restritiva, em que
     // obterVisitorId devolve null e o tracking simplesmente não acontece.
-    const contexto = await browser.newContext();
+    // Viewport de celular no CONTEXTO (context.newPage() não recebe
+    // opções): a barra fixa é a superfície de WhatsApp do tenant.
+    const contexto = await browser.newContext({ viewport: { width: 375, height: 800 } });
     // Contexto próprio: a barreira do beforeEach acima não o alcança, e
     // esta navegação acontece SEM interceptação de página.
     await contexto.route(ROTA_EVENTO, (rota) =>
@@ -311,7 +313,7 @@ test.describe("Tracking — FAIL-OPEN (analytics nunca bloqueia conversão)", ()
 
     await pagina.goto(URL_IMOVEL);
     await expect(pagina.getByRole("heading", { level: 1 })).toBeVisible();
-    const cta = pagina.getByRole("link", { name: "Falar no WhatsApp" }).first();
+    const cta = pagina.locator("[data-cta-imovel]").getByRole("link", { name: /WhatsApp/ });
     await expect(cta).toBeVisible();
     expect(await cta.getAttribute("href")).toMatch(/^https:\/\/wa\.me\/\d+/);
     expect(errosConsole).toEqual([]);

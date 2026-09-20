@@ -170,6 +170,7 @@ export default async function EditarImovelPage({
           precoAluguel: decimalParaValor(imovel.rentPrice),
           precoCondominio: decimalParaValor(imovel.condoFee),
           precoIptu: decimalParaValor(imovel.propertyTax),
+          observacaoValor: imovel.priceNote,
           areaTotal: imovel.totalArea,
           areaPrivativa: imovel.privateArea,
           quartos: imovel.bedrooms,
