@@ -346,7 +346,10 @@ test.describe("layout", () => {
 
   test("carrossel: o coração não troca a foto, e as setas seguem trocando", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto("/e2e-org-recursos/imoveis");
+    // Busca pelo título, não a primeira página: a listagem da Org W
+    // pagina em 12, e depender da posição do imóvel fazia o teste quebrar
+    // quando qualquer fixture novo entrava na organização.
+    await page.goto("/e2e-org-recursos/imoveis?busca=Imovel%20Galeria%205");
     await page.waitForLoadState("networkidle");
     const card = page.locator(`[data-favorito-imovel="${IDS_E2E.imovelGaleria5}"]`).locator("xpath=../..");
     const bolinhas = card.locator("[data-foto-card] > div.absolute.bottom-2 span");

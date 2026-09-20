@@ -3454,6 +3454,7 @@ async function main() {
     description?: string | null;
     highlightPhrase?: string | null;
     priceNote?: string | null;
+    publishedAt?: Date | null;
     propertyFeatures?: string[];
     videos?: number;
   }) => {
@@ -3520,12 +3521,21 @@ async function main() {
 
   // Fase 54 — o par que a spec compara: mesmo card, um com observação e
   // outro sem. O "Imovel Dobra Venda E2E" acima é o caso SEM texto.
+  //
+  // publishedAt preenchido de propósito: a ordem pública é `publishedAt
+  // DESC NULLS FIRST, id DESC` (Fase 48), então imóveis COM data vão
+  // para depois de todos os sem data — ou seja, para o fim da listagem
+  // da Organização W. Sem isso, estes dois entrariam no meio da primeira
+  // página e empurrariam o imóvel que a spec do carrossel (Fase 50)
+  // encontra lá para a página 2. As fichas destes fixtures são abertas
+  // diretamente por id; a posição deles na listagem não importa.
   await imovelDaDobra({
     id: IDS_E2E.imovelObservacaoValor,
     title: "Imovel Observacao Valor E2E",
     purpose: "SALE",
     price: 820000,
     priceNote: "Previsão de valorização: +25% até a entrega",
+    publishedAt: new Date("2026-01-02T12:00:00.000Z"),
   });
   // Texto no teto (160 caracteres): prova que a observação quebra em
   // várias linhas sem estourar o card em nenhuma largura.
@@ -3534,6 +3544,7 @@ async function main() {
     title: "Imovel Observacao Longa E2E",
     purpose: "SALE",
     price: 1250000,
+    publishedAt: new Date("2026-01-01T12:00:00.000Z"),
     priceNote:
       "Condições especiais de lançamento com entrada facilitada em até trinta e seis meses, " +
       "valores sujeitos a alteração sem aviso previo conforme tabela vigente.",
