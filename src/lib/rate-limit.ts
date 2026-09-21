@@ -165,7 +165,7 @@ export async function registrarSucessoLogin(
 // contato normalizado, cada um com janela curta + diária.
 // ---------------------------------------------------------------------
 
-export type FormularioTipo = "contato" | "anuncie" | "materiais";
+export type FormularioTipo = "contato" | "anuncie" | "materiais" | "visita";
 
 type ChecagemLimite = { chave: string; limite: number; janelaSegundos: number; motivo: string };
 

@@ -16,6 +16,10 @@ import { registrarAbuso } from "@/lib/abuse-log";
 import { hashCurto } from "@/lib/hash";
 import { resolverPessoaParaFormularioPublico } from "@/lib/person-dedup";
 import { ORIGENS_CAPTACAO, origemDoContato } from "@/lib/captacao";
+import { comoDatetimeLocal, visitaPublicaSchema } from "@/lib/visita-publica";
+import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
+import { deDatetimeLocalNoFuso, formatarDataHoraNoFuso } from "@/lib/fuso-horario";
+import { membroPodeReceberNegociacao } from "@/lib/responsavel-negociacao";
 import type { MaterialPublico } from "@/lib/materiais-imovel";
 
 // orgSlug chega via .bind(null, orgSlug) nos Client Components que chamam
@@ -518,4 +522,275 @@ export async function solicitarMateriais(
   }
 
   return { sucesso: true, materiais: resultado.materiais };
+}
+
+// =======================================================================
+// Fase 55 — SOLICITAÇÃO DE VISITA PELA FICHA PÚBLICA
+// =======================================================================
+// Não existe domínio novo aqui. O visitante entra exatamente na cadeia
+// que o CRM já tem:
+//
+//   Person (deduplicada, como em qualquer formulário público)
+//     -> PropertyInterest (a negociação daquela pessoa com aquele imóvel)
+//       -> ScheduledActivity type VISIT, status SCHEDULED
+//
+// É o mesmo trio que `criarAgendamentoVisita` monta do lado interno, e é
+// por isso que a visita aparece sozinha na Agenda, na Central de trabalho
+// do responsável, na ficha do cliente e na negociação — sem nenhuma tela
+// nova e sem uma caixa "agendamentos do site".
+//
+// O QUE O VISITANTE NÃO DECIDE: organização, imóvel, corretor e status.
+// Tudo isso é resolvido no servidor a partir do imóvel validado.
+//
+// STATUS: SCHEDULED, o mesmo de qualquer visita marcada — é o status que
+// mantém o compromisso pedindo ação. O produto não tem "solicitada" nem
+// disponibilidade em tempo real, então a tela diz ao visitante que o
+// corretor vai CONFIRMAR: o compromisso existe na agenda, a confirmação
+// com a pessoa é trabalho humano.
+
+/** Erro genérico: nunca revela se um id existe em outra organização. */
+const VISITA_INDISPONIVEL =
+  "Não foi possível agendar a visita para este imóvel. Tente novamente pelo formulário de contato.";
+
+export async function solicitarVisita(
+  orgSlug: string,
+  _prevState: unknown,
+  formData: FormData
+): Promise<{ sucesso: boolean; erro?: string; campo?: string }> {
+  const parsed = visitaPublicaSchema.safeParse({
+    nome: formData.get("nome"),
+    email: formData.get("email"),
+    telefone: formData.get("telefone"),
+    data: formData.get("data"),
+    hora: formData.get("hora"),
+    observacao: formData.get("observacao") || undefined,
+    imovelId: formData.get("imovelId"),
+  });
+
+  if (!parsed.success) {
+    const primeiro = parsed.error.issues[0];
+    return {
+      sucesso: false,
+      erro: primeiro?.message ?? "Preencha os campos corretamente.",
+      campo: typeof primeiro?.path[0] === "string" ? primeiro.path[0] : undefined,
+    };
+  }
+
+  const { nome, email, telefone, data, hora, observacao, imovelId } = parsed.data;
+
+  const org = await resolverOrganizacaoAtiva(orgSlug);
+  if ("erro" in org) return { sucesso: false, erro: org.erro };
+  const { organizationId } = org;
+
+  const protecao = await protecoesAntiSpam({
+    formulario: "visita",
+    formData,
+    organizationId,
+    contatoNormalizado: normalizarContato(email, telefone),
+  });
+  if (protecao.bloqueado) {
+    return protecao.erro ? { sucesso: false, erro: protecao.erro } : { sucesso: true };
+  }
+
+  // Data e hora são de PAREDE: só viram instante com o fuso da
+  // organização (Fase 18). Sem isso, "amanhã 9h" de uma imobiliária em
+  // São Paulo viraria outro dia no banco.
+  const fuso = await buscarFusoOrganizacao(organizationId);
+  const quando = deDatetimeLocalNoFuso(comoDatetimeLocal(data, hora), fuso);
+  if (!quando) {
+    return { sucesso: false, erro: "Data ou horário inválidos.", campo: "data" };
+  }
+  // Comparação entre INSTANTES: "no futuro" não depende de fuso nenhum.
+  if (quando.getTime() <= Date.now()) {
+    return {
+      sucesso: false,
+      erro: "Escolha uma data e um horário no futuro.",
+      campo: "data",
+    };
+  }
+
+  const resultado = await withOrganization(organizationId, async () => {
+    // O imovelId vem do navegador. Ele precisa ser DESTA organização e
+    // estar disponível — a mesma regra que o painel aplica para agendar
+    // visita (criarAgendamentoVisita). Um id de outro tenant, de um
+    // rascunho ou de um imóvel vendido cai no mesmo erro genérico.
+    const imovel = await prisma.property.findUnique({
+      where: { id: imovelId, organizationId },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        responsibleMemberId: true,
+        responsibleMember: { select: { id: true, status: true, contactEmail: true } },
+      },
+    });
+    if (!imovel || imovel.status !== "AVAILABLE") return { tipo: "indisponivel" as const };
+
+    // O visitante NÃO escolhe o corretor: quem atende é o responsável
+    // pelo imóvel, e só se ele ainda puder receber atribuição. Sem
+    // responsável (ou com ele inativo), a negociação nasce SEM dono e
+    // aparece nas telas de quem distribui trabalho — nunca é atribuída
+    // ao primeiro membro que aparecer.
+    const responsavelId =
+      imovel.responsibleMember && membroPodeReceberNegociacao(imovel.responsibleMember.status)
+        ? imovel.responsibleMember.id
+        : null;
+
+    const resolucao = await resolverPessoaParaFormularioPublico({
+      organizationId,
+      nome,
+      email,
+      telefone,
+      role: "LEAD",
+      source: "WEBSITE",
+    });
+
+    // Conflito de identidade (e-mail aponta para uma Person, telefone
+    // para outra): não dá para saber de quem é a visita, e escolher
+    // seria inventar identidade. O pedido não se perde — vira captação
+    // pendente com tudo que o visitante escreveu, inclusive o horário
+    // desejado, que sem a Person não teria onde morar.
+    if (resolucao.tipo === "conflito") {
+      await prisma.leadCapture.create({
+        data: {
+          organizationId,
+          name: nome,
+          email,
+          phone: telefone,
+          message: mensagemDaVisita(quando, fuso, observacao),
+          origin: ORIGENS_CAPTACAO.VISITA,
+          role: "LEAD",
+          propertyId: imovel.id,
+          ...atribuicaoDoFormulario(formData),
+        },
+      });
+      return { tipo: "pendente" as const, imovel };
+    }
+
+    const personId = resolucao.personId;
+
+    await prisma.$transaction(async (tx) => {
+      // A negociação daquela pessoa com aquele imóvel é ÚNICA
+      // (@@unique organizationId+personId+propertyId). Se ela já existe,
+      // é ela que recebe a visita — nada de uma segunda linha e nada de
+      // resetar stage, responsável ou notas já trabalhadas pelo corretor.
+      const existente = await tx.propertyInterest.findFirst({
+        where: { organizationId, personId, propertyId: imovel.id },
+        select: { id: true, stage: true, responsibleMemberId: true },
+      });
+
+      let interesseId = existente?.id;
+      if (!existente) {
+        const criado = await tx.propertyInterest.create({
+          data: {
+            organizationId,
+            personId,
+            propertyId: imovel.id,
+            responsibleMemberId: responsavelId,
+          },
+          select: { id: true, createdAt: true },
+        });
+        interesseId = criado.id;
+        await tx.propertyInterestStageHistory.create({
+          data: {
+            organizationId,
+            propertyInterestId: criado.id,
+            previousStage: null,
+            newStage: "INTERESTED",
+            changedAt: criado.createdAt,
+            // Sem ator: quem criou foi o visitante, que não é membro da
+            // organização. Inventar um autor seria atribuir a alguém um
+            // ato que essa pessoa não praticou (Fases 14/15).
+            changedByMemberId: null,
+          },
+        });
+      }
+
+      await tx.scheduledActivity.create({
+        data: {
+          organizationId,
+          personId,
+          propertyId: imovel.id,
+          propertyInterestId: interesseId,
+          type: "VISIT",
+          status: "SCHEDULED",
+          scheduledAt: quando,
+          notes: observacao || null,
+          // createdByMemberId null: ninguém da equipe criou este
+          // compromisso. A posse continua vindo da negociação.
+          createdByMemberId: null,
+        },
+      });
+
+      // O stage só AVANÇA de INTERESTED para VISIT_SCHEDULED — a mesma
+      // regra do agendamento interno. Qualquer outro stage (já visitado,
+      // em proposta) permanece intocado, nunca regride.
+      if (existente && existente.stage === "INTERESTED") {
+        await tx.propertyInterest.update({
+          where: { id: existente.id, organizationId },
+          data: { stage: "VISIT_SCHEDULED" },
+        });
+        await tx.propertyInterestStageHistory.create({
+          data: {
+            organizationId,
+            propertyInterestId: existente.id,
+            previousStage: "INTERESTED",
+            newStage: "VISIT_SCHEDULED",
+            changedAt: new Date(),
+            changedByMemberId: null,
+          },
+        });
+      }
+
+      // O CONTATO em si — o que faz o pedido aparecer na caixa de
+      // entrada comercial junto dos outros contatos do site (ela lista
+      // Interaction do site sem autor). A visita é o compromisso; esta é
+      // a comunicação que o originou, e as duas coisas são diferentes.
+      await tx.interaction.create({
+        data: {
+          organizationId,
+          personId,
+          propertyId: imovel.id,
+          type: "MESSAGE",
+          notes: mensagemDaVisita(quando, fuso, observacao),
+          origin: ORIGENS_CAPTACAO.VISITA,
+          ...atribuicaoDoFormulario(formData),
+        },
+      });
+    });
+
+    return { tipo: "agendada" as const, imovel };
+  });
+
+  if (resultado.tipo === "indisponivel") {
+    return { sucesso: false, erro: VISITA_INDISPONIVEL };
+  }
+
+  const configContato = await buscarConfiguracaoContato(organizationId);
+  const emailDestino = resultado.imovel.responsibleMember?.contactEmail || configContato.email;
+  if (emailDestino && (await hasModule(organizationId, "email"))) {
+    // Notificação, nunca durabilidade: a visita já está no banco.
+    await enviarEmailContato({
+      organizationId,
+      para: emailDestino,
+      nomeLead: nome,
+      emailLead: email,
+      telefoneLead: telefone,
+      mensagem: mensagemDaVisita(quando, fuso, observacao),
+      imovelTitulo: resultado.imovel.title,
+      avisoConflitoDedup: resultado.tipo === "pendente",
+    });
+  }
+
+  return { sucesso: true };
+}
+
+/**
+ * O texto que descreve o pedido para quem vai lê-lo no CRM: o horário
+ * desejado, no fuso da organização, mais a observação do visitante.
+ * Nada aqui é inventado — os dois vêm do formulário.
+ */
+function mensagemDaVisita(quando: Date, fuso: string, observacao?: string): string {
+  const cabecalho = `Visita solicitada pelo site para ${formatarDataHoraNoFuso(quando, fuso)}.`;
+  return observacao ? `${cabecalho}\n\n${observacao}` : cabecalho;
 }

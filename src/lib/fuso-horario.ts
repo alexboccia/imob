@@ -359,6 +359,17 @@ export function deDatetimeLocalNoFuso(valor: string, fuso: string): Date | null 
   return instante;
 }
 
+/**
+ * O DIA de hoje no fuso da organização, em "YYYY-MM-DD" — o mínimo do
+ * seletor de data do agendamento público (Fase 55). O relógio de quem
+ * navega pode estar em outro fuso; o dia que vale é o da imobiliária.
+ */
+export function dataDeCalendarioNoFuso(valor: Date, fuso: string): string {
+  const c = componentesNoFuso(valor, fuso);
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  return `${String(c.ano).padStart(4, "0")}-${p2(c.mes)}-${p2(c.dia)}`;
+}
+
 // Instante -> "YYYY-MM-DDTHH:mm" no fuso da organização, para preencher o
 // campo de edição. Sem isso, remarcar uma visita mostraria o horário em
 // UTC e o corretor "corrigiria" um horário que estava certo.

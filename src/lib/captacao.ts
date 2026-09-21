@@ -34,6 +34,12 @@ export const ORIGENS_CAPTACAO = {
   // diferentes, e é exatamente por isso que esta origem existe em vez de
   // reaproveitar IMOVEL.
   MATERIAIS: "MATERIAIS",
+  // Fase 55 — o visitante pediu para VISITAR o imóvel pela ficha. Origem
+  // própria, e não IMOVEL, porque a intenção é outra e mais quente: quem
+  // preenche o formulário lateral quer falar, quem pede material quer
+  // estudar, e quem marca visita quer entrar no imóvel. Sempre
+  // acompanhada do propertyId, como IMOVEL e MATERIAIS.
+  VISITA: "VISITA",
 } as const;
 
 export type OrigemCaptacao =
@@ -44,6 +50,7 @@ export const LABEL_ORIGEM_CAPTACAO: Record<string, string> = {
   CONTATO: "Página de contato",
   ANUNCIE: "Anuncie seu imóvel",
   MATERIAIS: "Materiais do imóvel",
+  VISITA: "Agendamento de visita",
 };
 
 // Só grava origem que o produto conhece. Um valor fora do catálogo (vindo

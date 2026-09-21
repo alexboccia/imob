@@ -53,6 +53,9 @@ import { CardContatoImovel } from "@/components/imovel/CardContatoImovel";
 import { BreadcrumbImovel, type SeloContexto } from "@/components/imovel/BreadcrumbImovel";
 import { migalhasDoImovel } from "@/lib/breadcrumb-imovel";
 import { CardCorretorImovel } from "@/components/imovel/CardCorretorImovel";
+import { AgendarVisita } from "@/components/imovel/AgendarVisita";
+import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
+import { dataDeCalendarioNoFuso } from "@/lib/fuso-horario";
 import { MateriaisImovel } from "@/components/imovel/MateriaisImovel";
 import { RastreioVisualizacaoImovel } from "@/components/analytics/RastreioVisualizacaoImovel";
 import { BarraCtaImovel } from "@/components/imovel/BarraCtaImovel";
@@ -316,6 +319,15 @@ export default async function DetalheImovelPage({
   // Âncora usada pela barra fixa do mobile pra saltar direto pro
   // formulário do card, em vez de duplicar o formulário na barra.
   const idFormulario = "contato-imovel";
+
+  // Fase 55 — o primeiro dia que o seletor de data aceita: HOJE no fuso
+  // comercial da organização, resolvido no servidor. O relógio do
+  // visitante pode estar em qualquer lugar do mundo, e o servidor recusa
+  // passado de qualquer forma — isto só evita oferecer o que será negado.
+  const dataMinima = dataDeCalendarioNoFuso(
+    new Date(),
+    await buscarFusoOrganizacao(organizationId)
+  );
 
   // Lançamento/em construção: mesma rota, mesma composição de sempre —
   // o que muda é a PRIORIDADE. Prazo de entrega, estágio e construtora
@@ -650,6 +662,20 @@ export default async function DetalheImovelPage({
           basePath={basePath}
           mensagemFormulario={mensagemContato}
           idFormulario={idFormulario}
+          // Fase 55 — só imóvel disponível aceita visita: é a mesma
+          // regra do agendamento interno, e um botão que sempre falha
+          // seria pior que botão nenhum.
+          agendarVisita={
+            imovel.status === "AVAILABLE" && (
+              <AgendarVisita
+                imovelId={imovel.id}
+                orgSlug={orgSlug}
+                basePath={basePath}
+                tituloImovel={imovel.title}
+                dataMinima={dataMinima}
+              />
+            )
+          }
           corretor={
             corretorPublico && (
               <CardCorretorImovel

@@ -39,6 +39,16 @@ export const TIPOS_EVENTO_ANALYTICS = {
   // Clique num CTA de WhatsApp da página do imóvel. É INTENÇÃO, nunca
   // conversa: ninguém sabe, deste lado, se a mensagem foi enviada.
   WHATSAPP_CLICK: "WHATSAPP_CLICK",
+  // Fase 55 — o visitante ABRIU o formulário de agendamento de visita.
+  // É INTENÇÃO, como o clique no WhatsApp: mede quem quis marcar, que é
+  // o único lado desta história que o CRM não vê.
+  //
+  // O ENVIO não vira evento, e a ausência é deliberada: a solicitação
+  // enviada já é Interaction + ScheduledActivity no CRM, com nome e
+  // horário. Medi-la também aqui criaria duas contagens do mesmo fato,
+  // que divergiriam na primeira falha de rede — exatamente o que a regra
+  // "nenhum evento de contato" abaixo evita desde a Fase 6.
+  VISIT_FORM_OPEN: "VISIT_FORM_OPEN",
 } as const;
 
 export type TipoEventoAnalytics =
@@ -50,6 +60,7 @@ export const LABEL_TIPO_EVENTO: Record<string, string> = {
   // existe é o clique. Chamar de lead afirmaria uma conversa que este
   // sistema não observou.
   WHATSAPP_CLICK: "Cliques no WhatsApp",
+  VISIT_FORM_OPEN: "Formulários de visita abertos",
 };
 
 export function tipoEventoValido(valor: unknown): valor is TipoEventoAnalytics {

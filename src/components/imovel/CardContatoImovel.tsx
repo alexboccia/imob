@@ -16,6 +16,10 @@ import { TITULO_BLOCO } from "@/lib/site-typography";
 // 43): quem atende vem logo antes de quem pergunta. A coluna de conteúdo
 // não o repete.
 //
+// Fase 55 — entre o valor e o corretor entra "Agendar uma visita": a
+// única ação do card que cria compromisso, e por isso a que vem antes de
+// quem atende.
+//
 // Fase 54 — o CTA grande "Falar no WhatsApp" saiu daqui. Ele era o
 // terceiro convite de WhatsApp da mesma tela (barra fixa no celular,
 // toolbar do corretor) e separava o preço de quem atende. O que fica
@@ -31,6 +35,7 @@ export function CardContatoImovel({
   mensagemFormulario,
   idFormulario,
   corretor,
+  agendarVisita,
 }: {
   imovel: ValoresImovel;
   imovelId: string;
@@ -40,11 +45,15 @@ export function CardContatoImovel({
   basePath: string;
   /** O corretor responsável, quando ele publicou o perfil. */
   corretor?: React.ReactNode;
+  /** Fase 55 — o agendamento de visita, quando o imóvel aceita visita. */
+  agendarVisita?: React.ReactNode;
 }) {
   return (
     <Card data-card-contato className="h-fit lg:sticky lg:top-[calc(var(--site-header-height,88px)+1rem)]">
       <CardContent className="space-y-4">
         <ValoresDoImovel imovel={imovel} />
+
+        {agendarVisita}
 
         {corretor}
 

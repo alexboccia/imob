@@ -26,8 +26,20 @@ describe("catálogo de tipos de evento", () => {
     expect(tipoEventoValido("constructor")).toBe(false);
   });
 
-  test("NÃO existe evento de contato — essa etapa é Interaction, sem dupla contagem", () => {
-    expect(Object.keys(TIPOS_EVENTO_ANALYTICS)).toEqual(["PROPERTY_VIEW", "WHATSAPP_CLICK"]);
+  // Fase 55 — VISIT_FORM_OPEN entrou no catálogo: abrir o formulário de
+  // visita é INTENÇÃO, como o clique no WhatsApp, e é o que o CRM não
+  // registra. O ENVIO continua fora, pelo motivo de sempre: ele já é
+  // Interaction (e agora também ScheduledActivity), e contá-lo aqui
+  // seria a dupla contagem que esta regra proíbe.
+  test("nenhum evento de CONTATO — essa etapa é Interaction, sem dupla contagem", () => {
+    expect(Object.keys(TIPOS_EVENTO_ANALYTICS)).toEqual([
+      "PROPERTY_VIEW",
+      "WHATSAPP_CLICK",
+      "VISIT_FORM_OPEN",
+    ]);
+    for (const tipo of Object.keys(TIPOS_EVENTO_ANALYTICS)) {
+      expect(tipo).not.toMatch(/CONTACT|SUBMIT|LEAD|REQUEST/);
+    }
   });
 
   test("rótulo do WhatsApp fala em CLIQUE, nunca em lead (o dado é o clique)", () => {

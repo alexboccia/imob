@@ -119,10 +119,11 @@ test.describe("CTA comercial", () => {
     await expect(comercial.locator('a[href*="wa.me"]')).toHaveCount(0);
 
     // E o preço encosta no que vem depois: nada de vão fantasma onde o
-    // botão estava.
+    // botão estava. Desde a Fase 55, quem vem logo depois do valor é o
+    // "Agendar uma visita".
     const p = await caixa(comercial.locator("[data-preco]").first());
     const seguinte = await caixa(
-      comercial.locator("[data-card-corretor], #contato-imovel").first()
+      comercial.locator("[data-agendar-visita], [data-card-corretor], #contato-imovel").first()
     );
     expect(seguinte.y - (p.y + p.height)).toBeLessThan(48);
   });

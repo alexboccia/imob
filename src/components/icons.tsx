@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
   FileText,
   Download,
+  CalendarDays,
 } from "lucide-react";
 
 export function IconeChevronEsquerdo(props: { className?: string }) {
@@ -152,4 +153,9 @@ export function IconeBusca(props: { className?: string }) {
 
 export function IconeFiltros(props: { className?: string }) {
   return <SlidersHorizontal className={props.className} />;
+}
+
+// Fase 55 — agendamento de visita pela ficha pública.
+export function IconeCalendario(props: { className?: string }) {
+  return <CalendarDays className={props.className} />;
 }

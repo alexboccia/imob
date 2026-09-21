@@ -9,7 +9,7 @@ import { logger } from "@/lib/logger";
 // "warn" — nunca vai pra Sentry (só "error" vai, ver logger.ts), é volume
 // de log estruturado normal, não uma condição de erro no sistema.
 export function registrarAbuso(evento: {
-  tipo: "login" | "contato" | "anuncie" | "materiais" | "upload";
+  tipo: "login" | "contato" | "anuncie" | "materiais" | "upload" | "visita";
   motivo: string;
   organizationId?: string;
   ip?: string;
