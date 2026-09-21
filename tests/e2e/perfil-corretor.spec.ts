@@ -80,7 +80,13 @@ test.describe("Perfil público do corretor — página", () => {
       // Hierarquia: um h1 só, o nome do profissional.
       const h1 = page.getByRole("heading", { level: 1 });
       await expect(h1).toBeVisible();
-      await expect(page.getByText("Corretor(a) de imóveis")).toBeVisible();
+      // `exact` mira o SUBTÍTULO visível ao lado do h1, e não o <title>
+      // da aba — que também contém esta frase, por construção
+      // (generateMetadata monta "<nome> | Corretor(a) de imóveis |
+      // <organização>"). Sem isso o localizador casa dois nós e viola o
+      // strict mode — de forma intermitente, porque o <title> só carrega
+      // a frase quando o metadata do perfil JÁ PUBLICADO está em cache.
+      await expect(page.getByText("Corretor(a) de imóveis", { exact: true })).toBeVisible();
       await expect(page.getByText(CRECI)).toBeVisible();
       await expect(page.getByText(BIO)).toBeVisible();
 
@@ -151,7 +157,7 @@ test.describe("Perfil público do corretor — página", () => {
       await page.goto(url);
 
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      await expect(page.getByText("Corretor(a) de imóveis")).toBeVisible();
+      await expect(page.getByText("Corretor(a) de imóveis", { exact: true })).toBeVisible();
       // Sem número próprio: nenhum botão de WhatsApp, mesmo com a
       // organização tendo número institucional configurado.
       await expect(page.getByRole("link", { name: /Falar no WhatsApp/i })).toHaveCount(0);
