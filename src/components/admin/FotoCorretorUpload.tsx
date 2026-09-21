@@ -88,7 +88,11 @@ export function FotoCorretorUpload({
             accept="image/*"
             onChange={handleArquivo}
             disabled={enviando}
-            className="block text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
+            // w-full min-w-0 max-w-full: a largura intrínseca do
+            // <input type="file"> (botão + nome do arquivo) é maior que
+            // 288px e estourava a coluna em 320px. Mesmas classes que os
+            // uploads de logo e favicon já usam.
+            className="block w-full min-w-0 max-w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
           />
           {foto && (
             <Button

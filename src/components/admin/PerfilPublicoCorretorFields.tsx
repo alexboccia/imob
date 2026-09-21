@@ -46,7 +46,13 @@ export function PerfilPublicoCorretorFields({
     // propósito, define esse mínimo. Sem isto a seção vazava para fora da
     // tela em 390px na autogestão, e vazava para dentro do scroll
     // horizontal do painel na tela de administração.
-    <fieldset className="min-w-0 space-y-4 rounded-lg border p-4">
+    // @container/perfil (Fase 56): os campos CURTOS se organizam pela
+    // largura DESTE bloco, não pela da janela. O mesmo fieldset vive em
+    // duas telas de larguras muito diferentes — a autogestão (largura do
+    // painel inteiro) e a edição de usuário (coluna estreita) — e um
+    // breakpoint de viewport acertaria só uma delas. Idioma já usado no
+    // editor de locais próximos (Fase 42).
+    <fieldset className="@container/perfil min-w-0 space-y-4 rounded-lg border p-4">
       <legend className="px-1 text-sm font-semibold">Perfil público</legend>
       <p className="text-xs text-muted-foreground">
         Identidade comercial exibida no site público: na página deste
@@ -91,7 +97,11 @@ export function PerfilPublicoCorretorFields({
         descricao="Aparece no site. É separada da foto usada no painel."
       />
 
-      <div className="space-y-1.5">
+      {/* Campos curtos lado a lado quando o bloco comporta; empilhados
+          quando não. A apresentação e a foto continuam em largura cheia:
+          são os dois campos que usam o espaço de verdade. */}
+      <div className="grid min-w-0 gap-4 @2xl/perfil:grid-cols-2">
+      <div className="min-w-0 space-y-1.5">
         <Label htmlFor="perfilPublicoCreci">CRECI (opcional)</Label>
         <Input
           id="perfilPublicoCreci"
@@ -103,25 +113,7 @@ export function PerfilPublicoCorretorFields({
         <ErroCampo erros={erros?.perfilPublicoCreci} />
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="perfilPublicoBio">Apresentação (opcional)</Label>
-        <Textarea
-          id="perfilPublicoBio"
-          name="perfilPublicoBio"
-          rows={4}
-          maxLength={LIMITE_BIO_PUBLICA}
-          defaultValue={valores.bio ?? ""}
-          placeholder="Uma breve apresentação profissional, exibida no site."
-          aria-invalid={erros?.perfilPublicoBio ? true : undefined}
-        />
-        <p className="text-xs text-muted-foreground">
-          Até {LIMITE_BIO_PUBLICA} caracteres. Texto simples — formatação e
-          links não são interpretados.
-        </p>
-        <ErroCampo erros={erros?.perfilPublicoBio} />
-      </div>
-
-      <div className="space-y-1.5">
+      <div className="min-w-0 space-y-1.5">
         <Label htmlFor="perfilPublicoWhatsapp">
           WhatsApp público (opcional)
         </Label>
@@ -140,7 +132,7 @@ export function PerfilPublicoCorretorFields({
         <ErroCampo erros={erros?.perfilPublicoWhatsapp} />
       </div>
 
-      <div className="space-y-1.5">
+      <div className="min-w-0 space-y-1.5">
         <Label htmlFor="perfilPublicoTelefone">Telefone público (opcional)</Label>
         <Input
           id="perfilPublicoTelefone"
@@ -157,7 +149,7 @@ export function PerfilPublicoCorretorFields({
         <ErroCampo erros={erros?.perfilPublicoTelefone} />
       </div>
 
-      <div className="space-y-1.5">
+      <div className="min-w-0 space-y-1.5">
         <Label htmlFor="perfilPublicoEmail">E-mail público (opcional)</Label>
         <Input
           id="perfilPublicoEmail"
@@ -173,6 +165,25 @@ export function PerfilPublicoCorretorFields({
           que continua privado.
         </p>
         <ErroCampo erros={erros?.perfilPublicoEmail} />
+      </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="perfilPublicoBio">Apresentação (opcional)</Label>
+        <Textarea
+          id="perfilPublicoBio"
+          name="perfilPublicoBio"
+          rows={4}
+          maxLength={LIMITE_BIO_PUBLICA}
+          defaultValue={valores.bio ?? ""}
+          placeholder="Uma breve apresentação profissional, exibida no site."
+          aria-invalid={erros?.perfilPublicoBio ? true : undefined}
+        />
+        <p className="text-xs text-muted-foreground">
+          Até {LIMITE_BIO_PUBLICA} caracteres. Texto simples — formatação e
+          links não são interpretados.
+        </p>
+        <ErroCampo erros={erros?.perfilPublicoBio} />
       </div>
 
       {perfilPublicoHref && (

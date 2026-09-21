@@ -228,3 +228,114 @@ test.describe("autoatendimento não vira gestão de usuários", () => {
     });
   }
 });
+
+// =======================================================================
+// Fase 56 — a tela usa o layout administrativo, não uma coluna própria
+// =======================================================================
+// A régua não é um pixel desta máquina: é OUTRA página administrativa de
+// formulário (Configurações), medida na mesma execução e na mesma
+// largura. Antes desta fase a página vivia dentro de `max-w-lg` e o card
+// ficava com 512px fixos — em 1440 sobravam ~680px vazios à direita, e
+// este teste falharia.
+test.describe("layout administrativo", () => {
+  const LARGURAS = [320, 390, 768, 1024, 1280, 1440];
+
+  /**
+   * A caixa de conteúdo de uma tela do painel: o container da página (o
+   * primeiro filho do <main>) e, quando existe, o bloco de formulário
+   * dentro dela. Comparar containers — e não um card qualquer — é o que
+   * torna a régua estável: cada tela tem cards internos de tamanhos
+   * diferentes, mas todas partilham o mesmo esqueleto.
+   */
+  async function geometria(
+    page: import("@playwright/test").Page,
+    rota: string,
+    bloco?: string
+  ) {
+    await page.goto(rota);
+    return page.evaluate((seletor) => {
+      const main = document.querySelector("main")!;
+      const m = main.getBoundingClientRect();
+      const estilo = getComputedStyle(main);
+      const container = main.firstElementChild!.getBoundingClientRect();
+      const alvo = seletor ? document.querySelector(seletor)!.getBoundingClientRect() : container;
+      return {
+        mainUtil: m.width - parseFloat(estilo.paddingLeft) - parseFloat(estilo.paddingRight),
+        container: container.width,
+        inicioContainer: container.left - m.left,
+        sobraContainer: m.right - container.right,
+        card: alvo.width,
+        overflow:
+          document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      };
+    }, bloco ?? null);
+  }
+
+  for (const largura of LARGURAS) {
+    test(`${largura}px: mesma caixa de conteúdo das outras telas do painel`, async ({ page }) => {
+      await login(page, ORG_CENTRAL_CORRETOR);
+      await page.setViewportSize({ width: largura, height: 900 });
+
+      const perfil = await geometria(page, "/app/meu-perfil", "fieldset");
+      // Referência viva: outra tela administrativa, medida agora, na
+      // mesma janela e com a mesma fonte.
+      const referencia = await geometria(page, "/app/clientes");
+
+      // O container ocupa a área útil do <main>, como a referência —
+      // começa no mesmo lugar e sobra o mesmo à direita.
+      expect(Math.abs(perfil.container - referencia.container), `container @ ${largura}`).toBeLessThan(2);
+      expect(Math.abs(perfil.container - perfil.mainUtil), `área útil @ ${largura}`).toBeLessThan(2);
+      expect(Math.abs(perfil.inicioContainer - referencia.inicioContainer)).toBeLessThan(2);
+      expect(Math.abs(perfil.sobraContainer - referencia.sobraContainer)).toBeLessThan(2);
+      // E o formulário acompanha o container, em vez de virar uma coluna
+      // estreita com o resto do painel vazio.
+      expect(Math.abs(perfil.card - perfil.container), `formulário @ ${largura}`).toBeLessThan(2);
+      expect(perfil.overflow, `estouro @ ${largura}`).toBe(false);
+    });
+  }
+
+  test("os campos continuam todos lá, na mesma ordem", async ({ page }) => {
+    await login(page, ORG_CENTRAL_CORRETOR);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await abrirMeuPerfil(page);
+
+    const campos = await page
+      .locator("fieldset input[id^='perfilPublico'], fieldset textarea[id^='perfilPublico']")
+      .evaluateAll((els) => els.map((e) => e.id));
+    expect(campos).toEqual([
+      "perfilPublicoCreci",
+      "perfilPublicoWhatsapp",
+      "perfilPublicoTelefone",
+      "perfilPublicoEmail",
+      "perfilPublicoBio",
+    ]);
+    await expect(page.getByTestId("perfil-publico-ativo")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Salvar" })).toBeVisible();
+    // O upload cabe na coluna, em qualquer largura.
+    for (const largura of [320, 1440]) {
+      await page.setViewportSize({ width: largura, height: 900 });
+      const arquivo = page.locator('fieldset input[type="file"]');
+      const caixa = await arquivo.boundingBox();
+      const limite = await page.locator("fieldset").boundingBox();
+      expect(caixa!.x + caixa!.width, `upload @ ${largura}`).toBeLessThanOrEqual(
+        limite!.x + limite!.width + 1
+      );
+    }
+  });
+
+  test("com largura, os campos curtos dividem a linha; sem largura, empilham", async ({ page }) => {
+    await login(page, ORG_CENTRAL_CORRETOR);
+    const linhaDe = async (id: string) =>
+      (await page.locator(`#${id}`).boundingBox())!.y;
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await abrirMeuPerfil(page);
+    // CRECI e WhatsApp lado a lado (mesma linha), como o padrão de
+    // Configurações faz com os cards curtos.
+    expect(Math.abs((await linhaDe("perfilPublicoCreci")) - (await linhaDe("perfilPublicoWhatsapp")))).toBeLessThan(2);
+
+    await page.setViewportSize({ width: 390, height: 900 });
+    await abrirMeuPerfil(page);
+    expect(await linhaDe("perfilPublicoWhatsapp")).toBeGreaterThan(await linhaDe("perfilPublicoCreci"));
+  });
+});

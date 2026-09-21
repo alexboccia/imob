@@ -61,19 +61,29 @@ export default async function MeuPerfilPublicoPage() {
     ? caminhoPerfilCorretor(resolverBasePath(membro.organization.slug), membro.id)
     : null;
 
+  // Mesmo esqueleto das outras telas administrativas de conteúdo
+  // (Configurações, Empreendimentos, Usuários): `space-y-5`, cabeçalho
+  // em bloco próprio e NENHUMA largura máxima — quem limita a linha é o
+  // <main> do layout do painel. O `max-w-lg` daqui era o container das
+  // telas de RECUSA (as duas acima, e o mesmo de /app/configuracoes
+  // quando falta papel): numa tela de conteúdo ele espremia o formulário
+  // numa coluna de 512px com metade do painel vazia à direita.
   return (
-    <div className="max-w-lg">
-      <h1 className="mb-2 text-2xl font-semibold">Meu perfil público</h1>
-      <p className="mb-6 text-sm text-muted-foreground">
+    <div className="space-y-5">
+      <div className="min-w-0">
+      <h1 className="min-w-0 break-words text-2xl font-semibold">Meu perfil público</h1>
+      <p className="text-sm text-muted-foreground">
         Estas informações aparecem no seu perfil público e nos imóveis em
         que você é apresentado como responsável. Nada aqui altera seus
         dados de acesso ao painel.
       </p>
       {!membro.publicProfileEnabled && (
-        <p className="mb-4 text-sm text-muted-foreground" data-testid="perfil-nao-publicado">
+        <p className="mt-1 text-sm text-muted-foreground" data-testid="perfil-nao-publicado">
           Seu perfil ainda não está publicado.
         </p>
       )}
+      </div>
+
       <MeuPerfilPublicoForm
         valores={{
           publicado: membro.publicProfileEnabled,
