@@ -11,7 +11,12 @@ import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
 import { obterIpCliente } from "@/lib/client-ip";
 import { obterKvStore } from "@/lib/kv-store";
-import { verificarLimiteFormulario, normalizarContato, type FormularioTipo } from "@/lib/rate-limit";
+import {
+  verificarLimiteFormulario,
+  verificarLimiteVisitaPorImovel,
+  normalizarContato,
+  type FormularioTipo,
+} from "@/lib/rate-limit";
 import { registrarAbuso } from "@/lib/abuse-log";
 import { hashCurto } from "@/lib/hash";
 import { resolverPessoaParaFormularioPublico } from "@/lib/person-dedup";
@@ -532,21 +537,27 @@ export async function solicitarMateriais(
 //
 //   Person (deduplicada, como em qualquer formulário público)
 //     -> PropertyInterest (a negociação daquela pessoa com aquele imóvel)
-//       -> ScheduledActivity type VISIT, status SCHEDULED
+//       -> ScheduledActivity type VISIT, status REQUESTED
 //
 // É o mesmo trio que `criarAgendamentoVisita` monta do lado interno, e é
-// por isso que a visita aparece sozinha na Agenda, na Central de trabalho
-// do responsável, na ficha do cliente e na negociação — sem nenhuma tela
-// nova e sem uma caixa "agendamentos do site".
+// por isso que o pedido aparece sozinho na Agenda, na ficha do cliente e
+// na negociação — sem nenhuma tela nova e sem uma caixa "agendamentos do
+// site".
 //
 // O QUE O VISITANTE NÃO DECIDE: organização, imóvel, corretor e status.
 // Tudo isso é resolvido no servidor a partir do imóvel validado.
 //
-// STATUS: SCHEDULED, o mesmo de qualquer visita marcada — é o status que
-// mantém o compromisso pedindo ação. O produto não tem "solicitada" nem
-// disponibilidade em tempo real, então a tela diz ao visitante que o
-// corretor vai CONFIRMAR: o compromisso existe na agenda, a confirmação
-// com a pessoa é trabalho humano.
+// STATUS (corrigido na Fase 56): REQUESTED, nunca SCHEDULED. A Fase 55
+// nascia SCHEDULED e com isso um desconhecido ocupava a agenda da equipe
+// com um horário que ninguém aceitou — o compromisso aparecia como
+// assumido, cobrava ação e podia até ser marcado como no-show. Agora o
+// envio cria um PEDIDO; quem o transforma em compromisso é
+// `confirmarSolicitacaoVisita`, do lado interno, com um humano decidindo.
+//
+// E é por isso que o STAGE NÃO AVANÇA mais aqui: INTERESTED ->
+// VISIT_SCHEDULED é a afirmação "existe visita marcada", que só passa a
+// ser verdade na confirmação. A negociação continua existindo e continua
+// aparecendo — o que ela não faz é mentir sobre ter visita agendada.
 
 /** Erro genérico: nunca revela se um id existe em outra organização. */
 const VISITA_INDISPONIVEL =
@@ -626,6 +637,26 @@ export async function solicitarVisita(
     });
     if (!imovel || imovel.status !== "AVAILABLE") return { tipo: "indisponivel" as const };
 
+    // Fase 56 — BALDE POR IMÓVEL, checado só DEPOIS de o imóvel existir
+    // e ser desta organização: um id inventado nunca cria balde, então
+    // ninguém consegue encher a memória do KV varrendo ids.
+    const store = obterKvStore();
+    if (store) {
+      const limiteImovel = await verificarLimiteVisitaPorImovel(store, {
+        organizationId,
+        propertyId: imovel.id,
+      });
+      if (!limiteImovel.permitido) {
+        registrarAbuso({
+          tipo: "visita",
+          motivo: `rate_limit_${limiteImovel.motivo}`,
+          organizationId,
+          ip: obterIpCliente(await headers()),
+        });
+        return { tipo: "limite" as const };
+      }
+    }
+
     // O visitante NÃO escolhe o corretor: quem atende é o responsável
     // pelo imóvel, e só se ele ainda puder receber atribuição. Sem
     // responsável (ou com ele inativo), a negociação nasce SEM dono e
@@ -669,78 +700,96 @@ export async function solicitarVisita(
 
     const personId = resolucao.personId;
 
+    // A negociação daquela pessoa com aquele imóvel é ÚNICA
+    // (@@unique organizationId+personId+propertyId). Se ela já existe, é
+    // ela que recebe a visita — nada de uma segunda linha e nada de
+    // resetar stage, responsável ou notas já trabalhadas pelo corretor.
+    //
+    // FORA da transação do pedido, e com tratamento de P2002 (Fase 56):
+    // dois envios simultâneos da MESMA pessoa para o MESMO imóvel
+    // chegavam aqui juntos, os dois liam "não existe" e o segundo
+    // estourava a unique — erro não tratado, 500 na cara de um visitante
+    // legítimo. Agora o perdedor da corrida simplesmente relê a linha
+    // que o vencedor acabou de criar, que é o comportamento correto: a
+    // negociação é a mesma.
+    const interesseId = await garantirNegociacaoDoVisitante({
+      organizationId,
+      personId,
+      propertyId: imovel.id,
+      responsavelId,
+    });
+
     await prisma.$transaction(async (tx) => {
-      // A negociação daquela pessoa com aquele imóvel é ÚNICA
-      // (@@unique organizationId+personId+propertyId). Se ela já existe,
-      // é ela que recebe a visita — nada de uma segunda linha e nada de
-      // resetar stage, responsável ou notas já trabalhadas pelo corretor.
-      const existente = await tx.propertyInterest.findFirst({
-        where: { organizationId, personId, propertyId: imovel.id },
-        select: { id: true, stage: true, responsibleMemberId: true },
+      // TRAVA A NEGOCIAÇÃO antes de decidir se este pedido é novo.
+      // Sem isto, dois envios idênticos simultâneos liam os dois "não
+      // existe pedido igual" e criavam duas linhas — a checagem de
+      // replay logo abaixo é read-then-write, e read-then-write sem
+      // trava não é atômico. O lock de linha do Postgres serializa as
+      // duas transações no MESMO registro (a negociação), que é
+      // exatamente o escopo em que a duplicidade pode ocorrer: nenhuma
+      // contenção global, nenhum lock distribuído.
+      await tx.$queryRaw`SELECT id FROM property_interests WHERE id = ${interesseId} AND "organizationId" = ${organizationId} FOR UPDATE`;
+
+      // IDEMPOTÊNCIA / REPLAY (Fase 56). Duplo clique, retry do
+      // navegador e reenvio imediato do mesmo payload chegam aqui como
+      // requisições separadas e indistinguíveis — e antes cada uma
+      // criava uma linha.
+      //
+      // A chave é o PEDIDO em si: mesma pessoa, mesmo imóvel, mesmo
+      // instante, ainda pendente. Não é uma unicidade eterna
+      // Person+Property (a mesma pessoa pode e deve poder visitar o
+      // mesmo imóvel de novo, e pedir outro horário depois), e não é
+      // uma janela de tempo arbitrária: só colapsa o que é literalmente
+      // o mesmo pedido não respondido.
+      //
+      // `status: "REQUESTED"` no filtro é deliberado: se a equipe já
+      // confirmou (SCHEDULED) ou descartou (CANCELLED) aquele horário,
+      // um novo envio é um pedido NOVO, e vira uma linha nova.
+      const pedidoIdentico = await tx.scheduledActivity.findFirst({
+        where: {
+          organizationId,
+          personId,
+          propertyId: imovel.id,
+          type: "VISIT",
+          status: "REQUESTED",
+          scheduledAt: quando,
+        },
+        select: { id: true },
       });
 
-      let interesseId = existente?.id;
-      if (!existente) {
-        const criado = await tx.propertyInterest.create({
+      if (!pedidoIdentico) {
+        await tx.scheduledActivity.create({
           data: {
             organizationId,
             personId,
             propertyId: imovel.id,
+            propertyInterestId: interesseId,
+            type: "VISIT",
+            // Fase 56 — PEDIDO, não compromisso. Ver o bloco de
+            // documentação no topo desta seção.
+            status: "REQUESTED",
+            scheduledAt: quando,
+            notes: observacao || null,
+            // createdByMemberId null: ninguém da equipe criou este
+            // compromisso. A posse continua vindo da negociação.
+            createdByMemberId: null,
+            // Fase 56 — o pedido nasce COM dono, e o dono é o
+            // responsável pelo imóvel resolvido no servidor. Sem isto,
+            // um pedido cuja negociação já existia e estava sem
+            // responsável não apareceria na fila de ninguém.
             responsibleMemberId: responsavelId,
           },
-          select: { id: true, createdAt: true },
-        });
-        interesseId = criado.id;
-        await tx.propertyInterestStageHistory.create({
-          data: {
-            organizationId,
-            propertyInterestId: criado.id,
-            previousStage: null,
-            newStage: "INTERESTED",
-            changedAt: criado.createdAt,
-            // Sem ator: quem criou foi o visitante, que não é membro da
-            // organização. Inventar um autor seria atribuir a alguém um
-            // ato que essa pessoa não praticou (Fases 14/15).
-            changedByMemberId: null,
-          },
         });
       }
 
-      await tx.scheduledActivity.create({
-        data: {
-          organizationId,
-          personId,
-          propertyId: imovel.id,
-          propertyInterestId: interesseId,
-          type: "VISIT",
-          status: "SCHEDULED",
-          scheduledAt: quando,
-          notes: observacao || null,
-          // createdByMemberId null: ninguém da equipe criou este
-          // compromisso. A posse continua vindo da negociação.
-          createdByMemberId: null,
-        },
-      });
-
-      // O stage só AVANÇA de INTERESTED para VISIT_SCHEDULED — a mesma
-      // regra do agendamento interno. Qualquer outro stage (já visitado,
-      // em proposta) permanece intocado, nunca regride.
-      if (existente && existente.stage === "INTERESTED") {
-        await tx.propertyInterest.update({
-          where: { id: existente.id, organizationId },
-          data: { stage: "VISIT_SCHEDULED" },
-        });
-        await tx.propertyInterestStageHistory.create({
-          data: {
-            organizationId,
-            propertyInterestId: existente.id,
-            previousStage: "INTERESTED",
-            newStage: "VISIT_SCHEDULED",
-            changedAt: new Date(),
-            changedByMemberId: null,
-          },
-        });
-      }
+      // O STAGE NÃO É TOCADO AQUI (mudança da Fase 56). Até a Fase 55
+      // este bloco avançava INTERESTED -> VISIT_SCHEDULED no envio do
+      // formulário, o que afirmava "esta negociação tem visita marcada"
+      // com base apenas no desejo de um desconhecido. O avanço passou
+      // para `confirmarSolicitacaoVisita`, onde a afirmação é verdade.
+      //
+      // Sem backfill e sem regressão: negociações que já avançaram
+      // continuam exatamente onde estão.
 
       // O CONTATO em si — o que faz o pedido aparecer na caixa de
       // entrada comercial junto dos outros contatos do site (ela lista
@@ -759,11 +808,14 @@ export async function solicitarVisita(
       });
     });
 
-    return { tipo: "agendada" as const, imovel };
+    return { tipo: "solicitada" as const, imovel };
   });
 
   if (resultado.tipo === "indisponivel") {
     return { sucesso: false, erro: VISITA_INDISPONIVEL };
+  }
+  if (resultado.tipo === "limite") {
+    return { sucesso: false, erro: MENSAGEM_LIMITE_EXCEDIDO };
   }
 
   const configContato = await buscarConfiguracaoContato(organizationId);
@@ -793,4 +845,65 @@ export async function solicitarVisita(
 function mensagemDaVisita(quando: Date, fuso: string, observacao?: string): string {
   const cabecalho = `Visita solicitada pelo site para ${formatarDataHoraNoFuso(quando, fuso)}.`;
   return observacao ? `${cabecalho}\n\n${observacao}` : cabecalho;
+}
+
+/**
+ * Devolve o id da negociação daquela pessoa com aquele imóvel, criando-a
+ * (com histórico de estágio inicial) se ainda não existir.
+ *
+ * Tolerante à corrida por construção: a unique do banco é a fonte da
+ * verdade, e perder a corrida não é erro — é descobrir que a negociação
+ * já existe.
+ */
+async function garantirNegociacaoDoVisitante(params: {
+  organizationId: string;
+  personId: string;
+  propertyId: string;
+  responsavelId: string | null;
+}): Promise<string> {
+  const { organizationId, personId, propertyId, responsavelId } = params;
+
+  const existente = await prisma.propertyInterest.findFirst({
+    where: { organizationId, personId, propertyId },
+    select: { id: true },
+  });
+  if (existente) return existente.id;
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const criado = await tx.propertyInterest.create({
+        data: { organizationId, personId, propertyId, responsibleMemberId: responsavelId },
+        select: { id: true, createdAt: true },
+      });
+      await tx.propertyInterestStageHistory.create({
+        data: {
+          organizationId,
+          propertyInterestId: criado.id,
+          previousStage: null,
+          newStage: "INTERESTED",
+          changedAt: criado.createdAt,
+          // Sem ator: quem criou foi o visitante, que não é membro da
+          // organização. Inventar um autor seria atribuir a alguém um
+          // ato que essa pessoa não praticou (Fases 14/15).
+          changedByMemberId: null,
+        },
+      });
+      return criado.id;
+    });
+  } catch (erro) {
+    // P2002 = unique violada: outro envio simultâneo criou a mesma
+    // negociação entre o findFirst e o create acima. A linha dele serve.
+    if (
+      typeof erro === "object" &&
+      erro !== null &&
+      (erro as { code?: string }).code === "P2002"
+    ) {
+      const concorrente = await prisma.propertyInterest.findFirst({
+        where: { organizationId, personId, propertyId },
+        select: { id: true },
+      });
+      if (concorrente) return concorrente.id;
+    }
+    throw erro;
+  }
 }

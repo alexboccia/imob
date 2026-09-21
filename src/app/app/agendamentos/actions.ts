@@ -391,6 +391,14 @@ export async function cancelarAgendamentoVisita(
     if (atividade.status === "COMPLETED") {
       return erroGenerico("Não é possível cancelar uma visita já concluída.");
     }
+    // Fase 56 — uma SOLICITAÇÃO pública ainda não confirmada não passa
+    // por aqui. Sem esta guarda ela cairia no CAS logo abaixo (que casa
+    // só SCHEDULED), voltaria count:0 e a action responderia "já estava
+    // cancelada" — mentira, porque o pedido continuaria pendente na
+    // fila de triagem. Quem recusa um pedido é descartarSolicitacaoVisita.
+    if (atividade.status === "REQUESTED") {
+      return erroGenerico("Esta visita ainda é uma solicitação — responda-a pela agenda.");
+    }
 
     // GUARDA ATÔMICA `status: "SCHEDULED"` — a mesma que a conclusão já
     // usava. Sem ela, cancelar e concluir simultaneamente produzia
@@ -568,6 +576,13 @@ export async function concluirAgendamentoVisita(
     // no momento da transação for exatamente VISIT_SCHEDULED).
     if (atividade.status === "CANCELLED") {
       return erroGenerico("Não é possível concluir uma visita cancelada.");
+    }
+    // Fase 56 — e NUNCA se encerra (nem como realizada, nem como
+    // no-show) uma visita que a equipe jamais confirmou: não houve
+    // compromisso a que faltar, e não há visita a avaliar. É esta
+    // guarda que impede REQUESTED de receber visitOutcome ou NO_SHOW.
+    if (atividade.status === "REQUESTED") {
+      return erroGenerico("Esta visita ainda é uma solicitação — confirme-a antes de encerrá-la.");
     }
 
     const resultado = await prisma.$transaction(async (tx) => {
@@ -1212,5 +1227,242 @@ export async function cancelarFollowUp(
     revalidatePath("/app/agenda");
     revalidatePath("/app/pipeline");
     return sucesso("Follow-up cancelado.");
+  });
+}
+
+// =======================================================================
+// Fase 56 — TRIAGEM DA SOLICITAÇÃO PÚBLICA DE VISITA
+// =======================================================================
+// Um pedido vindo da ficha pública nasce REQUESTED (ver o bloco de
+// documentação em src/app/[orgSlug]/actions.ts). Estas duas actions são
+// as ÚNICAS saídas desse estado, e cada uma existe porque o desfecho que
+// ela grava já é um fato do domínio:
+//
+//   confirmar  REQUESTED -> SCHEDULED   a equipe assume o compromisso
+//   descartar  REQUESTED -> CANCELLED   a equipe recusa o pedido
+//
+// NENHUMA DAS DUAS CRIA LINHA NOVA. É sempre a MESMA ScheduledActivity
+// mudando de estado — é isso que torna impossível a mesma solicitação
+// virar duas visitas.
+//
+// CONCORRÊNCIA: as duas usam o mesmo guard atômico já empregado por
+// concluir/cancelar — `status` no WHERE de um updateMany. Duplo clique,
+// duas abas e confirmação-depois-de-descarte convergem para o mesmo
+// lugar: exatamente uma escrita vence, e a perdedora RELÊ a linha e
+// responde o desfecho real, em vez de afirmar o que não fez.
+
+/** Carrega a solicitação alvo dentro do escopo comercial da sessão. */
+async function carregarSolicitacaoAlvo(
+  escopo: Awaited<ReturnType<typeof escopoComercialDaSessao>>,
+  scheduledActivityId: string,
+  organizationId: string
+) {
+  return prisma.scheduledActivity.findFirst({
+    where: whereAtividadeAlvo(escopo, scheduledActivityId, organizationId),
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      personId: true,
+      propertyId: true,
+      propertyInterestId: true,
+      property: { select: { status: true, organizationId: true } },
+    },
+  });
+}
+
+export async function confirmarSolicitacaoVisita(
+  scheduledActivityId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+  const escopo = await escopoComercialDaSessao(organizationId);
+
+  return withOrganization(organizationId, async () => {
+    const atividade = await carregarSolicitacaoAlvo(escopo, scheduledActivityId, organizationId);
+    // Mensagem genérica para "não existe", "é de outro tenant" e "está
+    // fora do meu escopo comercial": o mesmo padrão do resto do arquivo,
+    // que nunca revela a existência de uma linha alheia.
+    if (!atividade) return erroAcessoNegado("Solicitação não encontrada.");
+    if (atividade.type !== "VISIT") return erroAcessoNegado("Solicitação não encontrada.");
+    // Defesa em profundidade: o imóvel da atividade tem de ser desta
+    // organização, independentemente do organizationId da própria linha
+    // (mesmo racional de criarAgendamentoVisita).
+    if (atividade.property && atividade.property.organizationId !== organizationId) {
+      return erroAcessoNegado("Solicitação não encontrada.");
+    }
+
+    // Idempotente: confirmar de novo o que já está confirmado é sucesso
+    // sem segundo efeito — nunca erro para um duplo clique.
+    if (atividade.status === "SCHEDULED") return sucesso("Visita já estava confirmada.");
+    if (atividade.status !== "REQUESTED") {
+      // CANCELLED, COMPLETED ou NO_SHOW: nenhum deles volta a ser um
+      // pedido pendente. Mensagem única, porque a ação possível é a
+      // mesma nos três casos (nenhuma).
+      return erroGenerico("Esta solicitação não está mais pendente.");
+    }
+
+    // Mesma regra de `criarAgendamentoVisita`: não se assume compromisso
+    // de visita em imóvel que saiu do ar entre o pedido e a triagem.
+    if (atividade.property && atividade.property.status !== "AVAILABLE") {
+      return erroGenerico("Este imóvel não está disponível para agendar visita.");
+    }
+
+    const resultado = await prisma.$transaction(async (tx) => {
+      // CAS: só REQUESTED vira SCHEDULED. `completedAt`/`cancelledAt`/
+      // `visitOutcome` permanecem intocados — confirmar não é encerrar.
+      const confirmado = await tx.scheduledActivity.updateMany({
+        where: { id: atividade.id, organizationId, status: "REQUESTED" },
+        data: { status: "SCHEDULED" },
+      });
+      if (confirmado.count === 0) return { venceu: false as const, stageAvancou: false };
+
+      // O AVANÇO DE STAGE MORA AQUI (e não mais no envio público): é
+      // agora que "esta negociação tem visita marcada" passa a ser
+      // verdade. Mesma regra do agendamento interno — só avança a partir
+      // de INTERESTED, nunca regride nem sobrescreve stage trabalhado.
+      let stageAvancou = false;
+      if (atividade.propertyInterestId) {
+        const interesse = await tx.propertyInterest.findFirst({
+          where: { id: atividade.propertyInterestId, organizationId },
+          select: { id: true, stage: true },
+        });
+        if (interesse && interesse.stage === "INTERESTED") {
+          await tx.propertyInterest.update({
+            where: { id: interesse.id, organizationId },
+            data: { stage: "VISIT_SCHEDULED" },
+          });
+          await tx.propertyInterestStageHistory.create({
+            data: {
+              organizationId,
+              propertyInterestId: interesse.id,
+              previousStage: "INTERESTED",
+              newStage: "VISIT_SCHEDULED",
+              changedAt: new Date(),
+              // Fase 14 — ator é quem CONFIRMOU. Diferente do envio
+              // público, aqui existe um humano autenticado praticando o
+              // ato, e é o nome dele que a auditoria tem de registrar.
+              changedByMemberId: await resolverAtorTransicao(
+                tx,
+                organizationId,
+                session.user.organizationMemberId
+              ),
+            },
+          });
+          stageAvancou = true;
+        }
+      }
+
+      return { venceu: true as const, stageAvancou };
+    });
+
+    if (!resultado.venceu) {
+      // Perdeu a corrida: relê e responde o desfecho REAL.
+      const atual = await prisma.scheduledActivity.findFirst({
+        where: { id: atividade.id, organizationId },
+        select: { status: true },
+      });
+      return atual?.status === "SCHEDULED"
+        ? sucesso("Visita já estava confirmada.")
+        : erroGenerico("Esta solicitação não está mais pendente.");
+    }
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "ScheduledActivity",
+      entityId: atividade.id,
+      action: "visit_request_confirmed",
+    });
+    if (resultado.stageAvancou && atividade.propertyInterestId) {
+      await logActivity({
+        organizationId,
+        userId: session.user.id,
+        entity: "PropertyInterest",
+        entityId: atividade.propertyInterestId,
+        action: "property_interest_stage_changed",
+        payload: { from: "INTERESTED", to: "VISIT_SCHEDULED" },
+      });
+    }
+
+    revalidarPaginasAgendamento(atividade.personId, atividade.propertyId);
+    revalidatePath("/app/agenda");
+    return sucesso("Visita confirmada.");
+  });
+}
+
+export async function descartarSolicitacaoVisita(
+  scheduledActivityId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+  const escopo = await escopoComercialDaSessao(organizationId);
+
+  return withOrganization(organizationId, async () => {
+    const atividade = await carregarSolicitacaoAlvo(escopo, scheduledActivityId, organizationId);
+    if (!atividade) return erroAcessoNegado("Solicitação não encontrada.");
+    if (atividade.type !== "VISIT") return erroAcessoNegado("Solicitação não encontrada.");
+
+    // Idempotente, como o cancelamento de visita já era.
+    if (atividade.status === "CANCELLED") return sucesso("Solicitação já estava descartada.");
+    if (atividade.status !== "REQUESTED") {
+      // Uma visita JÁ CONFIRMADA não se descarta por aqui: ela é um
+      // compromisso, e compromisso se cancela na agenda, pelo fluxo que
+      // já existe (e que grava o cancelamento com o mesmo significado de
+      // sempre). Recusar aqui mantém os dois fatos distintos.
+      return erroGenerico("Esta solicitação já foi confirmada — cancele a visita pela agenda.");
+    }
+
+    // CAS: só REQUESTED vira CANCELLED. `cancelledAt` registra QUANDO o
+    // pedido foi recusado, exatamente como no cancelamento de visita.
+    // NO_SHOW nunca entra aqui: ninguém falta a um compromisso que a
+    // equipe nunca assumiu.
+    const descartado = await prisma.scheduledActivity.updateMany({
+      where: { id: atividade.id, organizationId, status: "REQUESTED" },
+      data: { status: "CANCELLED", cancelledAt: new Date() },
+    });
+    if (descartado.count === 0) {
+      const atual = await prisma.scheduledActivity.findFirst({
+        where: { id: atividade.id, organizationId },
+        select: { status: true },
+      });
+      return atual?.status === "CANCELLED"
+        ? sucesso("Solicitação já estava descartada.")
+        : erroGenerico("Esta solicitação já foi confirmada — cancele a visita pela agenda.");
+    }
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "ScheduledActivity",
+      entityId: atividade.id,
+      action: "visit_request_discarded",
+    });
+
+    // PropertyInterest.stage NÃO regride e NÃO é tocado — a negociação
+    // continua existindo, e o pedido recusado não apaga o interesse que
+    // a pessoa demonstrou. Mesma decisão de produto do cancelamento de
+    // visita (H.2).
+    revalidarPaginasAgendamento(atividade.personId, atividade.propertyId);
+    revalidatePath("/app/agenda");
+    return sucesso("Solicitação descartada.");
   });
 }

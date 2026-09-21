@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }));
 import { prisma } from "@/lib/prisma";
 import { criarCenario, criarImovel, criarPessoa } from "@/test/fixtures";
 import { solicitarVisita } from "@/app/[orgSlug]/actions";
-import { buscarAgendaProximas } from "@/lib/agenda";
+import { buscarAgendaProximas, buscarAgendaSolicitacoes } from "@/lib/agenda";
 import { atividadeDoMembro } from "@/lib/responsavel-atividade";
 import { ORIGENS_CAPTACAO } from "@/lib/captacao";
 
@@ -73,7 +73,7 @@ async function visitaGravada(organizationId: string) {
 }
 
 describe("criação da visita", () => {
-  test("o visitante entra na jornada: Person, negociação e visita agendada", async () => {
+  test("o visitante entra na jornada: Person, negociação e visita SOLICITADA", async () => {
     const c = await novoCenario();
     const imovel = await criarImovel({
       organizationId: c.organization.id,
@@ -96,8 +96,11 @@ describe("criação da visita", () => {
     expect(visita!.propertyId).toBe(imovel.id);
     expect(visita!.organizationId).toBe(c.organization.id);
     expect(visita!.personId).toBe(pessoa.id);
-    // Status inicial: o mesmo de qualquer visita marcada.
-    expect(visita!.status).toBe("SCHEDULED");
+    // Fase 56 — status inicial é PEDIDO, nunca compromisso assumido.
+    // Este par de asserções é o coração da fase: um desconhecido não
+    // ocupa a agenda da equipe.
+    expect(visita!.status).toBe("REQUESTED");
+    expect(visita!.status).not.toBe("SCHEDULED");
     expect(visita!.type).toBe("VISIT");
     // Nada de resultado, cancelamento ou conclusão inventados.
     expect(visita!.visitOutcome).toBeNull();
@@ -110,12 +113,14 @@ describe("criação da visita", () => {
     // No futuro.
     expect(visita!.scheduledAt.getTime()).toBeGreaterThan(Date.now());
 
-    // A negociação nasceu com o responsável DO IMÓVEL e já em
-    // VISIT_SCHEDULED? Não: ela nasce INTERESTED e a visita não regride
-    // nem avança o que não existia antes — ver o teste de stage abaixo.
+    // A negociação nasce com o responsável DO IMÓVEL e em INTERESTED —
+    // "tem visita marcada" só passa a ser verdade na confirmação.
     expect(visita!.propertyInterest).not.toBeNull();
     expect(visita!.propertyInterest!.responsibleMemberId).toBe(c.membro.id);
     expect(visita!.propertyInterest!.propertyId).toBe(imovel.id);
+    expect(visita!.propertyInterest!.stage).toBe("INTERESTED");
+    // Fase 56 — o pedido nasce com dono, para cair na fila de alguém.
+    expect(visita!.responsibleMemberId).toBe(c.membro.id);
   });
 
   test("o contato aparece na caixa de entrada, com a origem do agendamento", async () => {
@@ -135,7 +140,7 @@ describe("criação da visita", () => {
     expect(interacao.notes).toContain("Levo minha esposa.");
   });
 
-  test("a visita aparece nas consultas que o CRM já usa", async () => {
+  test("o pedido NÃO entra na agenda de compromissos — entra na fila de solicitações", async () => {
     const c = await novoCenario();
     const imovel = await criarImovel({
       organizationId: c.organization.id,
@@ -144,21 +149,34 @@ describe("criação da visita", () => {
     });
     await pedir(c.organization.slug, formVisita(imovel.id));
 
-    // Agenda da organização (próximas).
+    // Fase 56 — a aba de compromissos assumidos continua VAZIA. Era esta
+    // a regressão de produto: um horário que ninguém aceitou aparecendo
+    // como visita marcada.
     const proximas = await buscarAgendaProximas(c.organization.id, "America/Sao_Paulo", {});
-    expect(proximas.map((i) => i.type)).toContain("VISIT");
-    expect(proximas[0].property?.id).toBe(imovel.id);
-    expect(proximas[0].person?.name).toBe("Joana Compradora");
+    expect(proximas).toHaveLength(0);
 
-    // Central de trabalho do corretor: "minha" pela negociação.
-    const minhas = await prisma.scheduledActivity.count({
+    // E a Central de trabalho, que só conta SCHEDULED, também não o vê.
+    const compromissosDoMembro = await prisma.scheduledActivity.count({
       where: {
         organizationId: c.organization.id,
         status: "SCHEDULED",
         ...atividadeDoMembro(c.membro.id, c.organization.id),
       },
     });
-    expect(minhas).toBe(1);
+    expect(compromissosDoMembro).toBe(0);
+
+    // Mas o pedido EXISTE e está na fila de triagem do responsável, com
+    // os dados que ele precisa para decidir.
+    const solicitacoes = await buscarAgendaSolicitacoes(
+      c.organization.id,
+      "America/Sao_Paulo",
+      atividadeDoMembro(c.membro.id, c.organization.id)
+    );
+    expect(solicitacoes).toHaveLength(1);
+    expect(solicitacoes[0].status).toBe("REQUESTED");
+    expect(solicitacoes[0].property?.id).toBe(imovel.id);
+    expect(solicitacoes[0].person?.name).toBe("Joana Compradora");
+    expect(solicitacoes[0].createdAtISO).toBeTruthy();
   });
 
   test("pessoa já conhecida: reutiliza a Person e a negociação existente", async () => {
@@ -208,7 +226,7 @@ describe("criação da visita", () => {
     ).toBe(1);
   });
 
-  test("negociação em INTERESTED avança para VISIT_SCHEDULED, com histórico", async () => {
+  test("negociação em INTERESTED NÃO avança no envio público — só na confirmação", async () => {
     const c = await novoCenario();
     const imovel = await criarImovel({ organizationId: c.organization.id, status: "AVAILABLE" });
     const pessoa = await criarPessoa({
@@ -230,13 +248,13 @@ describe("criação da visita", () => {
     const depois = await prisma.propertyInterest.findUniqueOrThrow({
       where: { id: interesse.id, organizationId: c.organization.id },
     });
-    expect(depois.stage).toBe("VISIT_SCHEDULED");
+    // Fase 56 — "esta negociação tem visita marcada" é uma afirmação que
+    // o envio público não pode fazer sozinho. O stage fica onde estava.
+    expect(depois.stage).toBe("INTERESTED");
     const historico = await prisma.propertyInterestStageHistory.findMany({
       where: { propertyInterestId: interesse.id, organizationId: c.organization.id },
     });
-    expect(historico.map((h) => h.newStage)).toContain("VISIT_SCHEDULED");
-    // O visitante não é membro: a transição não tem ator inventado.
-    expect(historico.at(-1)!.changedByMemberId).toBeNull();
+    expect(historico.map((h) => h.newStage)).not.toContain("VISIT_SCHEDULED");
   });
 
   test("sem responsável pelo imóvel, a negociação nasce sem dono — nunca do primeiro membro", async () => {

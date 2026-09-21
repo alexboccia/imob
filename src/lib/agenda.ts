@@ -36,6 +36,12 @@ export type ItemAgenda = {
   visitOutcome: VisitOutcome | null;
   outcomeNotes: string | null;
   propertyInterestId: string | null;
+  // Fase 56 — QUANDO o registro entrou no sistema. Na aba Solicitações
+  // é informação de decisão ("este pedido está esperando desde ontem"),
+  // diferente de scheduledAt, que é o dia PEDIDO. Viaja como ISO, e não
+  // como Date, porque a forma cliente de ItemAgenda cruza a fronteira
+  // Server -> Client (ver ItemAgendaClient em agenda-visual.ts).
+  createdAtISO: string;
   // null tanto no caso normal de ausência (propertyId nulo na linha) quanto
   // na anomalia defensiva abaixo — a UI trata os dois casos da mesma forma
   // (fallback discreto), nunca falha.
@@ -43,7 +49,15 @@ export type ItemAgenda = {
   property: { id: string; title: string; neighborhood: string } | null;
 };
 
-export type ContadoresAgenda = { hoje: number; proximas: number; anteriores: number; atrasadas: number };
+export type ContadoresAgenda = {
+  hoje: number;
+  proximas: number;
+  anteriores: number;
+  atrasadas: number;
+  // Fase 56 — pedidos públicos ainda não respondidos. Conta REQUESTED,
+  // que nenhum dos outros quatro contadores enxerga.
+  solicitacoes: number;
+};
 
 // Limites defensivos documentados (seção 19 da H.3, preservados na H.4) —
 // "Hoje" carrega o dia inteiro sem limite (não é um caso real de
@@ -66,6 +80,7 @@ const SELECT_ITEM_AGENDA = {
   visitOutcome: true,
   outcomeNotes: true,
   propertyInterestId: true,
+  createdAt: true,
   // organizationId de Person/Property selecionado só pra reconferência
   // abaixo — nunca exposto no tipo de retorno ItemAgenda.
   person: { select: { id: true, name: true, phone: true, organizationId: true } },
@@ -82,6 +97,7 @@ type LinhaBruta = {
   visitOutcome: VisitOutcome | null;
   outcomeNotes: string | null;
   propertyInterestId: string | null;
+  createdAt: Date;
   person: { id: string; name: string; phone: string | null; organizationId: string };
   property: { id: string; title: string; neighborhood: string; organizationId: string } | null;
 };
@@ -108,6 +124,7 @@ function paraItemAgenda(linha: LinhaBruta, organizationId: string): ItemAgenda {
     visitOutcome: linha.visitOutcome,
     outcomeNotes: linha.outcomeNotes,
     propertyInterestId: linha.propertyInterestId,
+    createdAtISO: linha.createdAt.toISOString(),
     person:
       linha.person.organizationId === organizationId
         ? { id: linha.person.id, name: linha.person.name, phone: linha.person.phone }
@@ -324,6 +341,47 @@ export async function buscarAgendaHoje(
   });
 }
 
+// SOLICITAÇÕES (Fase 56): os pedidos públicos que ninguém respondeu
+// ainda — status REQUESTED, o único que nenhuma das outras três abas
+// enxerga. É deliberadamente uma aba SEPARADA, e não linhas misturadas
+// em Hoje/Próximas: a lista de compromissos assumidos não pode conter
+// horários que a equipe nunca aceitou.
+//
+// ORDENAÇÃO por `createdAt` ascendente, e não por `scheduledAt`: aqui a
+// fila é de ATENDIMENTO — quem pediu primeiro espera há mais tempo, e é
+// essa a leitura que a triagem precisa. É a mesma lógica de fila que a
+// Central já usa para atrasadas.
+//
+// Sem paginação, com o mesmo teto defensivo de Próximas: uma fila de
+// triagem que passe de LIMITE_PROXIMAS itens é um problema de operação
+// (ou de abuso), não de paginação.
+export async function buscarAgendaSolicitacoes(
+  organizationId: string,
+  fuso: string,
+  escopo: WhereAgenda,
+  opcoes: { limite?: number; filtros?: FiltrosAgenda } = {}
+): Promise<ItemAgenda[]> {
+  const limite = opcoes.limite ?? LIMITE_PROXIMAS;
+  const filtros = opcoes.filtros;
+  // Uma solicitação tem exatamente UM status. Pedir "Concluídas" ou
+  // "Canceladas" nesta aba é logicamente incompatível e devolve lista
+  // vazia de forma previsível — mesma convenção documentada em
+  // statusIncompativelComHojeOuProximas.
+  if (filtros && filtros.status !== "TODAS") return [];
+
+  return withOrganization(organizationId, async () => {
+    const base: WhereAgenda = { ...escopo, organizationId, status: "REQUESTED" };
+    const where = filtros ? combinarWhere(base, filtros, organizationId, fuso) : base;
+    const linhas = await prisma.scheduledActivity.findMany({
+      where,
+      orderBy: { createdAt: "asc" },
+      take: limite,
+      select: SELECT_ITEM_AGENDA,
+    });
+    return linhas.map((linha) => paraItemAgenda(linha, organizationId));
+  });
+}
+
 // PRÓXIMAS: SCHEDULED + scheduledAt depois do fim de hoje. Limite defensivo
 // fixo (LIMITE_PROXIMAS), sem paginação completa nesta aba — preservado
 // tal qual a H.3 mesmo com filtros ativos: um filtro só reduz o conjunto
@@ -418,7 +476,7 @@ export async function contarAgenda(
   const agora = opcoes.agora ?? new Date();
   const dia = intervaloDoDia(agora, fuso);
   return withOrganization(organizationId, async () => {
-    const [hoje, proximas, anteriores, atrasadas] = await Promise.all([
+    const [hoje, proximas, anteriores, atrasadas, solicitacoes] = await Promise.all([
       prisma.scheduledActivity.count({
         where: {
           ...escopo,
@@ -458,8 +516,15 @@ export async function contarAgenda(
           scheduledAt: { lt: dia.inicio },
         },
       }),
+      // Fase 56 — sem recorte de data: um pedido é pendência enquanto
+      // ninguém o responde, tenha ele sido feito para hoje ou para o mês
+      // que vem. O mesmo índice [organizationId, status, scheduledAt]
+      // cobre este count como cobre os outros quatro.
+      prisma.scheduledActivity.count({
+        where: { ...escopo, organizationId, status: "REQUESTED" },
+      }),
     ]);
-    return { hoje, proximas, anteriores, atrasadas };
+    return { hoje, proximas, anteriores, atrasadas, solicitacoes };
   });
 }
 

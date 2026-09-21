@@ -9,6 +9,7 @@ import {
   buscarAgendaHoje,
   buscarAgendaProximas,
   buscarAgendaAnteriores,
+  buscarAgendaSolicitacoes,
   contarAgenda,
   contarResumoDiario,
   interpretarFiltrosAgenda,
@@ -17,6 +18,7 @@ import {
 import { periodoDaVisita, proximaVisita, painelAgoraDoDia, type PeriodoDia } from "@/lib/scheduled-activity-date";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { AgendaItemCard } from "@/components/admin/AgendaItemCard";
+import { SolicitacaoVisitaCard } from "@/components/admin/agenda/SolicitacaoVisitaCard";
 import { PainelAgoraAgenda } from "@/components/admin/PainelAgoraAgenda";
 import { AgendaKpiCards } from "@/components/admin/agenda/AgendaKpiCards";
 import { AgendaTabs } from "@/components/admin/agenda/AgendaTabs";
@@ -42,7 +44,7 @@ function paraItemCliente(item: ItemAgenda): ItemAgendaClient {
 // por isso este redesenho NÃO adiciona nenhum botão "+ Novo compromisso"
 // (capacidade que nunca existiu, não deve ser fabricada só pro visual).
 
-const ABAS = ["hoje", "proximas", "anteriores"] as const;
+const ABAS = ["solicitacoes", "hoje", "proximas", "anteriores"] as const;
 type Aba = (typeof ABAS)[number];
 
 function ehAba(valor: string | undefined): valor is Aba {
@@ -134,7 +136,9 @@ export default async function AgendaPage({
   const skip = (page - 1) * take;
 
   let itens: ItemAgenda[];
-  if (aba === "hoje") {
+  if (aba === "solicitacoes") {
+    itens = await buscarAgendaSolicitacoes(organizationId, fuso, escopoAtividade, { filtros });
+  } else if (aba === "hoje") {
     itens = await buscarAgendaHoje(organizationId, fuso, escopoAtividade, { agora, filtros });
   } else if (aba === "proximas") {
     itens = await buscarAgendaProximas(organizationId, fuso, escopoAtividade, { agora, filtros });
@@ -158,6 +162,7 @@ export default async function AgendaPage({
       : null;
 
   const mensagemVazia: Record<Aba, string> = {
+    solicitacoes: "Nenhuma solicitação de visita aguardando resposta.",
     hoje: "Nenhuma visita agendada para hoje.",
     proximas: "Nenhuma próxima visita agendada.",
     anteriores: "Nenhuma visita anterior encontrada.",
@@ -201,6 +206,12 @@ export default async function AgendaPage({
               Ver próximas
             </Link>
           )}
+        </div>
+      ) : aba === "solicitacoes" ? (
+        <div className="space-y-2">
+          {itens.map((item) => (
+            <SolicitacaoVisitaCard key={item.id} item={paraItemCliente(item)} fuso={fuso} />
+          ))}
         </div>
       ) : gruposDoDia ? (
         <div className="space-y-6">

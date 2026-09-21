@@ -33,8 +33,11 @@ import { cn } from "@/lib/utils";
 // formulário fala com a action pública, que põe a visita no MESMO domínio
 // das visitas internas; aqui não há regra de negócio nenhuma.
 //
-// A confirmação não promete horário confirmado: o produto não tem agenda
-// de disponibilidade, e o corretor é quem confirma com a pessoa.
+// A tela NUNCA promete visita agendada — nem antes, nem depois do envio.
+// Desde a Fase 56 isso deixou de ser só uma escolha de texto e passou a
+// ser o que o sistema de fato faz: o envio cria uma SOLICITAÇÃO
+// (ScheduledActivity REQUESTED), e é o corretor quem a transforma em
+// compromisso. O texto daqui é a descrição honesta desse fluxo.
 
 const estadoInicial = { sucesso: false } as Awaited<ReturnType<typeof solicitarVisita>>;
 
@@ -99,9 +102,8 @@ export function AgendarVisita({
             <Alert className="border-success-muted-border bg-success-muted text-success-muted-foreground">
               <CheckCircle2 />
               <AlertDescription className="text-success-muted-foreground">
-                <strong className="block">Visita solicitada</strong>
-                Recebemos sua solicitação. O corretor responsável entra em contato para confirmar o
-                agendamento.
+                <strong className="block">Solicitação enviada!</strong>
+                O corretor responsável entrará em contato para confirmar o dia e horário.
               </AlertDescription>
             </Alert>
             <Button type="button" className="w-full" onClick={() => setAberto(false)}>
@@ -110,6 +112,12 @@ export function AgendarVisita({
           </div>
         ) : (
           <form action={formAction} className="space-y-3">
+            {/* O que o envio faz, dito antes de a pessoa preencher: o
+                horário é um PEDIDO, não uma reserva. */}
+            <p className="text-sm text-gray-500" data-aviso-confirmacao>
+              Escolha o melhor dia e horário. O corretor responsável entrará em contato para
+              confirmar sua visita.
+            </p>
             <CamposAntiSpam />
             <CamposAtribuicao />
             <input type="hidden" name="imovelId" value={imovelId} />

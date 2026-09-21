@@ -1,17 +1,20 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-const ABAS = ["hoje", "proximas", "anteriores"] as const;
+// Fase 56 — "Solicitações" entra ANTES de Hoje: é fila de triagem, e o
+// que espera resposta de um cliente vem antes do que já está combinado.
+const ABAS = ["solicitacoes", "hoje", "proximas", "anteriores"] as const;
 type Aba = (typeof ABAS)[number];
 
 const ABA_LABEL: Record<Aba, string> = {
+  solicitacoes: "Solicitações",
   hoje: "Hoje",
   proximas: "Próximas",
   anteriores: "Anteriores",
 };
 
-// Redesenho da Agenda — mesmas 3 abas de sempre (URL-driven via
-// ?aba=hoje|proximas|anteriores), mesma família visual de pill de
+// Redesenho da Agenda — abas URL-driven via
+// ?aba=solicitacoes|hoje|proximas|anteriores, mesma família visual de pill de
 // PipelineTabs/ClientesFiltrosEstagio (dark-ativo/claro-inativo,
 // rounded-lg, mesmas cores — nenhuma cor nova). Só um pouco mais compacta
 // que o padrão-base (h-7/px-2.5/gap-1.5 em vez de h-8/px-3/gap-2): a

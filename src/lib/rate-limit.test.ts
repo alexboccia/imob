@@ -2,6 +2,7 @@ import { describe, test, expect } from "vitest";
 import type { KvStore, ResultadoIncremento } from "@/lib/kv-store";
 import {
   verificarLimiteFormulario,
+  verificarLimiteVisitaPorImovel,
   verificarLimiteUpload,
   verificarBloqueioLogin,
   registrarFalhaLogin,
@@ -394,5 +395,63 @@ describe("obterIpCliente", () => {
   test("ignora valores com formato claramente inválido", () => {
     const headers = new Headers({ "do-connecting-ip": "'; DROP TABLE users;--" });
     expect(obterIpCliente(headers)).toBe("desconhecido");
+  });
+});
+
+
+// Fase 56 — o balde que faltava: um único anúncio não pode consumir
+// sozinho a cota de solicitações da imobiliária inteira.
+describe("verificarLimiteVisitaPorImovel", () => {
+  const imovel = { organizationId: "org-1", propertyId: "imovel-A" };
+
+  test("bloqueia a 6ª solicitação no mesmo imóvel dentro da janela curta", async () => {
+    const store = new MemoryKvStore();
+    for (let i = 0; i < LIMITES.visitaPorImovelCurto.limite; i++) {
+      expect((await verificarLimiteVisitaPorImovel(store, imovel)).permitido).toBe(true);
+    }
+    const excedente = await verificarLimiteVisitaPorImovel(store, imovel);
+    expect(excedente.permitido).toBe(false);
+    if (!excedente.permitido) {
+      expect(excedente.motivo).toBe("imovel_curto");
+      expect(excedente.retryAfterSegundos > 0).toBeTruthy();
+    }
+  });
+
+  test("o teto diário vale mesmo com a janela curta expirando entre as rajadas", async () => {
+    const relogio = criarRelogio();
+    const store = new MemoryKvStore(relogio.agora);
+    let permitidas = 0;
+    // Rajadas espaçadas: a janela curta zera a cada volta, a diária não.
+    for (let rodada = 0; rodada < 5; rodada++) {
+      for (let i = 0; i < LIMITES.visitaPorImovelCurto.limite; i++) {
+        if ((await verificarLimiteVisitaPorImovel(store, imovel)).permitido) permitidas++;
+      }
+      relogio.avancar(LIMITES.visitaPorImovelCurto.janelaSegundos + 1);
+    }
+    expect(permitidas).toBe(LIMITES.visitaPorImovelDiario.limite);
+  });
+
+  test("imóveis diferentes e organizações diferentes têm baldes independentes", async () => {
+    const store = new MemoryKvStore();
+    for (let i = 0; i < LIMITES.visitaPorImovelCurto.limite; i++) {
+      await verificarLimiteVisitaPorImovel(store, imovel);
+    }
+    expect((await verificarLimiteVisitaPorImovel(store, imovel)).permitido).toBe(false);
+    // Outro imóvel da MESMA organização não foi afetado...
+    expect(
+      (await verificarLimiteVisitaPorImovel(store, { ...imovel, propertyId: "imovel-B" })).permitido
+    ).toBe(true);
+    // ...e o mesmo id de imóvel em OUTRO tenant tampouco (a chave inclui
+    // a organização, então nem colisão de id vaza limite entre tenants).
+    expect(
+      (await verificarLimiteVisitaPorImovel(store, { ...imovel, organizationId: "org-2" })).permitido
+    ).toBe(true);
+  });
+
+  test("tráfego legítimo abaixo do teto nunca é bloqueado", async () => {
+    const store = new MemoryKvStore();
+    for (let i = 0; i < LIMITES.visitaPorImovelCurto.limite; i++) {
+      expect((await verificarLimiteVisitaPorImovel(store, imovel)).permitido).toBe(true);
+    }
   });
 });

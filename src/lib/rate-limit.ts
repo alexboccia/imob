@@ -16,6 +16,24 @@ export const LIMITES = {
   loginViolacoesJanelaSegundos: 24 * 60 * 60,
   formularioCurto: { limite: 5, janelaSegundos: 15 * 60 },
   formularioDiario: { limite: 20, janelaSegundos: 24 * 60 * 60 },
+  // Fase 56 — SOLICITAÇÃO DE VISITA, BALDE POR IMÓVEL.
+  //
+  // Os baldes acima (IP, organização, contato) já existiam e continuam
+  // valendo. Falta um: nada impedia que UM imóvel consumisse sozinho a
+  // cota inteira da organização, vindo de IPs e contatos diferentes —
+  // que é exatamente a forma do abuso descrito ("dezenas de
+  // solicitações contra o mesmo imóvel").
+  //
+  // OS NÚMEROS NÃO SÃO ARBITRÁRIOS: são derivados dos limites que já
+  // existem. A janela curta repete `formularioCurto` (5/15min), porque o
+  // ritmo humano plausível não muda por ser um imóvel em vez de um IP. A
+  // diária é METADE de `formularioDiario` (10, contra 20): o teto da
+  // organização é o limite externo, e o balde por imóvel só precisa
+  // garantir que um anúncio sozinho não o esgote. Dez pedidos de visita
+  // no mesmo imóvel em 24h continua sendo muito acima do tráfego real de
+  // um anúncio legítimo.
+  visitaPorImovelCurto: { limite: 5, janelaSegundos: 15 * 60 },
+  visitaPorImovelDiario: { limite: 10, janelaSegundos: 24 * 60 * 60 },
   uploadPorUsuario: { limite: 30, janelaSegundos: 10 * 60 },
   uploadPorOrganizacao: { limite: 100, janelaSegundos: 10 * 60 },
   // Tracking digital (Fase 6). Deliberadamente MUITO mais folgado que os
@@ -260,6 +278,26 @@ export async function verificarLimiteCadastro(
     });
   }
   return aplicarChecagens(store, checagens);
+}
+
+// Fase 56 — balde adicional do formulário de visita: por IMÓVEL. Fica
+// numa função própria (e não dentro de checagensFormulario) porque só o
+// formulário de visita tem imóvel; os outros três não teriam o que
+// passar aqui. Fail-open como todo o resto, pelo mesmo motivo: sem KV
+// configurado, o pedido legítimo passa.
+export async function verificarLimiteVisitaPorImovel(
+  store: KvStore,
+  params: { organizationId: string; propertyId: string }
+): Promise<ResultadoLimite> {
+  const { limite: limiteCurto, janelaSegundos: janelaCurta } = LIMITES.visitaPorImovelCurto;
+  const { limite: limiteDiario, janelaSegundos: janelaDiaria } = LIMITES.visitaPorImovelDiario;
+  // A chave inclui a organização: dois tenants nunca compartilham balde,
+  // nem por colisão de id.
+  const base = `rl:visita:imovel:${params.organizationId}:${params.propertyId}`;
+  return aplicarChecagens(store, [
+    { chave: `${base}:curta`, limite: limiteCurto, janelaSegundos: janelaCurta, motivo: "imovel_curto" },
+    { chave: `${base}:diaria`, limite: limiteDiario, janelaSegundos: janelaDiaria, motivo: "imovel_diario" },
+  ]);
 }
 
 export async function verificarLimiteFormulario(

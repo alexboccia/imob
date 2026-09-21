@@ -28,6 +28,10 @@ export type ItemAgendaClient = Omit<ItemAgenda, "scheduledAt"> & { scheduledAtIS
 export { TIPO_ATIVIDADE_LABEL } from "@/lib/follow-up";
 
 export const STATUS_VISITA_LABEL: Record<string, string> = {
+  // Fase 56 — "Solicitada" é o que o visitante fez; "Agendada" é o que a
+  // equipe assumiu. Dois rótulos porque são dois fatos, e confundi-los
+  // era o defeito que a fase corrigiu.
+  REQUESTED: "Solicitada",
   SCHEDULED: "Agendada",
   COMPLETED: "Concluída",
   CANCELLED: "Cancelada",

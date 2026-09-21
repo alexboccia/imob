@@ -192,6 +192,35 @@ enum ScheduledActivityType {
 }
 
 enum ScheduledActivityStatus {
+  // Fase 56 — O VISITANTE PEDIU, A EQUIPE AINDA NÃO CONFIRMOU.
+  //
+  // Nasce EXCLUSIVAMENTE da solicitação pública da ficha do imóvel
+  // (Fase 55): quem envia o formulário não é membro da organização e não
+  // tem como saber se aquele dia e horário cabem na agenda de alguém.
+  //
+  // POR QUE NÃO REUSAR SCHEDULED: SCHEDULED significa, em todo o
+  // produto, COMPROMISSO ASSUMIDO — é o status que a Agenda mostra, que
+  // a Central cobra, que o pipeline conta como "visita marcada" e que o
+  // corretor pode concluir ou marcar como no-show. Um pedido que ninguém
+  // leu ainda não é nada disso: tratá-lo como SCHEDULED ocupava a agenda
+  // com um horário que a equipe nunca aceitou, e era esse o defeito.
+  //
+  // POR QUE NÃO UM MODELO NOVO: o ciclo de vida é o MESMO — a mesma
+  // pessoa, o mesmo imóvel, a mesma negociação, o mesmo instante. Uma
+  // segunda tabela criaria uma segunda agenda e obrigaria a copiar a
+  // linha na confirmação; aqui a confirmação é só a transição
+  // REQUESTED -> SCHEDULED da MESMA linha, sem duplicata possível.
+  //
+  // O QUE NUNCA VALE PARA REQUESTED: NO_SHOW (não se falta a um
+  // compromisso que nunca foi assumido), COMPLETED e visitOutcome (não
+  // há visita a avaliar). Só duas saídas: SCHEDULED, quando a equipe
+  // confirma, ou CANCELLED, quando descarta.
+  //
+  // Valor ADITIVO, sem backfill: toda linha que já existe continua
+  // SCHEDULED e continua significando exatamente o que sempre
+  // significou. E como cada leitura do produto filtra status
+  // explicitamente, nenhuma tela passou a ver REQUESTED por acidente.
+  REQUESTED
   SCHEDULED
   COMPLETED
   CANCELLED

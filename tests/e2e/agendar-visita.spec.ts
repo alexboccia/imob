@@ -133,6 +133,10 @@ test.describe("diálogo", () => {
       await expect(m.getByLabel(campo, { exact: true })).toBeVisible();
     }
     await expect(m.getByLabel(/Observação/)).toBeVisible();
+    // Fase 56 — antes de preencher, a pessoa já sabe que está PEDINDO.
+    await expect(m.locator("[data-aviso-confirmacao]")).toContainText(
+      "entrará em contato para confirmar"
+    );
     // A política da Fase 51, sem página nova.
     await expect(m.getByRole("link", { name: "Política de Privacidade" })).toHaveAttribute(
       "href",
@@ -176,10 +180,13 @@ test.describe("envio", () => {
 
     const confirmacao = modal(page).locator("[data-visita-confirmada]");
     await expect(confirmacao).toBeVisible();
-    await expect(confirmacao.getByText("Visita solicitada")).toBeVisible();
-    await expect(confirmacao).toContainText("entra em contato para confirmar");
-    // Nada de "visita confirmada": o produto não tem agenda em tempo real.
-    expect(await confirmacao.innerText()).not.toMatch(/confirmada com sucesso|visita confirmada/i);
+    await expect(confirmacao.getByText("Solicitação enviada!")).toBeVisible();
+    await expect(confirmacao).toContainText("entrará em contato para confirmar o dia e horário");
+    // Fase 56 — a tela NUNCA pode dizer que a visita está agendada: no
+    // banco ela é REQUESTED, e prometer o contrário seria mentira.
+    expect(await confirmacao.innerText()).not.toMatch(
+      /confirmada com sucesso|visita confirmada|visita agendada|agendamento confirmado/i
+    );
 
     await confirmacao.getByRole("button", { name: "Fechar" }).click();
     await expect(modal(page)).toHaveCount(0);
@@ -282,9 +289,10 @@ test.describe("larguras", () => {
 // -----------------------------------------------------------------------
 // A visita chega ao CRM
 // -----------------------------------------------------------------------
-test.describe("o corretor recebe a visita", () => {
-  test("a solicitação do site aparece na agenda do painel", async ({ page }) => {
-    const nome = `Visitante Agenda ${Date.now()}`;
+test.describe("o corretor recebe a solicitação e decide", () => {
+  /** Faz o pedido pelo site e devolve o nome usado. */
+  async function pedirPeloSite(page: Page, rotulo: string) {
+    const nome = `${rotulo} ${Date.now()}`;
     // O imóvel da Org A que o site público expõe na raiz.
     await page.goto(`/imoveis/${IDS_E2E.imovelComBadgesOrgA}`);
     await botao(page).click();
@@ -292,14 +300,98 @@ test.describe("o corretor recebe a visita", () => {
     await preencher(page, { nome, observacao: "Chego de carro." });
     await modal(page).getByRole("button", { name: "Solicitar visita" }).click();
     await expect(modal(page).locator("[data-visita-confirmada]")).toBeVisible();
+    return nome;
+  }
 
-    // Mesmo domínio das visitas internas: aparece na Agenda do painel,
-    // na aba "Próximas" (a visita foi pedida para daqui a três dias).
+  test("o pedido entra na fila de solicitações, NÃO na agenda de compromissos", async ({
+    page,
+  }) => {
+    const nome = await pedirPeloSite(page, "Visitante Fila");
     await login(page, ORG_A);
+
+    // Fase 56 — a prova central: o pedido NÃO está entre os
+    // compromissos assumidos, mesmo tendo sido pedido para daqui a três
+    // dias (o que antes o punha direto em "Próximas").
     await page.goto("/app/agenda?aba=proximas");
-    await expect(page.getByText(nome).first()).toBeVisible();
-    // E na ficha do cliente, como negociação daquele imóvel.
+    await expect(page.getByText(nome)).toHaveCount(0);
+
+    // Ele está na aba de triagem, com o que o corretor precisa para
+    // decidir e com o status em TEXTO.
+    await page.goto("/app/agenda?aba=solicitacoes");
+    const cartao = page.locator("[data-slot=card]").filter({ hasText: nome });
+    await expect(cartao).toBeVisible();
+    await expect(cartao).toContainText("Solicitada");
+    await expect(cartao).toContainText("Chego de carro.");
+    await expect(cartao).toContainText("Solicitada em");
+    await expect(cartao.locator("[data-confirmar-solicitacao]")).toBeEnabled();
+    await expect(cartao.locator("[data-descartar-solicitacao]")).toBeEnabled();
+
+    // E a negociação existe na ficha do cliente desde o pedido.
     await page.goto("/app/clientes");
     await expect(page.getByText(nome).first()).toBeVisible();
+  });
+
+  test("confirmar move o pedido para a agenda como compromisso", async ({ page }) => {
+    const nome = await pedirPeloSite(page, "Visitante Confirmado");
+    await login(page, ORG_A);
+    await page.goto("/app/agenda?aba=solicitacoes");
+
+    const cartao = page.locator("[data-slot=card]").filter({ hasText: nome });
+    await cartao.locator("[data-confirmar-solicitacao]").click();
+
+    // Saiu da fila de triagem...
+    await expect(page.locator("[data-slot=card]").filter({ hasText: nome })).toHaveCount(0);
+    // ...e virou compromisso de verdade, com o outro rótulo.
+    await page.goto("/app/agenda?aba=proximas");
+    const compromisso = page.locator("[data-slot=card]").filter({ hasText: nome });
+    await expect(compromisso).toBeVisible();
+    await expect(compromisso).toContainText("Agendada");
+  });
+
+  test("descartar tira o pedido da fila sem criar compromisso", async ({ page }) => {
+    const nome = await pedirPeloSite(page, "Visitante Descartado");
+    await login(page, ORG_A);
+    await page.goto("/app/agenda?aba=solicitacoes");
+
+    const cartao = page.locator("[data-slot=card]").filter({ hasText: nome });
+    await cartao.locator("[data-descartar-solicitacao]").click();
+
+    await expect(page.locator("[data-slot=card]").filter({ hasText: nome })).toHaveCount(0);
+    await page.goto("/app/agenda?aba=proximas");
+    await expect(page.getByText(nome)).toHaveCount(0);
+  });
+
+  test("as ações são alcançáveis por teclado e têm nome acessível", async ({ page }) => {
+    const nome = await pedirPeloSite(page, "Visitante Teclado");
+    await login(page, ORG_A);
+    await page.goto("/app/agenda?aba=solicitacoes");
+
+    const cartao = page.locator("[data-slot=card]").filter({ hasText: nome });
+    const confirmar = cartao.locator("[data-confirmar-solicitacao]");
+    await expect(confirmar).toHaveAccessibleName(/Confirmar visita/);
+    await expect(cartao.locator("[data-descartar-solicitacao]")).toHaveAccessibleName(/Descartar/);
+
+    // Foco por teclado e acionamento por Enter — sem mouse.
+    await confirmar.focus();
+    await expect(confirmar).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("[data-slot=card]").filter({ hasText: nome })).toHaveCount(0);
+  });
+
+  test("a fila de solicitações não estoura em nenhuma largura", async ({ page }) => {
+    const nome = await pedirPeloSite(page, "Visitante Responsivo");
+    await login(page, ORG_A);
+
+    for (const largura of [320, 390, 768, 1024, 1280, 1440]) {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.goto("/app/agenda?aba=solicitacoes");
+      await expect(page.locator("[data-slot=card]").filter({ hasText: nome })).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+        ),
+        `estouro @ ${largura}`
+      ).toBe(true);
+    }
   });
 });
