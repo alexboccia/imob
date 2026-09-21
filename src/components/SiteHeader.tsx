@@ -8,6 +8,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { IconeMenu, IconeFechar, IconeCoracao } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { larguraCaixaLogo } from "@/lib/logo";
+import { BarraContatoTopo } from "@/components/BarraContatoTopo";
+import type { CanalPublico } from "@/lib/contatos-publicos";
 import { useFavoritos } from "@/lib/favoritos-store";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +66,10 @@ export function SiteHeader({
   navLinks,
   basePath,
   orgSlug,
+  // Fase 58 — canais já RESOLVIDOS para o topo (valor preenchido E flag
+  // ligada). Lista vazia é o caso comum e significa "sem barra": o
+  // cabeçalho fica exatamente como sempre foi.
+  canaisTopo = [],
 }: {
   nome: string;
   logo?: string | null;
@@ -71,6 +77,7 @@ export function SiteHeader({
   navLinks: NavLink[];
   basePath: string;
   orgSlug: string;
+  canaisTopo?: CanalPublico[];
 }) {
   const [aberto, setAberto] = useState(false);
   const altura = logoAltura && logoAltura > 0 ? logoAltura : 48;
@@ -113,12 +120,27 @@ export function SiteHeader({
       // por cima dele durante o scroll.
       className="border-b sticky top-0 bg-background z-30"
     >
+      {/* A barra some do DOM quando não há canais — o `&&` aqui e a
+          guarda dentro do componente. O ResizeObserver acima mede o
+          <header> inteiro, então `--site-header-height` já passa a
+          incluir a barra: quem gruda logo abaixo do cabeçalho (os
+          filtros da listagem) continua no lugar certo, sem mudança. */}
+      {canaisTopo.length > 0 && <BarraContatoTopo canais={canaisTopo} />}
       {/* Fase 49 — gap + min-w-0 no logo: a caixa do logo tem largura
           fixa (até 280px) e, em 320px, ela mais o botão do menu passavam
           da largura útil (288px) — o botão saía 8px para fora da tela.
           Agora a caixa encolhe até caber (a imagem é object-contain, só
           fica menor, nunca cortada) e o botão nunca encolhe. */}
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-5 sm:py-6">
+      {/* Fase 58 — com a barra acima, o conjunto não pode ficar alto
+          demais: o padding do cabeçalho cede um pouco SÓ quando ela
+          existe (py-4/sm:py-5 em vez de py-5/sm:py-6). Sem barra, os
+          valores são exatamente os de antes e nada muda de tamanho. */}
+      <div
+        className={cn(
+          "mx-auto flex max-w-6xl items-center justify-between gap-3 px-4",
+          canaisTopo.length > 0 ? "py-4 sm:py-5" : "py-5 sm:py-6"
+        )}
+      >
         <Link
           href={basePath || "/"}
           className="flex min-w-0 items-center"
@@ -264,6 +286,34 @@ export function SiteHeader({
                 Favoritos
                 <ContadorFavoritos total={totalFavoritos} />
               </Link>
+
+              {/* Fase 58 — as redes configuradas para o topo ficam
+                  ocultas na barra abaixo de sm (não cabem junto do
+                  telefone sem estourar 320px). Aqui elas voltam, com
+                  rótulo por extenso: dentro do menu há largura para
+                  texto, e um ícone solto numa lista vertical de links
+                  seria o item menos legível da navegação. Telefone e
+                  WhatsApp não se repetem aqui — a barra já os mostra em
+                  qualquer largura. */}
+              {canaisTopo.filter((c) => c.tipo === "REDE").length > 0 && (
+                <div className="mt-1 flex flex-col gap-1 border-t pt-2">
+                  {canaisTopo
+                    .filter((c) => c.tipo === "REDE")
+                    .map((canal) => (
+                      <a
+                        key={canal.chave}
+                        href={canal.href}
+                        data-canal-menu={canal.chave}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-md px-2 py-2.5 text-base font-medium text-gray-700"
+                        onClick={() => setAberto(false)}
+                      >
+                        {canal.rotulo}
+                      </a>
+                    ))}
+                </div>
+              )}
             </nav>
           </motion.div>
         )}

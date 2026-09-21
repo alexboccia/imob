@@ -185,6 +185,8 @@ export const IDS_E2E = {
   // navigator.sendBeacon, que a interceptação de rota do Playwright NÃO
   // captura de forma confiável.
   imovelTopOrgTracking: "e2e-imovel-tracking-top",
+  // Fase 58 — ficha da organização dedicada a contatos/redes públicos.
+  imovelContatos: "e2e-imovel-contatos",
   imovelSecundarioOrgTracking: "e2e-imovel-tracking-2",
 };
 
@@ -1314,6 +1316,67 @@ async function main() {
       organizationId: orgTracking.organization.id,
       whatsapp: "11999990000",
       email: "contato@tracking.e2e.test",
+    },
+  });
+
+  // Fase 58 — Organização dedicada aos CONTATOS E REDES do site público.
+  // Própria, e não uma das existentes, porque a barra superior MUDA A
+  // ALTURA do cabeçalho: ligá-la numa organização compartilhada
+  // quebraria as asserções geométricas de ficha/listagem de outras
+  // specs. Aqui cada canal recebe uma combinação diferente de topo e
+  // rodapé, para o spec provar as quatro possibilidades de uma vez.
+  const orgContatos = await garantirOrganizacaoComDono({
+    slug: "e2e-org-contatos",
+    timezone: "America/Sao_Paulo",
+    name: "Organização E2E Contatos",
+    planId: planoCompleto.id,
+    email: "owner-contatos@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+  await garantirTipoImovel({ organizationId: orgContatos.organization.id, name: "Apartamento" });
+  await garantirImovel({
+    id: IDS_E2E.imovelContatos,
+    organizationId: orgContatos.organization.id,
+    title: "Apartamento Contatos Publicos",
+    neighborhood: "Centro",
+  });
+  await prisma.organizationSettings.upsert({
+    where: { organizationId: orgContatos.organization.id },
+    update: {},
+    create: {
+      organizationId: orgContatos.organization.id,
+      email: "contato@contatos.e2e.test",
+      // Telefone: nos DOIS lugares.
+      phone: "(11) 3888-3000",
+      phoneShowHeader: true,
+      phoneShowFooter: true,
+      // WhatsApp: só no TOPO.
+      whatsapp: "5511999998888",
+      whatsappShowHeader: true,
+      whatsappShowFooter: false,
+      // Instagram: nos dois.
+      instagram: "https://instagram.com/contatos-e2e",
+      instagramShowHeader: true,
+      instagramShowFooter: true,
+      // LinkedIn: só no RODAPÉ.
+      linkedin: "https://linkedin.com/company/contatos-e2e",
+      linkedinShowHeader: false,
+      linkedinShowFooter: true,
+      // Facebook: PREENCHIDO e em NENHUM lugar — prova que o valor fica
+      // salvo sem aparecer.
+      facebook: "https://facebook.com/contatos-e2e",
+      facebookShowHeader: false,
+      facebookShowFooter: false,
+      // YouTube: VAZIO com as duas flags ligadas — prova que flag sem
+      // valor não renderiza nada.
+      youtube: null,
+      youtubeShowHeader: true,
+      youtubeShowFooter: true,
+      // TikTok: só no topo, para o ícone novo ter cobertura.
+      tiktok: "https://tiktok.com/@contatos-e2e",
+      tiktokShowHeader: true,
+      tiktokShowFooter: false,
     },
   });
 

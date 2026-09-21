@@ -254,6 +254,15 @@ export const ORG_NAVEGACAO = {
   slug: "e2e-org-navegacao",
 };
 
+// Fase 58 — organização dedicada aos CONTATOS E REDES do site público. A
+// barra superior muda a altura do cabeçalho, então ela não pode ser
+// ligada numa organização que outras specs medem.
+export const ORG_CONTATOS = {
+  slug: "e2e-org-contatos",
+  email: "owner-contatos@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const ORG_COMISSOES_BRUNO = {
   slug: "e2e-org-comissoes",
   email: "bruno-comissoes@e2e.test",
@@ -411,6 +420,8 @@ export const IDS_E2E = {
   // interceptação de rota do Playwright não captura de forma confiável:
   // um vazamento tem de cair onde nenhum número absoluto é afirmado.
   imovelTopOrgTracking: "e2e-imovel-tracking-top",
+  // Fase 58 — ficha da organização dedicada a contatos/redes públicos.
+  imovelContatos: "e2e-imovel-contatos",
   imovelSecundarioOrgTracking: "e2e-imovel-tracking-2",
 };
 

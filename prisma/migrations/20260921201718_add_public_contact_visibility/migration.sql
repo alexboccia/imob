@@ -1,0 +1,16 @@
+-- AlterTable
+ALTER TABLE "organization_settings" ADD COLUMN     "facebookShowFooter" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "facebookShowHeader" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "instagramShowFooter" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "instagramShowHeader" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "linkedinShowFooter" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "linkedinShowHeader" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "phoneShowFooter" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "phoneShowHeader" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "tiktok" TEXT,
+ADD COLUMN     "tiktokShowFooter" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "tiktokShowHeader" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "whatsappShowFooter" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "whatsappShowHeader" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "youtubeShowFooter" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "youtubeShowHeader" BOOLEAN NOT NULL DEFAULT false;

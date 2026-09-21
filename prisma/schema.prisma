@@ -1978,16 +1978,65 @@ model Organization {
 }
 
 model OrganizationSettings {
-  id                 String       @id @default(cuid())
-  organizationId     String       @unique
-  organization       Organization @relation(fields: [organizationId], references: [id])
-  phone              String?
-  email              String?
-  whatsapp           String?
-  instagram          String?
-  facebook           String?
-  youtube            String?
-  linkedin           String?
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  phone          String?
+  email          String?
+  whatsapp       String?
+  instagram      String?
+  facebook       String?
+  youtube        String?
+  linkedin       String?
+  // Fase 58 — a única rede que faltava no conjunto institucional. As
+  // outras quatro já existiam e NÃO foram duplicadas.
+  tiktok         String?
+
+  // -------------------------------------------------------------------
+  // Fase 58 — ONDE cada canal aparece no site público
+  // -------------------------------------------------------------------
+  // O VALOR de cada canal continua sendo um só (os campos acima). Estas
+  // flags respondem outra pergunta — em que região ele é exibido — e é
+  // por isso que são colunas separadas em vez de "instagramTopo" guardar
+  // uma segunda URL: duas fontes para o mesmo endereço divergiriam.
+  //
+  // A REGRA que o site aplica é sempre a mesma (ver canaisDoLocal em
+  // src/lib/contatos-publicos.ts): exibe <=> valor preenchido E flag do
+  // local. Campo vazio com flag ligada não renderiza nada.
+  //
+  // OS DEFAULTS NÃO SÃO UNIFORMES, e isso é deliberado: eles reproduzem
+  // exatamente o que o site JÁ mostrava antes desta migration, para
+  // nenhum tenant mudar de aparência no deploy.
+  //
+  //   topo    = false em TODOS os canais — a barra superior é nova, e
+  //             ninguém a pediu ainda; sem nenhum canal marcado ela
+  //             sequer existe no DOM.
+  //   rodapé  = true nas REDES, porque o rodapé já exibia os ícones de
+  //             rede sempre que a URL estava preenchida (ver
+  //             SiteFooter.tsx antes desta fase). Default false aqui
+  //             APAGARIA os ícones de quem já os tem — seria a regressão
+  //             visual que a fase existe para evitar.
+  //   rodapé  = false em telefone e WhatsApp, porque o rodapé nunca os
+  //             exibiu: ligá-los por padrão CRIARIA um bloco novo em
+  //             todo tenant, que é a outra metade do mesmo erro.
+  //
+  // Sem backfill: o default cobre as linhas existentes e nenhuma delas é
+  // reinterpretada.
+  phoneShowHeader     Boolean @default(false)
+  phoneShowFooter     Boolean @default(false)
+  whatsappShowHeader  Boolean @default(false)
+  whatsappShowFooter  Boolean @default(false)
+  instagramShowHeader Boolean @default(false)
+  instagramShowFooter Boolean @default(true)
+  facebookShowHeader  Boolean @default(false)
+  facebookShowFooter  Boolean @default(true)
+  linkedinShowHeader  Boolean @default(false)
+  linkedinShowFooter  Boolean @default(true)
+  youtubeShowHeader   Boolean @default(false)
+  youtubeShowFooter   Boolean @default(true)
+  tiktokShowHeader    Boolean @default(false)
+  tiktokShowFooter    Boolean @default(true)
+
   propertyCodePrefix String?
   logoUrl            String?
   logoHeight         Int?
@@ -2010,7 +2059,7 @@ model OrganizationSettings {
   // no fallback estático do produto (IMAGEM_HERO_PADRAO, site-config.ts)
   // — a Home nunca fica sem Hero.
   heroImageUrl       String?
-  updatedAt          DateTime     @updatedAt
+  updatedAt          DateTime @updatedAt
 
   @@map("organization_settings")
 }

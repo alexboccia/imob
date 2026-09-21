@@ -9,7 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ErroCampo } from "@/components/admin/ErroCampo";
+import { CANAIS_PUBLICOS, type ChaveCanal, type ConfiguracaoCanais } from "@/lib/contatos-publicos";
 import { LogoUpload } from "@/components/admin/LogoUpload";
 import { LogoRodapeUpload } from "@/components/admin/LogoRodapeUpload";
 import { FaviconUpload } from "@/components/admin/FaviconUpload";
@@ -20,6 +22,18 @@ import { HeroImageUpload } from "@/components/admin/HeroImageUpload";
 import { resolverTemaEfetivo, THEME_ID_CUSTOMIZADO, type TokensTema } from "@/lib/branding/temas";
 import type { GrupoFusos } from "@/lib/fusos-opcoes";
 
+// Exemplos de preenchimento, um por canal — nenhum aponta para uma marca
+// real: são sempre "suaimobiliaria".
+const PLACEHOLDERS: Record<ChaveCanal, string> = {
+  telefone: "+55 (11) 3888-3000",
+  whatsapp: "5511999998888 (DDI + DDD + número, só dígitos)",
+  instagram: "https://instagram.com/suaimobiliaria",
+  facebook: "https://facebook.com/suaimobiliaria",
+  linkedin: "https://linkedin.com/company/suaimobiliaria",
+  youtube: "https://youtube.com/@suaimobiliaria",
+  tiktok: "https://tiktok.com/@suaimobiliaria",
+};
+
 type ConfiguracaoInicial = {
   telefone: string;
   whatsapp: string;
@@ -28,6 +42,8 @@ type ConfiguracaoInicial = {
   facebook: string;
   youtube: string;
   linkedin: string;
+  tiktok: string;
+  canais: ConfiguracaoCanais;
   codigoImovelPrefixo: string;
   logo: string | null;
   logoAltura: number;
@@ -115,94 +131,88 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
         </CardContent>
       </Card>
 
-      <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-2">
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle className="min-w-0 break-words">Contato</CardTitle>
-          </CardHeader>
-          <CardContent className="min-w-0 space-y-4">
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="telefone">Telefone</Label>
-              <Input
-                id="telefone"
-                name="telefone"
-                defaultValue={config.telefone}
-                placeholder="+55 (11) 3888-3000"
-              />
-              <ErroCampo erros={estado.fieldErrors?.telefone} />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="whatsapp">WhatsApp</Label>
-              <Input
-                id="whatsapp"
-                name="whatsapp"
-                defaultValue={config.whatsapp}
-                placeholder="5511999998888 (DDI + DDD + número, só dígitos)"
-              />
-              <ErroCampo erros={estado.fieldErrors?.whatsapp} />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="email">E-mail</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                defaultValue={config.email}
-                placeholder="contato@suaimobiliaria.com.br"
-              />
-              <ErroCampo erros={estado.fieldErrors?.email} />
-            </div>
-          </CardContent>
-        </Card>
+      {/* Fase 58 — "Contato" e "Redes sociais" eram dois cards lado a
+          lado; viraram um só porque a decisão que a fase introduz (onde
+          cada canal aparece) é a MESMA para os dois grupos, e mantê-los
+          separados obrigaria a repetir a explicação duas vezes. O e-mail
+          continua sem par de caixas: ele é o destino dos formulários do
+          site, não um canal exibido no topo ou no rodapé. */}
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle className="min-w-0 break-words">Contatos e redes sociais</CardTitle>
+          <CardDescription className="min-w-0 break-words">
+            Escolha onde cada contato ou rede social será exibido no site público. Campos não
+            preenchidos não serão exibidos.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="min-w-0 space-y-4">
+          {/* Cabeçalho da "tabela" só a partir de sm: em telas estreitas
+              cada linha vira um bloco empilhado com os rótulos ao lado
+              das caixas, e uma fileira de títulos soltos no topo não
+              ajudaria a ler nada. */}
+          <div className="hidden items-center gap-4 border-b pb-2 text-xs font-medium text-muted-foreground sm:flex">
+            <span className="flex-1">Canal</span>
+            <span className="w-16 text-center">Topo</span>
+            <span className="w-16 text-center">Rodapé</span>
+          </div>
 
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle className="min-w-0 break-words">Redes sociais</CardTitle>
-          </CardHeader>
-          <CardContent className="min-w-0 space-y-4">
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="instagram">Instagram</Label>
-              <Input
-                id="instagram"
-                name="instagram"
-                defaultValue={config.instagram}
-                placeholder="https://instagram.com/suaimobiliaria"
-              />
-              <ErroCampo erros={estado.fieldErrors?.instagram} />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="facebook">Facebook</Label>
-              <Input
-                id="facebook"
-                name="facebook"
-                defaultValue={config.facebook}
-                placeholder="https://facebook.com/suaimobiliaria"
-              />
-              <ErroCampo erros={estado.fieldErrors?.facebook} />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="youtube">YouTube</Label>
-              <Input
-                id="youtube"
-                name="youtube"
-                defaultValue={config.youtube}
-                placeholder="https://youtube.com/@suaimobiliaria"
-              />
-              <ErroCampo erros={estado.fieldErrors?.youtube} />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="linkedin">LinkedIn</Label>
-              <Input
-                id="linkedin"
-                name="linkedin"
-                defaultValue={config.linkedin}
-                placeholder="https://linkedin.com/company/suaimobiliaria"
-              />
-              <ErroCampo erros={estado.fieldErrors?.linkedin} />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          {CANAIS_PUBLICOS.map((canal) => {
+            const valores = config.canais[canal.chave];
+            return (
+              <div
+                key={canal.chave}
+                data-canal-config={canal.chave}
+                className="min-w-0 space-y-2 border-b pb-4 last:border-b-0 last:pb-0 sm:flex sm:items-start sm:gap-4 sm:space-y-0"
+              >
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Label htmlFor={canal.chave}>{canal.rotulo}</Label>
+                  <Input
+                    id={canal.chave}
+                    name={canal.chave === "telefone" ? "telefone" : canal.chave}
+                    defaultValue={valores.valor}
+                    placeholder={PLACEHOLDERS[canal.chave]}
+                  />
+                  <ErroCampo erros={estado.fieldErrors?.[canal.chave]} />
+                </div>
+                {/* As duas caixas são independentes: um canal pode ficar
+                    só no rodapé, só no topo, nos dois ou em nenhum — e
+                    "em nenhum" mantém o valor salvo, apenas não exibido. */}
+                <div className="flex items-center gap-6 sm:gap-0">
+                  <label
+                    className="flex w-16 items-center gap-2 text-sm sm:justify-center sm:gap-0 sm:pt-8"
+                    data-flag={`${canal.chave}-topo`}
+                  >
+                    <Checkbox name={`${canal.chave}Topo`} defaultChecked={valores.topo} />
+                    <span className="sm:sr-only">Topo</span>
+                  </label>
+                  <label
+                    className="flex w-16 items-center gap-2 text-sm sm:justify-center sm:gap-0 sm:pt-8"
+                    data-flag={`${canal.chave}-rodape`}
+                  >
+                    <Checkbox name={`${canal.chave}Rodape`} defaultChecked={valores.rodape} />
+                    <span className="sm:sr-only">Rodapé</span>
+                  </label>
+                </div>
+              </div>
+            );
+          })}
+
+          <div className="min-w-0 space-y-1.5 border-t pt-4">
+            <Label htmlFor="email">E-mail</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              defaultValue={config.email}
+              placeholder="contato@suaimobiliaria.com.br"
+            />
+            <p className="text-xs text-muted-foreground">
+              Recebe as mensagens enviadas pelos formulários do site.
+            </p>
+            <ErroCampo erros={estado.fieldErrors?.email} />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Visibilidade da carteira comercial (Fase 22). Fica junto do
           resto da configuração institucional — nenhuma tela nova, e o

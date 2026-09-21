@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { LOGO_ALTURA_PADRAO, LOGO_RODAPE_ALTURA_PADRAO } from "@/lib/logo";
 import { tagConfiguracao } from "@/lib/cache-tags";
+import type { ConfiguracaoCanais } from "@/lib/contatos-publicos";
 
 async function buscarConfiguracaoContatoSemCache(organizationId: string) {
   const settings = await prisma.organizationSettings.findFirst({ where: { organizationId } });
@@ -14,6 +15,50 @@ async function buscarConfiguracaoContatoSemCache(organizationId: string) {
     facebook: settings?.facebook ?? "",
     youtube: settings?.youtube ?? "",
     linkedin: settings?.linkedin ?? "",
+    tiktok: settings?.tiktok ?? "",
+    // Fase 58 — o MESMO valor de cada canal acima, agora acompanhado da
+    // decisão de onde ele aparece. Montado aqui, num lugar só, para o
+    // cabeçalho e o rodapé consumirem a mesma estrutura (ver
+    // canaisDoLocal em contatos-publicos.ts). Sem linha de settings, os
+    // defaults abaixo são os mesmos do schema — um tenant que nunca
+    // salvou configuração continua com o site que sempre teve.
+    canais: {
+      telefone: {
+        valor: settings?.phone ?? "",
+        topo: settings?.phoneShowHeader ?? false,
+        rodape: settings?.phoneShowFooter ?? false,
+      },
+      whatsapp: {
+        valor: settings?.whatsapp ?? "",
+        topo: settings?.whatsappShowHeader ?? false,
+        rodape: settings?.whatsappShowFooter ?? false,
+      },
+      instagram: {
+        valor: settings?.instagram ?? "",
+        topo: settings?.instagramShowHeader ?? false,
+        rodape: settings?.instagramShowFooter ?? true,
+      },
+      facebook: {
+        valor: settings?.facebook ?? "",
+        topo: settings?.facebookShowHeader ?? false,
+        rodape: settings?.facebookShowFooter ?? true,
+      },
+      linkedin: {
+        valor: settings?.linkedin ?? "",
+        topo: settings?.linkedinShowHeader ?? false,
+        rodape: settings?.linkedinShowFooter ?? true,
+      },
+      youtube: {
+        valor: settings?.youtube ?? "",
+        topo: settings?.youtubeShowHeader ?? false,
+        rodape: settings?.youtubeShowFooter ?? true,
+      },
+      tiktok: {
+        valor: settings?.tiktok ?? "",
+        topo: settings?.tiktokShowHeader ?? false,
+        rodape: settings?.tiktokShowFooter ?? true,
+      },
+    } satisfies ConfiguracaoCanais,
     codigoImovelPrefixo: settings?.propertyCodePrefix ?? "",
     logo: settings?.logoUrl ?? null,
     logoAltura: settings?.logoHeight ?? LOGO_ALTURA_PADRAO,

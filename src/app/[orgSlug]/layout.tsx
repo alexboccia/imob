@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { CapturaAtribuicao } from "@/components/analytics/CapturaAtribuicao";
 import type { Metadata } from "next";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
+import { canaisDoLocal } from "@/lib/contatos-publicos";
 import { buscarBranding } from "@/lib/branding";
 import { resolverTemaEfetivo } from "@/lib/branding/temas";
 import { getOrganizationBySlug } from "@/lib/tenant";
@@ -161,6 +162,11 @@ export default async function PublicLayout({
         navLinks={navLinks(basePath)}
         basePath={basePath}
         orgSlug={orgSlug}
+        // Fase 58 — a MESMA configuração institucional alimenta o topo e
+        // o rodapé; só o local muda. Resolvido aqui, no layout, porque é
+        // o único lugar que já carrega a configuração uma vez para as
+        // duas pontas.
+        canaisTopo={canaisDoLocal(config.canais, "topo", { nomeOrganizacao: nomePublico })}
       />
       <main className="flex-1">{children}</main>
       <SiteFooter
@@ -181,12 +187,7 @@ export default async function PublicLayout({
           { href: `${basePath}/contato`, label: "Contato" },
           { href: caminhoPoliticaPrivacidade(basePath), label: "Política de Privacidade" },
         ]}
-        redesSociais={{
-          instagram: config.instagram,
-          facebook: config.facebook,
-          youtube: config.youtube,
-          linkedin: config.linkedin,
-        }}
+        canaisRodape={canaisDoLocal(config.canais, "rodape", { nomeOrganizacao: nomePublico })}
       />
       <BotaoContatoFlutuante
         nome={nomePublico}

@@ -5,18 +5,27 @@ import {
   IconeFacebook,
   IconeYoutube,
   IconeLinkedin,
+  IconeTiktok,
 } from "@/components/icones-sociais";
+import { IconeTelefone, IconeWhatsApp } from "@/components/icons";
+import type { CanalPublico, ChaveCanal } from "@/lib/contatos-publicos";
 import { LOGO_RODAPE_ALTURA_PADRAO, larguraCaixaLogoRodape } from "@/lib/logo";
 import { resolverAparenciaRodape } from "@/lib/branding/aparencia-rodape";
 
 type NavLink = { href: string; label: string };
 
-const REDES = [
-  { chave: "instagram" as const, Icone: IconeInstagram, label: "Instagram" },
-  { chave: "facebook" as const, Icone: IconeFacebook, label: "Facebook" },
-  { chave: "youtube" as const, Icone: IconeYoutube, label: "YouTube" },
-  { chave: "linkedin" as const, Icone: IconeLinkedin, label: "LinkedIn" },
-];
+// Fase 58 — a lista de canais e a decisão de quais aparecem saíram
+// daqui para src/lib/contatos-publicos.ts, que o cabeçalho usa também.
+// Aqui ficou só o mapa de ícones, que é apresentação.
+const ICONES: Record<ChaveCanal, (props: { className?: string }) => React.ReactElement> = {
+  telefone: IconeTelefone,
+  whatsapp: IconeWhatsApp,
+  instagram: IconeInstagram,
+  facebook: IconeFacebook,
+  linkedin: IconeLinkedin,
+  youtube: IconeYoutube,
+  tiktok: IconeTiktok,
+};
 
 // Proposta 2 (correção) tinha fundo escuro FIXO (slate-900) porque
 // --primary varia de tema claro (Dourado, oklch L=0.62) a escuro
@@ -84,7 +93,7 @@ export function SiteFooter({
   aparencia,
   basePath,
   navLinks,
-  redesSociais,
+  canaisRodape,
 }: {
   nome: string;
   logo?: string | null;
@@ -93,9 +102,13 @@ export function SiteFooter({
   aparencia?: string | null;
   basePath: string;
   navLinks: NavLink[];
-  redesSociais: { instagram: string; facebook: string; youtube: string; linkedin: string };
+  // Fase 58 — canais já RESOLVIDOS para o rodapé (valor preenchido E
+  // flag ligada), na mesma estrutura que o cabeçalho recebe.
+  canaisRodape?: CanalPublico[];
 }) {
-  const redesAtivas = REDES.filter((r) => redesSociais[r.chave]);
+  const canais = canaisRodape ?? [];
+  const redesAtivas = canais.filter((c) => c.tipo === "REDE");
+  const contatosAtivos = canais.filter((c) => c.tipo !== "REDE");
   const modo = resolverAparenciaRodape(aparencia);
   const cores = CORES_POR_APARENCIA[modo];
   // Logotipo dedicado ao rodapé (footerLogoUrl) tem prioridade — quem
@@ -161,22 +174,54 @@ export function SiteFooter({
           </nav>
 
           {redesAtivas.length > 0 && (
-            <div className="flex shrink-0 items-center gap-2">
-              {redesAtivas.map(({ chave, Icone, label }) => (
-                <a
-                  key={chave}
-                  href={redesSociais[chave]}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={label}
-                  className={`flex size-9 items-center justify-center rounded-full transition-colors hover:bg-primary hover:text-primary-foreground ${cores.chipIcone}`}
-                >
-                  <Icone className="size-4" />
-                </a>
-              ))}
+            <div className="flex shrink-0 items-center gap-2" data-redes-rodape>
+              {redesAtivas.map((canal) => {
+                const Icone = ICONES[canal.chave];
+                return (
+                  <a
+                    key={canal.chave}
+                    href={canal.href}
+                    data-canal-rodape={canal.chave}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={canal.rotulo}
+                    className={`flex size-9 items-center justify-center rounded-full transition-colors hover:bg-primary hover:text-primary-foreground ${cores.chipIcone}`}
+                  >
+                    <Icone className="size-4" />
+                  </a>
+                );
+              })}
             </div>
           )}
         </div>
+
+        {/* Fase 58 — bloco de CONTATO. Só existe quando há telefone ou
+            WhatsApp habilitados para o rodapé; sem eles, nem a linha nem
+            o separador aparecem. Nenhum tenant ganha este bloco no
+            deploy: as duas flags nascem desligadas (ver schema). */}
+        {contatosAtivos.length > 0 && (
+          <div
+            data-contatos-rodape
+            className={`mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t pt-6 text-sm ${cores.borda}`}
+          >
+            {contatosAtivos.map((canal) => {
+              const Icone = ICONES[canal.chave];
+              return (
+                <a
+                  key={canal.chave}
+                  href={canal.href}
+                  data-canal-rodape={canal.chave}
+                  target={canal.externo ? "_blank" : undefined}
+                  rel={canal.externo ? "noopener noreferrer" : undefined}
+                  className={`inline-flex min-h-9 items-center gap-2 transition-colors ${cores.linkHover}`}
+                >
+                  <Icone className="size-4 shrink-0" />
+                  <span className="whitespace-nowrap">{canal.texto}</span>
+                </a>
+              );
+            })}
+          </div>
+        )}
 
         <div className={`mt-8 border-t pt-6 text-center text-xs ${cores.borda} ${cores.textoMuted}`}>
           © {new Date().getFullYear()} {nome}. Todos os direitos reservados.

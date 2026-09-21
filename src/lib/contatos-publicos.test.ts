@@ -1,0 +1,250 @@
+import { describe, test, expect } from "vitest";
+import {
+  CANAIS_PUBLICOS,
+  canaisDoLocal,
+  temCanais,
+  urlRedeSocialValida,
+  normalizarUrlRedeSocial,
+  type ChaveCanal,
+  type ConfiguracaoCanais,
+} from "@/lib/contatos-publicos";
+
+// =======================================================================
+// Contatos institucionais do site público (Fase 58)
+// =======================================================================
+// A regra que estes testes protegem é uma só, e vale para todo canal:
+//
+//     aparece  <=>  valor preenchido  E  flag do local ligada
+//
+// Ela é o que garante que nenhuma informação vazia produza elemento
+// visual — nem ícone sem link, nem separador órfão, nem barra vazia.
+
+const VAZIO: ConfiguracaoCanais = {
+  telefone: { valor: "", topo: false, rodape: false },
+  whatsapp: { valor: "", topo: false, rodape: false },
+  instagram: { valor: "", topo: false, rodape: false },
+  facebook: { valor: "", topo: false, rodape: false },
+  linkedin: { valor: "", topo: false, rodape: false },
+  youtube: { valor: "", topo: false, rodape: false },
+  tiktok: { valor: "", topo: false, rodape: false },
+};
+
+/** Valor plausível para cada canal, usado pelas varreduras abaixo. */
+const VALOR: Record<ChaveCanal, string> = {
+  telefone: "(11) 3888-3000",
+  whatsapp: "5511999998888",
+  instagram: "https://instagram.com/exemplo",
+  facebook: "https://facebook.com/exemplo",
+  linkedin: "https://linkedin.com/company/exemplo",
+  youtube: "https://youtube.com/@exemplo",
+  tiktok: "https://tiktok.com/@exemplo",
+};
+
+function com(chave: ChaveCanal, config: Partial<ConfiguracaoCanais[ChaveCanal]>): ConfiguracaoCanais {
+  return { ...VAZIO, [chave]: { ...VAZIO[chave], ...config } };
+}
+
+describe("a regra vale para TODOS os canais, um por um", () => {
+  for (const { chave } of CANAIS_PUBLICOS) {
+    describe(chave, () => {
+      test("preenchido + topo ligado -> aparece no topo", () => {
+        const c = com(chave, { valor: VALOR[chave], topo: true });
+        expect(canaisDoLocal(c, "topo").map((x) => x.chave)).toEqual([chave]);
+      });
+
+      test("preenchido + topo desligado -> NÃO aparece no topo", () => {
+        const c = com(chave, { valor: VALOR[chave], topo: false });
+        expect(canaisDoLocal(c, "topo")).toHaveLength(0);
+      });
+
+      test("preenchido + rodapé ligado -> aparece no rodapé", () => {
+        const c = com(chave, { valor: VALOR[chave], rodape: true });
+        expect(canaisDoLocal(c, "rodape").map((x) => x.chave)).toEqual([chave]);
+      });
+
+      test("preenchido + rodapé desligado -> NÃO aparece no rodapé", () => {
+        const c = com(chave, { valor: VALOR[chave], rodape: false });
+        expect(canaisDoLocal(c, "rodape")).toHaveLength(0);
+      });
+
+      test("VAZIO com as duas flags ligadas -> não aparece em lugar nenhum", () => {
+        const c = com(chave, { valor: "", topo: true, rodape: true });
+        expect(canaisDoLocal(c, "topo")).toHaveLength(0);
+        expect(canaisDoLocal(c, "rodape")).toHaveLength(0);
+      });
+
+      test("só espaços em branco também conta como vazio", () => {
+        const c = com(chave, { valor: "   ", topo: true, rodape: true });
+        expect(canaisDoLocal(c, "topo")).toHaveLength(0);
+        expect(canaisDoLocal(c, "rodape")).toHaveLength(0);
+      });
+
+      test("preenchido + as duas flags -> aparece nos dois lugares", () => {
+        const c = com(chave, { valor: VALOR[chave], topo: true, rodape: true });
+        expect(canaisDoLocal(c, "topo").map((x) => x.chave)).toEqual([chave]);
+        expect(canaisDoLocal(c, "rodape").map((x) => x.chave)).toEqual([chave]);
+      });
+
+      test("preenchido + nenhuma flag -> fica salvo, mas invisível", () => {
+        const c = com(chave, { valor: VALOR[chave], topo: false, rodape: false });
+        expect(canaisDoLocal(c, "topo")).toHaveLength(0);
+        expect(canaisDoLocal(c, "rodape")).toHaveLength(0);
+        // O valor não foi apagado — só não é exibido.
+        expect(c[chave].valor).toBe(VALOR[chave]);
+      });
+    });
+  }
+});
+
+describe("barra e blocos vazios não existem", () => {
+  test("configuração inteiramente vazia não produz canal nenhum", () => {
+    expect(canaisDoLocal(VAZIO, "topo")).toHaveLength(0);
+    expect(canaisDoLocal(VAZIO, "rodape")).toHaveLength(0);
+    expect(temCanais(VAZIO, "topo")).toBe(false);
+    expect(temCanais(VAZIO, "rodape")).toBe(false);
+  });
+
+  test("tudo preenchido mas nada habilitado para o topo -> topo vazio", () => {
+    const tudo = Object.fromEntries(
+      CANAIS_PUBLICOS.map(({ chave }) => [chave, { valor: VALOR[chave], topo: false, rodape: true }])
+    ) as ConfiguracaoCanais;
+    expect(temCanais(tudo, "topo")).toBe(false);
+    expect(canaisDoLocal(tudo, "rodape")).toHaveLength(CANAIS_PUBLICOS.length);
+  });
+});
+
+describe("ordem e composição", () => {
+  test("a ordem exibida é a do catálogo, não a de preenchimento", () => {
+    const tudo = Object.fromEntries(
+      CANAIS_PUBLICOS.map(({ chave }) => [chave, { valor: VALOR[chave], topo: true, rodape: true }])
+    ) as ConfiguracaoCanais;
+    expect(canaisDoLocal(tudo, "topo").map((c) => c.chave)).toEqual(
+      CANAIS_PUBLICOS.map((c) => c.chave)
+    );
+  });
+
+  test("o catálogo cobre exatamente os sete canais combinados", () => {
+    expect(CANAIS_PUBLICOS.map((c) => c.chave)).toEqual([
+      "telefone",
+      "whatsapp",
+      "instagram",
+      "facebook",
+      "linkedin",
+      "youtube",
+      "tiktok",
+    ]);
+  });
+});
+
+describe("telefone", () => {
+  test("href tel: usa só os dígitos; o texto mantém a formatação", () => {
+    const c = com("telefone", { valor: "(11) 3888-3000", topo: true });
+    const [canal] = canaisDoLocal(c, "topo");
+    expect(canal.href).toBe("tel:+1138883000");
+    expect(canal.texto).toBe("(11) 3888-3000");
+    // Telefone não é link externo: não abre em nova aba.
+    expect(canal.externo).toBe(false);
+  });
+
+  test("número curto demais não vira link quebrado", () => {
+    const c = com("telefone", { valor: "123", topo: true });
+    expect(canaisDoLocal(c, "topo")).toHaveLength(0);
+  });
+
+  test("texto sem dígito nenhum não vira telefone", () => {
+    const c = com("telefone", { valor: "fale conosco", topo: true });
+    expect(canaisDoLocal(c, "topo")).toHaveLength(0);
+  });
+});
+
+describe("WhatsApp", () => {
+  test("usa o gerador do projeto e mostra 'WhatsApp', não o número", () => {
+    const c = com("whatsapp", { valor: "5511999998888", topo: true });
+    const [canal] = canaisDoLocal(c, "topo", { nomeOrganizacao: "Imobiliária Exemplo" });
+    expect(canal.href.startsWith("https://wa.me/5511999998888")).toBe(true);
+    // No topo o rótulo evita repetir dois números parecidos lado a lado.
+    expect(canal.texto).toBe("WhatsApp");
+    expect(canal.externo).toBe(true);
+  });
+
+  test("a mensagem é a cortesia padrão, com o nome da organização", () => {
+    const c = com("whatsapp", { valor: "5511999998888", topo: true });
+    const [canal] = canaisDoLocal(c, "topo", { nomeOrganizacao: "Imobiliária Exemplo" });
+    expect(decodeURIComponent(canal.href)).toContain("Imobiliária Exemplo");
+  });
+
+  test("número incompleto não vira CTA", () => {
+    const c = com("whatsapp", { valor: "119", topo: true });
+    expect(canaisDoLocal(c, "topo")).toHaveLength(0);
+  });
+});
+
+describe("redes sociais: links seguros", () => {
+  test("http e https passam", () => {
+    expect(urlRedeSocialValida("https://instagram.com/x")).toBe(true);
+    expect(urlRedeSocialValida("http://instagram.com/x")).toBe(true);
+  });
+
+  const perigosos = [
+    "javascript:alert(1)",
+    "JavaScript:alert(1)",
+    "  javascript:alert(1)  ",
+    "data:text/html;base64,PHNjcmlwdD4=",
+    "vbscript:msgbox(1)",
+    "file:///etc/passwd",
+    "javascript:/*--></script><script>alert(1)</script>",
+  ];
+
+  for (const valor of perigosos) {
+    test(`recusa ${valor.slice(0, 28)}`, () => {
+      expect(urlRedeSocialValida(valor)).toBe(false);
+      expect(normalizarUrlRedeSocial(valor)).toBeNull();
+    });
+  }
+
+  test("valor perigoso NUNCA vira href, mesmo já gravado no banco", () => {
+    // Estes campos eram string livre antes da Fase 58: um valor assim
+    // pode existir em base antiga. A revalidação na leitura é o que
+    // impede que ele vire link agora.
+    const c = com("instagram", { valor: "javascript:alert(1)", topo: true, rodape: true });
+    expect(canaisDoLocal(c, "topo")).toHaveLength(0);
+    expect(canaisDoLocal(c, "rodape")).toHaveLength(0);
+  });
+
+  test("URL relativa ou sem host é recusada", () => {
+    expect(urlRedeSocialValida("/instagram")).toBe(false);
+    expect(urlRedeSocialValida("instagram.com/x")).toBe(false);
+    expect(urlRedeSocialValida("https://")).toBe(false);
+  });
+
+  test("rede válida é externa e carrega o rótulo como nome acessível", () => {
+    const c = com("linkedin", { valor: "https://linkedin.com/company/x", rodape: true });
+    const [canal] = canaisDoLocal(c, "rodape");
+    expect(canal.externo).toBe(true);
+    expect(canal.rotulo).toBe("LinkedIn");
+    expect(canal.href).toBe("https://linkedin.com/company/x");
+  });
+
+  test("normalizar apenas apara espaços de uma URL válida", () => {
+    expect(normalizarUrlRedeSocial("  https://instagram.com/x  ")).toBe("https://instagram.com/x");
+  });
+});
+
+describe("topo e rodapé são independentes", () => {
+  test("um canal só no rodapé e outro só no topo não se misturam", () => {
+    const c: ConfiguracaoCanais = {
+      ...VAZIO,
+      telefone: { valor: VALOR.telefone, topo: true, rodape: false },
+      linkedin: { valor: VALOR.linkedin, topo: false, rodape: true },
+    };
+    expect(canaisDoLocal(c, "topo").map((x) => x.chave)).toEqual(["telefone"]);
+    expect(canaisDoLocal(c, "rodape").map((x) => x.chave)).toEqual(["linkedin"]);
+  });
+
+  test("o valor é o MESMO nos dois locais — nunca duas URLs diferentes", () => {
+    const c = com("instagram", { valor: VALOR.instagram, topo: true, rodape: true });
+    const topo = canaisDoLocal(c, "topo")[0];
+    const rodape = canaisDoLocal(c, "rodape")[0];
+    expect(topo.href).toBe(rodape.href);
+  });
+});

@@ -30,12 +30,24 @@ import { fusoValido } from "@/lib/fuso-horario";
 import { CATALOGO_TEMAS, THEME_ID_CUSTOMIZADO } from "@/lib/branding/temas";
 import { CATALOGO_APARENCIA_RODAPE } from "@/lib/branding/aparencia-rodape";
 import { validarFaviconUrl, validarUrlMidiaOrganizacao } from "@/lib/branding/favicon-url";
+import { urlRedeSocialValida } from "@/lib/contatos-publicos";
 import { gerarPaletaDoLogo, type MotivoFalhaExtracao } from "@/lib/branding/extrair-paleta-logo";
 import { tokensTemaSchema } from "@/lib/branding/tokens-tema-schema";
 import type { TokensTema } from "@/lib/branding/temas";
 
 const vazioParaNulo = (v: unknown) =>
   typeof v === "string" && v.trim() ? v.trim() : undefined;
+
+// Fase 58 — mensagem única e concreta: quem digita "instagram.com/x" sem
+// esquema precisa saber o que falta, não receber "inválido".
+const urlRedeSocial = z
+  .string()
+  .refine(urlRedeSocialValida, "Informe o endereço completo, começando com https://");
+
+// Checkbox HTML não envia nada quando desmarcado. Qualquer valor
+// presente conta como marcado ("on" é o que o navegador manda); ausente
+// é false, nunca "não mexer".
+const flagExibicao = z.preprocess((v) => v !== undefined && v !== null && v !== "", z.boolean());
 
 const configuracaoSchema = z.object({
   telefone: z.preprocess(vazioParaNulo, z.string().optional()),
@@ -44,10 +56,34 @@ const configuracaoSchema = z.object({
     z.string().email("E-mail inválido.").optional()
   ),
   whatsapp: z.preprocess(vazioParaNulo, z.string().optional()),
-  instagram: z.preprocess(vazioParaNulo, z.string().optional()),
-  facebook: z.preprocess(vazioParaNulo, z.string().optional()),
-  youtube: z.preprocess(vazioParaNulo, z.string().optional()),
-  linkedin: z.preprocess(vazioParaNulo, z.string().optional()),
+  // Fase 58 — as URLs de rede social passaram a ser VALIDADAS. Até aqui
+  // eram `z.string()` livre, e o valor virava `href` no site público de
+  // um tenant: um `javascript:` salvo na configuração seria script
+  // executável para todo visitante. `urlRedeSocialValida` é allowlist de
+  // http/https (ver contatos-publicos.ts), e o site revalida de novo na
+  // leitura — nada gravado antes desta fase vira link por já estar lá.
+  instagram: z.preprocess(vazioParaNulo, urlRedeSocial.optional()),
+  facebook: z.preprocess(vazioParaNulo, urlRedeSocial.optional()),
+  youtube: z.preprocess(vazioParaNulo, urlRedeSocial.optional()),
+  linkedin: z.preprocess(vazioParaNulo, urlRedeSocial.optional()),
+  tiktok: z.preprocess(vazioParaNulo, urlRedeSocial.optional()),
+  // Onde cada canal aparece. Checkbox ausente no FormData significa
+  // DESMARCADO — `flagExibicao` trata isso, em vez de manter o valor
+  // antigo, para desmarcar de fato funcionar ao salvar.
+  telefoneTopo: flagExibicao,
+  telefoneRodape: flagExibicao,
+  whatsappTopo: flagExibicao,
+  whatsappRodape: flagExibicao,
+  instagramTopo: flagExibicao,
+  instagramRodape: flagExibicao,
+  facebookTopo: flagExibicao,
+  facebookRodape: flagExibicao,
+  linkedinTopo: flagExibicao,
+  linkedinRodape: flagExibicao,
+  youtubeTopo: flagExibicao,
+  youtubeRodape: flagExibicao,
+  tiktokTopo: flagExibicao,
+  tiktokRodape: flagExibicao,
   codigoImovelPrefixo: z.preprocess(
     vazioParaNulo,
     z.string().max(10, "Use no máximo 10 caracteres.").optional()
@@ -183,6 +219,21 @@ export async function salvarConfiguracaoContato(
     facebook: campos.facebook ?? null,
     youtube: campos.youtube ?? null,
     linkedin: campos.linkedin ?? null,
+    tiktok: campos.tiktok ?? null,
+    phoneShowHeader: campos.telefoneTopo,
+    phoneShowFooter: campos.telefoneRodape,
+    whatsappShowHeader: campos.whatsappTopo,
+    whatsappShowFooter: campos.whatsappRodape,
+    instagramShowHeader: campos.instagramTopo,
+    instagramShowFooter: campos.instagramRodape,
+    facebookShowHeader: campos.facebookTopo,
+    facebookShowFooter: campos.facebookRodape,
+    linkedinShowHeader: campos.linkedinTopo,
+    linkedinShowFooter: campos.linkedinRodape,
+    youtubeShowHeader: campos.youtubeTopo,
+    youtubeShowFooter: campos.youtubeRodape,
+    tiktokShowHeader: campos.tiktokTopo,
+    tiktokShowFooter: campos.tiktokRodape,
     propertyCodePrefix: campos.codigoImovelPrefixo?.toUpperCase() ?? null,
     logoUrl: campos.logo ?? null,
     logoHeight: alturaLogo(campos.logoAltura),
