@@ -3,6 +3,7 @@ import { CapturaAtribuicao } from "@/components/analytics/CapturaAtribuicao";
 import type { Metadata } from "next";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { canaisDoLocal, horarioDoLocal } from "@/lib/contatos-publicos";
+import { estiloDaBarraTopo } from "@/lib/branding/cor-barra-topo";
 import { buscarBranding } from "@/lib/branding";
 import { resolverTemaEfetivo } from "@/lib/branding/temas";
 import { getOrganizationBySlug } from "@/lib/tenant";
@@ -168,6 +169,8 @@ export default async function PublicLayout({
         // duas pontas.
         canaisTopo={canaisDoLocal(config.canais, "topo", { nomeOrganizacao: nomePublico })}
         horarioTopo={horarioDoLocal(config.horario, "topo")}
+        // null = sem personalização; a barra mantém o visual de sempre.
+        estiloBarraTopo={estiloDaBarraTopo(config.corBarraTopo)}
       />
       <main className="flex-1">{children}</main>
       <SiteFooter

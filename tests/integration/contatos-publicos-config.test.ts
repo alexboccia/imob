@@ -17,6 +17,7 @@ import { auth } from "@/lib/auth";
 import { salvarConfiguracaoContato } from "@/app/app/configuracoes/actions";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { canaisDoLocal, horarioDoTopo, horarioDoLocal } from "@/lib/contatos-publicos";
+import { estiloDaBarraTopo } from "@/lib/branding/cor-barra-topo";
 
 // =======================================================================
 // Contatos e redes sociais configuráveis (Fase 58) — contra o banco
@@ -599,5 +600,116 @@ describe("horário: topo e rodapé independentes", () => {
       formulario({ horarioAtendimento: TEXTO, horarioAtendimentoRodape: "on" })
     );
     expect(r.success).toBe(false);
+  });
+});
+
+// =======================================================================
+// Fase 58.5 — cor de fundo da barra superior
+// =======================================================================
+
+describe("cor de fundo da barra superior", () => {
+  test("tenant que nunca configurou fica sem personalização", async () => {
+    const c = await novoCenario();
+    const config = await buscarConfiguracaoContato(c.organization.id);
+    expect(config.corBarraTopo).toBeNull();
+    // null => a barra mantém o visual de sempre.
+    expect(estiloDaBarraTopo(config.corBarraTopo)).toBeNull();
+  });
+
+  test("persiste a cor escolhida, normalizada", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+    const r = await salvar(formulario({ corBarraTopo: "#F5F5F5" }));
+    expect(r.success).toBe(true);
+
+    const settings = await prisma.organizationSettings.findFirstOrThrow({
+      where: { organizationId: c.organization.id },
+    });
+    expect(settings.topBarBackgroundColor).toBe("#f5f5f5");
+
+    const config = await buscarConfiguracaoContato(c.organization.id);
+    expect(estiloDaBarraTopo(config.corBarraTopo)?.fundo).toBe("#f5f5f5");
+  });
+
+  test("campo vazio remove a personalização — volta a null, não ao hex do padrão", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+    await salvar(formulario({ corBarraTopo: "#0f172a" }));
+    await salvar(formulario({ corBarraTopo: "" }));
+
+    const settings = await prisma.organizationSettings.findFirstOrThrow({
+      where: { organizationId: c.organization.id },
+    });
+    expect(settings.topBarBackgroundColor).toBeNull();
+    const config = await buscarConfiguracaoContato(c.organization.id);
+    expect(estiloDaBarraTopo(config.corBarraTopo)).toBeNull();
+  });
+
+  const invalidos = [
+    "#fff",
+    "white",
+    "rgb(0,0,0)",
+    "url(https://exemplo.test/x.png)",
+    "var(--primary)",
+    "linear-gradient(red, blue)",
+    "red; position: fixed",
+    "#ffffff; background-image: url(x)",
+  ];
+  for (const valor of invalidos) {
+    test(`recusa ${valor.slice(0, 28)} e não grava nada`, async () => {
+      const c = await novoCenario();
+      autenticarComo(c);
+      const r = await salvar(formulario({ corBarraTopo: valor }));
+      expect(r.success).toBe(false);
+
+      const settings = await prisma.organizationSettings.findFirst({
+        where: { organizationId: c.organization.id },
+      });
+      expect(settings?.topBarBackgroundColor ?? null).toBeNull();
+    });
+  }
+
+  test("BROKER não altera a cor", async () => {
+    const c = await novoCenario();
+    await prisma.organizationMember.update({
+      where: { id: c.membro.id, organizationId: c.organization.id },
+      data: { role: "BROKER" },
+    });
+    autenticarComo(c, "BROKER");
+    const r = await salvar(formulario({ corBarraTopo: "#0f172a" }));
+    expect(r.success).toBe(false);
+  });
+
+  test("a cor de uma organização não aparece na outra", async () => {
+    const a = await novoCenario();
+    const b = await novoCenario();
+    autenticarComo(b);
+    await salvar(formulario({ corBarraTopo: "#0f172a" }));
+
+    const configA = await buscarConfiguracaoContato(a.organization.id);
+    expect(configA.corBarraTopo).toBeNull();
+    expect(estiloDaBarraTopo(configA.corBarraTopo)).toBeNull();
+
+    const configB = await buscarConfiguracaoContato(b.organization.id);
+    expect(estiloDaBarraTopo(configB.corBarraTopo)?.fundo).toBe("#0f172a");
+  });
+
+  test("gravar a cor não mexe em canais nem horário", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+    await salvar(
+      formulario({
+        telefone: "(11) 3888-3000",
+        telefoneTopo: "on",
+        horarioAtendimento: "Seg a Sex",
+        horarioAtendimentoTopo: "on",
+        corBarraTopo: "#0f172a",
+      })
+    );
+
+    const config = await buscarConfiguracaoContato(c.organization.id);
+    expect(canaisDoLocal(config.canais, "topo").map((x) => x.chave)).toEqual(["telefone"]);
+    expect(horarioDoLocal(config.horario, "topo")).toBe("Seg a Sex");
+    expect(estiloDaBarraTopo(config.corBarraTopo)?.fundo).toBe("#0f172a");
   });
 });

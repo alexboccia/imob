@@ -816,3 +816,168 @@ test.describe("configurar o horário pela tela e ver no site", () => {
     await expect(page.locator("[data-horario-topo]")).toBeVisible();
   });
 });
+
+// =======================================================================
+// Cor de fundo da barra superior (Fase 58.5)
+// =======================================================================
+
+/** Cor computada de um elemento, em rgb. */
+async function corDe(page: Page, seletor: string, prop: "backgroundColor" | "color") {
+  return page
+    .locator(seletor)
+    .first()
+    .evaluate((el, p) => getComputedStyle(el)[p as "color"], prop);
+}
+
+/** Contraste WCAG entre duas cores rgb() lidas do navegador. */
+function contraste(a: string, b: string): number {
+  const canais = (c: string) =>
+    c.match(/\d+(\.\d+)?/g)!.slice(0, 3).map((n) => {
+      const v = Number(n) / 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    });
+  const lum = (c: string) => {
+    const [r, g, bl] = canais(c);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+test.describe("personalizar a cor da barra", () => {
+  const ESCURO = "#0f172a";
+  const CLARO = "#f5f5f5";
+
+  async function definirCor(page: Page, hex: string) {
+    await page.goto("/app/configuracoes");
+    await page.locator("#corBarraTopo").fill(hex);
+    await page.getByRole("button", { name: /Salvar alterações/ }).click();
+    await expect(page.locator("[data-feedback-salvar]")).toBeVisible();
+  }
+
+  async function restaurarPadrao(page: Page) {
+    await page.goto("/app/configuracoes");
+    // Sem personalização, o botão fica desabilitado — não há o que
+    // restaurar, e insistir no clique só trava a limpeza.
+    if ((await page.locator("#corBarraTopo").inputValue()) === "") return;
+    await page.locator("[data-restaurar-cor]").click();
+    await expect(page.locator("#corBarraTopo")).toHaveValue("");
+    await page.getByRole("button", { name: /Salvar alterações/ }).click();
+    await expect(page.locator("[data-feedback-salvar]")).toBeVisible();
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1200 });
+    await login(page, ORG_CONTATOS);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await restaurarPadrao(page);
+  });
+
+  test("sem personalização, a barra usa o visual padrão", async ({ page }) => {
+    await page.goto(BASE);
+    await expect(page.locator("[data-barra-personalizada]")).toHaveCount(0);
+    await expect(barra(page)).toBeVisible();
+  });
+
+  test("o seletor visual e o campo HEX representam a mesma configuração", async ({ page }) => {
+    await page.goto("/app/configuracoes");
+    await page.locator("#corBarraTopo").fill(ESCURO);
+    // O seletor nativo acompanha o texto.
+    await expect(page.locator("[data-seletor-cor]")).toHaveValue(ESCURO);
+    // E a amostra mostra as cores que a barra usaria.
+    await expect(page.locator("[data-previa-cor]")).toBeVisible();
+  });
+
+  test("HEX inválido é sinalizado na tela, sem amostra", async ({ page }) => {
+    await page.goto("/app/configuracoes");
+    await page.locator("#corBarraTopo").fill("#zzz");
+    await expect(page.locator("[data-erro-cor]")).toBeVisible();
+    await expect(page.locator("[data-previa-cor]")).toHaveCount(0);
+  });
+
+  for (const [nome, hex] of [
+    ["escura", ESCURO],
+    ["clara", CLARO],
+    ["intermediária", "#2563eb"],
+  ] as const) {
+    test(`cor ${nome}: persiste, aplica na barra e mantém tudo legível`, async ({ page }) => {
+      await definirCor(page, hex);
+
+      // Persistiu de verdade.
+      await page.goto("/app/configuracoes");
+      await expect(page.locator("#corBarraTopo")).toHaveValue(hex);
+
+      await page.goto(BASE);
+      await expect(page.locator("[data-barra-personalizada]")).toHaveCount(1);
+
+      const fundo = await corDe(page, "[data-barra-contato-topo]", "backgroundColor");
+      const conteudo = await corDe(page, "[data-horario-topo]", "color");
+      expect(contraste(fundo, conteudo), `horário em ${hex}`).toBeGreaterThanOrEqual(4.5);
+
+      // Redes, telefone e separador acompanham a mesma cor de conteúdo.
+      for (const sel of ["[data-canal-topo='instagram']", "[data-canal-topo='telefone']"]) {
+        const c = await corDe(page, sel, "color");
+        expect(contraste(fundo, c), `${sel} em ${hex}`).toBeGreaterThanOrEqual(4.5);
+      }
+      const sep = await corDe(page, "[data-separador-topo]", "backgroundColor");
+      expect(sep, "separador sem cor própria").not.toBe(fundo);
+
+      // WhatsApp continua visível (regra de objeto gráfico: 3:1).
+      const whats = await corDe(page, "[data-canal-topo='whatsapp'] svg", "color");
+      expect(contraste(fundo, whats), `WhatsApp em ${hex}`).toBeGreaterThanOrEqual(3);
+
+      // A composição da 58.4 segue intacta.
+      await expect(page.locator("[data-grupo-direito]")).toHaveCount(1);
+      await expect(page.locator("[data-separador-topo]:visible")).toHaveCount(2);
+    });
+  }
+
+  test("a personalização não vaza para o cabeçalho nem para o rodapé", async ({ page }) => {
+    await definirCor(page, ESCURO);
+    await page.goto(BASE);
+
+    const fundoBarra = await corDe(page, "[data-barra-contato-topo]", "backgroundColor");
+    const fundoHeaderPrincipal = await page.evaluate(() => {
+      const logo = document.querySelector("[data-logo-site]")!;
+      return getComputedStyle(logo.closest("div")!).backgroundColor;
+    });
+    expect(fundoHeaderPrincipal).not.toBe(fundoBarra);
+
+    const fundoRodape = await corDe(page, "footer", "backgroundColor");
+    expect(fundoRodape).not.toBe(fundoBarra);
+  });
+
+  test("restaurar padrão devolve a barra ao visual de sempre", async ({ page }) => {
+    await definirCor(page, ESCURO);
+    await page.goto(BASE);
+    await expect(page.locator("[data-barra-personalizada]")).toHaveCount(1);
+
+    await restaurarPadrao(page);
+    await page.goto(BASE);
+    await expect(page.locator("[data-barra-personalizada]")).toHaveCount(0);
+    // A barra continua lá — o que sumiu foi só a personalização.
+    await expect(barra(page)).toBeVisible();
+    await expect(page.locator("[data-horario-topo]")).toBeVisible();
+  });
+
+  test("a cor acompanha a barra em todas as larguras", async ({ page }) => {
+    await definirCor(page, ESCURO);
+    for (const largura of [320, 390, 768, 1024, 1280, 1440]) {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.goto(BASE);
+      await expect(page.locator("[data-barra-personalizada]")).toHaveCount(1);
+      const fundo = await corDe(page, "[data-barra-contato-topo]", "backgroundColor");
+      const conteudo = await corDe(page, "[data-horario-topo]", "color");
+      expect(contraste(fundo, conteudo), `contraste @ ${largura}`).toBeGreaterThanOrEqual(4.5);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+        ),
+        `estouro @ ${largura}`
+      ).toBe(true);
+    }
+    await page.setViewportSize({ width: 1280, height: 1200 });
+  });
+});

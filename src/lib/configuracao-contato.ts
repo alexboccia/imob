@@ -67,6 +67,9 @@ async function buscarConfiguracaoContatoSemCache(organizationId: string) {
       topo: settings?.businessHoursShowHeader ?? false,
       rodape: settings?.businessHoursShowFooter ?? false,
     } satisfies ConfiguracaoHorario,
+    // Fase 58.5 — cor de fundo da barra superior. Hex cru; quem decide
+    // fundo/conteúdo/WhatsApp é estiloDaBarraTopo, na renderização.
+    corBarraTopo: settings?.topBarBackgroundColor ?? null,
     codigoImovelPrefixo: settings?.propertyCodePrefix ?? "",
     logo: settings?.logoUrl ?? null,
     logoAltura: settings?.logoHeight ?? LOGO_ALTURA_PADRAO,

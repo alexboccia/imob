@@ -11,6 +11,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ErroCampo } from "@/components/admin/ErroCampo";
+import { CorBarraTopo } from "@/components/admin/CorBarraTopo";
 import {
   CANAIS_PUBLICOS,
   LIMITE_HORARIO_ATENDIMENTO,
@@ -51,6 +52,7 @@ type ConfiguracaoInicial = {
   tiktok: string;
   canais: ConfiguracaoCanais;
   horario: ConfiguracaoHorario;
+  corBarraTopo: string | null;
   codigoImovelPrefixo: string;
   logo: string | null;
   logoAltura: number;
@@ -291,6 +293,8 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
               </label>
             </div>
           </div>
+
+          <CorBarraTopo corInicial={config.corBarraTopo} />
 
           <div className="min-w-0 space-y-1.5 border-t pt-4">
             <Label htmlFor="email">E-mail</Label>

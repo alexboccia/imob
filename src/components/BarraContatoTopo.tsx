@@ -10,6 +10,7 @@ import { IconeTelefone, IconeWhatsApp } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { separadoresDaBarra } from "@/lib/contatos-publicos";
 import type { CanalPublico, ChaveCanal } from "@/lib/contatos-publicos";
+import type { EstiloBarraTopo } from "@/lib/branding/cor-barra-topo";
 
 // =======================================================================
 // Barra superior de contato (Fase 58, recomposta na 58.2)
@@ -38,9 +39,16 @@ import type { CanalPublico, ChaveCanal } from "@/lib/contatos-publicos";
 // quando existe conteúdo dos dois lados dele — ver `separadorAntesDe*`
 // abaixo, onde a regra inteira mora.
 //
-// VISUAL: discreta de propósito — fundo `muted`, texto pequeno, uma
-// linha. Todas as cores saem dos tokens do tenant, com UMA exceção
-// documentada: o ícone do WhatsApp (ver abaixo).
+// VISUAL: discreta de propósito — texto pequeno, uma linha. Sem
+// personalização (o padrão), as cores saem dos tokens do tenant:
+// `bg-muted`/`text-muted-foreground`, exatamente como sempre foi.
+//
+// COM personalização (Fase 58.5), o fundo é o hex escolhido pela
+// organização e o conteúdo é DERIVADO dele por contraste — nunca uma
+// segunda cor escolhida à mão, que permitiria salvar texto escuro sobre
+// fundo escuro. Os valores entram como propriedades de estilo já
+// validadas como "#RRGGBB"; nada de classe Tailwind montada com texto do
+// banco, nada de CSS injetado. Ver estiloDaBarraTopo.
 //
 // MOBILE: as redes somem abaixo de sm (não cabem junto de horário e
 // telefone em 320px) e reaparecem no menu mobile, que o SiteHeader
@@ -57,7 +65,15 @@ const ICONES: Record<ChaveCanal, (props: { className?: string }) => React.ReactE
   tiktok: IconeTiktok,
 };
 
-function Item({ canal, somenteIcone }: { canal: CanalPublico; somenteIcone: boolean }) {
+function Item({
+  canal,
+  somenteIcone,
+  estilo,
+}: {
+  canal: CanalPublico;
+  somenteIcone: boolean;
+  estilo: EstiloBarraTopo | null;
+}) {
   const Icone = ICONES[canal.chave];
   // O verde do WhatsApp é a ÚNICA cor desta barra que não vem do tema do
   // tenant, e é intencional: ele comunica de qual serviço se trata antes
@@ -79,12 +95,21 @@ function Item({ canal, somenteIcone }: { canal: CanalPublico; somenteIcone: bool
       aria-label={somenteIcone ? canal.rotulo : undefined}
       className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded px-1 py-1 transition-colors hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
     >
-      <Icone
+      {/* A cor entra pelo `span` porque os ícones do projeto recebem só
+          `className` e pintam com `currentColor` — assim nenhum deles
+          precisa aprender uma prop de estilo. Com fundo personalizado, o
+          verde do WhatsApp é medido contra esse fundo: continua verde
+          quando dá para distinguir e cede ao conteúdo quando não daria.
+          O token GLOBAL segue intocado — a decisão é só desta barra. */}
+      <span
         className={cn(
-          "size-4 shrink-0",
-          ehWhatsApp && "text-whatsapp-brand"
+          "flex shrink-0 items-center",
+          ehWhatsApp && !estilo && "text-whatsapp-brand"
         )}
-      />
+        style={ehWhatsApp && estilo ? { color: estilo.whatsapp } : undefined}
+      >
+        <Icone className="size-4 shrink-0" />
+      </span>
       {somenteIcone ? null : <span className="whitespace-nowrap">{canal.texto}</span>}
     </a>
   );
@@ -93,10 +118,13 @@ function Item({ canal, somenteIcone }: { canal: CanalPublico; somenteIcone: bool
 export function BarraContatoTopo({
   canais,
   horario,
+  estilo = null,
 }: {
   canais: CanalPublico[];
   /** Texto já resolvido (preenchido E habilitado) ou null. */
   horario?: string | null;
+  /** Cores resolvidas, ou null para manter o visual padrão. */
+  estilo?: EstiloBarraTopo | null;
 }) {
   const contatos = canais.filter((c) => c.tipo !== "REDE");
   const redes = canais.filter((c) => c.tipo === "REDE");
@@ -112,7 +140,14 @@ export function BarraContatoTopo({
   });
 
   return (
-    <div data-barra-contato-topo className="border-b bg-muted text-muted-foreground">
+    <div
+      data-barra-contato-topo
+      // Uma cor configurada NÃO faz a barra existir: a guarda acima
+      // continua sendo o conteúdo. Fundo sem conteúdo não vira faixa.
+      data-barra-personalizada={estilo ? "" : undefined}
+      className={cn("border-b", !estilo && "bg-muted text-muted-foreground")}
+      style={estilo ? { backgroundColor: estilo.fundo, color: estilo.conteudo } : undefined}
+    >
       {/* justify-end: o bloco inteiro encosta na direita e o espaço
           flexível fica à esquerda dele. */}
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-y-1 px-4 py-1.5 text-sm">
@@ -133,7 +168,7 @@ export function BarraContatoTopo({
           {redes.length > 0 && (
             <div className="hidden shrink-0 items-center gap-1 sm:flex">
               {redes.map((canal) => (
-                <Item key={canal.chave} canal={canal} somenteIcone />
+                <Item key={canal.chave} canal={canal} somenteIcone estilo={estilo} />
               ))}
             </div>
           )}
@@ -145,7 +180,7 @@ export function BarraContatoTopo({
           {contatos.length > 0 && (
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
               {contatos.map((canal) => (
-                <Item key={canal.chave} canal={canal} somenteIcone={false} />
+                <Item key={canal.chave} canal={canal} somenteIcone={false} estilo={estilo} />
               ))}
             </div>
           )}

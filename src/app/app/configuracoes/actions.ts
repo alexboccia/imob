@@ -30,6 +30,8 @@ import { fusoValido } from "@/lib/fuso-horario";
 import { CATALOGO_TEMAS, THEME_ID_CUSTOMIZADO } from "@/lib/branding/temas";
 import { CATALOGO_APARENCIA_RODAPE } from "@/lib/branding/aparencia-rodape";
 import { validarFaviconUrl, validarUrlMidiaOrganizacao } from "@/lib/branding/favicon-url";
+import { hexValido } from "@/lib/branding/oklch-color";
+import { normalizarCorBarraTopo } from "@/lib/branding/cor-barra-topo";
 import {
   urlRedeSocialValida,
   normalizarHorario,
@@ -105,6 +107,17 @@ const configuracaoSchema = z.object({
   ),
   horarioAtendimentoTopo: flagExibicao,
   horarioAtendimentoRodape: flagExibicao,
+  // Fase 58.5 — cor de fundo da barra superior. Vazio => null => visual
+  // padrão (é assim que "Usar cor padrão" limpa a personalização, em vez
+  // de gravar o hex do padrão atual). Validado pela MESMA regra do resto
+  // do branding, que só aceita "#RRGGBB" — nada de CSS livre.
+  corBarraTopo: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() ? v.trim() : undefined),
+    z
+      .string()
+      .refine(hexValido, "Use uma cor no formato #RRGGBB.")
+      .optional()
+  ),
   codigoImovelPrefixo: z.preprocess(
     vazioParaNulo,
     z.string().max(10, "Use no máximo 10 caracteres.").optional()
@@ -258,6 +271,7 @@ export async function salvarConfiguracaoContato(
     businessHours: campos.horarioAtendimento ?? null,
     businessHoursShowHeader: campos.horarioAtendimentoTopo,
     businessHoursShowFooter: campos.horarioAtendimentoRodape,
+    topBarBackgroundColor: normalizarCorBarraTopo(campos.corBarraTopo),
     propertyCodePrefix: campos.codigoImovelPrefixo?.toUpperCase() ?? null,
     logoUrl: campos.logo ?? null,
     logoHeight: alturaLogo(campos.logoAltura),

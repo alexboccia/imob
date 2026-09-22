@@ -2063,6 +2063,19 @@ model OrganizationSettings {
   // marcar a caixa.
   businessHoursShowFooter Boolean @default(false)
 
+  // Fase 58.5 — cor de fundo da FAIXA DE CONTATOS do topo, só dela.
+  // Nunca o cabeçalho com logotipo e menu, nunca o rodapé.
+  //
+  // "#RRGGBB" validado pela mesma função do resto do branding
+  // (hexValido) — nunca CSS livre. null é o valor de todo tenant
+  // existente e significa "mantenha o visual de sempre": sem backfill,
+  // sem cor gravada por padrão, nada muda de aparência no deploy.
+  //
+  // A cor do CONTEÚDO não é guardada: ela é derivada do fundo por
+  // contraste (ver estiloDaBarraTopo), para não existir a combinação
+  // "fundo escuro com texto escuro" salva no banco.
+  topBarBackgroundColor String?
+
   propertyCodePrefix String?
   logoUrl            String?
   logoHeight         Int?

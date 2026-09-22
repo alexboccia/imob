@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { larguraCaixaLogo } from "@/lib/logo";
 import { BarraContatoTopo } from "@/components/BarraContatoTopo";
 import type { CanalPublico } from "@/lib/contatos-publicos";
+import type { EstiloBarraTopo } from "@/lib/branding/cor-barra-topo";
 import { useFavoritos } from "@/lib/favoritos-store";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +73,7 @@ export function SiteHeader({
   canaisTopo = [],
   // Fase 58.2 — horário de atendimento já resolvido (texto ou null).
   horarioTopo = null,
+  estiloBarraTopo = null,
 }: {
   nome: string;
   logo?: string | null;
@@ -81,6 +83,7 @@ export function SiteHeader({
   orgSlug: string;
   canaisTopo?: CanalPublico[];
   horarioTopo?: string | null;
+  estiloBarraTopo?: EstiloBarraTopo | null;
 }) {
   const [aberto, setAberto] = useState(false);
   const altura = logoAltura && logoAltura > 0 ? logoAltura : 48;
@@ -129,7 +132,7 @@ export function SiteHeader({
           incluir a barra: quem gruda logo abaixo do cabeçalho (os
           filtros da listagem) continua no lugar certo, sem mudança. */}
       {(canaisTopo.length > 0 || horarioTopo) && (
-        <BarraContatoTopo canais={canaisTopo} horario={horarioTopo} />
+        <BarraContatoTopo canais={canaisTopo} horario={horarioTopo} estilo={estiloBarraTopo} />
       )}
       {/* Fase 49 — gap + min-w-0 no logo: a caixa do logo tem largura
           fixa (até 280px) e, em 320px, ela mais o botão do menu passavam
