@@ -1341,11 +1341,12 @@ async function main() {
     title: "Apartamento Contatos Publicos",
     neighborhood: "Centro",
   });
-  await prisma.organizationSettings.upsert({
-    where: { organizationId: orgContatos.organization.id },
-    update: {},
-    create: {
-      organizationId: orgContatos.organization.id,
+  // O seed é AUTORITATIVO: a mesma configuração vai em `update` e em
+  // `create`. Com `update: {}` a linha só era populada na primeira
+  // execução, e todo campo acrescentado depois (foi o que aconteceu com
+  // o horário na Fase 58.2) nunca chegava a uma base já semeada — o
+  // spec passava em máquina nova e falhava na suíte completa.
+  const configContatosE2E = {
       email: "contato@contatos.e2e.test",
       // Telefone: nos DOIS lugares.
       phone: "(11) 3888-3000",
@@ -1377,7 +1378,14 @@ async function main() {
       tiktok: "https://tiktok.com/@contatos-e2e",
       tiktokShowHeader: true,
       tiktokShowFooter: false,
-    },
+      // Fase 58.2 — horário de atendimento, habilitado para o topo.
+      businessHours: "Segunda a sexta, das 9h as 18h",
+      businessHoursShowHeader: true,
+  } as const;
+  await prisma.organizationSettings.upsert({
+    where: { organizationId: orgContatos.organization.id },
+    update: configContatosE2E,
+    create: { organizationId: orgContatos.organization.id, ...configContatosE2E },
   });
 
   const hashVisitante = (n: number) => String(n).padStart(2, "0").repeat(16);

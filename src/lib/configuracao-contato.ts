@@ -2,7 +2,7 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { LOGO_ALTURA_PADRAO, LOGO_RODAPE_ALTURA_PADRAO } from "@/lib/logo";
 import { tagConfiguracao } from "@/lib/cache-tags";
-import type { ConfiguracaoCanais } from "@/lib/contatos-publicos";
+import type { ConfiguracaoCanais, ConfiguracaoHorario } from "@/lib/contatos-publicos";
 
 async function buscarConfiguracaoContatoSemCache(organizationId: string) {
   const settings = await prisma.organizationSettings.findFirst({ where: { organizationId } });
@@ -59,6 +59,13 @@ async function buscarConfiguracaoContatoSemCache(organizationId: string) {
         rodape: settings?.tiktokShowFooter ?? true,
       },
     } satisfies ConfiguracaoCanais,
+    // Fase 58.2 — horário de atendimento. Fora de `canais` porque não é
+    // um canal (ver contatos-publicos.ts): não tem link nem ícone de
+    // marca, e só existe no topo.
+    horario: {
+      valor: settings?.businessHours ?? "",
+      topo: settings?.businessHoursShowHeader ?? false,
+    } satisfies ConfiguracaoHorario,
     codigoImovelPrefixo: settings?.propertyCodePrefix ?? "",
     logo: settings?.logoUrl ?? null,
     logoAltura: settings?.logoHeight ?? LOGO_ALTURA_PADRAO,

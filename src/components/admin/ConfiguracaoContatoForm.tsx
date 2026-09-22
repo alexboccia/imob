@@ -11,7 +11,13 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ErroCampo } from "@/components/admin/ErroCampo";
-import { CANAIS_PUBLICOS, type ChaveCanal, type ConfiguracaoCanais } from "@/lib/contatos-publicos";
+import {
+  CANAIS_PUBLICOS,
+  LIMITE_HORARIO_ATENDIMENTO,
+  type ChaveCanal,
+  type ConfiguracaoCanais,
+  type ConfiguracaoHorario,
+} from "@/lib/contatos-publicos";
 import { LogoUpload } from "@/components/admin/LogoUpload";
 import { LogoRodapeUpload } from "@/components/admin/LogoRodapeUpload";
 import { FaviconUpload } from "@/components/admin/FaviconUpload";
@@ -44,6 +50,7 @@ type ConfiguracaoInicial = {
   linkedin: string;
   tiktok: string;
   canais: ConfiguracaoCanais;
+  horario: ConfiguracaoHorario;
   codigoImovelPrefixo: string;
   logo: string | null;
   logoAltura: number;
@@ -139,7 +146,9 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           site, não um canal exibido no topo ou no rodapé. */}
       <Card className="min-w-0">
         <CardHeader>
-          <CardTitle className="min-w-0 break-words">Contatos e redes sociais</CardTitle>
+          <CardTitle className="min-w-0 break-words">
+            Contatos, redes sociais e atendimento
+          </CardTitle>
           <CardDescription className="min-w-0 break-words">
             Escolha onde cada contato ou rede social será exibido no site público. Campos não
             preenchidos não serão exibidos.
@@ -201,6 +210,39 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
               </div>
             );
           })}
+
+          {/* Fase 58.2 — horário de atendimento. Fica junto dos demais
+              porque é configuração do MESMO lugar (a barra superior),
+              mas sem par de caixas: só existe no topo, e inventar um
+              "Exibir no rodapé" criaria uma opção que ninguém pediu. */}
+          <div
+            data-canal-config="horario"
+            className="min-w-0 space-y-2 border-t pt-4 sm:flex sm:items-start sm:gap-4 sm:space-y-0"
+          >
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Label htmlFor="horarioAtendimento">Horário de atendimento</Label>
+              <Input
+                id="horarioAtendimento"
+                name="horarioAtendimento"
+                defaultValue={config.horario.valor}
+                maxLength={LIMITE_HORARIO_ATENDIMENTO}
+                placeholder="Segunda a sexta, das 9h às 18h"
+              />
+              <ErroCampo erros={estado.fieldErrors?.horarioAtendimento} />
+            </div>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 sm:shrink-0 sm:pt-8">
+              <label
+                className="flex cursor-pointer items-center gap-2 text-sm"
+                data-flag="horario-topo"
+              >
+                <Checkbox
+                  name="horarioAtendimentoTopo"
+                  defaultChecked={config.horario.topo}
+                />
+                Topo
+              </label>
+            </div>
+          </div>
 
           <div className="min-w-0 space-y-1.5 border-t pt-4">
             <Label htmlFor="email">E-mail</Label>

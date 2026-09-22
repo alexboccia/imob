@@ -18,6 +18,51 @@ import { linkWhatsApp, temWhatsApp } from "@/lib/whatsapp";
 // alimentavam o rodapé e a Home. O que a Fase 58 acrescenta é (a) TikTok,
 // que faltava no conjunto, e (b) a decisão de ONDE cada um aparece.
 
+// -----------------------------------------------------------------------
+// Horário de atendimento (Fase 58.2)
+// -----------------------------------------------------------------------
+// Fica NESTE módulo, junto dos canais, porque compartilha exatamente a
+// mesma regra de exibição — e deliberadamente FORA de CANAIS_PUBLICOS,
+// porque não é um destino: não tem href, não é clicável, não tem ícone
+// de marca. É uma frase.
+//
+// 120 caracteres: a barra superior é uma linha só, dividida com redes,
+// telefone e WhatsApp. "Atendimento de segunda a sábado, das 8h às 18h"
+// tem 47; o dobro disso ainda cabe, e o triplo empurraria o resto para
+// fora da linha em telas médias.
+export const LIMITE_HORARIO_ATENDIMENTO = 120;
+
+export type ConfiguracaoHorario = { valor: string; topo: boolean };
+
+/**
+ * Normaliza o horário para gravar: apara, colapsa espaços e devolve null
+ * para vazio — nunca "" (que o site teria de tratar como preenchido).
+ *
+ * NÃO aceita marcação: o texto é renderizado como texto pelo React, que
+ * já escapa tudo, mas um valor com `<` guardado no banco continuaria
+ * sendo lixo aparecendo na barra. Recusar na entrada é mais honesto que
+ * exibir `<b>9h</b>` literalmente para o visitante.
+ */
+export function normalizarHorario(valor: string | null | undefined): string | null {
+  if (typeof valor !== "string") return null;
+  const limpo = valor.trim().replace(/\s+/g, " ");
+  return limpo || null;
+}
+
+export function horarioTemMarcacao(valor: string | null | undefined): boolean {
+  return typeof valor === "string" && /[<>]/.test(valor);
+}
+
+/**
+ * Mesma regra dos canais: aparece se tiver texto E estiver habilitado
+ * para o topo. Devolve null — e não "" — para quem renderiza não
+ * precisar decidir o que é vazio.
+ */
+export function horarioDoTopo(horario: ConfiguracaoHorario | undefined): string | null {
+  if (!horario || !horario.topo) return null;
+  return normalizarHorario(horario.valor);
+}
+
 /** Um canal é um contato (tel/WhatsApp) ou uma rede social. */
 export type TipoCanal = "TELEFONE" | "WHATSAPP" | "REDE";
 

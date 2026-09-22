@@ -16,7 +16,7 @@ vi.mock("next/cache", () => ({
 import { auth } from "@/lib/auth";
 import { salvarConfiguracaoContato } from "@/app/app/configuracoes/actions";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
-import { canaisDoLocal } from "@/lib/contatos-publicos";
+import { canaisDoLocal, horarioDoTopo } from "@/lib/contatos-publicos";
 
 // =======================================================================
 // Contatos e redes sociais configuráveis (Fase 58) — contra o banco
@@ -272,5 +272,152 @@ describe("autorização e isolamento", () => {
 
     const configB = await buscarConfiguracaoContato(b.organization.id);
     expect(configB.canais.instagram.valor).toBe("https://instagram.com/da-b");
+  });
+});
+
+describe("horário de atendimento (Fase 58.2)", () => {
+  test("persiste valor e flag, e o site resolve o texto", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+
+    const r = await salvar(
+      formulario({
+        horarioAtendimento: "Segunda a sexta, das 9h às 18h",
+        horarioAtendimentoTopo: "on",
+      })
+    );
+    expect(r.success).toBe(true);
+
+    const config = await buscarConfiguracaoContato(c.organization.id);
+    expect(config.horario).toEqual({ valor: "Segunda a sexta, das 9h às 18h", topo: true });
+    expect(horarioDoTopo(config.horario)).toBe("Segunda a sexta, das 9h às 18h");
+  });
+
+  test("salvo sem marcar Topo fica guardado, mas não aparece", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+    await salvar(formulario({ horarioAtendimento: "Seg a Sex, 9h às 18h" }));
+
+    const config = await buscarConfiguracaoContato(c.organization.id);
+    expect(config.horario.valor).toBe("Seg a Sex, 9h às 18h");
+    expect(config.horario.topo).toBe(false);
+    expect(horarioDoTopo(config.horario)).toBeNull();
+  });
+
+  test("desmarcar Topo depois desliga de fato", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+    await salvar(
+      formulario({ horarioAtendimento: "Seg a Sex", horarioAtendimentoTopo: "on" })
+    );
+    await salvar(formulario({ horarioAtendimento: "Seg a Sex" }));
+
+    const config = await buscarConfiguracaoContato(c.organization.id);
+    expect(config.horario.topo).toBe(false);
+  });
+
+  test("espaços são aparados na gravação; só espaços vira null", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+
+    await salvar(formulario({ horarioAtendimento: "   Seg  a   Sex   " }));
+    let settings = await prisma.organizationSettings.findFirstOrThrow({
+      where: { organizationId: c.organization.id },
+    });
+    expect(settings.businessHours).toBe("Seg a Sex");
+
+    await salvar(formulario({ horarioAtendimento: "    " }));
+    settings = await prisma.organizationSettings.findFirstOrThrow({
+      where: { organizationId: c.organization.id },
+    });
+    expect(settings.businessHours).toBeNull();
+  });
+
+  test("texto longo demais é recusado e nada é gravado", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+
+    const r = await salvar(formulario({ horarioAtendimento: "a".repeat(200) }));
+    expect(r.success).toBe(false);
+    const settings = await prisma.organizationSettings.findFirst({
+      where: { organizationId: c.organization.id },
+    });
+    expect(settings?.businessHours ?? null).toBeNull();
+  });
+
+  test("marcação é recusada — nada de HTML guardado", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+
+    for (const perigoso of ["<b>9h</b>", "<script>alert(1)</script>", "9h <img src=x>"]) {
+      const r = await salvar(formulario({ horarioAtendimento: perigoso }));
+      expect(r.success).toBe(false);
+    }
+    const settings = await prisma.organizationSettings.findFirst({
+      where: { organizationId: c.organization.id },
+    });
+    expect(settings?.businessHours ?? null).toBeNull();
+  });
+
+  test("tenant que nunca configurou não tem horário no topo", async () => {
+    const c = await novoCenario();
+    const config = await buscarConfiguracaoContato(c.organization.id);
+    expect(config.horario).toEqual({ valor: "", topo: false });
+    expect(horarioDoTopo(config.horario)).toBeNull();
+  });
+
+  test("BROKER não altera o horário", async () => {
+    const c = await novoCenario();
+    await prisma.organizationMember.update({
+      where: { id: c.membro.id, organizationId: c.organization.id },
+      data: { role: "BROKER" },
+    });
+    autenticarComo(c, "BROKER");
+
+    const r = await salvar(
+      formulario({ horarioAtendimento: "Seg a Sex", horarioAtendimentoTopo: "on" })
+    );
+    expect(r.success).toBe(false);
+    const settings = await prisma.organizationSettings.findFirst({
+      where: { organizationId: c.organization.id },
+    });
+    expect(settings?.businessHours ?? null).toBeNull();
+  });
+
+  test("o horário de uma organização não vaza para outra", async () => {
+    const a = await novoCenario();
+    const b = await novoCenario();
+    autenticarComo(b);
+    await salvar(
+      formulario({ horarioAtendimento: "Horário da B", horarioAtendimentoTopo: "on" })
+    );
+
+    const configA = await buscarConfiguracaoContato(a.organization.id);
+    expect(configA.horario.valor).toBe("");
+    expect(horarioDoTopo(configA.horario)).toBeNull();
+
+    const configB = await buscarConfiguracaoContato(b.organization.id);
+    expect(configB.horario.valor).toBe("Horário da B");
+  });
+
+  test("gravar o horário não mexe nas flags dos canais", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+
+    await salvar(
+      formulario({
+        instagram: "https://instagram.com/exemplo",
+        instagramTopo: "on",
+        instagramRodape: "on",
+        horarioAtendimento: "Seg a Sex",
+        horarioAtendimentoTopo: "on",
+      })
+    );
+
+    const config = await buscarConfiguracaoContato(c.organization.id);
+    expect(config.canais.instagram.topo).toBe(true);
+    expect(config.canais.instagram.rodape).toBe(true);
+    expect(canaisDoLocal(config.canais, "topo").map((x) => x.chave)).toEqual(["instagram"]);
+    expect(canaisDoLocal(config.canais, "rodape").map((x) => x.chave)).toEqual(["instagram"]);
   });
 });

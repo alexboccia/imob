@@ -5,6 +5,10 @@ import {
   temCanais,
   urlRedeSocialValida,
   normalizarUrlRedeSocial,
+  horarioDoTopo,
+  normalizarHorario,
+  horarioTemMarcacao,
+  LIMITE_HORARIO_ATENDIMENTO,
   type ChaveCanal,
   type ConfiguracaoCanais,
 } from "@/lib/contatos-publicos";
@@ -246,5 +250,65 @@ describe("topo e rodapé são independentes", () => {
     const topo = canaisDoLocal(c, "topo")[0];
     const rodape = canaisDoLocal(c, "rodape")[0];
     expect(topo.href).toBe(rodape.href);
+  });
+});
+
+// =======================================================================
+// Horário de atendimento (Fase 58.2)
+// =======================================================================
+// Mesma regra dos canais — preenchido E habilitado — sobre um valor que
+// não é link.
+
+describe("horário de atendimento", () => {
+  test("vazio não aparece, mesmo habilitado", () => {
+    expect(horarioDoTopo({ valor: "", topo: true })).toBeNull();
+    expect(horarioDoTopo({ valor: "   ", topo: true })).toBeNull();
+  });
+
+  test("preenchido com a flag desligada não aparece", () => {
+    expect(horarioDoTopo({ valor: "Seg a Sex, 9h às 18h", topo: false })).toBeNull();
+  });
+
+  test("preenchido e habilitado aparece", () => {
+    expect(horarioDoTopo({ valor: "Seg a Sex, 9h às 18h", topo: true })).toBe(
+      "Seg a Sex, 9h às 18h"
+    );
+  });
+
+  test("ausente não quebra", () => {
+    expect(horarioDoTopo(undefined)).toBeNull();
+  });
+
+  test("normaliza: apara e colapsa espaços", () => {
+    expect(normalizarHorario("  Seg  a   Sex,  9h  ")).toBe("Seg a Sex, 9h");
+    expect(horarioDoTopo({ valor: "  Seg a Sex  ", topo: true })).toBe("Seg a Sex");
+  });
+
+  test("vazio normaliza para null, nunca string vazia", () => {
+    expect(normalizarHorario("")).toBeNull();
+    expect(normalizarHorario("   ")).toBeNull();
+    expect(normalizarHorario(null)).toBeNull();
+    expect(normalizarHorario(undefined)).toBeNull();
+  });
+
+  test("marcação é detectada para ser recusada na entrada", () => {
+    expect(horarioTemMarcacao("<b>9h</b>")).toBe(true);
+    expect(horarioTemMarcacao("<script>alert(1)</script>")).toBe(true);
+    expect(horarioTemMarcacao("Seg a Sex, 9h às 18h")).toBe(false);
+    // "das 9h > 18h" também é recusado: o ganho de permitir o sinal não
+    // compensa a ambiguidade de guardar marcação parcial.
+    expect(horarioTemMarcacao("das 9h > 18h")).toBe(true);
+  });
+
+  test("o limite de caracteres é o da barra, não arbitrário", () => {
+    expect(LIMITE_HORARIO_ATENDIMENTO).toBe(120);
+    // O exemplo mais longo do enunciado cabe com folga.
+    expect("Atendimento de segunda a sábado, das 8h às 18h".length).toBeLessThan(
+      LIMITE_HORARIO_ATENDIMENTO
+    );
+  });
+
+  test("o horário NÃO é um canal — não tem href nem entra no catálogo", () => {
+    expect(CANAIS_PUBLICOS.map((c) => c.chave)).not.toContain("horario");
   });
 });

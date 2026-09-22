@@ -30,7 +30,12 @@ import { fusoValido } from "@/lib/fuso-horario";
 import { CATALOGO_TEMAS, THEME_ID_CUSTOMIZADO } from "@/lib/branding/temas";
 import { CATALOGO_APARENCIA_RODAPE } from "@/lib/branding/aparencia-rodape";
 import { validarFaviconUrl, validarUrlMidiaOrganizacao } from "@/lib/branding/favicon-url";
-import { urlRedeSocialValida } from "@/lib/contatos-publicos";
+import {
+  urlRedeSocialValida,
+  normalizarHorario,
+  horarioTemMarcacao,
+  LIMITE_HORARIO_ATENDIMENTO,
+} from "@/lib/contatos-publicos";
 import { gerarPaletaDoLogo, type MotivoFalhaExtracao } from "@/lib/branding/extrair-paleta-logo";
 import { tokensTemaSchema } from "@/lib/branding/tokens-tema-schema";
 import type { TokensTema } from "@/lib/branding/temas";
@@ -84,6 +89,21 @@ const configuracaoSchema = z.object({
   youtubeRodape: flagExibicao,
   tiktokTopo: flagExibicao,
   tiktokRodape: flagExibicao,
+  // Fase 58.2 — horário de atendimento. Texto curto, sem marcação: o
+  // valor é renderizado como texto na barra superior, e recusar `<`/`>`
+  // na entrada evita guardar algo que apareceria literalmente ali.
+  horarioAtendimento: z.preprocess(
+    (v) => (typeof v === "string" ? normalizarHorario(v) ?? undefined : undefined),
+    z
+      .string()
+      .max(
+        LIMITE_HORARIO_ATENDIMENTO,
+        `Use no máximo ${LIMITE_HORARIO_ATENDIMENTO} caracteres.`
+      )
+      .refine((valor) => !horarioTemMarcacao(valor), "Não use < ou > no horário.")
+      .optional()
+  ),
+  horarioAtendimentoTopo: flagExibicao,
   codigoImovelPrefixo: z.preprocess(
     vazioParaNulo,
     z.string().max(10, "Use no máximo 10 caracteres.").optional()
@@ -234,6 +254,8 @@ export async function salvarConfiguracaoContato(
     youtubeShowFooter: campos.youtubeRodape,
     tiktokShowHeader: campos.tiktokTopo,
     tiktokShowFooter: campos.tiktokRodape,
+    businessHours: campos.horarioAtendimento ?? null,
+    businessHoursShowHeader: campos.horarioAtendimentoTopo,
     propertyCodePrefix: campos.codigoImovelPrefixo?.toUpperCase() ?? null,
     logoUrl: campos.logo ?? null,
     logoHeight: alturaLogo(campos.logoAltura),

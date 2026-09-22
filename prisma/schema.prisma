@@ -2037,6 +2037,24 @@ model OrganizationSettings {
   tiktokShowHeader    Boolean @default(false)
   tiktokShowFooter    Boolean @default(true)
 
+  // Fase 58.2 — HORÁRIO DE ATENDIMENTO, texto institucional livre e
+  // curto ("Segunda a sexta, das 9h às 18h").
+  //
+  // TEXTO, e não dias/faixas modelados: o produto não tem — nem quer
+  // nesta fase — calendário comercial, feriado, exceção ou "aberto
+  // agora". Modelar o que não se usa criaria um domínio inteiro para
+  // sustentar uma linha de texto.
+  //
+  // NÃO é um "canal" como os de cima, e por isso não entra em
+  // CANAIS_PUBLICOS: canal tem href (liga, abre conversa, abre perfil);
+  // horário é informação, não destino. Forçá-lo no mesmo tipo obrigaria
+  // a inventar um link que não existe.
+  //
+  // Só TOPO: é onde a informação foi pedida, e o rodapé não ganhou
+  // flag para não criar uma opção que ninguém pediu (ver relatório).
+  businessHours           String?
+  businessHoursShowHeader Boolean @default(false)
+
   propertyCodePrefix String?
   logoUrl            String?
   logoHeight         Int?

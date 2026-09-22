@@ -70,6 +70,8 @@ export function SiteHeader({
   // ligada). Lista vazia é o caso comum e significa "sem barra": o
   // cabeçalho fica exatamente como sempre foi.
   canaisTopo = [],
+  // Fase 58.2 — horário de atendimento já resolvido (texto ou null).
+  horarioTopo = null,
 }: {
   nome: string;
   logo?: string | null;
@@ -78,6 +80,7 @@ export function SiteHeader({
   basePath: string;
   orgSlug: string;
   canaisTopo?: CanalPublico[];
+  horarioTopo?: string | null;
 }) {
   const [aberto, setAberto] = useState(false);
   const altura = logoAltura && logoAltura > 0 ? logoAltura : 48;
@@ -125,7 +128,9 @@ export function SiteHeader({
           <header> inteiro, então `--site-header-height` já passa a
           incluir a barra: quem gruda logo abaixo do cabeçalho (os
           filtros da listagem) continua no lugar certo, sem mudança. */}
-      {canaisTopo.length > 0 && <BarraContatoTopo canais={canaisTopo} />}
+      {(canaisTopo.length > 0 || horarioTopo) && (
+        <BarraContatoTopo canais={canaisTopo} horario={horarioTopo} />
+      )}
       {/* Fase 49 — gap + min-w-0 no logo: a caixa do logo tem largura
           fixa (até 280px) e, em 320px, ela mais o botão do menu passavam
           da largura útil (288px) — o botão saía 8px para fora da tela.
@@ -138,7 +143,7 @@ export function SiteHeader({
       <div
         className={cn(
           "mx-auto flex max-w-6xl items-center justify-between gap-3 px-4",
-          canaisTopo.length > 0 ? "py-4 sm:py-5" : "py-5 sm:py-6"
+          canaisTopo.length > 0 || horarioTopo ? "py-4 sm:py-5" : "py-5 sm:py-6"
         )}
       >
         <Link

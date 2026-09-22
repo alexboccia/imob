@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { CapturaAtribuicao } from "@/components/analytics/CapturaAtribuicao";
 import type { Metadata } from "next";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
-import { canaisDoLocal } from "@/lib/contatos-publicos";
+import { canaisDoLocal, horarioDoTopo } from "@/lib/contatos-publicos";
 import { buscarBranding } from "@/lib/branding";
 import { resolverTemaEfetivo } from "@/lib/branding/temas";
 import { getOrganizationBySlug } from "@/lib/tenant";
@@ -167,6 +167,7 @@ export default async function PublicLayout({
         // o único lugar que já carrega a configuração uma vez para as
         // duas pontas.
         canaisTopo={canaisDoLocal(config.canais, "topo", { nomeOrganizacao: nomePublico })}
+        horarioTopo={horarioDoTopo(config.horario)}
       />
       <main className="flex-1">{children}</main>
       <SiteFooter
