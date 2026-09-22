@@ -2054,6 +2054,14 @@ model OrganizationSettings {
   // flag para não criar uma opção que ninguém pediu (ver relatório).
   businessHours           String?
   businessHoursShowHeader Boolean @default(false)
+  // Fase 58.3 — o horário ganhou o mesmo par de decisões dos canais.
+  // UM texto, DUAS escolhas independentes: nunca um "horário do topo"
+  // diferente de um "horário do rodapé".
+  //
+  // Nasce desligado: quem já configurou o horário para o topo continua
+  // exatamente como está, e o rodapé só passa a exibi-lo quando alguém
+  // marcar a caixa.
+  businessHoursShowFooter Boolean @default(false)
 
   propertyCodePrefix String?
   logoUrl            String?

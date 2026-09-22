@@ -7,6 +7,7 @@ import {
   IconeLinkedin,
   IconeTiktok,
 } from "@/components/icones-sociais";
+import { Clock } from "lucide-react";
 import { IconeTelefone, IconeWhatsApp } from "@/components/icons";
 import type { CanalPublico, ChaveCanal } from "@/lib/contatos-publicos";
 import { LOGO_RODAPE_ALTURA_PADRAO, larguraCaixaLogoRodape } from "@/lib/logo";
@@ -94,6 +95,7 @@ export function SiteFooter({
   basePath,
   navLinks,
   canaisRodape,
+  horarioRodape,
 }: {
   nome: string;
   logo?: string | null;
@@ -105,6 +107,8 @@ export function SiteFooter({
   // Fase 58 — canais já RESOLVIDOS para o rodapé (valor preenchido E
   // flag ligada), na mesma estrutura que o cabeçalho recebe.
   canaisRodape?: CanalPublico[];
+  // Fase 58.3 — horário já resolvido para o rodapé (texto ou null).
+  horarioRodape?: string | null;
 }) {
   const canais = canaisRodape ?? [];
   const redesAtivas = canais.filter((c) => c.tipo === "REDE");
@@ -195,15 +199,29 @@ export function SiteFooter({
           )}
         </div>
 
-        {/* Fase 58 — bloco de CONTATO. Só existe quando há telefone ou
-            WhatsApp habilitados para o rodapé; sem eles, nem a linha nem
-            o separador aparecem. Nenhum tenant ganha este bloco no
-            deploy: as duas flags nascem desligadas (ver schema). */}
-        {contatosAtivos.length > 0 && (
+        {/* Fase 58 — bloco de CONTATO, que na 58.3 passou a abrigar
+            também o horário de atendimento. Só existe quando há ALGO
+            habilitado para o rodapé; sem nada, nem a linha nem o
+            separador aparecem. Nenhum tenant ganha este bloco no deploy:
+            todas as flags envolvidas nascem desligadas (ver schema).
+            
+            O horário vem PRIMEIRO: é o contexto do atendimento, e os
+            meios de contato vêm em seguida — a mesma ordem da barra
+            superior, para as duas pontas do site não se contradizerem. */}
+        {(contatosAtivos.length > 0 || horarioRodape) && (
           <div
             data-contatos-rodape
             className={`mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t pt-6 text-sm ${cores.borda}`}
           >
+            {horarioRodape && (
+              <p data-horario-rodape className="flex min-w-0 items-center gap-2">
+                {/* Decorativo: o próprio texto já diz que é horário de
+                    atendimento, então o relógio não acrescenta
+                    informação a quem usa leitor de tela. */}
+                <Clock className="size-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0">{horarioRodape}</span>
+              </p>
+            )}
             {contatosAtivos.map((canal) => {
               const Icone = ICONES[canal.chave];
               return (

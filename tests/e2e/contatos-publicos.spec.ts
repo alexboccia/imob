@@ -584,3 +584,179 @@ test.describe("responsividade da barra recomposta", () => {
     });
   }
 });
+
+// =======================================================================
+// Horário de atendimento no topo e no rodapé (Fase 58.3)
+// =======================================================================
+
+test.describe("horário no site público", () => {
+  test("aparece no topo, à esquerda, com o texto exato configurado", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.goto(BASE);
+
+    const horario = page.locator("[data-horario-topo]");
+    await expect(horario).toBeVisible();
+    await expect(horario).toHaveText(/Segunda a sexta, das 9h as 18h/);
+  });
+
+  test("aparece no rodapé, junto do bloco de contato", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.goto(BASE);
+
+    const rodape = page.locator("[data-horario-rodape]");
+    await expect(rodape).toBeVisible();
+    await expect(rodape).toHaveText(/Segunda a sexta, das 9h as 18h/);
+    // Dentro do bloco institucional que já existia, não num segundo rodapé.
+    await expect(page.locator("[data-contatos-rodape] [data-horario-rodape]")).toHaveCount(1);
+    await expect(page.locator("footer")).toHaveCount(1);
+  });
+
+  test("o texto é o MESMO nos dois lugares — uma fonte só", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.goto(BASE);
+
+    const topo = (await page.locator("[data-horario-topo]").innerText()).trim();
+    const rodape = (await page.locator("[data-horario-rodape]").innerText()).trim();
+    expect(topo).toBe(rodape);
+  });
+
+  test("o relógio é decorativo: a informação está no texto", async ({ page }) => {
+    await page.goto(BASE);
+    for (const seletor of ["[data-horario-topo]", "[data-horario-rodape]"]) {
+      await expect(page.locator(`${seletor} svg`)).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
+  test("tenant sem horário não ganha nada em nenhum dos dois", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator("[data-horario-topo]")).toHaveCount(0);
+    await expect(page.locator("[data-horario-rodape]")).toHaveCount(0);
+  });
+
+  for (const largura of [320, 390, 768, 1024, 1280, 1440]) {
+    test(`${largura}px: horário legível no topo e no rodapé, sem estouro`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.goto(BASE);
+
+      for (const seletor of ["[data-horario-topo]", "[data-horario-rodape]"]) {
+        const c = await caixa(page, seletor);
+        expect(c.x, `${seletor} @ ${largura}`).toBeGreaterThanOrEqual(-0.5);
+        expect(c.x + c.width, `${seletor} @ ${largura}`).toBeLessThanOrEqual(largura + 0.5);
+        expect(
+          await page.locator(`${seletor} span`).evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+          `${seletor} cortado @ ${largura}`
+        ).toBe(true);
+      }
+
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+        ),
+        `estouro @ ${largura}`
+      ).toBe(true);
+    });
+  }
+});
+
+// =======================================================================
+// O caminho COMPLETO do defeito relatado (Fase 58.3)
+// =======================================================================
+// admin -> salvar -> recarregar -> banco -> site. É o teste que faltava:
+// a Fase 58.2 provou a regra, a action e a renderização, mas nunca o
+// trajeto inteiro para o horário.
+
+test.describe("configurar o horário pela tela e ver no site", () => {
+  const TEXTO = `Atendimento E2E ${Date.now()}`;
+
+  test("preencher, marcar Topo e Rodapé, salvar e ver nos dois lugares", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1200 });
+    await login(page, ORG_CONTATOS);
+
+    const campo = page.locator("#horarioAtendimento");
+    const inputTopo = "[data-flag='horario-topo'] input[type=checkbox]";
+    const inputRodape = "[data-flag='horario-rodape'] input[type=checkbox]";
+    const original = "Segunda a sexta, das 9h as 18h";
+
+    try {
+      await page.goto("/app/configuracoes");
+      await campo.fill(TEXTO);
+      await page.getByRole("button", { name: /Salvar alterações/ }).click();
+      // Feedback visível JUNTO do botão — o clique acontece no fim da página.
+      await expect(page.locator("[data-feedback-salvar]")).toBeVisible();
+
+      // Recarrega: persistiu de verdade, não é estado do React.
+      await page.goto("/app/configuracoes");
+      await expect(campo).toHaveValue(TEXTO);
+      await expect(page.locator(inputTopo)).toBeChecked();
+      await expect(page.locator(inputRodape)).toBeChecked();
+
+      // E o site mostra o texto exato, nos dois lugares.
+      await page.goto(BASE);
+      await expect(page.locator("[data-horario-topo]")).toContainText(TEXTO);
+      await expect(page.locator("[data-horario-rodape]")).toContainText(TEXTO);
+    } finally {
+      await page.goto("/app/configuracoes");
+      await campo.fill(original);
+      if (!(await page.locator(inputTopo).isChecked())) {
+        await page.locator("[data-flag='horario-topo']").click();
+      }
+      if (!(await page.locator(inputRodape).isChecked())) {
+        await page.locator("[data-flag='horario-rodape']").click();
+      }
+      await page.getByRole("button", { name: /Salvar alterações/ }).click();
+      await expect(page.locator("[data-feedback-salvar]")).toBeVisible();
+    }
+  });
+
+  test("desmarcar Topo tira do topo e mantém no rodapé", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1200 });
+    await login(page, ORG_CONTATOS);
+    const inputTopo = "[data-flag='horario-topo'] input[type=checkbox]";
+
+    try {
+      await page.goto("/app/configuracoes");
+      await page.locator("[data-flag='horario-topo']").click();
+      await expect(page.locator(inputTopo)).not.toBeChecked();
+      await page.getByRole("button", { name: /Salvar alterações/ }).click();
+      await expect(page.locator("[data-feedback-salvar]")).toBeVisible();
+
+      await page.goto("/app/configuracoes");
+      await expect(page.locator(inputTopo)).not.toBeChecked();
+
+      await page.goto(BASE);
+      await expect(page.locator("[data-horario-topo]")).toHaveCount(0);
+      await expect(page.locator("[data-horario-rodape]")).toBeVisible();
+      // A barra continua existindo por causa dos canais.
+      await expect(barra(page)).toHaveCount(1);
+    } finally {
+      await page.goto("/app/configuracoes");
+      if (!(await page.locator(inputTopo).isChecked())) {
+        await page.locator("[data-flag='horario-topo']").click();
+        await page.getByRole("button", { name: /Salvar alterações/ }).click();
+        await expect(page.locator("[data-feedback-salvar]")).toBeVisible();
+      }
+    }
+
+    await page.goto(BASE);
+    await expect(page.locator("[data-horario-topo]")).toBeVisible();
+  });
+
+  test("um campo inválido não salva nada, e o erro é levado à tela", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1200 });
+    await login(page, ORG_CONTATOS);
+    await page.goto("/app/configuracoes");
+
+    // Endereço sem esquema: recusado desde a Fase 58.
+    await page.locator("#instagram").fill("instagram.com/sem-esquema");
+    await page.getByRole("button", { name: /Salvar alterações/ }).click();
+
+    // O motivo aparece JUNTO do botão e o resumo recebe foco — era este
+    // o silêncio que fazia "configurei e não apareceu".
+    await expect(page.locator("[data-feedback-salvar]")).toBeVisible();
+    await expect(page.locator("[data-erro-configuracao]")).toBeFocused();
+
+    // Nada foi gravado: o horário do seed continua intacto.
+    await page.goto(BASE);
+    await expect(page.locator("[data-horario-topo]")).toBeVisible();
+  });
+});

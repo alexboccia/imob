@@ -65,6 +65,7 @@ async function buscarConfiguracaoContatoSemCache(organizationId: string) {
     horario: {
       valor: settings?.businessHours ?? "",
       topo: settings?.businessHoursShowHeader ?? false,
+      rodape: settings?.businessHoursShowFooter ?? false,
     } satisfies ConfiguracaoHorario,
     codigoImovelPrefixo: settings?.propertyCodePrefix ?? "",
     logo: settings?.logoUrl ?? null,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { salvarConfiguracaoContato } from "@/app/app/configuracoes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { formatarCodigoImovel } from "@/lib/format";
@@ -75,11 +75,46 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
     salvarConfiguracaoContato,
     ESTADO_INICIAL_ACAO
   );
+  const resumoRef = useRef<HTMLDivElement>(null);
+
+  // Fase 58.3 — SALVAMENTO É TUDO-OU-NADA: um único campo inválido
+  // descarta o formulário inteiro, inclusive os campos corretos (há
+  // teste de integração afirmando isso). O alerta que explica o motivo
+  // fica no TOPO desta página longa, e o botão Salvar no fim — ou seja,
+  // fora da tela no momento do clique. Quem salvava via a página não
+  // mudar e concluía que tinha dado certo.
+  //
+  // Levar foco e rolagem ao resumo transforma uma falha silenciosa em
+  // uma falha visível. Não muda regra de validação nenhuma.
+  useEffect(() => {
+    if (estado.success || !estado.message) return;
+    const el = resumoRef.current;
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.focus();
+  }, [estado]);
 
   return (
     <form action={formAction} className="space-y-5">
       {estado.message && !estado.success && (
-        <Alert variant="destructive">
+        <Alert
+          ref={resumoRef}
+          variant="destructive"
+          // tabIndex -1: recebe foco por programa (para o leitor de tela
+          // anunciar o erro) sem entrar na ordem de tabulação.
+          tabIndex={-1}
+          role="alert"
+          data-erro-configuracao
+        >
+          <AlertDescription>{estado.message}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* O sucesso aparece no TOPO e também junto do botão (ver fim do
+          formulário): quem clica em Salvar está olhando para o fim da
+          página, não para o começo. */}
+      {estado.success && estado.message && (
+        <Alert data-sucesso-configuracao>
           <AlertDescription>{estado.message}</AlertDescription>
         </Alert>
       )}
@@ -230,6 +265,9 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
               />
               <ErroCampo erros={estado.fieldErrors?.horarioAtendimento} />
             </div>
+            {/* Fase 58.3 — o horário ganhou o par completo, igual aos
+                demais canais. Cada caixa com o próprio rótulo visível,
+                como a correção da Fase 58 estabeleceu. */}
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 sm:shrink-0 sm:pt-8">
               <label
                 className="flex cursor-pointer items-center gap-2 text-sm"
@@ -240,6 +278,16 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
                   defaultChecked={config.horario.topo}
                 />
                 Topo
+              </label>
+              <label
+                className="flex cursor-pointer items-center gap-2 text-sm"
+                data-flag="horario-rodape"
+              >
+                <Checkbox
+                  name="horarioAtendimentoRodape"
+                  defaultChecked={config.horario.rodape}
+                />
+                Rodapé
               </label>
             </div>
           </div>
@@ -385,14 +433,29 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
         </CardContent>
       </Card>
 
-      <Button
-        type="submit"
-        size="lg"
-        disabled={pendente}
-        className="h-auto min-h-9 min-w-0 shrink whitespace-normal"
-      >
-        {pendente ? "Salvando..." : "Salvar alterações"}
-      </Button>
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <Button
+          type="submit"
+          size="lg"
+          disabled={pendente}
+          className="h-auto min-h-9 min-w-0 shrink whitespace-normal"
+        >
+          {pendente ? "Salvando..." : "Salvar alterações"}
+        </Button>
+        {/* Feedback ao lado do botão — onde os olhos estão no momento do
+            clique. `role="status"` para ser anunciado sem roubar foco. */}
+        {estado.message && (
+          <p
+            role="status"
+            data-feedback-salvar
+            className={`min-w-0 break-words text-sm ${
+              estado.success ? "text-muted-foreground" : "text-destructive"
+            }`}
+          >
+            {estado.message}
+          </p>
+        )}
+      </div>
     </form>
   );
 }

@@ -6,6 +6,7 @@ import {
   urlRedeSocialValida,
   normalizarUrlRedeSocial,
   horarioDoTopo,
+  horarioDoLocal,
   normalizarHorario,
   horarioTemMarcacao,
   LIMITE_HORARIO_ATENDIMENTO,
@@ -260,28 +261,22 @@ describe("topo e rodapé são independentes", () => {
 // não é link.
 
 describe("horário de atendimento", () => {
-  test("vazio não aparece, mesmo habilitado", () => {
-    expect(horarioDoTopo({ valor: "", topo: true })).toBeNull();
-    expect(horarioDoTopo({ valor: "   ", topo: true })).toBeNull();
-  });
+  const h = (valor: string, topo: boolean, rodape = false) => ({ valor, topo, rodape });
 
-  test("preenchido com a flag desligada não aparece", () => {
-    expect(horarioDoTopo({ valor: "Seg a Sex, 9h às 18h", topo: false })).toBeNull();
-  });
-
-  test("preenchido e habilitado aparece", () => {
-    expect(horarioDoTopo({ valor: "Seg a Sex, 9h às 18h", topo: true })).toBe(
-      "Seg a Sex, 9h às 18h"
-    );
+  test("vazio não aparece, mesmo habilitado nos dois", () => {
+    expect(horarioDoLocal(h("", true, true), "topo")).toBeNull();
+    expect(horarioDoLocal(h("", true, true), "rodape")).toBeNull();
+    expect(horarioDoLocal(h("   ", true, true), "topo")).toBeNull();
   });
 
   test("ausente não quebra", () => {
-    expect(horarioDoTopo(undefined)).toBeNull();
+    expect(horarioDoLocal(undefined, "topo")).toBeNull();
+    expect(horarioDoLocal(undefined, "rodape")).toBeNull();
   });
 
   test("normaliza: apara e colapsa espaços", () => {
     expect(normalizarHorario("  Seg  a   Sex,  9h  ")).toBe("Seg a Sex, 9h");
-    expect(horarioDoTopo({ valor: "  Seg a Sex  ", topo: true })).toBe("Seg a Sex");
+    expect(horarioDoLocal(h("  Seg a Sex  ", true), "topo")).toBe("Seg a Sex");
   });
 
   test("vazio normaliza para null, nunca string vazia", () => {
@@ -295,14 +290,11 @@ describe("horário de atendimento", () => {
     expect(horarioTemMarcacao("<b>9h</b>")).toBe(true);
     expect(horarioTemMarcacao("<script>alert(1)</script>")).toBe(true);
     expect(horarioTemMarcacao("Seg a Sex, 9h às 18h")).toBe(false);
-    // "das 9h > 18h" também é recusado: o ganho de permitir o sinal não
-    // compensa a ambiguidade de guardar marcação parcial.
     expect(horarioTemMarcacao("das 9h > 18h")).toBe(true);
   });
 
   test("o limite de caracteres é o da barra, não arbitrário", () => {
     expect(LIMITE_HORARIO_ATENDIMENTO).toBe(120);
-    // O exemplo mais longo do enunciado cabe com folga.
     expect("Atendimento de segunda a sábado, das 8h às 18h".length).toBeLessThan(
       LIMITE_HORARIO_ATENDIMENTO
     );
@@ -310,5 +302,42 @@ describe("horário de atendimento", () => {
 
   test("o horário NÃO é um canal — não tem href nem entra no catálogo", () => {
     expect(CANAIS_PUBLICOS.map((c) => c.chave)).not.toContain("horario");
+  });
+
+  // -------------------------------------------------------------------
+  // Fase 58.3 — as quatro combinações, uma a uma
+  // -------------------------------------------------------------------
+  const TEXTO = "Segunda a sexta, das 9h às 18h";
+
+  test("topo sim / rodapé não -> só no topo", () => {
+    const c = h(TEXTO, true, false);
+    expect(horarioDoLocal(c, "topo")).toBe(TEXTO);
+    expect(horarioDoLocal(c, "rodape")).toBeNull();
+  });
+
+  test("topo não / rodapé sim -> só no rodapé", () => {
+    const c = h(TEXTO, false, true);
+    expect(horarioDoLocal(c, "topo")).toBeNull();
+    expect(horarioDoLocal(c, "rodape")).toBe(TEXTO);
+  });
+
+  test("ambos -> nos dois, com o MESMO texto", () => {
+    const c = h(TEXTO, true, true);
+    expect(horarioDoLocal(c, "topo")).toBe(TEXTO);
+    expect(horarioDoLocal(c, "rodape")).toBe(TEXTO);
+    // Uma fonte só: nunca dois horários diferentes.
+    expect(horarioDoLocal(c, "topo")).toBe(horarioDoLocal(c, "rodape"));
+  });
+
+  test("nenhum -> fica salvo e invisível nos dois", () => {
+    const c = h(TEXTO, false, false);
+    expect(horarioDoLocal(c, "topo")).toBeNull();
+    expect(horarioDoLocal(c, "rodape")).toBeNull();
+    expect(c.valor).toBe(TEXTO);
+  });
+
+  test("horarioDoTopo continua sendo o atalho do topo", () => {
+    expect(horarioDoTopo(h(TEXTO, true, true))).toBe(horarioDoLocal(h(TEXTO, true, true), "topo"));
+    expect(horarioDoTopo(h(TEXTO, false, true))).toBeNull();
   });
 });

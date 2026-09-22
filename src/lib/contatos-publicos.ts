@@ -32,7 +32,10 @@ import { linkWhatsApp, temWhatsApp } from "@/lib/whatsapp";
 // fora da linha em telas médias.
 export const LIMITE_HORARIO_ATENDIMENTO = 120;
 
-export type ConfiguracaoHorario = { valor: string; topo: boolean };
+/** Onde uma informação pode ser exibida no site público. */
+export type LocalExibicao = "topo" | "rodape";
+
+export type ConfiguracaoHorario = { valor: string; topo: boolean; rodape: boolean };
 
 /**
  * Normaliza o horário para gravar: apara, colapsa espaços e devolve null
@@ -54,13 +57,24 @@ export function horarioTemMarcacao(valor: string | null | undefined): boolean {
 }
 
 /**
- * Mesma regra dos canais: aparece se tiver texto E estiver habilitado
- * para o topo. Devolve null — e não "" — para quem renderiza não
- * precisar decidir o que é vazio.
+ * Mesma regra dos canais, agora para os dois locais: aparece se tiver
+ * texto E estiver habilitado NAQUELE local. Devolve null — e não "" —
+ * para quem renderiza não precisar decidir o que é vazio.
+ *
+ * UM texto, DUAS decisões: as duas leituras saem do mesmo `valor`, então
+ * é impossível o topo e o rodapé mostrarem horários diferentes.
  */
-export function horarioDoTopo(horario: ConfiguracaoHorario | undefined): string | null {
-  if (!horario || !horario.topo) return null;
+export function horarioDoLocal(
+  horario: ConfiguracaoHorario | undefined,
+  local: LocalExibicao
+): string | null {
+  if (!horario || !horario[local]) return null;
   return normalizarHorario(horario.valor);
+}
+
+/** Atalho do caso mais comum — o topo, onde o horário nasceu. */
+export function horarioDoTopo(horario: ConfiguracaoHorario | undefined): string | null {
+  return horarioDoLocal(horario, "topo");
 }
 
 /** Um canal é um contato (tel/WhatsApp) ou uma rede social. */
@@ -74,8 +88,6 @@ export type ChaveCanal =
   | "linkedin"
   | "youtube"
   | "tiktok";
-
-export type LocalExibicao = "topo" | "rodape";
 
 type DefinicaoCanal = {
   chave: ChaveCanal;

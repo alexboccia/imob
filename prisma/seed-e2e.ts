@@ -991,6 +991,31 @@ async function main() {
     },
   });
 
+  // Fase 58.3 — a Org A é o tenant servido em "/", e várias specs
+  // afirmam que ali NÃO existe barra superior. Até aqui ela não tinha
+  // bloco de configuração no seed: o estado era o que o último teste
+  // tivesse deixado, então um spec que ligasse um canal no topo
+  // contaminava as asserções dos outros. Estes campos passam a ser
+  // redefinidos a cada seed — só os desta fase, para não colidir com as
+  // specs que ligam e desligam o WhatsApp da Org A durante a execução.
+  const semExibicaoPublica = {
+    businessHours: null,
+    businessHoursShowHeader: false,
+    businessHoursShowFooter: false,
+    phoneShowHeader: false,
+    whatsappShowHeader: false,
+    instagramShowHeader: false,
+    facebookShowHeader: false,
+    linkedinShowHeader: false,
+    youtubeShowHeader: false,
+    tiktokShowHeader: false,
+  } as const;
+  await prisma.organizationSettings.upsert({
+    where: { organizationId: orgA.organization.id },
+    update: semExibicaoPublica,
+    create: { organizationId: orgA.organization.id, ...semExibicaoPublica },
+  });
+
   await garantirTipoImovel({ organizationId: orgA.organization.id, name: "Apartamento" });
   // Redesenho de Tipos de Imóvel — fixtures determinísticas mínimas pra
   // exercitar os dois grupos (residencial já tinha "Apartamento" acima) e
@@ -1381,6 +1406,8 @@ async function main() {
       // Fase 58.2 — horário de atendimento, habilitado para o topo.
       businessHours: "Segunda a sexta, das 9h as 18h",
       businessHoursShowHeader: true,
+      // Fase 58.3 — também no rodapé, para o spec cobrir os dois.
+      businessHoursShowFooter: true,
   } as const;
   await prisma.organizationSettings.upsert({
     where: { organizationId: orgContatos.organization.id },

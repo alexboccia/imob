@@ -16,7 +16,7 @@ vi.mock("next/cache", () => ({
 import { auth } from "@/lib/auth";
 import { salvarConfiguracaoContato } from "@/app/app/configuracoes/actions";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
-import { canaisDoLocal, horarioDoTopo } from "@/lib/contatos-publicos";
+import { canaisDoLocal, horarioDoTopo, horarioDoLocal } from "@/lib/contatos-publicos";
 
 // =======================================================================
 // Contatos e redes sociais configuráveis (Fase 58) — contra o banco
@@ -289,7 +289,12 @@ describe("horário de atendimento (Fase 58.2)", () => {
     expect(r.success).toBe(true);
 
     const config = await buscarConfiguracaoContato(c.organization.id);
-    expect(config.horario).toEqual({ valor: "Segunda a sexta, das 9h às 18h", topo: true });
+    expect(config.horario).toEqual({
+      valor: "Segunda a sexta, das 9h às 18h",
+      topo: true,
+      // Fase 58.3 — o rodapé entrou no par e nasce desligado.
+      rodape: false,
+    });
     expect(horarioDoTopo(config.horario)).toBe("Segunda a sexta, das 9h às 18h");
   });
 
@@ -362,7 +367,7 @@ describe("horário de atendimento (Fase 58.2)", () => {
   test("tenant que nunca configurou não tem horário no topo", async () => {
     const c = await novoCenario();
     const config = await buscarConfiguracaoContato(c.organization.id);
-    expect(config.horario).toEqual({ valor: "", topo: false });
+    expect(config.horario).toEqual({ valor: "", topo: false, rodape: false });
     expect(horarioDoTopo(config.horario)).toBeNull();
   });
 
@@ -419,5 +424,180 @@ describe("horário de atendimento (Fase 58.2)", () => {
     expect(config.canais.instagram.rodape).toBe(true);
     expect(canaisDoLocal(config.canais, "topo").map((x) => x.chave)).toEqual(["instagram"]);
     expect(canaisDoLocal(config.canais, "rodape").map((x) => x.chave)).toEqual(["instagram"]);
+  });
+});
+
+// =======================================================================
+// Fase 58.3 — o salvamento é TUDO-OU-NADA
+// =======================================================================
+// Documentado como teste porque é o modo de falha mais provável por trás
+// de "configurei e não apareceu": um único campo inválido, em qualquer
+// ponto deste formulário longo, descarta o salvamento inteiro — inclusive
+// campos que estavam perfeitamente válidos.
+
+describe("salvamento tudo-ou-nada", () => {
+  test("um campo inválido descarta TAMBÉM o horário válido", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+
+    const r = await salvar(
+      formulario({
+        horarioAtendimento: "Segunda a sexta, das 9h às 18h",
+        horarioAtendimentoTopo: "on",
+        // Endereço sem esquema: recusado desde a Fase 58.
+        instagram: "instagram.com/sem-esquema",
+      })
+    );
+    expect(r.success).toBe(false);
+
+    const settings = await prisma.organizationSettings.findFirst({
+      where: { organizationId: c.organization.id },
+    });
+    // O horário era válido e mesmo assim não foi gravado.
+    expect(settings?.businessHours ?? null).toBeNull();
+    expect(settings?.businessHoursShowHeader ?? false).toBe(false);
+  });
+
+  test("payload completo e válido, como o de um tenant real, grava tudo", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+
+    const r = await salvar(
+      formulario({
+        telefone: "(11) 3888-3000",
+        telefoneTopo: "on",
+        whatsapp: "5511999998888",
+        whatsappTopo: "on",
+        instagram: "https://instagram.com/x",
+        instagramTopo: "on",
+        facebook: "https://facebook.com/x",
+        facebookTopo: "on",
+        linkedin: "https://linkedin.com/company/x",
+        linkedinTopo: "on",
+        youtube: "https://youtube.com/@x",
+        youtubeTopo: "on",
+        tiktok: "https://tiktok.com/@x",
+        tiktokTopo: "on",
+        horarioAtendimento: "Segunda a sexta, das 9h às 18h",
+        horarioAtendimentoTopo: "on",
+      })
+    );
+    expect(r.success).toBe(true);
+
+    const config = await buscarConfiguracaoContato(c.organization.id);
+    expect(horarioDoTopo(config.horario)).toBe("Segunda a sexta, das 9h às 18h");
+    expect(canaisDoLocal(config.canais, "topo")).toHaveLength(7);
+  });
+});
+
+// =======================================================================
+// Fase 58.3 — horário no rodapé, e as quatro combinações persistidas
+// =======================================================================
+
+describe("horário: topo e rodapé independentes", () => {
+  const TEXTO = "Segunda a sexta, das 9h às 18h";
+
+  async function salvarHorario(c: Cenario, topo: boolean, rodape: boolean) {
+    autenticarComo(c);
+    const campos: Record<string, string> = { horarioAtendimento: TEXTO };
+    if (topo) campos.horarioAtendimentoTopo = "on";
+    if (rodape) campos.horarioAtendimentoRodape = "on";
+    const r = await salvar(formulario(campos));
+    expect(r.success).toBe(true);
+    return buscarConfiguracaoContato(c.organization.id);
+  }
+
+  test("topo sim / rodapé não", async () => {
+    const config = await salvarHorario(await novoCenario(), true, false);
+    expect(horarioDoLocal(config.horario, "topo")).toBe(TEXTO);
+    expect(horarioDoLocal(config.horario, "rodape")).toBeNull();
+  });
+
+  test("topo não / rodapé sim", async () => {
+    const config = await salvarHorario(await novoCenario(), false, true);
+    expect(horarioDoLocal(config.horario, "topo")).toBeNull();
+    expect(horarioDoLocal(config.horario, "rodape")).toBe(TEXTO);
+  });
+
+  test("ambos", async () => {
+    const config = await salvarHorario(await novoCenario(), true, true);
+    expect(horarioDoLocal(config.horario, "topo")).toBe(TEXTO);
+    expect(horarioDoLocal(config.horario, "rodape")).toBe(TEXTO);
+  });
+
+  test("nenhum: guardado e invisível", async () => {
+    const config = await salvarHorario(await novoCenario(), false, false);
+    expect(config.horario.valor).toBe(TEXTO);
+    expect(horarioDoLocal(config.horario, "topo")).toBeNull();
+    expect(horarioDoLocal(config.horario, "rodape")).toBeNull();
+  });
+
+  test("texto vazio com as duas flags não aparece em lugar nenhum", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+    await salvar(
+      formulario({ horarioAtendimentoTopo: "on", horarioAtendimentoRodape: "on" })
+    );
+    const config = await buscarConfiguracaoContato(c.organization.id);
+    expect(horarioDoLocal(config.horario, "topo")).toBeNull();
+    expect(horarioDoLocal(config.horario, "rodape")).toBeNull();
+  });
+
+  test("desmarcar só o Topo mantém o rodapé — e vice-versa", async () => {
+    const c = await novoCenario();
+    await salvarHorario(c, true, true);
+
+    // Tira o topo.
+    await salvar(
+      formulario({ horarioAtendimento: TEXTO, horarioAtendimentoRodape: "on" })
+    );
+    let config = await buscarConfiguracaoContato(c.organization.id);
+    expect(horarioDoLocal(config.horario, "topo")).toBeNull();
+    expect(horarioDoLocal(config.horario, "rodape")).toBe(TEXTO);
+
+    // Tira o rodapé, devolve o topo.
+    await salvar(formulario({ horarioAtendimento: TEXTO, horarioAtendimentoTopo: "on" }));
+    config = await buscarConfiguracaoContato(c.organization.id);
+    expect(horarioDoLocal(config.horario, "topo")).toBe(TEXTO);
+    expect(horarioDoLocal(config.horario, "rodape")).toBeNull();
+  });
+
+  test("o rodapé nasce desligado para quem já tinha horário no topo", async () => {
+    const c = await novoCenario();
+    // Estado de um tenant da Fase 58.2: horário no topo, coluna nova
+    // ainda no default.
+    await prisma.organizationSettings.create({
+      data: {
+        organizationId: c.organization.id,
+        businessHours: TEXTO,
+        businessHoursShowHeader: true,
+      },
+    });
+    const config = await buscarConfiguracaoContato(c.organization.id);
+    expect(horarioDoLocal(config.horario, "topo")).toBe(TEXTO);
+    expect(horarioDoLocal(config.horario, "rodape")).toBeNull();
+  });
+
+  test("o horário de uma organização não vaza para o rodapé de outra", async () => {
+    const a = await novoCenario();
+    const b = await novoCenario();
+    await salvarHorario(b, true, true);
+
+    const configA = await buscarConfiguracaoContato(a.organization.id);
+    expect(horarioDoLocal(configA.horario, "topo")).toBeNull();
+    expect(horarioDoLocal(configA.horario, "rodape")).toBeNull();
+  });
+
+  test("BROKER não altera o horário do rodapé", async () => {
+    const c = await novoCenario();
+    await prisma.organizationMember.update({
+      where: { id: c.membro.id, organizationId: c.organization.id },
+      data: { role: "BROKER" },
+    });
+    autenticarComo(c, "BROKER");
+    const r = await salvar(
+      formulario({ horarioAtendimento: TEXTO, horarioAtendimentoRodape: "on" })
+    );
+    expect(r.success).toBe(false);
   });
 });

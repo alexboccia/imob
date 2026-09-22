@@ -104,6 +104,7 @@ const configuracaoSchema = z.object({
       .optional()
   ),
   horarioAtendimentoTopo: flagExibicao,
+  horarioAtendimentoRodape: flagExibicao,
   codigoImovelPrefixo: z.preprocess(
     vazioParaNulo,
     z.string().max(10, "Use no máximo 10 caracteres.").optional()
@@ -256,6 +257,7 @@ export async function salvarConfiguracaoContato(
     tiktokShowFooter: campos.tiktokRodape,
     businessHours: campos.horarioAtendimento ?? null,
     businessHoursShowHeader: campos.horarioAtendimentoTopo,
+    businessHoursShowFooter: campos.horarioAtendimentoRodape,
     propertyCodePrefix: campos.codigoImovelPrefixo?.toUpperCase() ?? null,
     logoUrl: campos.logo ?? null,
     logoHeight: alturaLogo(campos.logoAltura),
