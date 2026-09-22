@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { IDS_E2E, ORG_A, ORG_CONTATOS } from "./helpers";
+import { IDS_E2E, ORG_A, ORG_CONTATOS, login } from "./helpers";
 
 // =======================================================================
 // Contatos e redes sociais no topo e no rodapé (Fase 58)
@@ -250,5 +250,157 @@ test.describe("responsividade", () => {
     await page.getByRole("link", { name: "Comprar" }).first().click();
     await page.waitForURL(/finalidade=SALE/);
     await expect(barra(page)).toHaveCount(1);
+  });
+});
+
+
+// =======================================================================
+// Configuração pelo FORMULÁRIO REAL
+// =======================================================================
+// A Fase 58 testou a regra (unitário), a action (integração, com FormData
+// montado à mão) e a renderização (E2E, com o banco semeado direto). O
+// que NENHUM deles atravessava era a tela: marcar a caixa, salvar, e ver
+// o site mudar. Foi nessa lacuna que o defeito relatado se escondeu —
+// em produção todas as flags ficaram no default, com as URLs salvas.
+
+/** Largura realmente pintada do texto de um rótulo. */
+async function larguraDoTexto(page: Page, seletor: string) {
+  return page.locator(seletor).evaluate((el) => {
+    let total = 0;
+    for (const no of Array.from(el.childNodes)) {
+      if (no.nodeType !== Node.TEXT_NODE || !no.textContent?.trim()) continue;
+      const r = document.createRange();
+      r.selectNodeContents(no);
+      total += r.getBoundingClientRect().width;
+    }
+    for (const span of Array.from(el.querySelectorAll("span"))) {
+      total += span.getBoundingClientRect().width;
+    }
+    return total;
+  });
+}
+
+test.describe("a tela de configuração", () => {
+  test("cada caixa Topo/Rodapé se identifica com texto visível, em qualquer largura", async ({
+    page,
+  }) => {
+    await login(page, ORG_CONTATOS);
+
+    for (const largura of [390, 1280]) {
+      await page.setViewportSize({ width: largura, height: 1200 });
+      await page.goto("/app/configuracoes");
+
+      for (const canal of ["telefone", "instagram"]) {
+        for (const local of ["topo", "rodape"]) {
+          const texto = await larguraDoTexto(page, `[data-flag='${canal}-${local}']`);
+          // Esconder o rótulo (sr-only) deixava duas caixas idênticas e
+          // mudas lado a lado — foi o que permitiu marcar uma pensando
+          // estar marcando a outra.
+          expect(texto, `rótulo de ${canal}/${local} @ ${largura}px`).toBeGreaterThan(20);
+        }
+      }
+    }
+  });
+
+  test("o formulário reflete o que está salvo, caixa por caixa", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1200 });
+    await login(page, ORG_CONTATOS);
+    await page.goto("/app/configuracoes");
+
+    const marcada = (canal: string, local: string) =>
+      page.locator(`[data-flag='${canal}-${local}'] input[type=checkbox]`).isChecked();
+
+    // Mesma combinação do seed — a tela não pode inventar estado.
+    expect(await marcada("telefone", "topo")).toBe(true);
+    expect(await marcada("telefone", "rodape")).toBe(true);
+    expect(await marcada("whatsapp", "topo")).toBe(true);
+    expect(await marcada("whatsapp", "rodape")).toBe(false);
+    expect(await marcada("linkedin", "topo")).toBe(false);
+    expect(await marcada("linkedin", "rodape")).toBe(true);
+    expect(await marcada("facebook", "topo")).toBe(false);
+    expect(await marcada("facebook", "rodape")).toBe(false);
+  });
+
+  test("desmarcar Topo tira do topo, mantém no rodapé, e persiste", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1200 });
+    await login(page, ORG_CONTATOS);
+
+    const caixaTopo = "[data-flag='telefone-topo']";
+    const inputTopo = `${caixaTopo} input[type=checkbox]`;
+
+    try {
+      // 1. Estado inicial: telefone aparece nos dois lugares.
+      await page.goto(BASE);
+      await expect(noTopo(page, "telefone")).toBeVisible();
+      await expect(noRodape(page, "telefone")).toBeVisible();
+
+      // 2. Desmarca só o Topo e salva.
+      await page.goto("/app/configuracoes");
+      await page.locator(caixaTopo).click();
+      await expect(page.locator(inputTopo)).not.toBeChecked();
+      await page.getByRole("button", { name: /Salvar alterações/ }).click();
+      await expect(page.getByRole("button", { name: /Salvar alterações/ })).toBeEnabled();
+
+      // 3. RECARREGA: a caixa continua desmarcada — persistiu de fato,
+      //    não é só estado do React.
+      await page.goto("/app/configuracoes");
+      await expect(page.locator(inputTopo)).not.toBeChecked();
+
+      // 4. O site reflete: sumiu do topo, continua no rodapé.
+      await page.goto(BASE);
+      await expect(noTopo(page, "telefone")).toHaveCount(0);
+      await expect(noRodape(page, "telefone")).toBeVisible();
+      // A barra continua existindo por causa dos outros canais do topo.
+      await expect(barra(page)).toHaveCount(1);
+    } finally {
+      // 5. Restaura o estado do seed — as outras specs deste arquivo
+      //    dependem dele.
+      await page.goto("/app/configuracoes");
+      if (!(await page.locator(inputTopo).isChecked())) {
+        await page.locator(caixaTopo).click();
+        await page.getByRole("button", { name: /Salvar alterações/ }).click();
+        await expect(page.getByRole("button", { name: /Salvar alterações/ })).toBeEnabled();
+      }
+    }
+
+    // 6. Voltou ao estado inicial, e o topo voltou junto.
+    await page.goto(BASE);
+    await expect(noTopo(page, "telefone")).toBeVisible();
+  });
+
+  test("marcar Topo num canal que só estava no rodapé o leva ao topo", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1200 });
+    await login(page, ORG_CONTATOS);
+
+    const caixa = "[data-flag='linkedin-topo']";
+    const input = `${caixa} input[type=checkbox]`;
+
+    try {
+      await page.goto(BASE);
+      await expect(noTopo(page, "linkedin")).toHaveCount(0);
+      await expect(noRodape(page, "linkedin")).toBeVisible();
+
+      await page.goto("/app/configuracoes");
+      await page.locator(caixa).click();
+      await page.getByRole("button", { name: /Salvar alterações/ }).click();
+      await expect(page.getByRole("button", { name: /Salvar alterações/ })).toBeEnabled();
+
+      await page.goto("/app/configuracoes");
+      await expect(page.locator(input)).toBeChecked();
+
+      await page.goto(BASE);
+      await expect(noTopo(page, "linkedin")).toBeVisible();
+      await expect(noRodape(page, "linkedin")).toBeVisible();
+    } finally {
+      await page.goto("/app/configuracoes");
+      if (await page.locator(input).isChecked()) {
+        await page.locator(caixa).click();
+        await page.getByRole("button", { name: /Salvar alterações/ }).click();
+        await expect(page.getByRole("button", { name: /Salvar alterações/ })).toBeEnabled();
+      }
+    }
+
+    await page.goto(BASE);
+    await expect(noTopo(page, "linkedin")).toHaveCount(0);
   });
 });

@@ -146,16 +146,6 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           </CardDescription>
         </CardHeader>
         <CardContent className="min-w-0 space-y-4">
-          {/* Cabeçalho da "tabela" só a partir de sm: em telas estreitas
-              cada linha vira um bloco empilhado com os rótulos ao lado
-              das caixas, e uma fileira de títulos soltos no topo não
-              ajudaria a ler nada. */}
-          <div className="hidden items-center gap-4 border-b pb-2 text-xs font-medium text-muted-foreground sm:flex">
-            <span className="flex-1">Canal</span>
-            <span className="w-16 text-center">Topo</span>
-            <span className="w-16 text-center">Rodapé</span>
-          </div>
-
           {CANAIS_PUBLICOS.map((canal) => {
             const valores = config.canais[canal.chave];
             return (
@@ -174,23 +164,38 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
                   />
                   <ErroCampo erros={estado.fieldErrors?.[canal.chave]} />
                 </div>
-                {/* As duas caixas são independentes: um canal pode ficar
-                    só no rodapé, só no topo, nos dois ou em nenhum — e
-                    "em nenhum" mantém o valor salvo, apenas não exibido. */}
-                <div className="flex items-center gap-6 sm:gap-0">
+                {/* CORREÇÃO — cada caixa carrega o próprio rótulo VISÍVEL,
+                    em qualquer largura.
+                    
+                    A primeira versão desta tela escondia os dois rótulos
+                    no desktop (`sm:sr-only`) e delegava a identificação a
+                    uma fileira de títulos "Topo/Rodapé" no alto do card.
+                    Duas caixas idênticas e sem texto, a dezenas de pixels
+                    do único lugar que dizia o que eram — e o título
+                    "Topo" ainda por cima caía 16px fora do eixo da sua
+                    própria caixa (medido: título em x=1096..1160, caixa
+                    em x=1112..1176), enquanto "Rodapé" alinhava exato.
+                    Era possível marcar uma acreditando ter marcado a
+                    outra, e o resultado disso é exatamente o defeito
+                    relatado: rodapé configurado, topo não.
+                    
+                    Rótulo colado na caixa não depende de alinhamento
+                    entre elementos distantes, então não tem como
+                    desalinhar. */}
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 sm:shrink-0 sm:pt-8">
                   <label
-                    className="flex w-16 items-center gap-2 text-sm sm:justify-center sm:gap-0 sm:pt-8"
+                    className="flex cursor-pointer items-center gap-2 text-sm"
                     data-flag={`${canal.chave}-topo`}
                   >
                     <Checkbox name={`${canal.chave}Topo`} defaultChecked={valores.topo} />
-                    <span className="sm:sr-only">Topo</span>
+                    Topo
                   </label>
                   <label
-                    className="flex w-16 items-center gap-2 text-sm sm:justify-center sm:gap-0 sm:pt-8"
+                    className="flex cursor-pointer items-center gap-2 text-sm"
                     data-flag={`${canal.chave}-rodape`}
                   >
                     <Checkbox name={`${canal.chave}Rodape`} defaultChecked={valores.rodape} />
-                    <span className="sm:sr-only">Rodapé</span>
+                    Rodapé
                   </label>
                 </div>
               </div>
