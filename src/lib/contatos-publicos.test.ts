@@ -9,6 +9,7 @@ import {
   horarioDoLocal,
   normalizarHorario,
   horarioTemMarcacao,
+  separadoresDaBarra,
   LIMITE_HORARIO_ATENDIMENTO,
   type ChaveCanal,
   type ConfiguracaoCanais,
@@ -339,5 +340,83 @@ describe("horário de atendimento", () => {
   test("horarioDoTopo continua sendo o atalho do topo", () => {
     expect(horarioDoTopo(h(TEXTO, true, true))).toBe(horarioDoLocal(h(TEXTO, true, true), "topo"));
     expect(horarioDoTopo(h(TEXTO, false, true))).toBeNull();
+  });
+});
+
+// =======================================================================
+// Separadores da barra superior (Fase 58.4)
+// =======================================================================
+// As oito combinações de grupos, uma a uma. A regra é por GRUPO, então
+// nenhuma combinação recebe tratamento especial no código.
+
+describe("separadores da barra", () => {
+  const g = (temHorario: boolean, temRedes: boolean, temContatos: boolean) =>
+    separadoresDaBarra({ temHorario, temRedes, temContatos });
+
+  /** Quantos traços aparecem no desktop, onde todos os grupos são visíveis. */
+  const noDesktop = (s: ReturnType<typeof separadoresDaBarra>) =>
+    (s.antesDasRedes ? 1 : 0) + (s.antesDosContatos ? 1 : 0);
+
+  /** Quantos aparecem no mobile, onde as redes estão escondidas. */
+  const noMobile = (s: ReturnType<typeof separadoresDaBarra>) =>
+    s.antesDasRedes && !s.antesDasRedesSoNoDesktop ? 1 : 0;
+
+  test("horário + redes + contatos -> dois traços no desktop", () => {
+    const s = g(true, true, true);
+    expect(noDesktop(s)).toBe(2);
+    // No mobile as redes somem e sobra UM traço, separando horário de
+    // contatos — o mesmo elemento, reaproveitado.
+    expect(noMobile(s)).toBe(1);
+  });
+
+  test("horário + redes -> um traço, e nenhum no mobile", () => {
+    const s = g(true, true, false);
+    expect(noDesktop(s)).toBe(1);
+    // Sem contatos, no mobile não sobraria nada depois do traço.
+    expect(noMobile(s)).toBe(0);
+  });
+
+  test("horário + contatos -> um traço, também no mobile", () => {
+    const s = g(true, false, true);
+    expect(noDesktop(s)).toBe(1);
+    expect(noMobile(s)).toBe(1);
+  });
+
+  test("redes + contatos -> um traço no desktop, nenhum no mobile", () => {
+    const s = g(false, true, true);
+    expect(noDesktop(s)).toBe(1);
+    expect(noMobile(s)).toBe(0);
+  });
+
+  test("somente horário -> nenhum traço", () => {
+    expect(noDesktop(g(true, false, false))).toBe(0);
+    expect(noMobile(g(true, false, false))).toBe(0);
+  });
+
+  test("somente redes -> nenhum traço", () => {
+    expect(noDesktop(g(false, true, false))).toBe(0);
+  });
+
+  test("somente contatos -> nenhum traço", () => {
+    expect(noDesktop(g(false, false, true))).toBe(0);
+  });
+
+  test("nenhum grupo -> nenhum traço", () => {
+    expect(noDesktop(g(false, false, false))).toBe(0);
+    expect(noMobile(g(false, false, false))).toBe(0);
+  });
+
+  test("nunca há traço sem conteúdo dos dois lados", () => {
+    for (const h of [true, false]) {
+      for (const r of [true, false]) {
+        for (const c of [true, false]) {
+          const s = g(h, r, c);
+          // O traço antes das redes exige horário à esquerda e ALGO à direita.
+          if (s.antesDasRedes) expect(h && (r || c)).toBe(true);
+          // O traço antes dos contatos exige redes à esquerda e contatos à direita.
+          if (s.antesDosContatos) expect(r && c).toBe(true);
+        }
+      }
+    }
   });
 });

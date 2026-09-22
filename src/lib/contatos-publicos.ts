@@ -253,3 +253,46 @@ export function temCanais(
 ): boolean {
   return canaisDoLocal(configuracao, local, opcoes).length > 0;
 }
+
+// -----------------------------------------------------------------------
+// Separadores da barra superior (Fase 58.4)
+// -----------------------------------------------------------------------
+// A barra mostra até três grupos — horário, redes e contatos — separados
+// por um traço. A regra é POR GRUPO, nunca por combinação enumerada: um
+// separador existe quando há conteúdo dos dois lados dele.
+//
+// Função pura e fora do componente porque a única parte difícil disto é
+// lógica, não marcação: as redes desaparecem abaixo de `sm` (continuam no
+// menu mobile), e um traço desenhado ao lado de um grupo invisível vira
+// um traço solto. Aqui as oito combinações ficam verificáveis sem montar
+// página nenhuma.
+export type GruposDaBarra = {
+  temHorario: boolean;
+  temRedes: boolean;
+  temContatos: boolean;
+};
+
+export type SeparadoresDaBarra = {
+  /**
+   * O traço depois do horário. Tem papel DUPLO: no desktop separa o
+   * horário das redes; no mobile, com as redes fora, passa a separar o
+   * horário dos contatos — o mesmo elemento, sem duplicar nada no DOM.
+   */
+  antesDasRedes: boolean;
+  /**
+   * `true` quando esse primeiro traço precisa sumir junto com as redes:
+   * sem contatos, no mobile não sobraria nada depois dele.
+   */
+  antesDasRedesSoNoDesktop: boolean;
+  /** O traço entre redes e contatos — sempre acompanha as redes. */
+  antesDosContatos: boolean;
+};
+
+export function separadoresDaBarra(grupos: GruposDaBarra): SeparadoresDaBarra {
+  const antesDasRedes = grupos.temHorario && (grupos.temRedes || grupos.temContatos);
+  return {
+    antesDasRedes,
+    antesDasRedesSoNoDesktop: antesDasRedes && !grupos.temContatos,
+    antesDosContatos: grupos.temRedes && grupos.temContatos,
+  };
+}

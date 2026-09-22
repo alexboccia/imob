@@ -417,15 +417,36 @@ test.describe("composição da barra superior", () => {
     await page.goto(BASE);
   });
 
-  test("o horário aparece à esquerda, com o texto configurado", async ({ page }) => {
+  test("o horário é o PRIMEIRO item do grupo, não um bloco solto à esquerda", async ({
+    page,
+  }) => {
     const horario = page.locator("[data-horario-topo]");
     await expect(horario).toBeVisible();
     await expect(horario).toContainText("Segunda a sexta");
 
     const h = await caixa(page, "[data-horario-topo]");
-    const direito = await caixa(page, "[data-grupo-direito]");
-    // Grupos distintos, o horário inteiramente antes do grupo direito.
-    expect(h.x + h.width).toBeLessThanOrEqual(direito.x + 0.5);
+    const grupo = await caixa(page, "[data-grupo-direito]");
+
+    // Fase 58.4 — o horário está DENTRO do grupo, e é o item que o abre.
+    await expect(page.locator("[data-grupo-direito] [data-horario-topo]")).toHaveCount(1);
+    expect(h.x).toBeGreaterThanOrEqual(grupo.x - 0.5);
+    expect(h.x + h.width).toBeLessThanOrEqual(grupo.x + grupo.width + 0.5);
+    // E abre o grupo: nada do grupo começa antes dele.
+    expect(Math.abs(h.x - grupo.x)).toBeLessThan(2);
+  });
+
+  test("não sobra vão entre o horário e as redes — só traço e respiro", async ({ page }) => {
+    const h = await caixa(page, "[data-horario-topo]");
+    const primeiraRede = await caixa(page, "[data-canal-topo='instagram']");
+    const vao = primeiraRede.x - (h.x + h.width);
+
+    // Antes da 58.4 este vão era o espaço flexível da barra inteira
+    // (centenas de px). Agora é gap + separador + gap. O teto é
+    // relativo à própria barra, não um pixel de máquina: menos de um
+    // quinto da largura útil dela.
+    const barraCaixa = await caixa(page, "[data-barra-contato-topo]");
+    expect(vao).toBeGreaterThan(0);
+    expect(vao, `vão de ${Math.round(vao)}px`).toBeLessThan(barraCaixa.width / 5);
   });
 
   test("a ordem horizontal é redes -> telefone -> WhatsApp", async ({ page }) => {
@@ -466,13 +487,35 @@ test.describe("composição da barra superior", () => {
     expect(Math.abs(bordaDireitaBarra - bordaDireitaNav)).toBeLessThan(20);
   });
 
-  test("o separador só existe entre redes e contatos", async ({ page }) => {
-    await expect(page.locator("[data-separador-topo]")).toHaveCount(1);
-    const sep = await caixa(page, "[data-separador-topo]");
+  test("dois separadores: horário | redes | contatos", async ({ page }) => {
+    const seps = page.locator("[data-separador-topo]:visible");
+    await expect(seps).toHaveCount(2);
+
+    const h = await caixa(page, "[data-horario-topo]");
+    const instagram = await caixa(page, "[data-canal-topo='instagram']");
     const tiktok = await caixa(page, "[data-canal-topo='tiktok']");
     const telefone = await caixa(page, "[data-canal-topo='telefone']");
-    expect(sep.x).toBeGreaterThanOrEqual(tiktok.x + tiktok.width - 0.5);
-    expect(sep.x + sep.width).toBeLessThanOrEqual(telefone.x + 0.5);
+
+    const s1 = (await seps.nth(0).boundingBox())!;
+    const s2 = (await seps.nth(1).boundingBox())!;
+
+    // Primeiro traço: entre o fim do horário e o início das redes.
+    expect(s1.x).toBeGreaterThanOrEqual(h.x + h.width - 0.5);
+    expect(s1.x + s1.width).toBeLessThanOrEqual(instagram.x + 0.5);
+    // Segundo: entre o fim das redes e o início dos contatos.
+    expect(s2.x).toBeGreaterThanOrEqual(tiktok.x + tiktok.width - 0.5);
+    expect(s2.x + s2.width).toBeLessThanOrEqual(telefone.x + 0.5);
+  });
+
+  test("nenhum separador entre telefone e WhatsApp — são o mesmo grupo", async ({ page }) => {
+    const telefone = await caixa(page, "[data-canal-topo='telefone']");
+    const whatsapp = await caixa(page, "[data-canal-topo='whatsapp']");
+
+    for (const sep of await page.locator("[data-separador-topo]:visible").all()) {
+      const c = (await sep.boundingBox())!;
+      const entre = c.x > telefone.x + telefone.width && c.x + c.width < whatsapp.x;
+      expect(entre, "há um traço entre telefone e WhatsApp").toBe(false);
+    }
   });
 
   test("o ícone do WhatsApp usa o verde da marca, e a cor não é o único sinal", async ({
@@ -525,16 +568,29 @@ test.describe("casos parciais da barra", () => {
     await expect(page.locator("[data-grupo-direito]")).toHaveCount(0);
   });
 
-  test("sem redes visíveis (mobile), não sobra separador órfão", async ({ page }) => {
+  test("no mobile as redes saem e sobra UM traço, entre horário e contatos", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 320, height: 900 });
     await page.goto(BASE);
-    // As redes saem da barra abaixo de sm; o separador vai junto.
+
     await expect(page.locator("[data-canal-topo='instagram']")).toBeHidden();
-    await expect(page.locator("[data-separador-topo]")).toBeHidden();
-    // Horário e contatos continuam.
+    // Horário e contatos continuam, e o traço que os separa é o mesmo
+    // elemento que no desktop separa horário e redes.
     await expect(page.locator("[data-horario-topo]")).toBeVisible();
     await expect(page.locator("[data-canal-topo='telefone']")).toBeVisible();
     await expect(page.locator("[data-canal-topo='whatsapp']")).toBeVisible();
+
+    const seps = page.locator("[data-separador-topo]:visible");
+    await expect(seps).toHaveCount(1);
+
+    // E ele não é órfão: tem conteúdo dos dois lados.
+    const sep = (await seps.first().boundingBox())!;
+    const h = await caixa(page, "[data-horario-topo]");
+    const telefone = await caixa(page, "[data-canal-topo='telefone']");
+    const depoisDoHorario = sep.y >= h.y || sep.x >= h.x + h.width - 0.5;
+    expect(depoisDoHorario).toBe(true);
+    expect(telefone.y >= sep.y || telefone.x >= sep.x).toBe(true);
   });
 });
 

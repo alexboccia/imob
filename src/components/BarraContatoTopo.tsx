@@ -8,6 +8,7 @@ import {
 } from "@/components/icones-sociais";
 import { IconeTelefone, IconeWhatsApp } from "@/components/icons";
 import { cn } from "@/lib/utils";
+import { separadoresDaBarra } from "@/lib/contatos-publicos";
 import type { CanalPublico, ChaveCanal } from "@/lib/contatos-publicos";
 
 // =======================================================================
@@ -17,19 +18,25 @@ import type { CanalPublico, ChaveCanal } from "@/lib/contatos-publicos";
 // habilitou alguma coisa para o topo. Sem conteúdo, quem renderiza não a
 // monta: a barra não fica vazia, ela não existe.
 //
-// COMPOSIÇÃO (58.2):
+// COMPOSIÇÃO (58.4):
 //
-//   [ ◷ horário ]                    [ redes | ☎ telefone  WhatsApp ]
+//        [ ◷ horário | redes | ☎ telefone  WhatsApp ]
+//                                                    ^ borda do container
 //
-// O horário é o único item da esquerda; TODO o resto vai para a direita,
-// na ordem redes -> telefone -> WhatsApp. Antes telefone e WhatsApp
-// ficavam à esquerda junto do horário; passaram para a direita porque é
-// ali que a pessoa procura ação de contato, e o horário é contexto.
+// TRÊS GRUPOS, UM BLOCO SÓ, encostado à direita. Na 58.2 o horário ficava
+// sozinho no extremo esquerdo e o resto no extremo direito, com um vazio
+// enorme no meio: a barra parecia duas barras. Agora o horário é o
+// primeiro item do mesmo grupo, imediatamente antes das redes, e o
+// espaço flexível fica todo à esquerda do bloco.
 //
-// O alinhamento é decidido por `justify-*` no container, não por margem
-// solta: com horário, `justify-between` separa os dois grupos; sem
-// horário, `justify-end` mantém o grupo direito colado à direita sem
-// precisar de um elemento vazio segurando a esquerda.
+// O alinhamento é `justify-end` no container — sem margem arbitrária,
+// sem posicionamento absoluto, sem largura fixa. A borda direita
+// continua sendo a do container público (max-w-6xl), a mesma da
+// navegação principal logo abaixo.
+//
+// SEPARADORES POR GRUPO, nunca por combinação: cada um só é renderizado
+// quando existe conteúdo dos dois lados dele — ver `separadorAntesDe*`
+// abaixo, onde a regra inteira mora.
 //
 // VISUAL: discreta de propósito — fundo `muted`, texto pequeno, uma
 // linha. Todas as cores saem dos tokens do tenant, com UMA exceção
@@ -93,59 +100,73 @@ export function BarraContatoTopo({
 }) {
   const contatos = canais.filter((c) => c.tipo !== "REDE");
   const redes = canais.filter((c) => c.tipo === "REDE");
-  const temDireita = contatos.length > 0 || redes.length > 0;
-
   // Guarda de segurança: montada sem nada, não produz elemento na página.
-  if (!horario && !temDireita) return null;
+  if (!horario && contatos.length === 0 && redes.length === 0) return null;
+
+  // A regra inteira vive em separadoresDaBarra (contatos-publicos.ts),
+  // onde as oito combinações de grupos são testadas uma a uma.
+  const separadores = separadoresDaBarra({
+    temHorario: Boolean(horario),
+    temRedes: redes.length > 0,
+    temContatos: contatos.length > 0,
+  });
 
   return (
     <div data-barra-contato-topo className="border-b bg-muted text-muted-foreground">
-      <div
-        className={cn(
-          "mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-1.5 text-sm",
-          // Com os dois grupos, um vai para cada ponta. Só com o direito,
-          // ele encosta na direita sozinho — sem div vazia à esquerda.
-          horario && temDireita ? "justify-between" : horario ? "justify-start" : "justify-end"
-        )}
-      >
-        {horario && (
-          <p data-horario-topo className="flex min-w-0 items-center gap-1.5">
-            <Clock className="size-4 shrink-0" aria-hidden="true" />
-            <span className="min-w-0">{horario}</span>
-          </p>
-        )}
+      {/* justify-end: o bloco inteiro encosta na direita e o espaço
+          flexível fica à esquerda dele. */}
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-y-1 px-4 py-1.5 text-sm">
+        <div data-grupo-direito className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          {horario && (
+            <p data-horario-topo className="flex min-w-0 items-center gap-1.5">
+              <Clock className="size-4 shrink-0" aria-hidden="true" />
+              <span className="min-w-0">{horario}</span>
+            </p>
+          )}
 
-        {temDireita && (
-          <div data-grupo-direito className="flex shrink-0 items-center gap-x-3 gap-y-1">
-            {redes.length > 0 && (
-              <div className="hidden shrink-0 items-center gap-1 sm:flex">
-                {redes.map((canal) => (
-                  <Item key={canal.chave} canal={canal} somenteIcone />
-                ))}
-              </div>
-            )}
+          {separadores.antesDasRedes && (
+            <Separador
+              className={separadores.antesDasRedesSoNoDesktop ? "hidden sm:block" : ""}
+            />
+          )}
 
-            {/* Separador SÓ quando existe conteúdo dos dois lados dele —
-                e só quando as redes estão de fato visíveis (elas somem
-                abaixo de sm), para não sobrar um traço solto no mobile. */}
-            {redes.length > 0 && contatos.length > 0 && (
-              <span
-                aria-hidden="true"
-                data-separador-topo
-                className="hidden h-4 w-px shrink-0 bg-current opacity-25 sm:block"
-              />
-            )}
+          {redes.length > 0 && (
+            <div className="hidden shrink-0 items-center gap-1 sm:flex">
+              {redes.map((canal) => (
+                <Item key={canal.chave} canal={canal} somenteIcone />
+              ))}
+            </div>
+          )}
 
-            {contatos.length > 0 && (
-              <div className="flex shrink-0 items-center gap-x-3 gap-y-1">
-                {contatos.map((canal) => (
-                  <Item key={canal.chave} canal={canal} somenteIcone={false} />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+          {/* Este acompanha as redes: com elas escondidas, quem separa
+              horário e contatos é o traço acima. */}
+          {separadores.antesDosContatos && <Separador className="hidden sm:block" />}
+
+          {contatos.length > 0 && (
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              {contatos.map((canal) => (
+                <Item key={canal.chave} canal={canal} somenteIcone={false} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * O `|` entre grupos. Uma borda de 1px em vez do caractere: o traço fica
+ * com altura previsível e não é lido por leitor de tela, que já percebe
+ * a separação pela estrutura. O respiro dos dois lados vem do `gap` do
+ * container — nada de margem própria.
+ */
+function Separador({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-separador-topo
+      className={cn("h-4 w-px shrink-0 bg-current opacity-25", className)}
+    />
   );
 }
