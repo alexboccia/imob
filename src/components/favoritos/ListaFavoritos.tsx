@@ -6,6 +6,9 @@ import { ImovelCard } from "@/components/ImovelCard";
 import { buttonVariants } from "@/components/ui/button";
 import { IconeCoracao } from "@/components/icons";
 import { BotaoFavoritoImovel } from "@/components/favoritos/BotaoFavoritoImovel";
+import { SelecionarParaComparar } from "@/components/favoritos/SelecionarParaComparar";
+import { BarraComparacao } from "@/components/favoritos/BarraComparacao";
+import { sincronizarComFavoritos, useSelecao } from "@/lib/comparador-selecao";
 import { favoritosMaisRecentesPrimeiro, idImovelValido } from "@/lib/favoritos";
 import { removerFavorito, useFavoritos } from "@/lib/favoritos-store";
 import type { ImovelFavorito } from "@/lib/favoritos-data";
@@ -35,6 +38,19 @@ export function ListaFavoritos({ orgSlug, basePath }: { orgSlug: string; basePat
     () => (salvos ? favoritosMaisRecentesPrimeiro(salvos).filter(idImovelValido) : null),
     [salvos]
   );
+  // Deixar de favoritar é uma decisão sobre o imóvel, não sobre a tela:
+  // o que sai da lista salva sai também da comparação, para ela nunca
+  // apontar para fora dos favoritos.
+  const selecao = useSelecao(orgSlug);
+  const selecionados = useMemo(
+    () => (selecao ?? []).filter((id) => (ids ?? []).includes(id)),
+    [selecao, ids]
+  );
+  useEffect(() => {
+    if (ids === null || selecao === null) return;
+    sincronizarComFavoritos(orgSlug, ids);
+  }, [orgSlug, ids, selecao]);
+
   const [estado, setEstado] = useState<Estado>({ imoveis: new Map(), consultados: new Set() });
   const [erro, setErro] = useState(false);
   const [tentativa, setTentativa] = useState(0);
@@ -112,7 +128,13 @@ export function ListaFavoritos({ orgSlug, basePath }: { orgSlug: string; basePat
         {erro && <ErroFavoritos aoTentar={() => setTentativa((t) => t + 1)} />}
         <ul className={cn(GRADE, erro && "mt-6")} data-lista-favoritos>
           {visiveis.map((imovel) => (
-            <li key={imovel.id} data-favorito={imovel.id}>
+            <li key={imovel.id} data-favorito={imovel.id} className="flex flex-col">
+              <SelecionarParaComparar
+                orgSlug={orgSlug}
+                imovelId={imovel.id}
+                titulo={imovel.titulo}
+              />
+              <div className="mt-2 min-w-0">
               <ImovelCard
                 imovel={imovel}
                 basePath={basePath}
@@ -128,9 +150,11 @@ export function ListaFavoritos({ orgSlug, basePath }: { orgSlug: string; basePat
                   />
                 }
               />
+              </div>
             </li>
           ))}
         </ul>
+        <BarraComparacao orgSlug={orgSlug} basePath={basePath} total={selecionados.length} />
       </>
     );
   }
