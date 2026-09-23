@@ -487,9 +487,9 @@ test.describe("composição da barra superior", () => {
     expect(Math.abs(bordaDireitaBarra - bordaDireitaNav)).toBeLessThan(20);
   });
 
-  test("dois separadores: horário | redes | contatos", async ({ page }) => {
+  test("três separadores: horário | redes | telefone | WhatsApp", async ({ page }) => {
     const seps = page.locator("[data-separador-topo]:visible");
-    await expect(seps).toHaveCount(2);
+    await expect(seps).toHaveCount(3);
 
     const h = await caixa(page, "[data-horario-topo]");
     const instagram = await caixa(page, "[data-canal-topo='instagram']");
@@ -507,15 +507,18 @@ test.describe("composição da barra superior", () => {
     expect(s2.x + s2.width).toBeLessThanOrEqual(telefone.x + 0.5);
   });
 
-  test("nenhum separador entre telefone e WhatsApp — são o mesmo grupo", async ({ page }) => {
+  test("há um separador entre telefone e WhatsApp", async ({ page }) => {
     const telefone = await caixa(page, "[data-canal-topo='telefone']");
     const whatsapp = await caixa(page, "[data-canal-topo='whatsapp']");
 
+    let encontrado = false;
     for (const sep of await page.locator("[data-separador-topo]:visible").all()) {
       const c = (await sep.boundingBox())!;
-      const entre = c.x > telefone.x + telefone.width && c.x + c.width < whatsapp.x;
-      expect(entre, "há um traço entre telefone e WhatsApp").toBe(false);
+      if (c.x > telefone.x + telefone.width - 0.5 && c.x + c.width < whatsapp.x + 0.5) {
+        encontrado = true;
+      }
     }
+    expect(encontrado, "falta o traço entre telefone e WhatsApp").toBe(true);
   });
 
   test("o ícone do WhatsApp usa o verde da marca, e a cor não é o único sinal", async ({
@@ -581,10 +584,13 @@ test.describe("casos parciais da barra", () => {
     await expect(page.locator("[data-canal-topo='telefone']")).toBeVisible();
     await expect(page.locator("[data-canal-topo='whatsapp']")).toBeVisible();
 
+    // Dois: o que separa horário de contatos (o mesmo elemento que no
+    // desktop separa horário das redes) e o que separa telefone do
+    // WhatsApp.
     const seps = page.locator("[data-separador-topo]:visible");
-    await expect(seps).toHaveCount(1);
+    await expect(seps).toHaveCount(2);
 
-    // E ele não é órfão: tem conteúdo dos dois lados.
+    // O primeiro não é órfão: tem conteúdo dos dois lados.
     const sep = (await seps.first().boundingBox())!;
     const h = await caixa(page, "[data-horario-topo]");
     const telefone = await caixa(page, "[data-canal-topo='telefone']");
@@ -930,7 +936,7 @@ test.describe("personalizar a cor da barra", () => {
 
       // A composição da 58.4 segue intacta.
       await expect(page.locator("[data-grupo-direito]")).toHaveCount(1);
-      await expect(page.locator("[data-separador-topo]:visible")).toHaveCount(2);
+      await expect(page.locator("[data-separador-topo]:visible")).toHaveCount(3);
     });
   }
 

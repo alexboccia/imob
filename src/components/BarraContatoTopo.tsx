@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Clock } from "lucide-react";
 import {
   IconeInstagram,
@@ -179,8 +180,17 @@ export function BarraContatoTopo({
 
           {contatos.length > 0 && (
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              {contatos.map((canal) => (
-                <Item key={canal.chave} canal={canal} somenteIcone={false} estilo={estilo} />
+              {/* Um traço entre cada par de contatos. A 58.4 tratava
+                  telefone e WhatsApp como um bloco colado, sem divisão;
+                  na revisão visual eles ficaram próximos demais para
+                  serem lidos como duas ações distintas. A regra continua
+                  sendo "só entre elementos", então com um único contato
+                  não sobra traço nenhum. */}
+              {contatos.map((canal, i) => (
+                <Fragment key={canal.chave}>
+                  {i > 0 && <Separador />}
+                  <Item canal={canal} somenteIcone={false} estilo={estilo} />
+                </Fragment>
               ))}
             </div>
           )}
