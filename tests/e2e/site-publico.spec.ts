@@ -693,7 +693,11 @@ test.describe("Site público — Home comercial (Fase 1)", () => {
     await expect(cta).toHaveAttribute("href", /\/anuncie$/);
     await cta.click();
     await page.waitForURL("**/anuncie");
-    await expect(page.getByRole("heading", { name: "Anuncie seu imóvel", level: 1 })).toBeVisible();
+    // Fase 60 — o h1 virou a headline da landing; o rótulo curto
+    // continua no cartão do formulário (h2).
+    await expect(
+      page.getByRole("heading", { level: 1, name: /Anuncie seu imóvel com quem entende/ })
+    ).toBeVisible();
     await expect(page.locator("form")).toBeVisible();
   });
 

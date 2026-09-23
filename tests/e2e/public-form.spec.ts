@@ -119,7 +119,9 @@ test.describe("Captação — contexto do lead no CRM", () => {
     await page.locator("#telefone").fill(telefone);
     await page.locator("#email").fill(email);
     await page.locator('textarea[name="descricaoImovel"]').fill(descricao);
-    await page.getByRole("button", { name: /Enviar/ }).click();
+    // Fase 60 — o CTA passou a nomear a ação ("Quero anunciar meu
+    // imóvel"); o submit e a action por trás dele são os mesmos.
+    await page.getByRole("button", { name: /Quero anunciar meu imóvel/ }).click();
     await expect(page.getByText(/enviad[ao] com sucesso|Recebemos/i)).toBeVisible();
 
     await login(page, ORG_A);
