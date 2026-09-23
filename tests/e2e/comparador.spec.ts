@@ -261,9 +261,11 @@ test.describe("apenas diferenças", () => {
 // Janela deslizante
 // -----------------------------------------------------------------------
 test.describe("navegação entre os selecionados", () => {
-  test("com 4 selecionados no desktop, 3 aparecem e a navegação troca o conjunto", async ({
-    page,
-  }) => {
+  test("com 4 selecionados e espaço para 3, a navegação troca o conjunto", async ({ page }) => {
+    // 1024: cabem três colunas (ver a tabela de larguras no spec de
+    // densidade). É a largura em que "selecionados != visíveis" ainda
+    // acontece com os quatro imóveis públicos do seed.
+    await page.setViewportSize({ width: 1024, height: 1000 });
     await comFavoritos(page, TODOS);
     await comSelecao(page, TODOS);
     await page.goto(COMPARAR);
@@ -298,6 +300,7 @@ test.describe("navegação entre os selecionados", () => {
   });
 
   test("a navegação funciona por teclado", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
     await comFavoritos(page, TODOS);
     await comSelecao(page, TODOS);
     await page.goto(COMPARAR);
@@ -362,5 +365,202 @@ test.describe("responsividade", () => {
     for (let i = 1; i < caixas.length; i++) {
       expect(caixas[i].x).toBeGreaterThanOrEqual(caixas[i - 1].direita - 0.5);
     }
+  });
+});
+
+
+// =======================================================================
+// Densidade e layout (Fase 59.1)
+// =======================================================================
+// A funcionalidade é a mesma; o que mudou é quanta informação cabe na
+// tela e com que rapidez se lê. As invariantes abaixo são relações, não
+// pixels de uma máquina.
+
+test.describe("densidade do comparador", () => {
+  /** Quantas colunas o componente decidiu mostrar, já assentado. */
+  async function colunasAssentadas(page: Page) {
+    await colunas(page).first().waitFor();
+    // O ResizeObserver começa em 1 e corrige: esperar a contagem parar
+    // de mudar evita medir o estado inicial.
+    await page.waitForFunction(
+      () => {
+        const n = document.querySelectorAll("[data-coluna-imovel]").length;
+        const w = window as unknown as { _n?: number };
+        if (w._n === n) return true;
+        w._n = n;
+        return false;
+      },
+      null,
+      { polling: 150 }
+    );
+    return colunas(page).count();
+  }
+
+  test("quatro imóveis aparecem quando há espaço real", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await comFavoritos(page, TODOS);
+    await comSelecao(page, TODOS);
+    await page.goto(COMPARAR);
+
+    expect(await colunasAssentadas(page)).toBe(4);
+    // E sem espremer: cada coluna mantém largura utilizável.
+    const larguras = await colunas(page).evaluateAll((els) =>
+      els.map((e) => e.getBoundingClientRect().width)
+    );
+    for (const l of larguras) expect(l).toBeGreaterThan(180);
+    // Sem excedente, não há navegação.
+    await expect(page.locator("[data-comparar-proximos]")).toHaveCount(0);
+  });
+
+  test("quantas colunas cabem acompanha a largura disponível", async ({ page }) => {
+    await comFavoritos(page, TODOS);
+    await comSelecao(page, TODOS);
+
+    const esperado: Record<number, number> = {
+      320: 1,
+      390: 1,
+      768: 2,
+      1024: 3,
+      1280: 4,
+      1440: 4,
+    };
+    for (const [largura, colunasEsperadas] of Object.entries(esperado)) {
+      await page.setViewportSize({ width: Number(largura), height: 1000 });
+      await page.goto(COMPARAR);
+      expect(await colunasAssentadas(page), `${largura}px`).toBe(colunasEsperadas);
+    }
+  });
+
+  test("a foto identifica sem dominar a página", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await comFavoritos(page, TODOS);
+    await comSelecao(page, TODOS);
+    await page.goto(COMPARAR);
+    await colunasAssentadas(page);
+
+    const alturas = await page
+      .locator("[data-coluna-imovel] div.relative")
+      .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+    expect(alturas.length).toBeGreaterThan(0);
+    for (const h of alturas) {
+      // Antes da 59.1 a foto crescia com a coluna e chegava a 237px.
+      expect(h).toBeLessThanOrEqual(180);
+      expect(h).toBeGreaterThan(80);
+    }
+    // Altura igual em todas as colunas: é o que mantém as linhas
+    // alinhadas entre si.
+    expect(new Set(alturas.map(Math.round)).size).toBe(1);
+  });
+
+  test("a coluna de critérios se distingue dos valores e acompanha a rolagem", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await comFavoritos(page, TODOS);
+    await comSelecao(page, TODOS);
+    await page.goto(COMPARAR);
+    await colunasAssentadas(page);
+
+    const criterio = page.locator("[data-criterio='preco']");
+    await expect(criterio).toHaveText("Preço");
+    await expect(criterio).toBeVisible();
+
+    const estilo = await criterio.evaluate((e) => {
+      const s = getComputedStyle(e);
+      return { posicao: s.position, fundo: s.backgroundColor, peso: s.fontWeight };
+    });
+    // Grudada, com fundo opaco próprio (é o que impede o valor de
+    // aparecer por baixo) e peso maior que o texto comum.
+    expect(estilo.posicao).toBe("sticky");
+    expect(estilo.fundo).not.toBe("rgba(0, 0, 0, 0)");
+    expect(Number(estilo.peso)).toBeGreaterThanOrEqual(600);
+
+    // Largura suficiente para o rótulo não ser cortado.
+    const caixa = (await criterio.boundingBox())!;
+    expect(caixa.width).toBeGreaterThan(100);
+  });
+
+  test("todos os critérios da tabela têm rótulo visível", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await comFavoritos(page, TODOS);
+    await comSelecao(page, TODOS);
+    await page.goto(COMPARAR);
+    await colunasAssentadas(page);
+
+    const rotulos = await page
+      .locator("[data-criterio]")
+      .evaluateAll((els) => els.map((e) => (e.textContent ?? "").trim()));
+    expect(rotulos.length).toBeGreaterThan(10);
+    for (const r of rotulos) expect(r.length).toBeGreaterThan(0);
+    // Os principais estão lá, por nome.
+    for (const esperado of ["Preço", "Área total", "Quartos", "Bairro"]) {
+      expect(rotulos).toContain(esperado);
+    }
+  });
+
+  test("a identidade compacta gruda no topo e segue as mesmas colunas", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 700 });
+    await comFavoritos(page, TODOS);
+    await comSelecao(page, TODOS);
+    await page.goto(COMPARAR);
+    await colunasAssentadas(page);
+
+    const ordemColunas = await colunas(page).evaluateAll((els) =>
+      els.map((e) => e.getAttribute("data-coluna-imovel"))
+    );
+    const ordemFixa = await page
+      .locator("[data-identidade-fixa]")
+      .evaluateAll((els) => els.map((e) => e.getAttribute("data-identidade-fixa")));
+    expect(ordemFixa).toEqual(ordemColunas);
+
+    // Depois de rolar, a identidade continua na tela e alinhada com a
+    // sua coluna.
+    await page.evaluate(() => window.scrollTo(0, 600));
+    const fixa = page.locator("[data-cabecalho-fixo]");
+    await expect(fixa).toBeVisible();
+    const caixaFixa = (await fixa.boundingBox())!;
+    // Compacta: não pode comer a viewport.
+    expect(caixaFixa.height).toBeLessThan(90);
+
+    for (const id of ordemColunas) {
+      const coluna = (await page.locator(`[data-coluna-imovel='${id}']`).boundingBox())!;
+      const identidade = (await page
+        .locator(`[data-identidade-fixa='${id}']`)
+        .boundingBox())!;
+      // Mesma coluna: o eixo horizontal coincide.
+      expect(Math.abs(identidade.x - coluna.x)).toBeLessThan(2);
+    }
+  });
+
+  test("cada valor pertence à coluna do seu imóvel", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await comFavoritos(page, TODOS);
+    await comSelecao(page, TODOS);
+    await page.goto(COMPARAR);
+    const visiveis = await colunasAssentadas(page);
+
+    const ordem = await colunas(page).evaluateAll((els) =>
+      els.map((e) => e.getBoundingClientRect().x)
+    );
+    const celulas = await page
+      .locator("[data-linha='bairro'] td")
+      .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().x));
+    expect(celulas).toHaveLength(visiveis);
+    for (let i = 0; i < visiveis; i++) {
+      expect(Math.abs(celulas[i] - ordem[i]), `célula ${i}`).toBeLessThan(2);
+    }
+  });
+
+  test("a comparação ficou mais curta do que era", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await comFavoritos(page, TODOS);
+    await comSelecao(page, TODOS);
+    await page.goto(COMPARAR);
+    await colunasAssentadas(page);
+
+    const linha = (await linhas(page).first().boundingBox())!;
+    // Linhas densas, mas com alvo de toque e leitura preservados.
+    expect(linha.height).toBeLessThanOrEqual(36);
+    expect(linha.height).toBeGreaterThanOrEqual(28);
   });
 });

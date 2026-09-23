@@ -5,7 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Checkbox } from "@/components/ui/checkbox";
 import { buttonVariants } from "@/components/ui/button";
-import { IconeChevronEsquerdo, IconeChevronDireito } from "@/components/icons";
+import { IconeChevronEsquerdo, IconeChevronDireito, IconeFechar } from "@/components/icons";
+import { formatarPreco } from "@/lib/format";
 import {
   MINIMO_PARA_COMPARAR,
   removerDaSelecao,
@@ -32,16 +33,42 @@ import { cn } from "@/lib/utils";
 // por um breakpoint escolhido a dedo: o mesmo componente pode viver numa
 // página estreita ou larga, e o que importa é o espaço que ele tem.
 
-/** Largura mínima confortável de uma coluna de imóvel, em px. */
-const LARGURA_COLUNA = 240;
-/** Teto de colunas simultâneas: acima disso a leitura lado a lado perde o sentido. */
-const MAXIMO_VISIVEIS = 3;
+// Espaço que a coluna de critérios reserva antes das colunas de imóveis.
+// É o MESMO valor da classe `sm:w-44` aplicada a ela (11rem = 176px):
+// antes isto era uma fração da largura da coluna de imóvel, o que fazia
+// a conta estimar um espaço que o CSS não usava.
+const LARGURA_CRITERIOS = 176;
 
-/** Quantas colunas cabem em `largura`, entre 1 e MAXIMO_VISIVEIS. */
+/**
+ * Largura mínima confortável de uma coluna de imóvel, em px.
+ *
+ * 220 e não 240 (Fase 59.1): com o cabeçalho compacto — foto baixa,
+ * tipo e bairro numa linha, preço em outra — a coluna deixou de precisar
+ * de 240px para continuar legível. É essa folga que permite a quarta
+ * coluna em telas largas sem espremer nada.
+ */
+const LARGURA_COLUNA = 220;
+
+/**
+ * Teto de colunas simultâneas. Quatro, e não mais: acima disso cada
+ * coluna cai abaixo do mínimo utilizável mesmo em telas muito largas
+ * (o container público é limitado a max-w-6xl), e a leitura lado a lado
+ * passa a exigir varredura horizontal em vez de comparação.
+ */
+const MAXIMO_VISIVEIS = 4;
+
+/**
+ * Quantas colunas cabem em `largura`, entre 1 e MAXIMO_VISIVEIS.
+ *
+ * Continua decidindo pelo espaço REAL do container, nunca por
+ * breakpoint: o mesmo componente numa página estreita mostra menos
+ * colunas sem que ninguém precise listar larguras de tela. Quando quatro
+ * não cabem, mostra três — a coluna nunca é comprimida para atingir um
+ * número.
+ */
 export function colunasQueCabem(largura: number): number {
   if (!Number.isFinite(largura) || largura <= 0) return 1;
-  // A coluna de critérios ocupa espaço antes das colunas de imóveis.
-  const disponivel = largura - LARGURA_COLUNA * 0.6;
+  const disponivel = largura - LARGURA_CRITERIOS;
   const cabem = Math.floor(disponivel / LARGURA_COLUNA);
   return Math.min(Math.max(cabem, 1), MAXIMO_VISIVEIS);
 }
@@ -179,7 +206,7 @@ export function Comparador({ orgSlug, basePath }: { orgSlug: string; basePath: s
                   key={imovel.id}
                   scope="col"
                   data-coluna-imovel={imovel.id}
-                  className="min-w-0 border-b p-2 align-top"
+                  className="min-w-0 p-2 align-top"
                 >
                   <CabecalhoImovel
                     imovel={imovel}
@@ -189,30 +216,67 @@ export function Comparador({ orgSlug, basePath }: { orgSlug: string; basePath: s
                 </th>
               ))}
             </tr>
+            {/* Fase 59.1 — IDENTIDADE COMPACTA, grudada no topo durante a
+                rolagem. A comparação é longa: ao chegar em Características
+                é preciso continuar sabendo de quem é cada coluna. Só ESTA
+                linha gruda — a foto fica para trás — para o cabeçalho
+                fixo não comer a viewport.
+                
+                `aria-hidden`: é repetição visual da coluna acima, que já
+                é o cabeçalho semântico. Anunciá-la de novo faria cada
+                célula ser lida com dois nomes. */}
+            <tr aria-hidden="true" data-cabecalho-fixo className="sticky top-0 z-20">
+              <th className="border-b bg-muted p-0" />
+              {janela.map((imovel) => (
+                <th
+                  key={imovel.id}
+                  data-identidade-fixa={imovel.id}
+                  className="min-w-0 border-b bg-muted px-2 py-1.5 text-left align-middle font-normal"
+                >
+                  <p className="min-w-0 truncate text-xs text-muted-foreground">
+                    {[imovel.tipo, imovel.bairro].filter(Boolean).join(" · ")}
+                  </p>
+                  <p className="min-w-0 truncate text-sm font-semibold text-gray-900">
+                    {formatarPreco(imovel.preco ?? imovel.precoAluguel)}
+                  </p>
+                </th>
+              ))}
+            </tr>
           </thead>
           {grupos.map((grupo) => (
             <tbody key={grupo.chave} data-grupo={grupo.chave}>
               <tr>
+                {/* Faixa do grupo: separa sem gastar altura — uma linha
+                    baixa, em caixa alta e com espaçamento de letra, que
+                    se reconhece de relance sem virar um bloco. */}
                 <th
                   scope="colgroup"
                   colSpan={janela.length + 1}
-                  className="bg-muted p-2 text-left text-xs font-semibold text-muted-foreground uppercase"
+                  className="sticky left-0 border-y bg-secondary px-2 py-1 text-left text-[11px] font-semibold tracking-wide text-secondary-foreground uppercase"
                 >
                   {grupo.titulo}
                 </th>
               </tr>
               {grupo.linhas.map((linha) => (
                 <tr key={linha.chave} data-linha={linha.chave} className="border-b">
-                  {/* A coluna de critérios continua colada à esquerda
-                      quando a tabela rola na horizontal. */}
+                  {/* A COLUNA DE CRITÉRIOS é o eixo de leitura da tabela
+                      e precisa se distinguir dos valores: fundo próprio,
+                      borda à direita e largura garantida. Sem isso a
+                      linha vira "R$ 4.500.000 | R$ 3.200.000" sem que
+                      "Preço" salte aos olhos.
+                      
+                      `sticky left-0` mantém o critério visível quando a
+                      tabela rola na horizontal — e o fundo opaco é o que
+                      impede o valor de aparecer por baixo dele. */}
                   <th
                     scope="row"
-                    className="sticky left-0 z-10 bg-background p-2 text-left font-medium text-gray-700"
+                    data-criterio={linha.chave}
+                    className="sticky left-0 z-10 w-32 border-r bg-muted/60 px-2 py-1.5 text-left text-xs font-semibold text-gray-700 sm:w-44 sm:text-sm"
                   >
                     {linha.rotulo}
                   </th>
                   {linha.valores.map((valor, i) => (
-                    <td key={janela[i].id} className="min-w-0 p-2 break-words">
+                    <td key={janela[i].id} className="min-w-0 px-2 py-1.5 text-sm break-words">
                       {linha.tipo === "booleano" ? (
                         // Nunca só a cor: o símbolo tem texto acessível
                         // ao lado dele.
@@ -292,38 +356,60 @@ function CabecalhoImovel({
   aoRemover: () => void;
 }) {
   return (
-    <div className="min-w-0 space-y-2 text-left font-normal">
-      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-muted">
+    <div className="min-w-0 space-y-1.5 text-left font-normal">
+      {/* ALTURA FIXA, não proporção (Fase 59.1). Com `aspect-[4/3]` a
+          foto crescia junto com a coluna — 237px numa tela de 1440 —, e
+          no comparador a fotografia serve para RECONHECER o imóvel; a
+          exploração visual é a ficha. Altura fixa também mantém todas as
+          colunas alinhadas entre si, seja qual for a largura.
+          `object-cover` preserva o enquadramento sem distorcer. */}
+      <div className="relative h-32 w-full overflow-hidden rounded-lg bg-muted sm:h-40">
         {imovel.foto && (
           <Image
             src={imovel.foto}
             alt={imovel.titulo}
             fill
-            sizes="240px"
+            sizes="220px"
             className="object-cover"
           />
         )}
       </div>
-      <p className="min-w-0 truncate font-semibold text-gray-900">{imovel.titulo}</p>
-      <div className="flex flex-wrap items-center gap-2">
+
+      {/* Tipo e bairro numa linha só: é o que identifica o imóvel de
+          relance, sem gastar a altura que o título inteiro gastaria. */}
+      <p className="min-w-0 truncate text-xs text-muted-foreground">
+        {[imovel.tipo, imovel.bairro].filter(Boolean).join(" · ")}
+      </p>
+      {/* `line-clamp-2` corta VISUALMENTE; o texto continua inteiro no
+          DOM, então leitor de tela e `title` mostram o nome completo. */}
+      <p className="line-clamp-2 min-w-0 text-sm font-semibold text-gray-900" title={imovel.titulo}>
+        {imovel.titulo}
+      </p>
+      <p className="min-w-0 truncate text-sm font-semibold text-gray-900">
+        {formatarPreco(imovel.preco ?? imovel.precoAluguel)}
+      </p>
+
+      <div className="flex flex-wrap items-center gap-1">
         <Link
           href={`${basePath}/imoveis/${imovel.id}`}
           data-ver-imovel={imovel.id}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-7 px-2 text-xs")}
         >
           Ver imóvel
         </Link>
         {/* Sai da comparação, NUNCA dos favoritos: são estados
             diferentes, e o visitante não pode perder o que salvou ao
-            organizar a comparação. */}
+            organizar a comparação. O rótulo virou ícone para caber na
+            coluna estreita — o nome acessível continua completo. */}
         <button
           type="button"
           data-remover-comparacao={imovel.id}
           onClick={aoRemover}
           aria-label={`Remover ${imovel.titulo} da comparação`}
-          className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+          title={`Remover ${imovel.titulo} da comparação`}
+          className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-7 w-7 p-0")}
         >
-          Remover
+          <IconeFechar className="size-4" aria-hidden="true" />
         </button>
       </div>
     </div>
