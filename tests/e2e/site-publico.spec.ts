@@ -24,7 +24,7 @@ async function definirContato(
   page: import("@playwright/test").Page,
   valores: { whatsapp?: string; telefone?: string; email?: string }
 ) {
-  await page.goto("/app/configuracoes");
+  await page.goto("/app/configuracoes?tab=contatos");
   await page.locator("#whatsapp").fill(valores.whatsapp ?? "");
   await page.locator("#telefone").fill(valores.telefone ?? "");
   await page.locator("#email").fill(valores.email ?? "");
@@ -573,13 +573,13 @@ test.describe("Site público — Footer aparência (rodapé)", () => {
 
     await login(page, ORG_A);
 
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=site");
     await page.getByRole("radio", { name: /Cor principal do tema/i }).check({ force: true });
     await page.getByRole("button", { name: "Salvar alterações" }).click();
     await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
     expect(await estiloFundoFooter()).toBe("var(--primary)");
 
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=site");
     await page.getByRole("radio", { name: /Fundo claro/i }).check({ force: true });
     await page.getByRole("button", { name: "Salvar alterações" }).click();
     await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
@@ -590,7 +590,7 @@ test.describe("Site público — Footer aparência (rodapé)", () => {
 
     // Devolve ao padrão (AUTO): outros testes deste arquivo (luminosidade
     // do footer, acima) dependem do fundo escuro padrão da organização.
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=site");
     await page.getByRole("radio", { name: /Automático pelo tema/i }).check({ force: true });
     await page.getByRole("button", { name: "Salvar alterações" }).click();
     await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
@@ -607,7 +607,7 @@ test.describe("Configurações — altura do logotipo do rodapé", () => {
     page,
   }) => {
     await login(page, ORG_A);
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=site");
 
     const alturaRodape = page.locator("#logoRodapeAltura");
     const alturaCabecalho = page.locator("#logoAltura");
@@ -622,7 +622,7 @@ test.describe("Configurações — altura do logotipo do rodapé", () => {
     await page.getByRole("button", { name: "Salvar alterações" }).click();
     await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
 
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=site");
     await expect(alturaRodape).toHaveValue("72");
     // Os dois campos são independentes: mexer no rodapé não pode arrastar
     // a altura do cabeçalho junto.

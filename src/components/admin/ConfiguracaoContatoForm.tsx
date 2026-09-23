@@ -12,6 +12,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ErroCampo } from "@/components/admin/ErroCampo";
 import { CorBarraTopo } from "@/components/admin/CorBarraTopo";
+import { AbasConfiguracoes } from "@/components/admin/AbasConfiguracoes";
+import { PreviaIdentidade } from "@/components/admin/PreviaIdentidade";
 import {
   CANAIS_PUBLICOS,
   LIMITE_HORARIO_ATENDIMENTO,
@@ -121,321 +123,393 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
         </Alert>
       )}
 
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Identidade visual</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            Configure como sua imobiliária aparece no site público.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-w-0 space-y-6">
-          <div className="min-w-0 space-y-1.5">
-            <Label htmlFor="nomePublico">Nome público (opcional)</Label>
-            <Input
-              id="nomePublico"
-              name="nomePublico"
-              defaultValue={config.nomePublico ?? ""}
-              placeholder="Deixe em branco para usar o nome cadastrado da organização"
-              maxLength={120}
-            />
-            <ErroCampo erros={estado.fieldErrors?.nomePublico} />
-          </div>
-          <LogoUpload logoInicial={config.logo} alturaInicial={config.logoAltura} />
-          <FaviconUpload faviconInicial={config.favicon} />
-          <SeletorTema
-            themeIdAtual={config.themeId}
-            temaCustomizado={
-              config.temaCustomizado
-                ? resolverTemaEfetivo(THEME_ID_CUSTOMIZADO, config.temaCustomizado)
-                : null
-            }
-          />
-          {/* A paleta persistida do tenant vira a base editável da
-              seção — é o que faz a tela continuar mostrando as cores
-              atuais ao voltar/recarregar, em vez de exigir 'Gerar'. */}
-          <GeradorTemaLogotipo paletaInicial={config.temaCustomizado} />
-
-          <div className="min-w-0 border-t pt-6">
-            <HeroImageUpload heroImageInicial={config.heroImage} />
-          </div>
-
-          <div className="min-w-0 space-y-6 border-t pt-6">
+      <AbasConfiguracoes
+        abas={[
+          {
+            id: "geral",
+            rotulo: "Geral",
+            conteudo: (
+              <>
+          <Card className="min-w-0">
+            <CardHeader>
+              <CardTitle className="min-w-0 break-words">Informações gerais</CardTitle>
+              <CardDescription className="min-w-0 break-words">
+                Os dados básicos da sua imobiliária.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="min-w-0 space-y-6">
             <div className="min-w-0 space-y-1.5">
-              <p className="min-w-0 break-words text-sm font-medium">Rodapé do site</p>
-              <p className="min-w-0 break-words text-sm text-muted-foreground">
-                Use uma versão do logotipo adequada ao fundo do rodapé.
-              </p>
-            </div>
-            <LogoRodapeUpload
-              logoInicial={config.logoRodape}
-              alturaInicial={config.logoRodapeAltura}
-            />
-            <SeletorAparenciaRodape aparenciaAtual={config.footerAppearance} />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Fase 58 — "Contato" e "Redes sociais" eram dois cards lado a
-          lado; viraram um só porque a decisão que a fase introduz (onde
-          cada canal aparece) é a MESMA para os dois grupos, e mantê-los
-          separados obrigaria a repetir a explicação duas vezes. O e-mail
-          continua sem par de caixas: ele é o destino dos formulários do
-          site, não um canal exibido no topo ou no rodapé. */}
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">
-            Contatos, redes sociais e atendimento
-          </CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            Escolha onde cada contato ou rede social será exibido no site público. Campos não
-            preenchidos não serão exibidos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-w-0 space-y-4">
-          {CANAIS_PUBLICOS.map((canal) => {
-            const valores = config.canais[canal.chave];
-            return (
-              <div
-                key={canal.chave}
-                data-canal-config={canal.chave}
-                className="min-w-0 space-y-2 border-b pb-4 last:border-b-0 last:pb-0 sm:flex sm:items-start sm:gap-4 sm:space-y-0"
-              >
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <Label htmlFor={canal.chave}>{canal.rotulo}</Label>
-                  <Input
-                    id={canal.chave}
-                    name={canal.chave === "telefone" ? "telefone" : canal.chave}
-                    defaultValue={valores.valor}
-                    placeholder={PLACEHOLDERS[canal.chave]}
-                  />
-                  <ErroCampo erros={estado.fieldErrors?.[canal.chave]} />
-                </div>
-                {/* CORREÇÃO — cada caixa carrega o próprio rótulo VISÍVEL,
-                    em qualquer largura.
-                    
-                    A primeira versão desta tela escondia os dois rótulos
-                    no desktop (`sm:sr-only`) e delegava a identificação a
-                    uma fileira de títulos "Topo/Rodapé" no alto do card.
-                    Duas caixas idênticas e sem texto, a dezenas de pixels
-                    do único lugar que dizia o que eram — e o título
-                    "Topo" ainda por cima caía 16px fora do eixo da sua
-                    própria caixa (medido: título em x=1096..1160, caixa
-                    em x=1112..1176), enquanto "Rodapé" alinhava exato.
-                    Era possível marcar uma acreditando ter marcado a
-                    outra, e o resultado disso é exatamente o defeito
-                    relatado: rodapé configurado, topo não.
-                    
-                    Rótulo colado na caixa não depende de alinhamento
-                    entre elementos distantes, então não tem como
-                    desalinhar. */}
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 sm:shrink-0 sm:pt-8">
-                  <label
-                    className="flex cursor-pointer items-center gap-2 text-sm"
-                    data-flag={`${canal.chave}-topo`}
-                  >
-                    <Checkbox name={`${canal.chave}Topo`} defaultChecked={valores.topo} />
-                    Topo
-                  </label>
-                  <label
-                    className="flex cursor-pointer items-center gap-2 text-sm"
-                    data-flag={`${canal.chave}-rodape`}
-                  >
-                    <Checkbox name={`${canal.chave}Rodape`} defaultChecked={valores.rodape} />
-                    Rodapé
-                  </label>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Fase 58.2 — horário de atendimento. Fica junto dos demais
-              porque é configuração do MESMO lugar (a barra superior),
-              mas sem par de caixas: só existe no topo, e inventar um
-              "Exibir no rodapé" criaria uma opção que ninguém pediu. */}
-          <div
-            data-canal-config="horario"
-            className="min-w-0 space-y-2 border-t pt-4 sm:flex sm:items-start sm:gap-4 sm:space-y-0"
-          >
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <Label htmlFor="horarioAtendimento">Horário de atendimento</Label>
+              <Label htmlFor="nomePublico">Nome público (opcional)</Label>
               <Input
-                id="horarioAtendimento"
-                name="horarioAtendimento"
-                defaultValue={config.horario.valor}
-                maxLength={LIMITE_HORARIO_ATENDIMENTO}
-                placeholder="Segunda a sexta, das 9h às 18h"
+                id="nomePublico"
+                name="nomePublico"
+                defaultValue={config.nomePublico ?? ""}
+                placeholder="Deixe em branco para usar o nome cadastrado da organização"
+                maxLength={120}
               />
-              <ErroCampo erros={estado.fieldErrors?.horarioAtendimento} />
+              <ErroCampo erros={estado.fieldErrors?.nomePublico} />
             </div>
-            {/* Fase 58.3 — o horário ganhou o par completo, igual aos
-                demais canais. Cada caixa com o próprio rótulo visível,
-                como a correção da Fase 58 estabeleceu. */}
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 sm:shrink-0 sm:pt-8">
-              <label
-                className="flex cursor-pointer items-center gap-2 text-sm"
-                data-flag="horario-topo"
-              >
-                <Checkbox
-                  name="horarioAtendimentoTopo"
-                  defaultChecked={config.horario.topo}
-                />
-                Topo
-              </label>
-              <label
-                className="flex cursor-pointer items-center gap-2 text-sm"
-                data-flag="horario-rodape"
-              >
-                <Checkbox
-                  name="horarioAtendimentoRodape"
-                  defaultChecked={config.horario.rodape}
-                />
-                Rodapé
-              </label>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <CorBarraTopo corInicial={config.corBarraTopo} />
-
-          <div className="min-w-0 space-y-1.5 border-t pt-4">
-            <Label htmlFor="email">E-mail</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              defaultValue={config.email}
-              placeholder="contato@suaimobiliaria.com.br"
-            />
-            <p className="text-xs text-muted-foreground">
-              Recebe as mensagens enviadas pelos formulários do site.
-            </p>
-            <ErroCampo erros={estado.fieldErrors?.email} />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Visibilidade da carteira comercial (Fase 22). Fica junto do
-          resto da configuração institucional — nenhuma tela nova, e o
-          mesmo gate de OWNER/ADMIN que já protege esta página. */}
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Visibilidade da carteira comercial</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            Define o que cada pessoa da equipe enxerga em Clientes, Pipeline e Agenda. Alterar
-            esta opção não transfere nem apaga nada — muda apenas quem tem acesso.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-w-0">
-          {/* <fieldset> + <legend>: as duas opções são uma escolha única
-              e precisam ser anunciadas como grupo por leitor de tela. */}
-          <fieldset className="min-w-0 space-y-3">
-            <legend className="sr-only">Visibilidade da carteira comercial</legend>
-            {[
-              {
-                valor: "COLLABORATIVE" as const,
-                titulo: "Compartilhada",
-                descricao:
-                  "Todos os usuários com acesso ao CRM visualizam a carteira da organização.",
-              },
-              {
-                valor: "RESTRICTED" as const,
-                titulo: "Restrita",
-                descricao:
-                  "Corretores visualizam apenas os clientes, negociações e compromissos da própria carteira. Gestores mantêm a visão da organização.",
-              },
-            ].map((opcao) => (
-              <label
-                key={opcao.valor}
-                htmlFor={`visibilidade-${opcao.valor}`}
-                className="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border p-3 has-[:checked]:border-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
-              >
-                <input
-                  type="radio"
-                  id={`visibilidade-${opcao.valor}`}
-                  name="visibilidadeComercial"
-                  value={opcao.valor}
-                  defaultChecked={config.visibilidadeComercial === opcao.valor}
-                  className="mt-1 shrink-0"
-                />
-                <span className="min-w-0">
-                  <span className="block font-medium">{opcao.titulo}</span>
-                  <span className="block text-sm text-muted-foreground">{opcao.descricao}</span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
-          <ErroCampo erros={estado.fieldErrors?.visibilidadeComercial} />
-        </CardContent>
-      </Card>
-
-      {/* Fuso horário (Fase 18). Fica em Configurações, junto do resto
-          da configuração institucional — nenhuma tela nova. */}
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Fuso horário da organização</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            Usado para Agenda, Central e períodos do Analytics. Alterar o fuso não muda nenhuma
-            data já registrada — muda apenas como os dias e horários são interpretados e
-            exibidos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-w-0">
-          <div className="min-w-0 space-y-1.5">
-            <Label htmlFor="timezone">Fuso horário</Label>
-            {/* <select> NATIVO: busca por digitação, teclado e leitor de
-                tela funcionam sem JavaScript, e não há divergência entre
-                servidor e cliente. O rótulo é legível; o valor salvo é
-                sempre o identificador IANA. */}
-            <select
-              id="timezone"
-              name="timezone"
-              defaultValue={config.fuso}
-              className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-96"
-            >
-              {config.gruposDeFuso.map((grupo) => (
-                <optgroup key={grupo.titulo} label={grupo.titulo}>
-                  {grupo.opcoes.map((opcao) => (
-                    <option key={opcao.valor} value={opcao.valor}>
-                      {opcao.rotulo}
-                    </option>
+          <Card className="min-w-0">
+            <CardHeader>
+              <CardTitle className="min-w-0 break-words">Fuso horário da organização</CardTitle>
+              <CardDescription className="min-w-0 break-words">
+                Usado para Agenda, Central e períodos do Analytics. Alterar o fuso não muda nenhuma
+                data já registrada — muda apenas como os dias e horários são interpretados e
+                exibidos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="min-w-0">
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="timezone">Fuso horário</Label>
+                {/* <select> NATIVO: busca por digitação, teclado e leitor de
+                    tela funcionam sem JavaScript, e não há divergência entre
+                    servidor e cliente. O rótulo é legível; o valor salvo é
+                    sempre o identificador IANA. */}
+                <select
+                  id="timezone"
+                  name="timezone"
+                  defaultValue={config.fuso}
+                  className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-96"
+                >
+                  {config.gruposDeFuso.map((grupo) => (
+                    <optgroup key={grupo.titulo} label={grupo.titulo}>
+                      {grupo.opcoes.map((opcao) => (
+                        <option key={opcao.valor} value={opcao.valor}>
+                          {opcao.rotulo}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
-                </optgroup>
-              ))}
-            </select>
-            <ErroCampo erros={estado.fieldErrors?.timezone} />
-            <p className="min-w-0 break-words text-xs text-muted-foreground">
-              Configuração atual: {config.fuso}.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+                </select>
+                <ErroCampo erros={estado.fieldErrors?.timezone} />
+                <p className="min-w-0 break-words text-xs text-muted-foreground">
+                  Configuração atual: {config.fuso}.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Código do imóvel</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            Os imóveis recebem um código numérico automático (ex: 100001).
-            Defina um prefixo opcional para personalizar como ele é exibido.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-w-0">
-          <div className="min-w-0 space-y-1.5">
-            <Label htmlFor="codigoImovelPrefixo">Prefixo</Label>
-            <Input
-              id="codigoImovelPrefixo"
-              name="codigoImovelPrefixo"
-              defaultValue={config.codigoImovelPrefixo}
-              placeholder="Ex: IMB"
-              maxLength={10}
-              className="w-full uppercase placeholder:normal-case sm:w-48"
+          <Card className="min-w-0">
+            <CardHeader>
+              <CardTitle className="min-w-0 break-words">Código do imóvel</CardTitle>
+              <CardDescription className="min-w-0 break-words">
+                Os imóveis recebem um código numérico automático (ex: 100001).
+                Defina um prefixo opcional para personalizar como ele é exibido.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="min-w-0">
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="codigoImovelPrefixo">Prefixo</Label>
+                <Input
+                  id="codigoImovelPrefixo"
+                  name="codigoImovelPrefixo"
+                  defaultValue={config.codigoImovelPrefixo}
+                  placeholder="Ex: IMB"
+                  maxLength={10}
+                  className="w-full uppercase placeholder:normal-case sm:w-48"
+                />
+                <ErroCampo erros={estado.fieldErrors?.codigoImovelPrefixo} />
+                <p className="min-w-0 break-words text-xs text-muted-foreground">
+                  Ficará assim:{" "}
+                  {formatarCodigoImovel(100001, config.codigoImovelPrefixo || null)}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+              </>
+            ),
+          },
+          {
+            id: "identidade",
+            rotulo: "Identidade visual",
+            conteudo: (
+              <>
+          {/* Duas colunas a partir de xl: a prévia fica ao lado dos
+              controles, que é o que permite "alterei aqui, vejo ali".
+              Abaixo disso ela vai para baixo — empilhar é melhor que
+              espremer as pastilhas de tema. */}
+          <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+            <Card className="min-w-0">
+              <CardHeader>
+                <CardTitle className="min-w-0 break-words">Identidade visual</CardTitle>
+                <CardDescription className="min-w-0 break-words">
+                  Como sua imobiliária aparece no site público.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="min-w-0 space-y-6">
+            <LogoUpload logoInicial={config.logo} alturaInicial={config.logoAltura} />
+            <FaviconUpload faviconInicial={config.favicon} />
+            <SeletorTema
+              themeIdAtual={config.themeId}
+              temaCustomizado={
+                config.temaCustomizado
+                  ? resolverTemaEfetivo(THEME_ID_CUSTOMIZADO, config.temaCustomizado)
+                  : null
+              }
             />
-            <ErroCampo erros={estado.fieldErrors?.codigoImovelPrefixo} />
-            <p className="min-w-0 break-words text-xs text-muted-foreground">
-              Ficará assim:{" "}
-              {formatarCodigoImovel(100001, config.codigoImovelPrefixo || null)}
-            </p>
+            {/* A paleta persistida do tenant vira a base editável da
+                seção — é o que faz a tela continuar mostrando as cores
+                atuais ao voltar/recarregar, em vez de exigir 'Gerar'. */}
+            <GeradorTemaLogotipo paletaInicial={config.temaCustomizado} />
+              </CardContent>
+            </Card>
+            <div className="min-w-0 xl:sticky xl:top-20">
+              <Card className="min-w-0">
+                <CardContent className="min-w-0 pt-6">
+                  <PreviaIdentidade
+                    temaInicial={config.themeId}
+                    temaCustomizado={
+                      config.temaCustomizado
+                        ? resolverTemaEfetivo(THEME_ID_CUSTOMIZADO, config.temaCustomizado)
+                        : null
+                    }
+                    logo={config.logo}
+                    nomeFallback={config.nomePublico || "Sua imobiliária"}
+                  />
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+              </>
+            ),
+          },
+          {
+            id: "site",
+            rotulo: "Site público",
+            conteudo: (
+              <>
+          <Card className="min-w-0">
+            <CardHeader>
+              <CardTitle className="min-w-0 break-words">Site público</CardTitle>
+              <CardDescription className="min-w-0 break-words">
+                A imagem principal da Home, o rodapé e a faixa de contatos do topo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="min-w-0 space-y-6">
+              <HeroImageUpload heroImageInicial={config.heroImage} />
+
+            <div className="min-w-0 border-t pt-6">
+              <div className="min-w-0 space-y-1.5">
+                <p className="min-w-0 break-words text-sm font-medium">Rodapé do site</p>
+                <p className="min-w-0 break-words text-sm text-muted-foreground">
+                  Use uma versão do logotipo adequada ao fundo do rodapé.
+                </p>
+              </div>
+              <LogoRodapeUpload
+                logoInicial={config.logoRodape}
+                alturaInicial={config.logoRodapeAltura}
+              />
+              <SeletorAparenciaRodape aparenciaAtual={config.footerAppearance} />
+            </div>
+
+            <div className="min-w-0 border-t pt-6">
+              <CorBarraTopo corInicial={config.corBarraTopo} />
+            </div>
+            </CardContent>
+          </Card>
+              </>
+            ),
+          },
+          {
+            id: "contatos",
+            rotulo: "Contatos e redes",
+            conteudo: (
+              <>
+          <Card className="min-w-0">
+            <CardHeader>
+              <CardTitle className="min-w-0 break-words">Contatos, redes sociais e atendimento</CardTitle>
+              <CardDescription className="min-w-0 break-words">
+                Escolha onde cada contato ou rede social será exibido no site público. Campos não preenchidos não serão exibidos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="min-w-0 space-y-4">
+            {CANAIS_PUBLICOS.map((canal) => {
+              const valores = config.canais[canal.chave];
+              return (
+                <div
+                  key={canal.chave}
+                  data-canal-config={canal.chave}
+                  className="min-w-0 space-y-2 border-b pb-4 last:border-b-0 last:pb-0 sm:flex sm:items-start sm:gap-4 sm:space-y-0"
+                >
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <Label htmlFor={canal.chave}>{canal.rotulo}</Label>
+                    <Input
+                      id={canal.chave}
+                      name={canal.chave === "telefone" ? "telefone" : canal.chave}
+                      defaultValue={valores.valor}
+                      placeholder={PLACEHOLDERS[canal.chave]}
+                    />
+                    <ErroCampo erros={estado.fieldErrors?.[canal.chave]} />
+                  </div>
+                  {/* CORREÇÃO — cada caixa carrega o próprio rótulo VISÍVEL,
+                      em qualquer largura.
+                    
+                      A primeira versão desta tela escondia os dois rótulos
+                      no desktop (`sm:sr-only`) e delegava a identificação a
+                      uma fileira de títulos "Topo/Rodapé" no alto do card.
+                      Duas caixas idênticas e sem texto, a dezenas de pixels
+                      do único lugar que dizia o que eram — e o título
+                      "Topo" ainda por cima caía 16px fora do eixo da sua
+                      própria caixa (medido: título em x=1096..1160, caixa
+                      em x=1112..1176), enquanto "Rodapé" alinhava exato.
+                      Era possível marcar uma acreditando ter marcado a
+                      outra, e o resultado disso é exatamente o defeito
+                      relatado: rodapé configurado, topo não.
+                    
+                      Rótulo colado na caixa não depende de alinhamento
+                      entre elementos distantes, então não tem como
+                      desalinhar. */}
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2 sm:shrink-0 sm:pt-8">
+                    <label
+                      className="flex cursor-pointer items-center gap-2 text-sm"
+                      data-flag={`${canal.chave}-topo`}
+                    >
+                      <Checkbox name={`${canal.chave}Topo`} defaultChecked={valores.topo} />
+                      Topo
+                    </label>
+                    <label
+                      className="flex cursor-pointer items-center gap-2 text-sm"
+                      data-flag={`${canal.chave}-rodape`}
+                    >
+                      <Checkbox name={`${canal.chave}Rodape`} defaultChecked={valores.rodape} />
+                      Rodapé
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Fase 58.2 — horário de atendimento. Fica junto dos demais
+                porque é configuração do MESMO lugar (a barra superior),
+                mas sem par de caixas: só existe no topo, e inventar um
+                "Exibir no rodapé" criaria uma opção que ninguém pediu. */}
+            <div
+              data-canal-config="horario"
+              className="min-w-0 space-y-2 border-t pt-4 sm:flex sm:items-start sm:gap-4 sm:space-y-0"
+            >
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Label htmlFor="horarioAtendimento">Horário de atendimento</Label>
+                <Input
+                  id="horarioAtendimento"
+                  name="horarioAtendimento"
+                  defaultValue={config.horario.valor}
+                  maxLength={LIMITE_HORARIO_ATENDIMENTO}
+                  placeholder="Segunda a sexta, das 9h às 18h"
+                />
+                <ErroCampo erros={estado.fieldErrors?.horarioAtendimento} />
+              </div>
+              {/* Fase 58.3 — o horário ganhou o par completo, igual aos
+                  demais canais. Cada caixa com o próprio rótulo visível,
+                  como a correção da Fase 58 estabeleceu. */}
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 sm:shrink-0 sm:pt-8">
+                <label
+                  className="flex cursor-pointer items-center gap-2 text-sm"
+                  data-flag="horario-topo"
+                >
+                  <Checkbox
+                    name="horarioAtendimentoTopo"
+                    defaultChecked={config.horario.topo}
+                  />
+                  Topo
+                </label>
+                <label
+                  className="flex cursor-pointer items-center gap-2 text-sm"
+                  data-flag="horario-rodape"
+                >
+                  <Checkbox
+                    name="horarioAtendimentoRodape"
+                    defaultChecked={config.horario.rodape}
+                  />
+                  Rodapé
+                </label>
+              </div>
+            </div>
+
+            <div className="min-w-0 space-y-1.5 border-t pt-4">
+              <Label htmlFor="email">E-mail</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                defaultValue={config.email}
+                placeholder="contato@suaimobiliaria.com.br"
+              />
+              <p className="text-xs text-muted-foreground">
+                Recebe as mensagens enviadas pelos formulários do site.
+              </p>
+              <ErroCampo erros={estado.fieldErrors?.email} />
+            </div>
+            </CardContent>
+          </Card>
+              </>
+            ),
+          },
+          {
+            id: "acesso",
+            rotulo: "Equipe e acesso",
+            conteudo: (
+              <>
+          {/* Visibilidade da carteira comercial (Fase 22). Fica junto do
+              resto da configuração institucional — nenhuma tela nova, e o
+              mesmo gate de OWNER/ADMIN que já protege esta página. */}
+          <Card className="min-w-0">
+            <CardHeader>
+              <CardTitle className="min-w-0 break-words">Visibilidade da carteira comercial</CardTitle>
+              <CardDescription className="min-w-0 break-words">
+                Define o que cada pessoa da equipe enxerga em Clientes, Pipeline e Agenda. Alterar
+                esta opção não transfere nem apaga nada — muda apenas quem tem acesso.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="min-w-0">
+              {/* <fieldset> + <legend>: as duas opções são uma escolha única
+                  e precisam ser anunciadas como grupo por leitor de tela. */}
+              <fieldset className="min-w-0 space-y-3">
+                <legend className="sr-only">Visibilidade da carteira comercial</legend>
+                {[
+                  {
+                    valor: "COLLABORATIVE" as const,
+                    titulo: "Compartilhada",
+                    descricao:
+                      "Todos os usuários com acesso ao CRM visualizam a carteira da organização.",
+                  },
+                  {
+                    valor: "RESTRICTED" as const,
+                    titulo: "Restrita",
+                    descricao:
+                      "Corretores visualizam apenas os clientes, negociações e compromissos da própria carteira. Gestores mantêm a visão da organização.",
+                  },
+                ].map((opcao) => (
+                  <label
+                    key={opcao.valor}
+                    htmlFor={`visibilidade-${opcao.valor}`}
+                    className="flex min-w-0 cursor-pointer items-start gap-3 rounded-lg border p-3 has-[:checked]:border-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
+                  >
+                    <input
+                      type="radio"
+                      id={`visibilidade-${opcao.valor}`}
+                      name="visibilidadeComercial"
+                      value={opcao.valor}
+                      defaultChecked={config.visibilidadeComercial === opcao.valor}
+                      className="mt-1 shrink-0"
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-medium">{opcao.titulo}</span>
+                      <span className="block text-sm text-muted-foreground">{opcao.descricao}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+              <ErroCampo erros={estado.fieldErrors?.visibilidadeComercial} />
+            </CardContent>
+          </Card>
+              </>
+            ),
+          },
+        ]}
+      />
 
       <div className="flex min-w-0 flex-wrap items-center gap-3">
         <Button

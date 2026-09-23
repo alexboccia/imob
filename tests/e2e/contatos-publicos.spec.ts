@@ -288,7 +288,7 @@ test.describe("a tela de configuração", () => {
 
     for (const largura of [390, 1280]) {
       await page.setViewportSize({ width: largura, height: 1200 });
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
 
       for (const canal of ["telefone", "instagram"]) {
         for (const local of ["topo", "rodape"]) {
@@ -305,7 +305,7 @@ test.describe("a tela de configuração", () => {
   test("o formulário reflete o que está salvo, caixa por caixa", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1200 });
     await login(page, ORG_CONTATOS);
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=contatos");
 
     const marcada = (canal: string, local: string) =>
       page.locator(`[data-flag='${canal}-${local}'] input[type=checkbox]`).isChecked();
@@ -335,7 +335,7 @@ test.describe("a tela de configuração", () => {
       await expect(noRodape(page, "telefone")).toBeVisible();
 
       // 2. Desmarca só o Topo e salva.
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
       await page.locator(caixaTopo).click();
       await expect(page.locator(inputTopo)).not.toBeChecked();
       await page.getByRole("button", { name: /Salvar alterações/ }).click();
@@ -343,7 +343,7 @@ test.describe("a tela de configuração", () => {
 
       // 3. RECARREGA: a caixa continua desmarcada — persistiu de fato,
       //    não é só estado do React.
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
       await expect(page.locator(inputTopo)).not.toBeChecked();
 
       // 4. O site reflete: sumiu do topo, continua no rodapé.
@@ -355,7 +355,7 @@ test.describe("a tela de configuração", () => {
     } finally {
       // 5. Restaura o estado do seed — as outras specs deste arquivo
       //    dependem dele.
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
       if (!(await page.locator(inputTopo).isChecked())) {
         await page.locator(caixaTopo).click();
         await page.getByRole("button", { name: /Salvar alterações/ }).click();
@@ -380,19 +380,19 @@ test.describe("a tela de configuração", () => {
       await expect(noTopo(page, "linkedin")).toHaveCount(0);
       await expect(noRodape(page, "linkedin")).toBeVisible();
 
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
       await page.locator(caixa).click();
       await page.getByRole("button", { name: /Salvar alterações/ }).click();
       await expect(page.getByRole("button", { name: /Salvar alterações/ })).toBeEnabled();
 
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
       await expect(page.locator(input)).toBeChecked();
 
       await page.goto(BASE);
       await expect(noTopo(page, "linkedin")).toBeVisible();
       await expect(noRodape(page, "linkedin")).toBeVisible();
     } finally {
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
       if (await page.locator(input).isChecked()) {
         await page.locator(caixa).click();
         await page.getByRole("button", { name: /Salvar alterações/ }).click();
@@ -740,14 +740,14 @@ test.describe("configurar o horário pela tela e ver no site", () => {
     const original = "Segunda a sexta, das 9h as 18h";
 
     try {
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
       await campo.fill(TEXTO);
       await page.getByRole("button", { name: /Salvar alterações/ }).click();
       // Feedback visível JUNTO do botão — o clique acontece no fim da página.
       await expect(page.locator("[data-feedback-salvar]")).toBeVisible();
 
       // Recarrega: persistiu de verdade, não é estado do React.
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
       await expect(campo).toHaveValue(TEXTO);
       await expect(page.locator(inputTopo)).toBeChecked();
       await expect(page.locator(inputRodape)).toBeChecked();
@@ -757,7 +757,7 @@ test.describe("configurar o horário pela tela e ver no site", () => {
       await expect(page.locator("[data-horario-topo]")).toContainText(TEXTO);
       await expect(page.locator("[data-horario-rodape]")).toContainText(TEXTO);
     } finally {
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
       await campo.fill(original);
       if (!(await page.locator(inputTopo).isChecked())) {
         await page.locator("[data-flag='horario-topo']").click();
@@ -776,13 +776,13 @@ test.describe("configurar o horário pela tela e ver no site", () => {
     const inputTopo = "[data-flag='horario-topo'] input[type=checkbox]";
 
     try {
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
       await page.locator("[data-flag='horario-topo']").click();
       await expect(page.locator(inputTopo)).not.toBeChecked();
       await page.getByRole("button", { name: /Salvar alterações/ }).click();
       await expect(page.locator("[data-feedback-salvar]")).toBeVisible();
 
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
       await expect(page.locator(inputTopo)).not.toBeChecked();
 
       await page.goto(BASE);
@@ -791,7 +791,7 @@ test.describe("configurar o horário pela tela e ver no site", () => {
       // A barra continua existindo por causa dos canais.
       await expect(barra(page)).toHaveCount(1);
     } finally {
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=contatos");
       if (!(await page.locator(inputTopo).isChecked())) {
         await page.locator("[data-flag='horario-topo']").click();
         await page.getByRole("button", { name: /Salvar alterações/ }).click();
@@ -806,7 +806,7 @@ test.describe("configurar o horário pela tela e ver no site", () => {
   test("um campo inválido não salva nada, e o erro é levado à tela", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1200 });
     await login(page, ORG_CONTATOS);
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=contatos");
 
     // Endereço sem esquema: recusado desde a Fase 58.
     await page.locator("#instagram").fill("instagram.com/sem-esquema");
@@ -855,14 +855,14 @@ test.describe("personalizar a cor da barra", () => {
   const CLARO = "#f5f5f5";
 
   async function definirCor(page: Page, hex: string) {
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=site");
     await page.locator("#corBarraTopo").fill(hex);
     await page.getByRole("button", { name: /Salvar alterações/ }).click();
     await expect(page.locator("[data-feedback-salvar]")).toBeVisible();
   }
 
   async function restaurarPadrao(page: Page) {
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=site");
     // Sem personalização, o botão fica desabilitado — não há o que
     // restaurar, e insistir no clique só trava a limpeza.
     if ((await page.locator("#corBarraTopo").inputValue()) === "") return;
@@ -888,7 +888,7 @@ test.describe("personalizar a cor da barra", () => {
   });
 
   test("o seletor visual e o campo HEX representam a mesma configuração", async ({ page }) => {
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=site");
     await page.locator("#corBarraTopo").fill(ESCURO);
     // O seletor nativo acompanha o texto.
     await expect(page.locator("[data-seletor-cor]")).toHaveValue(ESCURO);
@@ -897,7 +897,7 @@ test.describe("personalizar a cor da barra", () => {
   });
 
   test("HEX inválido é sinalizado na tela, sem amostra", async ({ page }) => {
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=site");
     await page.locator("#corBarraTopo").fill("#zzz");
     await expect(page.locator("[data-erro-cor]")).toBeVisible();
     await expect(page.locator("[data-previa-cor]")).toHaveCount(0);
@@ -912,7 +912,7 @@ test.describe("personalizar a cor da barra", () => {
       await definirCor(page, hex);
 
       // Persistiu de verdade.
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=site");
       await expect(page.locator("#corBarraTopo")).toHaveValue(hex);
 
       await page.goto(BASE);

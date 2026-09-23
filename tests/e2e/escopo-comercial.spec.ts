@@ -138,7 +138,7 @@ test.describe("configuração da política", () => {
   test.afterAll(async ({ browser }) => {
     const pagina = await browser.newPage();
     await login(pagina, ORG_RESTRITA);
-    await pagina.goto("/app/configuracoes");
+    await pagina.goto("/app/configuracoes?tab=acesso");
     await pagina.locator("#visibilidade-RESTRICTED").check();
     await Promise.all([
       pagina.waitForResponse(
@@ -151,7 +151,7 @@ test.describe("configuração da política", () => {
 
   test("OWNER vê e altera a política; a mudança reflete sem deploy", async ({ page }) => {
     await login(page, ORG_RESTRITA);
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=acesso");
 
     await expect(
       page.locator('[data-slot="card-title"]', { hasText: "Visibilidade da carteira comercial" })
@@ -169,7 +169,7 @@ test.describe("configuração da política", () => {
       ),
       page.getByRole("button", { name: /Salvar alterações/ }).click(),
     ]);
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=acesso");
     await expect(page.locator("#visibilidade-COLLABORATIVE")).toBeChecked();
 
     await entrarComo(page, ORG_RESTRITA_ANA);
@@ -180,7 +180,7 @@ test.describe("configuração da política", () => {
 
     // Restaura o estado do seed para não contaminar a próxima execução.
     await entrarComo(page, ORG_RESTRITA);
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=acesso");
     await page.locator("#visibilidade-RESTRICTED").check();
     await Promise.all([
       page.waitForResponse(
@@ -188,7 +188,7 @@ test.describe("configuração da política", () => {
       ),
       page.getByRole("button", { name: /Salvar alterações/ }).click(),
     ]);
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=acesso");
     await expect(page.locator("#visibilidade-RESTRICTED")).toBeChecked();
   });
 
@@ -201,7 +201,7 @@ test.describe("configuração da política", () => {
     page,
   }) => {
     await entrarComo(page, ORG_RESTRITA_ANA);
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=acesso");
 
     // O formulário não é sequer entregue.
     await expect(page.locator("#visibilidade-COLLABORATIVE")).toHaveCount(0);
@@ -212,7 +212,7 @@ test.describe("configuração da política", () => {
 
     // A política continua RESTRITA.
     await entrarComo(page, ORG_RESTRITA);
-    await page.goto("/app/configuracoes");
+    await page.goto("/app/configuracoes?tab=acesso");
     await expect(page.locator("#visibilidade-RESTRICTED")).toBeChecked();
 
     // E a Ana continua sem ver a carteira do Bruno.
@@ -225,7 +225,7 @@ test.describe("configuração da política", () => {
     await entrarComo(page, ORG_RESTRITA);
     for (const largura of [375, 390, 430, 768, 1024, 1280, 1440]) {
       await page.setViewportSize({ width: largura, height: 900 });
-      await page.goto("/app/configuracoes");
+      await page.goto("/app/configuracoes?tab=acesso");
       await expect(page.locator("#visibilidade-RESTRICTED")).toBeVisible();
       const rolagemX = await page.evaluate(() => {
         window.scrollTo(9999, 0);

@@ -153,11 +153,20 @@ test.describe("configurar o fuso", () => {
   }) => {
     await login(page, ORG_FUSO);
     await page.goto("/app/configuracoes");
-    // Um único botão de salvar para a página inteira.
+    // Um único botão de salvar para a página inteira. As abas reorganizam
+    // os cards, mas não quebram o formulário em telas separadas: o botão
+    // continua sendo um só, fora das abas.
     await expect(page.getByRole("button", { name: /Salvar alterações/ })).toHaveCount(1);
     const titulo = (nome: string) => page.locator('[data-slot="card-title"]', { hasText: nome });
-    await expect(titulo("Identidade visual")).toBeVisible();
+    // Cada card está numa aba, e ambos pertencem ao MESMO formulário.
     await expect(titulo("Fuso horário da organização")).toBeVisible();
+    await page.getByRole("tab", { name: "Identidade visual" }).click();
+    await expect(titulo("Identidade visual")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Salvar alterações/ })).toHaveCount(1);
+    const formularios = await page
+      .locator('form:has(select[name="timezone"]):has(input[name="themeId"])')
+      .count();
+    expect(formularios, "fuso e tema no mesmo <form>").toBe(1);
   });
 
   test("sem overflow horizontal em 375/390/430/768/1024/1280/1440", async ({ page }) => {

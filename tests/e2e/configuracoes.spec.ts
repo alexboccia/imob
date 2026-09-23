@@ -8,22 +8,44 @@ import { ORG_A, login } from "./helpers";
 // salvar continua funcionando de ponta a ponta (persiste e reaparece após
 // reload), tema continua selecionável, controles de upload permanecem
 // presentes, e responsividade real (overflow + legibilidade, não só CSS).
+// Fase 61 — a tela passou a ser dividida em abas. Os painéis inativos
+// continuam MONTADOS (escondidos por `hidden`), porque o formulário é um
+// só e a action grava todos os campos: desmontar apagaria o que não
+// estivesse na aba aberta. Por isso os testes abrem a aba certa antes de
+// verificar o que está visível.
+async function abrirAba(page: import("@playwright/test").Page, rotulo: string) {
+  await page.getByRole("tab", { name: rotulo }).click();
+}
+
 test.describe("Configurações", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, ORG_A);
     await page.goto("/app/configuracoes");
   });
 
-  test("página renderiza com os cards esperados e a ação de salvar", async ({ page }) => {
+  test("página renderiza com as cinco abas e a ação de salvar", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Configurações" })).toBeVisible();
-    await expect(page.locator('[data-slot="card-title"]', { hasText: "Identidade visual" })).toBeVisible();
-    await expect(page.locator('[data-slot="card-title"]', { hasText: "Contato" })).toBeVisible();
-    await expect(page.locator('[data-slot="card-title"]', { hasText: "Redes sociais" })).toBeVisible();
-    await expect(page.locator('[data-slot="card-title"]', { hasText: "Código do imóvel" })).toBeVisible();
+    for (const aba of [
+      "Geral",
+      "Identidade visual",
+      "Site público",
+      "Contatos e redes",
+      "Equipe e acesso",
+    ]) {
+      await expect(page.getByRole("tab", { name: aba })).toBeVisible();
+    }
+    // Uma aba ativa por vez, e a primeira já vem aberta.
+    await expect(page.locator('[role="tab"][aria-selected="true"]')).toHaveCount(1);
+    await expect(page.getByRole("tab", { name: "Geral" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    // O salvar é único e vale para a tela inteira.
     await expect(page.getByRole("button", { name: "Salvar alterações" })).toBeVisible();
   });
 
   test("controles de upload de logo e favicon permanecem presentes", async ({ page }) => {
+    await abrirAba(page, "Identidade visual");
     await expect(page.getByText("Logotipo", { exact: true })).toBeVisible();
     await expect(page.getByText("Favicon", { exact: true })).toBeVisible();
     // Quatro inputs de arquivo reais (logo cabeçalho + favicon + logo
@@ -32,6 +54,7 @@ test.describe("Configurações", () => {
   });
 
   test("imagem principal da Home: seção aparece com preview do fallback padrão, sem 'Restaurar' quando não customizada", async ({ page }) => {
+    await abrirAba(page, "Site público");
     await expect(page.getByText("Imagem principal da Home", { exact: true })).toBeVisible();
     await expect(
       page.getByText("Esta imagem aparece em destaque no topo do seu site.")
@@ -50,6 +73,7 @@ test.describe("Configurações", () => {
   });
 
   test("rodapé do site: upload dedicado e as 3 opções de aparência aparecem, AUTO é o padrão", async ({ page }) => {
+    await abrirAba(page, "Site público");
     await expect(page.getByText("Rodapé do site", { exact: true })).toBeVisible();
     await expect(page.getByText("Logotipo do rodapé", { exact: true })).toBeVisible();
     await expect(
@@ -64,11 +88,13 @@ test.describe("Configurações", () => {
   });
 
   test("aparência do rodapé persiste após salvar e recarregar", async ({ page }) => {
+    await abrirAba(page, "Site público");
     await page.getByRole("radio", { name: /Fundo claro/i }).check({ force: true });
     await page.getByRole("button", { name: "Salvar alterações" }).click();
     await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
 
     await page.reload();
+    await abrirAba(page, "Site público");
     await expect(page.getByRole("radio", { name: /Fundo claro/i })).toBeChecked();
     await expect(page.getByRole("radio", { name: /Automático pelo tema/i })).not.toBeChecked();
 
@@ -83,8 +109,13 @@ test.describe("Configurações", () => {
     const marcador = Date.now();
     const prefixo = `T${marcador}`.slice(0, 10);
 
+    // Campos de TRÊS abas diferentes, num salvamento só: é a prova de
+    // que trocar de aba não descarta o que já foi preenchido.
+    await abrirAba(page, "Contatos e redes");
     await page.locator("#telefone").fill("+55 (11) 99999-0000");
+    await abrirAba(page, "Geral");
     await page.locator("#codigoImovelPrefixo").fill(prefixo);
+    await abrirAba(page, "Identidade visual");
     await page.getByRole("radio", { name: /Vinho/i }).check({ force: true });
 
     await page.getByRole("button", { name: "Salvar alterações" }).click();
@@ -96,13 +127,20 @@ test.describe("Configurações", () => {
     await expect(page.getByRole("button", { name: "Salvando..." })).toBeHidden();
 
     await page.reload();
+    // A aba aberta sobreviveu ao reload: ela viaja na URL.
+    await expect(page).toHaveURL(/tab=identidade/);
+    // Os valores persistidos continuam nos seus campos — inclusive nas
+    // abas que não estão abertas, porque os painéis seguem montados.
     await expect(page.locator("#telefone")).toHaveValue("+55 (11) 99999-0000");
     await expect(page.locator("#codigoImovelPrefixo")).toHaveValue(prefixo.toUpperCase());
     await expect(page.getByRole("radio", { name: /Vinho/i })).toBeChecked();
+
+    await abrirAba(page, "Geral");
     await expect(page.getByText(`Ficará assim: ${prefixo.toUpperCase()}-100001`)).toBeVisible();
   });
 
   test("gerar tema pelo logotipo: seção aparece, e sem logo salvo mostra erro amigável (sem quebrar)", async ({ page }) => {
+    await abrirAba(page, "Identidade visual");
     await expect(page.getByText("🎨 Gerar tema pelo logotipo")).toBeVisible();
     await expect(
       page.getByText(
@@ -139,6 +177,7 @@ test.describe("Configurações", () => {
     // Legibilidade: um rótulo de tema não deve quebrar em 1 caractere por
     // linha (mesma classe de bug já encontrada em Manutenção) — medindo a
     // largura real do texto do rótulo "Grafite".
+    await abrirAba(page, "Identidade visual");
     const rotuloTema = page.getByText("Grafite", { exact: true });
     await expect(rotuloTema).toBeVisible();
     const largura = await rotuloTema.evaluate((el) => el.getBoundingClientRect().width);
@@ -207,6 +246,7 @@ test.describe("Configurações", () => {
     }));
     expect(m.scrollWidth <= m.innerWidth + 1, `innerWidth=${m.innerWidth} scrollWidth=${m.scrollWidth}`).toBe(true);
 
+    await abrirAba(page, "Identidade visual");
     const identidade = await page
       .locator('[data-slot="card"]')
       .filter({ has: page.locator('[data-slot="card-title"]', { hasText: "Identidade visual" }) })
@@ -215,4 +255,140 @@ test.describe("Configurações", () => {
     // metade (~672px) da área disponível em desktop largo.
     expect(identidade && identidade.width > 800, `largura do card: ${identidade?.width}`).toBe(true);
   });
+});
+
+// =======================================================================
+// Abas e prévia (Fase 61)
+// =======================================================================
+test.describe("Configurações — abas", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes");
+  });
+
+  test("cada aba mostra o seu conteúdo e esconde o das outras", async ({ page }) => {
+    const esperado: Record<string, string> = {
+      Geral: "geral",
+      "Identidade visual": "identidade",
+      "Site público": "site",
+      "Contatos e redes": "contatos",
+      "Equipe e acesso": "acesso",
+    };
+    for (const [rotulo, id] of Object.entries(esperado)) {
+      await page.getByRole("tab", { name: rotulo }).click();
+      await expect(page.locator(`[data-painel='${id}']`)).toBeVisible();
+      // Exatamente um painel visível por vez.
+      await expect(page.locator("[data-painel]:visible")).toHaveCount(1);
+      await expect(page.getByRole("tab", { name: rotulo })).toHaveAttribute(
+        "aria-selected",
+        "true"
+      );
+    }
+  });
+
+  test("os campos das abas fechadas continuam no formulário", async ({ page }) => {
+    // É isto que torna a divisão em abas segura: a action grava todos os
+    // campos, e um painel desmontado apagaria o que não estivesse aberto.
+    await page.getByRole("tab", { name: "Equipe e acesso" }).click();
+    for (const campo of ["#telefone", "#codigoImovelPrefixo", "#nomePublico", "#email"]) {
+      await expect(page.locator(campo)).toHaveCount(1);
+    }
+  });
+
+  test("trocar de aba não descarta o que foi digitado", async ({ page }) => {
+    const valor = `Imobiliária ${Date.now()}`;
+    await page.getByRole("tab", { name: "Geral" }).click();
+    await page.locator("#nomePublico").fill(valor);
+
+    await page.getByRole("tab", { name: "Contatos e redes" }).click();
+    await page.getByRole("tab", { name: "Site público" }).click();
+    await page.getByRole("tab", { name: "Geral" }).click();
+
+    await expect(page.locator("#nomePublico")).toHaveValue(valor);
+  });
+
+  test("a aba escolhida fica no endereço, sem recarregar a página", async ({ page }) => {
+    const marcador = `Rascunho ${Date.now()}`;
+    await page.getByRole("tab", { name: "Geral" }).click();
+    await page.locator("#nomePublico").fill(marcador);
+
+    await page.getByRole("tab", { name: "Site público" }).click();
+    await expect(page).toHaveURL(/tab=site/);
+    // Não houve navegação: o que estava digitado continua lá.
+    await page.getByRole("tab", { name: "Geral" }).click();
+    await expect(page.locator("#nomePublico")).toHaveValue(marcador);
+  });
+
+  test("abrir com ?tab= já mostra a aba pedida", async ({ page }) => {
+    await page.goto("/app/configuracoes?tab=contatos");
+    await expect(page.locator("[data-painel='contatos']")).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Contatos e redes" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+  });
+
+  test("aba inválida na URL cai na primeira, sem quebrar", async ({ page }) => {
+    await page.goto("/app/configuracoes?tab=nao-existe");
+    await expect(page.locator("[data-painel='geral']")).toBeVisible();
+  });
+
+  test("as abas funcionam pelo teclado", async ({ page }) => {
+    const primeira = page.getByRole("tab", { name: "Geral" });
+    await primeira.focus();
+    await expect(primeira).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("tab", { name: "Identidade visual" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    await page.keyboard.press("ArrowLeft");
+    await expect(primeira).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("a prévia reage ao tema antes de salvar", async ({ page }) => {
+    await page.getByRole("tab", { name: "Identidade visual" }).click();
+    const previa = page.locator("[data-previa-tema]");
+    await expect(previa).toBeVisible();
+
+    // O tema atual da organização depende do que outros testes deste
+    // arquivo salvaram, então o alvo é escolhido a partir dele — nunca
+    // um tema fixo, que poderia ser justamente o que já está aplicado.
+    const antes = await previa.getAttribute("data-previa-tema");
+    const alvo = antes === "wine" ? /Verde Floresta/i : /Vinho/i;
+    await page.getByRole("radio", { name: alvo }).check({ force: true });
+    await expect(previa).not.toHaveAttribute("data-previa-tema", antes ?? "");
+    // Nada foi salvo: a mudança é só da prévia.
+    await expect(page.getByRole("button", { name: "Salvar alterações" })).toBeEnabled();
+  });
+
+  test("a prévia acompanha o nome público enquanto se digita", async ({ page }) => {
+    const nome = `Prévia ${Date.now()}`;
+    await page.getByRole("tab", { name: "Geral" }).click();
+    await page.locator("#nomePublico").fill(nome);
+    await page.getByRole("tab", { name: "Identidade visual" }).click();
+    await expect(page.locator("[data-previa-identidade]")).toContainText(nome);
+  });
+
+  for (const largura of [320, 390, 768, 1024, 1280, 1440]) {
+    test(`${largura}px: abas e painel sem estouro horizontal`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.goto("/app/configuracoes?tab=identidade");
+
+      await expect(page.locator("[data-abas-configuracoes]")).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+        ),
+        `estouro @ ${largura}`
+      ).toBe(true);
+
+      // O salvar continua alcançável em qualquer largura.
+      const salvar = (await page
+        .getByRole("button", { name: "Salvar alterações" })
+        .boundingBox())!;
+      expect(salvar.x).toBeGreaterThanOrEqual(-0.5);
+      expect(salvar.x + salvar.width).toBeLessThanOrEqual(largura + 0.5);
+    });
+  }
 });
