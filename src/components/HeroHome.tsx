@@ -1,5 +1,10 @@
 import Image from "next/image";
-import { TITULO_HERO, SUBTITULO_HERO } from "@/lib/site-typography";
+import {
+  TITULO_HERO,
+  SUBTITULO_HERO,
+  HERO_TITULO,
+  HERO_SUBTITULO,
+} from "@/lib/site-typography";
 
 // Proposta 2 (correção) — antes o painel de busca vivia FORA/abaixo deste
 // componente (barra horizontal com -mt negativo simulando sobreposição).
@@ -91,10 +96,8 @@ export function HeroHome({
       <div className="relative mx-auto max-w-6xl px-4 py-14 sm:py-20 lg:py-12">
         <div className="flex flex-col items-center gap-10 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
           <div className="max-w-xl text-center lg:flex-1 lg:text-left">
-            <h1 className={TITULO_HERO}>Encontre o imóvel ideal para você</h1>
-            <p className={`${SUBTITULO_HERO} mt-4`}>
-              Apartamentos, casas e imóveis comerciais selecionados para você.
-            </p>
+            <h1 className={TITULO_HERO}>{HERO_TITULO}</h1>
+            <p className={`${SUBTITULO_HERO} mt-4`}>{HERO_SUBTITULO}</p>
           </div>
 
           <div className="w-full max-w-md lg:w-[380px] lg:shrink-0">{children}</div>

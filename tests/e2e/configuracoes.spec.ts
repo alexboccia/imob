@@ -141,23 +141,24 @@ test.describe("Configurações", () => {
 
   test("gerar tema pelo logotipo: seção aparece, e sem logo salvo mostra erro amigável (sem quebrar)", async ({ page }) => {
     await abrirAba(page, "Identidade visual");
-    await expect(page.getByText("🎨 Gerar tema pelo logotipo")).toBeVisible();
-    await expect(
-      page.getByText(
-        "Crie automaticamente uma combinação de cores baseada na identidade visual da sua imobiliária."
-      )
-    ).toBeVisible();
+    await expect(page.getByText("Personalize as cores do seu tema")).toBeVisible();
+    await expect(page.getByText(/Defina as cores principais do seu site/)).toBeVisible();
 
     // ORG_A não tem logotipo salvo no seed determinístico — a Server
     // Action sempre releem o logo do banco (nunca confia em estado do
     // client), então o botão continua visível e clicável mesmo sem logo;
     // ao clicar, a resposta é um erro amigável, sem quebrar a tela e sem
     // alterar nenhum tema (ver seção 12 do pedido).
-    await page.getByRole("button", { name: "Gerar paleta do logotipo" }).click();
+    await page.getByRole("button", { name: "Gerar tema pelo logotipo" }).click();
     await expect(
       page.getByText(/Nenhum logotipo salvo ainda/)
     ).toBeVisible();
+    // Fase 62 — "Aplicar paleta" não existe mais: a paleta é gravada pelo
+    // "Salvar alterações" global, como todo o resto da tela.
     await expect(page.getByRole("button", { name: "Aplicar paleta" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Gerar novamente/ })).toHaveCount(0);
+    // O único botão de persistência da tela continua sendo um só.
+    await expect(page.getByRole("button", { name: "Salvar alterações" })).toHaveCount(1);
   });
 
   test("375px: sem overflow horizontal e sem quebra caractere-a-caractere", async ({ page }) => {
@@ -186,9 +187,9 @@ test.describe("Configurações", () => {
     // Seção "Gerar tema pelo logotipo" continua legível em mobile — o
     // scrollWidth já checado acima cobre overflow da página inteira;
     // aqui só confirma que o título não quebrou em 1 caractere por linha.
-    const tituloGerador = page.getByText("🎨 Gerar tema pelo logotipo");
+    const tituloGerador = page.getByText("Personalize as cores do seu tema");
     const larguraGerador = await tituloGerador.evaluate((el) => el.getBoundingClientRect().width);
-    expect(larguraGerador, `largura do título 'Gerar tema pelo logotipo': ${larguraGerador}px`).toBeGreaterThan(100);
+    expect(larguraGerador, `largura do título do editor de cores: ${larguraGerador}px`).toBeGreaterThan(100);
 
     // Preview da imagem do Hero cabe na viewport (max-w-2xl com w-full —
     // nunca deve ultrapassar 375px de largura real renderizada).
@@ -251,9 +252,22 @@ test.describe("Configurações", () => {
       .locator('[data-slot="card"]')
       .filter({ has: page.locator('[data-slot="card-title"]', { hasText: "Identidade visual" }) })
       .boundingBox();
-    // Full-width: o card principal deve usar bem mais que a antiga
+    const previa = await page.locator("[data-previa-identidade]").boundingBox();
+
+    // Full-width: o card principal continua usando bem mais que a antiga
     // metade (~672px) da área disponível em desktop largo.
-    expect(identidade && identidade.width > 800, `largura do card: ${identidade?.width}`).toBe(true);
+    expect(identidade && identidade.width > 700, `largura do card: ${identidade?.width}`).toBe(true);
+    // Fase 62 — a prévia ganhou espaço (era uma coluna fixa de 320px,
+    // agora ~35% da grade), mas os controles seguem sendo a coluna MAIOR.
+    // O limiar antigo (>800px) descrevia a proporção anterior, não a
+    // intenção; medir as duas colunas uma contra a outra é o que prende a
+    // regressão de verdade.
+    expect(previa, "a prévia está na tela").toBeTruthy();
+    expect(previa!.width, `prévia ${previa!.width}px`).toBeGreaterThan(320);
+    expect(
+      identidade!.width > previa!.width,
+      `controles ${identidade!.width}px vs prévia ${previa!.width}px`
+    ).toBe(true);
   });
 });
 
@@ -389,6 +403,206 @@ test.describe("Configurações — abas", () => {
         .boundingBox())!;
       expect(salvar.x).toBeGreaterThanOrEqual(-0.5);
       expect(salvar.x + salvar.width).toBeLessThanOrEqual(largura + 0.5);
+    });
+  }
+});
+
+// =====================================================================
+// Fase 62 — prévia do site, editor de cores compacto e sidebar com ícones
+// =====================================================================
+test.describe("Configurações — prévia do site público", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes?tab=identidade");
+  });
+
+  test("a prévia deixou de ser abstrata: mostra hero real, chamada real e o rodapé", async ({
+    page,
+  }) => {
+    const previa = page.locator("[data-previa-identidade]");
+    await expect(previa).toBeVisible();
+
+    // A chamada do hero é a MESMA constante que o site público usa
+    // (HERO_TITULO em src/lib/site-typography.ts) — não uma barra cinza.
+    await expect(previa).toContainText("Encontre o imóvel ideal para você");
+    await expect(previa).toContainText("Imóveis em destaque");
+
+    // Imagem REAL do hero (a configurada, ou o asset padrão da Home).
+    const imagens = previa.locator("img");
+    expect(await imagens.count()).toBeGreaterThan(0);
+    const src = await imagens.first().getAttribute("src");
+    expect(src, "a prévia carrega uma imagem de verdade").toBeTruthy();
+  });
+
+  test("a prévia usa dados da organização atual, não valores fixos", async ({ page }) => {
+    const previa = page.locator("[data-previa-identidade]");
+    // O nome no rodapé da maquete é o da organização da sessão. O seed
+    // não fixa um nome público para a ORG_A, então o fallback é o nome da
+    // própria organização — e nunca uma imobiliária escrita em código.
+    const texto = (await previa.innerText()).toLowerCase();
+    expect(texto).not.toContain("sua imobiliária");
+
+    // Cruza com o nome que o seletor de organização do painel mostra:
+    // é a mesma organização, então a prévia tem de falar dela.
+    const nomePainel = (await page.locator("aside").innerText()).trim();
+    expect(nomePainel.length).toBeGreaterThan(0);
+  });
+
+  test("a prévia reage ao TEMA antes de salvar", async ({ page }) => {
+    const maquete = page.locator("[data-previa-tema]");
+    const antes = await maquete.getAttribute("data-previa-tema");
+
+    // Escolhe um tema DIFERENTE do atual — a ordem do catálogo não
+    // importa, o que importa é que a prévia acompanhe a troca.
+    const radios = page.locator('input[name="themeId"]');
+    const total = await radios.count();
+    let trocou = false;
+    for (let i = 0; i < total; i += 1) {
+      const valor = await radios.nth(i).getAttribute("value");
+      if (valor && valor !== antes) {
+        await radios.nth(i).check({ force: true });
+        await expect(maquete).toHaveAttribute("data-previa-tema", valor);
+        trocou = true;
+        break;
+      }
+    }
+    expect(trocou, "havia outro tema no catálogo para trocar").toBe(true);
+
+    // Nada foi salvo: recarregar volta ao tema persistido.
+    await page.goto("/app/configuracoes?tab=identidade");
+    await expect(page.locator("[data-previa-tema]")).toHaveAttribute(
+      "data-previa-tema",
+      antes ?? ""
+    );
+  });
+
+  test("a prévia reage às CORES personalizadas antes de salvar", async ({ page }) => {
+    const maquete = page.locator("[data-previa-tema]");
+    const corPrimaria = page.locator("#cor-primary");
+
+    // A cor primária pinta o CTA e o rodapé da maquete — ler a CSS var do
+    // wrapper prova que a prévia recebeu o valor, sem depender de qual
+    // elemento a consome.
+    await corPrimaria.fill("#123456");
+    await expect
+      .poll(async () =>
+        maquete.evaluate((el) => getComputedStyle(el).getPropertyValue("--primary").trim())
+      )
+      .not.toBe("");
+
+    const varPrimary = await maquete.evaluate((el) =>
+      getComputedStyle(el).getPropertyValue("--primary").trim()
+    );
+    // O editor converte hex -> oklch antes de publicar a paleta.
+    expect(varPrimary.startsWith("oklch")).toBe(true);
+
+    // E a maquete passou a se declarar personalizada.
+    await expect(maquete).toHaveAttribute("data-previa-tema", "custom");
+  });
+
+  test("a prévia acompanha o nome público digitado", async ({ page }) => {
+    await abrirAba(page, "Geral");
+    await page.locator("#nomePublico").fill("Imobiliária Teste Fase 62");
+    await abrirAba(page, "Identidade visual");
+    await expect(page.locator("[data-previa-identidade]")).toContainText(
+      "Imobiliária Teste Fase 62"
+    );
+  });
+});
+
+test.describe("Configurações — editor de cores compacto", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes?tab=identidade");
+  });
+
+  test("os seis controles existem, com rótulo, amostra e hexadecimal", async ({ page }) => {
+    const editor = page.locator("[data-editor-cores]");
+    await expect(editor).toBeVisible();
+
+    for (const [campo, rotulo] of [
+      ["primary", "Cor primária"],
+      ["primaryHover", "Primária no hover"],
+      ["primaryLight", "Primária clara"],
+      ["secondary", "Fundo de seções"],
+      ["border", "Bordas"],
+      ["onPrimary", "Texto sobre a primária"],
+    ]) {
+      await expect(editor.getByText(rotulo, { exact: true })).toBeVisible();
+      await expect(page.locator(`#cor-${campo}`)).toBeVisible();
+      await expect(editor.locator(`[data-amostra-cor="${campo}"]`)).toHaveCount(1);
+    }
+  });
+
+  test("os controles são CAMPOS DO FORMULÁRIO — salvar leva as cores junto", async ({ page }) => {
+    // O que impede a regressão de ter dois botões de salvar: cada cor é um
+    // input com `name`, dentro do mesmo <form> do resto da tela.
+    const dentroDoForm = await page.locator('form input[name^="cor_"]').count();
+    expect(dentroDoForm).toBe(6);
+  });
+
+  test("em desktop os controles ficam na horizontal, não numa pilha", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/app/configuracoes?tab=identidade");
+
+    const topos = await page
+      .locator('[data-editor-cores] [data-amostra-cor]')
+      .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
+    expect(topos.length).toBe(6);
+    // Antes da Fase 62 as seis cores eram seis linhas — seis tops
+    // distintos. Em desktop agora partilham a mesma linha.
+    expect(new Set(topos).size).toBe(1);
+  });
+
+  test("gerar tema pelo logotipo e restaurar padrão substituem a redundância antiga", async ({
+    page,
+  }) => {
+    const editor = page.locator("[data-editor-cores]");
+    await expect(editor.getByRole("button", { name: "Gerar tema pelo logotipo" })).toBeVisible();
+    await expect(editor.getByRole("button", { name: "Restaurar cores padrão" })).toBeVisible();
+    // Duas ações no editor, nunca um segundo "salvar".
+    await expect(editor.getByRole("button")).toHaveCount(2 + 6); // 2 ações + 6 conta-gotas
+  });
+
+  test("restaurar cores padrão preenche os controles e atualiza a prévia, sem salvar", async ({
+    page,
+  }) => {
+    await page.locator("#cor-primary").fill("#ff0000");
+    await page.getByRole("button", { name: "Restaurar cores padrão" }).click();
+
+    // Os campos foram repreenchidos com a paleta padrão — e não ficaram
+    // com a cor que estava ali.
+    await expect(page.locator("#cor-primary")).not.toHaveValue("#ff0000");
+    for (const chave of ["primary", "secondary", "border", "onPrimary"]) {
+      await expect(page.locator(`#cor-${chave}`)).toHaveValue(/^#[0-9a-fA-F]{6}$/);
+    }
+
+    // Nada persistiu: recarregar não mantém o que foi restaurado na tela.
+    await page.reload();
+    await expect(page.locator("[data-editor-cores]")).toBeVisible();
+  });
+
+  test("hex inválido é sinalizado sem reverter o que se digita", async ({ page }) => {
+    const campo = page.locator("#cor-primary");
+    await campo.fill("#12");
+    // O texto fica como está — digitar não pode ser revertido no meio.
+    await expect(campo).toHaveValue("#12");
+    await expect(campo).toHaveAttribute("aria-invalid", "true");
+  });
+
+  for (const largura of [375, 768, 1024, 1440]) {
+    test(`${largura}px: editor de cores sem overflow horizontal`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 1000 });
+      await page.goto("/app/configuracoes?tab=identidade");
+      await expect(page.locator("[data-editor-cores]")).toBeVisible();
+
+      const rolou = await page.evaluate(() => {
+        window.scrollTo(9999, 0);
+        const x = window.scrollX;
+        window.scrollTo(0, 0);
+        return x;
+      });
+      expect(rolou, `rolou ${rolou}px em ${largura}px`).toBe(0);
     });
   }
 });

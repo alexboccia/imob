@@ -17,7 +17,7 @@ import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { buscarBranding } from "@/lib/branding";
 import { IMAGEM_HERO_PADRAO } from "@/lib/site-config";
-import { TITULO_SECAO } from "@/lib/site-typography";
+import { TITULO_SECAO, SECAO_DESTAQUES_TITULO } from "@/lib/site-typography";
 import type { Prisma } from "@/generated/prisma/client";
 
 // Sem force-dynamic (removido do layout): as listas de imóveis desta
@@ -151,7 +151,7 @@ export default async function HomePage({
       <FaixaConfianca />
 
       <SecaoImoveis
-        titulo="Imóveis em destaque"
+        titulo={SECAO_DESTAQUES_TITULO}
         imoveis={destaques.map(paraImovelCard)}
         // "Ver todos" leva à listagem completa desta organização, com o
         // basePath multi-tenant já resolvido — nunca um slug fixo.

@@ -8,6 +8,8 @@ import { usePathname } from "next/navigation";
 import { ExternalLink, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ICONES_NAV } from "@/components/admin/icones-nav";
+import { itemAtivo, type ItemNavAdmin } from "@/components/admin/AdminSidebarNav";
 import {
   Sheet,
   SheetContent,
@@ -27,10 +29,11 @@ import {
 // desmonta o Sheet sozinho — sem o onClick abaixo, o menu ficaria aberto
 // por cima da página de destino).
 //
-// Duplica a lista de links do <aside> desktop (layout.tsx) em vez de
-// compartilhar um componente — desktop permanece 100% intocado (zero
-// risco), e aqui a lista ganha estado ativo (usePathname), que não foi
-// pedido pro desktop.
+// A lista de links chega pronta do servidor (layout.tsx), a MESMA que
+// alimenta a sidebar desktop. Fase 62: o desktop virou componente de
+// cliente (AdminSidebarNav) para também poder destacar a rota atual, e as
+// duas pontas passaram a compartilhar a regra de "ativo" (itemAtivo) e o
+// mapa de ícones (ICONES_NAV) em vez de cada uma ter a sua cópia.
 export function AdminMobileNav({
   navLinks,
   siteUrl,
@@ -43,7 +46,7 @@ export function AdminMobileNav({
   organizacoes,
   organizationIdAtual,
 }: {
-  navLinks: { href: string; label: string; liberado: boolean }[];
+  navLinks: ItemNavAdmin[];
   siteUrl: string | null;
   userName: string | null | undefined;
   userRoleLabel: string;
@@ -97,15 +100,17 @@ export function AdminMobileNav({
           )}
           <nav className="flex-1 space-y-1 overflow-y-auto text-sm" aria-label="Navegação principal">
             {navLinks.map((link) => {
-              const ativo = link.href === "/app" ? pathname === "/app" : pathname.startsWith(link.href);
+              const Icone = ICONES_NAV[link.icone];
+              const ativo = itemAtivo(pathname, link.href);
               if (!link.liberado) {
                 return (
                   <span
                     key={link.href}
                     title="Disponível em planos superiores"
-                    className="flex items-center justify-between rounded-md px-3 py-2 text-gray-400 cursor-not-allowed"
+                    className="flex cursor-not-allowed items-center gap-2.5 rounded-md px-3 py-2 text-gray-400"
                   >
-                    {link.label}
+                    <Icone aria-hidden className="size-[18px] shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{link.label}</span>
                     <Badge variant="secondary" className="text-[10px]">
                       Pro
                     </Badge>
@@ -120,11 +125,12 @@ export function AdminMobileNav({
                   onClick={() => setOpen(false)}
                   className={
                     ativo
-                      ? "block rounded-md bg-primary/10 px-3 py-2 font-medium text-primary"
-                      : "block rounded-md px-3 py-2 hover:bg-gray-100"
+                      ? "flex items-center gap-2.5 rounded-md bg-primary/10 px-3 py-2 font-medium text-primary"
+                      : "flex items-center gap-2.5 rounded-md px-3 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                   }
                 >
-                  {link.label}
+                  <Icone aria-hidden className="size-[18px] shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{link.label}</span>
                 </Link>
               );
             })}

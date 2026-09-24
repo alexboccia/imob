@@ -9,6 +9,9 @@ import { temPapel, PAPEIS_GESTAO_CONFIGURACOES } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
 import { withOrganization } from "@/lib/tenant-context";
 import { ConfiguracaoContatoForm } from "@/components/admin/ConfiguracaoContatoForm";
+import { buscarImoveisPrevia } from "@/lib/previa-identidade-data";
+import { IMAGEM_HERO_PADRAO } from "@/lib/site-config";
+import { prisma } from "@/lib/prisma";
 
 export default async function ConfiguracoesPage() {
   const organizationId = await requireOrganizationId();
@@ -34,7 +37,15 @@ export default async function ConfiguracoesPage() {
     );
   }
 
-  const [config, branding, fuso, fusoConfigurado, visibilidadeComercial] = await withOrganization(organizationId, () =>
+  const [
+    config,
+    branding,
+    fuso,
+    fusoConfigurado,
+    visibilidadeComercial,
+    imoveisPrevia,
+    organizacao,
+  ] = await withOrganization(organizationId, () =>
     Promise.all([
       buscarConfiguracaoContato(organizationId),
       buscarBranding(organizationId),
@@ -46,6 +57,17 @@ export default async function ConfiguracoesPage() {
       // "nunca configurado" de "configurado como UTC".
       buscarFusoConfigurado(organizationId),
       buscarVisibilidadeComercial(organizationId),
+      // Fase 62 — os imóveis que a prévia da identidade mostra. Mesma
+      // consulta em paralelo com as outras: não adiciona um round-trip
+      // sequencial à tela.
+      buscarImoveisPrevia(organizationId),
+      // Nome "oficial" da organização: é o que o site público usa quando
+      // não há nome público configurado (ver [orgSlug]/layout.tsx), então
+      // é também o fallback correto do rótulo na prévia.
+      prisma.organization.findUniqueOrThrow({
+        where: { id: organizationId },
+        select: { name: true },
+      }),
     ])
   );
 
@@ -68,6 +90,11 @@ export default async function ConfiguracoesPage() {
           nomePublico: branding.displayName,
           footerAppearance: branding.footerAppearance,
           temaCustomizado: branding.customTheme,
+          nomeOrganizacao: organizacao.name,
+          // Mesmo fallback da Home pública: a imagem configurada, ou o
+          // asset de marca quando a organização nunca customizou.
+          heroPrevia: config.heroImage ?? IMAGEM_HERO_PADRAO,
+          imoveisPrevia,
           fuso,
           gruposDeFuso: opcoesDeFuso(fuso),
           visibilidadeComercial,

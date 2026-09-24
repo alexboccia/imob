@@ -14,6 +14,7 @@ import { ErroCampo } from "@/components/admin/ErroCampo";
 import { CorBarraTopo } from "@/components/admin/CorBarraTopo";
 import { AbasConfiguracoes } from "@/components/admin/AbasConfiguracoes";
 import { PreviaIdentidade } from "@/components/admin/PreviaIdentidade";
+import type { ImovelPrevia } from "@/lib/previa-identidade-data";
 import {
   CANAIS_PUBLICOS,
   LIMITE_HORARIO_ATENDIMENTO,
@@ -64,6 +65,13 @@ type ConfiguracaoInicial = {
   themeId: string | null;
   favicon: string | null;
   nomePublico: string | null;
+  // Fase 62 — dados REAIS que a prévia do site mostra. Resolvidos no
+  // servidor para o tenant da sessão (ver ConfiguracoesPage): o nome da
+  // organização como último recurso do rótulo, a imagem do hero já com o
+  // fallback aplicado, e os imóveis publicados.
+  nomeOrganizacao: string;
+  heroPrevia: string | null;
+  imoveisPrevia: ImovelPrevia[];
   footerAppearance: string | null;
   temaCustomizado: TokensTema | null;
   // Fase 18 — fuso horário comercial já resolvido (nunca null aqui: a
@@ -231,7 +239,7 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
               controles, que é o que permite "alterei aqui, vejo ali".
               Abaixo disso ela vai para baixo — empilhar é melhor que
               espremer as pastilhas de tema. */}
-          <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+          <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,65fr)_minmax(0,35fr)] xl:items-start">
             <Card className="min-w-0">
               <CardHeader>
                 <CardTitle className="min-w-0 break-words">Identidade visual</CardTitle>
@@ -267,7 +275,9 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
                         : null
                     }
                     logo={config.logo}
-                    nomeFallback={config.nomePublico || "Sua imobiliária"}
+                    nomeFallback={config.nomePublico || config.nomeOrganizacao}
+                    heroImagem={config.heroPrevia}
+                    imoveis={config.imoveisPrevia}
                   />
                 </CardContent>
               </Card>

@@ -1,12 +1,12 @@
-import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSiteUrl, resolverBasePath } from "@/lib/site-url";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
-import { Badge } from "@/components/ui/badge";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
+import { AdminSidebarNav } from "@/components/admin/AdminSidebarNav";
+import type { ChaveIconeNav } from "@/components/admin/icones-nav";
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
 import { hasModule } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
@@ -26,24 +26,28 @@ const TODOS_NAV_LINKS: {
   label: string;
   modulo?: string;
   papeis?: ReadonlySet<string>;
+  // Fase 62 — apelido do ícone no mapa de src/components/admin/icones-nav.ts.
+  // String, não componente: esta lista atravessa a fronteira servidor →
+  // cliente (sidebar e menu mobile são componentes de cliente).
+  icone: ChaveIconeNav;
 }[] = [
-  { href: "/app", label: "Dashboard" },
-  { href: "/app/imoveis", label: "Imóveis" },
-  { href: "/app/clientes", label: "Clientes", modulo: "crm" },
-  { href: "/app/pipeline", label: "Pipeline", modulo: "crm" },
-  { href: "/app/agenda", label: "Agenda", modulo: "crm" },
+  { href: "/app", label: "Dashboard", icone: "dashboard" },
+  { href: "/app/imoveis", label: "Imóveis", icone: "imoveis" },
+  { href: "/app/clientes", label: "Clientes", modulo: "crm", icone: "clientes" },
+  { href: "/app/pipeline", label: "Pipeline", modulo: "crm", icone: "pipeline" },
+  { href: "/app/agenda", label: "Agenda", modulo: "crm", icone: "agenda" },
   // Analytics comercial (Fase 5) — mesmo portão de módulo das outras
   // telas de CRM: é uma agregação de Interaction, exatamente o dado que
   // Clientes/Pipeline/Agenda já mostram linha a linha. Fica logo depois
   // delas, fechando o bloco de CRM, e nunca antes de Imóveis/Clientes
   // (que são o trabalho diário, não a leitura gerencial).
-  { href: "/app/analytics", label: "Analytics", modulo: "crm" },
+  { href: "/app/analytics", label: "Analytics", modulo: "crm", icone: "analytics" },
   // Fase 35 — a carteira financeira do corretor. Mesmo portão de módulo
   // do resto do CRM e NENHUM recorte por papel: o saldo é pessoal, a
   // consulta filtra pelo membro da sessão, e todo mundo que participa de
   // uma comissão tem direito à própria resposta. Fica depois do Analytics
   // porque é leitura, não trabalho diário — e antes dos catálogos.
-  { href: "/app/minhas-comissoes", label: "Minhas comissões", modulo: "crm" },
+  { href: "/app/minhas-comissoes", label: "Minhas comissões", modulo: "crm", icone: "comissoes" },
   // Fase 24 — fila de identificação. Primeiro item do menu com recorte
   // por PAPEL, e não só por módulo: um BROKER não decide a qual cliente
   // pertence um contato ambíguo, então o item não existe para ele. Isso
@@ -54,14 +58,15 @@ const TODOS_NAV_LINKS: {
     label: "Contatos a identificar",
     modulo: "crm",
     papeis: PAPEIS_RESOLUCAO_IDENTIDADE,
+    icone: "captacoes",
   },
   // Fase 38 — junto dos outros catálogos por organização, e com o
   // mesmo portão de leitura: um corretor precisa reconhecer os
   // empreendimentos que vai selecionar no cadastro do imóvel.
-  { href: "/app/empreendimentos", label: "Empreendimentos" },
-  { href: "/app/caracteristicas", label: "Características" },
-  { href: "/app/tipos-imovel", label: "Tipos de imóvel" },
-  { href: "/app/usuarios", label: "Usuários" },
+  { href: "/app/empreendimentos", label: "Empreendimentos", icone: "empreendimentos" },
+  { href: "/app/caracteristicas", label: "Características", icone: "caracteristicas" },
+  { href: "/app/tipos-imovel", label: "Tipos de imóvel", icone: "tipos-imovel" },
+  { href: "/app/usuarios", label: "Usuários", icone: "usuarios" },
   // Autoatendimento do próprio perfil público — separado de "Usuários"
   // de propósito: manter a própria identidade no site não é gestão de
   // pessoas. Só aparece para quem pode ter perfil público; um assistente
@@ -71,6 +76,7 @@ const TODOS_NAV_LINKS: {
     href: "/app/meu-perfil",
     label: "Meu perfil público",
     papeis: PAPEIS_PERFIL_PUBLICO_PROPRIO,
+    icone: "meu-perfil",
   },
   // Fase 25 — fecha a dívida que a Fase 24 deixou registrada ao criar o
   // recorte por papel. /app/configuracoes JÁ recusa quem não é
@@ -82,11 +88,16 @@ const TODOS_NAV_LINKS: {
   // Só esta entrada muda. /app/usuarios e /app/manutencao continuam
   // visíveis para todos DE PROPÓSITO: as duas telas renderizam conteúdo
   // real e útil em modo somente-leitura, não uma recusa.
-  { href: "/app/configuracoes", label: "Configurações", papeis: PAPEIS_GESTAO_CONFIGURACOES },
+  {
+    href: "/app/configuracoes",
+    label: "Configurações",
+    papeis: PAPEIS_GESTAO_CONFIGURACOES,
+    icone: "configuracoes",
+  },
   // Fase 27 — o contrato da imobiliária com o produto. Recortado por
   // PAPEIS_FINANCEIRO: um gestor comercial não responde pelo contrato.
-  { href: "/app/assinatura", label: "Assinatura", papeis: PAPEIS_FINANCEIRO },
-  { href: "/app/manutencao", label: "Manutenção" },
+  { href: "/app/assinatura", label: "Assinatura", papeis: PAPEIS_FINANCEIRO, icone: "assinatura" },
+  { href: "/app/manutencao", label: "Manutenção", icone: "manutencao" },
 ];
 
 export default async function AdminLayout({
@@ -151,10 +162,14 @@ export default async function AdminLayout({
     await signOut({ redirectTo: "/app/login" });
   }
 
-  const navLinksParaMobile = NAV_LINKS.map((link) => ({
+  // Uma lista só para sidebar e menu mobile: `liberado` (portão de
+  // módulo) e o ícone resolvidos uma vez, no servidor, para os dois nunca
+  // divergirem.
+  const itensNav = NAV_LINKS.map((link) => ({
     href: link.href,
     label: link.label,
     liberado: !link.modulo || Boolean(modulosHabilitados.get(link.modulo)),
+    icone: link.icone,
   }));
 
   return (
@@ -185,34 +200,7 @@ export default async function AdminLayout({
             Ver site
           </a>
         )}
-        <nav className="flex-1 px-2 py-4 space-y-1 text-sm">
-          {NAV_LINKS.map((link) => {
-            const liberado = !link.modulo || modulosHabilitados.get(link.modulo);
-            if (!liberado) {
-              return (
-                <span
-                  key={link.href}
-                  title="Disponível em planos superiores"
-                  className="flex items-center justify-between rounded-md px-3 py-2 text-gray-400 cursor-not-allowed"
-                >
-                  {link.label}
-                  <Badge variant="secondary" className="text-[10px]">
-                    Pro
-                  </Badge>
-                </span>
-              );
-            }
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="block rounded-md px-3 py-2 hover:bg-gray-100"
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <AdminSidebarNav itens={itensNav} />
         <div className="px-4 py-4 border-t text-sm">
           <p className="font-medium truncate">{session.user?.name}</p>
           <p className="text-gray-500 truncate">
@@ -236,7 +224,7 @@ export default async function AdminLayout({
           desta correção, não só em /app/clientes). */}
       <div className="min-w-0 flex-1 flex flex-col">
         <AdminMobileNav
-          navLinks={navLinksParaMobile}
+          navLinks={itensNav}
           siteUrl={siteUrl}
           userName={session.user?.name}
           userRoleLabel={PAPEL_USUARIO_LABEL[session.user?.role ?? ""] ?? session.user?.role ?? ""}

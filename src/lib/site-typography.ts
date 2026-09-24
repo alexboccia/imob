@@ -24,3 +24,14 @@ export const TITULO_DETALHE =
   "text-2xl sm:text-3xl font-bold tracking-tight text-gray-900";
 
 export const TITULO_BLOCO = "text-lg font-semibold text-gray-900";
+
+// Texto do hero da Home pública. Extraído de HeroHome.tsx na Fase 62 para
+// a prévia da identidade visual (painel) mostrar A MESMA frase que o
+// visitante lê, em vez de uma barra cinza no lugar do título. Um lugar só:
+// mudar a chamada aqui muda o site e a prévia juntos.
+export const HERO_TITULO = "Encontre o imóvel ideal para você";
+export const HERO_SUBTITULO =
+  "Apartamentos, casas e imóveis comerciais selecionados para você.";
+
+// Título da vitrine da Home — mesma razão.
+export const SECAO_DESTAQUES_TITULO = "Imóveis em destaque";

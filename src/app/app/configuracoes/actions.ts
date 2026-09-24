@@ -30,7 +30,7 @@ import { fusoValido } from "@/lib/fuso-horario";
 import { CATALOGO_TEMAS, THEME_ID_CUSTOMIZADO } from "@/lib/branding/temas";
 import { CATALOGO_APARENCIA_RODAPE } from "@/lib/branding/aparencia-rodape";
 import { validarFaviconUrl, validarUrlMidiaOrganizacao } from "@/lib/branding/favicon-url";
-import { hexValido } from "@/lib/branding/oklch-color";
+import { hexValido, hexParaOklch, formatarOklch } from "@/lib/branding/oklch-color";
 import { normalizarCorBarraTopo } from "@/lib/branding/cor-barra-topo";
 import {
   urlRedeSocialValida,
@@ -40,6 +40,7 @@ import {
 } from "@/lib/contatos-publicos";
 import { gerarPaletaDoLogo, type MotivoFalhaExtracao } from "@/lib/branding/extrair-paleta-logo";
 import { tokensTemaSchema } from "@/lib/branding/tokens-tema-schema";
+import { CHAVES_COR_EDITAVEIS, campoCorDaChave } from "@/lib/branding/paleta-editavel";
 import type { TokensTema } from "@/lib/branding/temas";
 
 const vazioParaNulo = (v: unknown) =>
@@ -161,6 +162,26 @@ const configuracaoSchema = z.object({
     [THEME_ID_CUSTOMIZADO, ...Object.keys(CATALOGO_TEMAS)] as [string, ...string[]],
     { message: "Tema inválido." }
   ),
+  // Fase 62 — as seis cores editáveis do tema personalizado passaram a
+  // viajar NO FORMULÁRIO, em vez de terem um botão "Aplicar paleta" com
+  // persistência própria. O que isto muda é só QUEM grava: continua sendo
+  // um clique explícito do usuário ("Salvar alterações"), nunca um efeito
+  // colateral de subir um logotipo.
+  //
+  // Hex aqui, oklch no banco: o editor trabalha em #RRGGBB (é o que o
+  // input de cor e o conta-gotas falam) e a conversão acontece abaixo,
+  // antes de passar pelo tokensTemaSchema — o MESMO schema estrito que
+  // aplicarPaletaGerada já usava. Nenhuma cor chega ao banco sem passar
+  // por ele, então continuar aceitando o valor do client não afrouxa nada.
+  //
+  // Opcionais de propósito: um tenant que nunca personalizou não manda
+  // estes campos, e a submissão tem de seguir válida.
+  cor_primary: z.preprocess(vazioParaNulo, z.string().optional()),
+  cor_primaryHover: z.preprocess(vazioParaNulo, z.string().optional()),
+  cor_primaryLight: z.preprocess(vazioParaNulo, z.string().optional()),
+  cor_secondary: z.preprocess(vazioParaNulo, z.string().optional()),
+  cor_border: z.preprocess(vazioParaNulo, z.string().optional()),
+  cor_onPrimary: z.preprocess(vazioParaNulo, z.string().optional()),
   favicon: z.preprocess(vazioParaNulo, z.string().optional()),
   // Fase P.10 — nome público exibido no site, quando diverge do nome
   // "oficial"/legal da organização (Organization.name). Nunca cor/CSS
@@ -204,6 +225,49 @@ function alturaLogoRodape(valor: number | undefined) {
     LOGO_RODAPE_ALTURA_MAX,
     Math.max(LOGO_RODAPE_ALTURA_MIN, Math.round(valor))
   );
+}
+
+
+// Fase 62 — monta a paleta personalizada a partir dos campos hex do
+// formulário. Devolve `null` quando não há paleta completa para gravar,
+// e é isso que faz o caminho antigo continuar valendo: quem escolhe um
+// dos 6 temas prontos não manda estes campos, e OrganizationBranding.
+// customTheme fica EXATAMENTE como estava (nunca é apagado ao trocar de
+// tema — voltar para "Personalizado" reencontra a paleta de antes).
+//
+// `link` não é editável: é derivado de `primary`, o mesmo que o catálogo
+// fixo e o gerador do logotipo fazem (ver gerar-paleta.ts).
+//
+// A validação final é o tokensTemaSchema — o mesmo de aplicarPaletaGerada
+// —, então nenhuma cor chega ao banco sem passar por oklch(L C H) com
+// faixas fechadas. Um hex inválido derruba a paleta inteira em vez de
+// gravar metade.
+function paletaDoFormulario(campos: {
+  cor_primary?: string;
+  cor_primaryHover?: string;
+  cor_primaryLight?: string;
+  cor_secondary?: string;
+  cor_border?: string;
+  cor_onPrimary?: string;
+}): TokensTema | null {
+  const hexes: Record<string, string> = {};
+  for (const chave of CHAVES_COR_EDITAVEIS) {
+    const valor = campos[campoCorDaChave(chave) as keyof typeof campos];
+    if (!valor) return null;
+    if (!hexValido(valor)) return null;
+    hexes[chave] = valor;
+  }
+
+  const emOklch: Record<string, string> = {};
+  for (const [chave, hex] of Object.entries(hexes)) {
+    const oklch = hexParaOklch(hex);
+    if (!oklch) return null;
+    emOklch[chave] = formatarOklch(oklch);
+  }
+  emOklch.link = emOklch.primary;
+
+  const validado = tokensTemaSchema.safeParse(emOklch);
+  return validado.success ? validado.data : null;
 }
 
 export async function salvarConfiguracaoContato(
@@ -280,6 +344,12 @@ export async function salvarConfiguracaoContato(
     heroImageUrl: campos.heroImage ?? null,
   };
 
+  // Só faz sentido gravar a paleta quando "Personalizado" é o tema
+  // escolhido; para qualquer tema do catálogo os campos de cor são
+  // ignorados (ver paletaDoFormulario).
+  const paletaCustomizada =
+    campos.themeId === THEME_ID_CUSTOMIZADO ? paletaDoFormulario(campos) : null;
+
   await withOrganization(organizationId, async () => {
     await prisma.$transaction([
       // Fuso horário (Fase 18) — mora em Organization, não em Settings.
@@ -312,6 +382,10 @@ export async function salvarConfiguracaoContato(
           faviconUrl: campos.favicon ?? null,
           displayName: campos.nomePublico ?? null,
           footerAppearance: campos.footerAparencia,
+          // Só grava a paleta quando ela É o tema escolhido. Sem esta
+          // condição, ajustar as cores e depois escolher "Azul Clássico"
+          // sobrescreveria a paleta salva sem o usuário ter pedido.
+          ...(paletaCustomizada ? { customTheme: paletaCustomizada } : {}),
         },
         create: {
           organizationId,
@@ -319,6 +393,7 @@ export async function salvarConfiguracaoContato(
           faviconUrl: campos.favicon ?? null,
           displayName: campos.nomePublico ?? null,
           footerAppearance: campos.footerAparencia,
+          ...(paletaCustomizada ? { customTheme: paletaCustomizada } : {}),
         },
       }),
     ]);
