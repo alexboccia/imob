@@ -12,6 +12,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ErroCampo } from "@/components/admin/ErroCampo";
 import { CorBarraTopo } from "@/components/admin/CorBarraTopo";
+import {
+  Monitor,
+  Palette,
+  Share2,
+  ShieldCheck,
+  SlidersHorizontal,
+} from "lucide-react";
 import { AbasConfiguracoes } from "@/components/admin/AbasConfiguracoes";
 import { PreviaIdentidade } from "@/components/admin/PreviaIdentidade";
 import type { ImovelPrevia } from "@/lib/previa-identidade-data";
@@ -136,8 +143,16 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           {
             id: "geral",
             rotulo: "Geral",
+            icone: SlidersHorizontal,
             conteudo: (
               <>
+          {/* Fase 63 — "Informações gerais" e "Fuso horário" eram dois
+              cards, cada um com um campo estreito e metade da largura
+              vazia. São o mesmo domínio (dados básicos da organização),
+              então viraram um card com duas colunas em desktop. Os campos,
+              seus `name`, seus ids e a persistência são exatamente os
+              mesmos — a mudança é de layout. "Código do imóvel" continua
+              num card à parte, porque é outro assunto. */}
           <Card className="min-w-0">
             <CardHeader>
               <CardTitle className="min-w-0 break-words">Informações gerais</CardTitle>
@@ -145,57 +160,57 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
                 Os dados básicos da sua imobiliária.
               </CardDescription>
             </CardHeader>
-            <CardContent className="min-w-0 space-y-6">
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="nomePublico">Nome público (opcional)</Label>
-              <Input
-                id="nomePublico"
-                name="nomePublico"
-                defaultValue={config.nomePublico ?? ""}
-                placeholder="Deixe em branco para usar o nome cadastrado da organização"
-                maxLength={120}
-              />
-              <ErroCampo erros={estado.fieldErrors?.nomePublico} />
-            </div>
-            </CardContent>
-          </Card>
-
-          <Card className="min-w-0">
-            <CardHeader>
-              <CardTitle className="min-w-0 break-words">Fuso horário da organização</CardTitle>
-              <CardDescription className="min-w-0 break-words">
-                Usado para Agenda, Central e períodos do Analytics. Alterar o fuso não muda nenhuma
-                data já registrada — muda apenas como os dias e horários são interpretados e
-                exibidos.
-              </CardDescription>
-            </CardHeader>
             <CardContent className="min-w-0">
-              <div className="min-w-0 space-y-1.5">
-                <Label htmlFor="timezone">Fuso horário</Label>
-                {/* <select> NATIVO: busca por digitação, teclado e leitor de
-                    tela funcionam sem JavaScript, e não há divergência entre
-                    servidor e cliente. O rótulo é legível; o valor salvo é
-                    sempre o identificador IANA. */}
-                <select
-                  id="timezone"
-                  name="timezone"
-                  defaultValue={config.fuso}
-                  className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:w-96"
-                >
-                  {config.gruposDeFuso.map((grupo) => (
-                    <optgroup key={grupo.titulo} label={grupo.titulo}>
-                      {grupo.opcoes.map((opcao) => (
-                        <option key={opcao.valor} value={opcao.valor}>
-                          {opcao.rotulo}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                <ErroCampo erros={estado.fieldErrors?.timezone} />
-                <p className="min-w-0 break-words text-xs text-muted-foreground">
-                  Configuração atual: {config.fuso}.
-                </p>
+              <div className="grid min-w-0 gap-5 lg:grid-cols-2">
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="nomePublico">Nome público (opcional)</Label>
+                  <Input
+                    id="nomePublico"
+                    name="nomePublico"
+                    defaultValue={config.nomePublico ?? ""}
+                    placeholder="Deixe em branco para usar o nome da organização"
+                    maxLength={120}
+                  />
+                  <ErroCampo erros={estado.fieldErrors?.nomePublico} />
+                  <p className="min-w-0 break-words text-xs text-muted-foreground">
+                    É o nome que aparece no site público.
+                  </p>
+                </div>
+
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="timezone">Fuso horário</Label>
+                  {/* <select> NATIVO: busca por digitação, teclado e leitor de
+                      tela funcionam sem JavaScript, e não há divergência entre
+                      servidor e cliente. O rótulo é legível; o valor salvo é
+                      sempre o identificador IANA. */}
+                  <select
+                    id="timezone"
+                    name="timezone"
+                    defaultValue={config.fuso}
+                    className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    {config.gruposDeFuso.map((grupo) => (
+                      <optgroup key={grupo.titulo} label={grupo.titulo}>
+                        {grupo.opcoes.map((opcao) => (
+                          <option key={opcao.valor} value={opcao.valor}>
+                            {opcao.rotulo}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <ErroCampo erros={estado.fieldErrors?.timezone} />
+                  {/* Texto preservado palavra por palavra do card anterior:
+                      é a promessa que sustenta a Fase 18 e está coberta por
+                      teste. Consolidar o card era mudança de layout — não
+                      havia razão para reescrever a explicação. */}
+                  <p className="min-w-0 break-words text-xs text-muted-foreground">
+                    Usado para Agenda, Central e períodos do Analytics. Alterar
+                    o fuso não muda nenhuma data já registrada — muda apenas
+                    como os dias e horários são interpretados e exibidos.
+                    Configuração atual: {config.fuso}.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -209,21 +224,30 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
               </CardDescription>
             </CardHeader>
             <CardContent className="min-w-0">
-              <div className="min-w-0 space-y-1.5">
-                <Label htmlFor="codigoImovelPrefixo">Prefixo</Label>
-                <Input
-                  id="codigoImovelPrefixo"
-                  name="codigoImovelPrefixo"
-                  defaultValue={config.codigoImovelPrefixo}
-                  placeholder="Ex: IMB"
-                  maxLength={10}
-                  className="w-full uppercase placeholder:normal-case sm:w-48"
-                />
-                <ErroCampo erros={estado.fieldErrors?.codigoImovelPrefixo} />
-                <p className="min-w-0 break-words text-xs text-muted-foreground">
-                  Ficará assim:{" "}
-                  {formatarCodigoImovel(100001, config.codigoImovelPrefixo || null)}
-                </p>
+              {/* Prefixo à esquerda, exemplo à direita — o exemplo é só
+                  informação visual derivada do prefixo, nunca um campo. */}
+              <div className="grid min-w-0 gap-5 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] sm:items-start">
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="codigoImovelPrefixo">Prefixo</Label>
+                  <Input
+                    id="codigoImovelPrefixo"
+                    name="codigoImovelPrefixo"
+                    defaultValue={config.codigoImovelPrefixo}
+                    placeholder="Ex: IMB"
+                    maxLength={10}
+                    className="w-full uppercase placeholder:normal-case"
+                  />
+                  <ErroCampo erros={estado.fieldErrors?.codigoImovelPrefixo} />
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                  <span className="block text-sm font-medium">Exemplo</span>
+                  <p className="flex min-h-9 min-w-0 items-center break-all rounded-lg bg-muted/60 px-3 font-mono text-sm">
+                    {formatarCodigoImovel(100001, config.codigoImovelPrefixo || null)}
+                  </p>
+                  <p className="min-w-0 break-words text-xs text-muted-foreground">
+                    Ficará assim nos imóveis.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -233,13 +257,17 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           {
             id: "identidade",
             rotulo: "Identidade visual",
+            icone: Palette,
             conteudo: (
               <>
           {/* Duas colunas a partir de xl: a prévia fica ao lado dos
               controles, que é o que permite "alterei aqui, vejo ali".
               Abaixo disso ela vai para baixo — empilhar é melhor que
               espremer as pastilhas de tema. */}
-          <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,65fr)_minmax(0,35fr)] xl:items-start">
+          {/* xl:items-start é obrigatório para o sticky da prévia: com o
+                  `stretch` padrão a coluna ocuparia a altura toda da linha
+                  e não sobraria folga para grudar. */}
+              <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,62fr)_minmax(0,38fr)] xl:items-start">
             <Card className="min-w-0">
               <CardHeader>
                 <CardTitle className="min-w-0 break-words">Identidade visual</CardTitle>
@@ -264,7 +292,13 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
             <GeradorTemaLogotipo paletaInicial={config.temaCustomizado} />
               </CardContent>
             </Card>
-            <div className="min-w-0 xl:sticky xl:top-20">
+            {/* Sticky só a partir de xl — é onde a prévia fica ao lado dos
+                controles. Em tablet/mobile ela está no fluxo, embaixo, e
+                grudar não faria sentido. top-6 espelha o padding do <main>
+                (md:p-6): o painel não tem header fixo no desktop, então não
+                há nada para a prévia cobrir. max-h + overflow-y-auto para a
+                miniatura nunca ficar mais alta que a viewport. */}
+            <div className="min-w-0 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto">
               <Card className="min-w-0">
                 <CardContent className="min-w-0 pt-6">
                   <PreviaIdentidade
@@ -289,6 +323,7 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           {
             id: "site",
             rotulo: "Site público",
+            icone: Monitor,
             conteudo: (
               <>
           <Card className="min-w-0">
@@ -326,6 +361,7 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           {
             id: "contatos",
             rotulo: "Contatos e redes",
+            icone: Share2,
             conteudo: (
               <>
           <Card className="min-w-0">
@@ -460,6 +496,7 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           {
             id: "acesso",
             rotulo: "Equipe e acesso",
+            icone: ShieldCheck,
             conteudo: (
               <>
           {/* Visibilidade da carteira comercial (Fase 22). Fica junto do
@@ -521,12 +558,27 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
         ]}
       />
 
-      <div className="flex min-w-0 flex-wrap items-center gap-3">
+      {/* Fase 63 — barra de ações. O botão ficava solto embaixo do
+          conteúdo, sem nada que o ligasse ao formulário. Agora tem borda
+          superior, fundo e o botão alinhado à direita em desktop.
+          NÃO é sticky, e NÃO tem "Cancelar": a tela é um formulário
+          não-controlado (defaultValue + Server Action), então não existe
+          um estado "original" guardado para restaurar nem um dirty-state
+          confiável para anunciar "alterações não salvas". Inventar
+          qualquer um dos dois seria prometer o que a arquitetura atual não
+          entrega — recarregar a página já é o descarte seguro. Sticky
+          também foi descartado: o feedback de `role="status"` mora ao lado
+          do botão e cresce, e uma barra fixa o empurraria para fora da
+          vista justo quando ele importa. */}
+      <div
+        data-barra-acoes
+        className="-mx-4 flex min-w-0 flex-wrap-reverse items-center justify-end gap-3 border-t bg-muted/30 px-4 py-4 md:-mx-6 md:px-6"
+      >
         <Button
           type="submit"
           size="lg"
           disabled={pendente}
-          className="h-auto min-h-9 min-w-0 shrink whitespace-normal"
+          className="h-auto min-h-9 min-w-0 shrink whitespace-normal sm:order-2"
         >
           {pendente ? "Salvando..." : "Salvar alterações"}
         </Button>
@@ -536,7 +588,7 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           <p
             role="status"
             data-feedback-salvar
-            className={`min-w-0 break-words text-sm ${
+            className={`min-w-0 flex-1 break-words text-sm sm:order-1 ${
               estado.success ? "text-muted-foreground" : "text-destructive"
             }`}
           >

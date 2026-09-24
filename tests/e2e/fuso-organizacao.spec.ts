@@ -121,12 +121,22 @@ test.describe("configurar o fuso", () => {
     await login(page, ORG_FUSO);
     await page.goto("/app/configuracoes");
 
+    // Fase 63 — o card "Fuso horário da organização" foi consolidado no
+    // card "Informações gerais" (mesmo domínio, duas colunas em desktop).
+    // O CAMPO, o `name`, o id e a explicação são os mesmos; o que deixou
+    // de existir é o título do card próprio. A cobertura passou a ser o
+    // rótulo do campo dentro do card certo — mais perto do que o usuário
+    // realmente precisa encontrar.
+    //
     // CardTitle do design system renderiza um <div>, não um heading
     // (achado da Fase 17, preservado aqui em vez de alterar o componente
     // compartilhado, o que mexeria em todos os cards do produto).
-    await expect(
-      page.locator('[data-slot="card-title"]', { hasText: "Fuso horário da organização" })
-    ).toBeVisible();
+    const cardGeral = page
+      .locator('[data-slot="card"]')
+      .filter({ has: page.locator('[data-slot="card-title"]', { hasText: "Informações gerais" }) });
+    await expect(cardGeral).toBeVisible();
+    await expect(cardGeral.getByText("Fuso horário", { exact: true })).toBeVisible();
+    await expect(cardGeral.locator("#timezone")).toBeVisible();
     await expect(
       page.getByText("Usado para Agenda, Central e períodos do Analytics.")
     ).toBeVisible();
@@ -159,7 +169,9 @@ test.describe("configurar o fuso", () => {
     await expect(page.getByRole("button", { name: /Salvar alterações/ })).toHaveCount(1);
     const titulo = (nome: string) => page.locator('[data-slot="card-title"]', { hasText: nome });
     // Cada card está numa aba, e ambos pertencem ao MESMO formulário.
-    await expect(titulo("Fuso horário da organização")).toBeVisible();
+    // Fase 63 — o fuso agora vive no card "Informações gerais".
+    await expect(titulo("Informações gerais")).toBeVisible();
+    await expect(page.locator("#timezone")).toBeVisible();
     await page.getByRole("tab", { name: "Identidade visual" }).click();
     await expect(titulo("Identidade visual")).toBeVisible();
     await expect(page.getByRole("button", { name: /Salvar alterações/ })).toHaveCount(1);

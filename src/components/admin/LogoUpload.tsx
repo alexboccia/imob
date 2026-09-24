@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { BotaoEscolherArquivo } from "@/components/admin/BotaoEscolherArquivo";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LOGO_ALTURA_MIN, LOGO_ALTURA_MAX, LOGO_ALTURA_PADRAO } from "@/lib/logo";
@@ -64,25 +65,27 @@ export function LogoUpload({
             </div>
           )}
         </div>
-        <div className="min-w-0 space-y-1">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleArquivo}
-            disabled={enviando}
-            className="block w-full min-w-0 max-w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
-          />
-          {logo && (
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              className="text-destructive h-auto p-0 block"
-              onClick={() => setLogo(null)}
-            >
-              Remover logotipo
-            </Button>
-          )}
+        <div className="min-w-0 space-y-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <BotaoEscolherArquivo
+              onArquivo={handleArquivo}
+              accept="image/*"
+              disabled={enviando}
+              rotulo={enviando ? "Enviando..." : logo ? "Alterar logotipo" : "Enviar logotipo"}
+              descricaoAcessivel="Enviar arquivo de logotipo"
+            />
+            {logo && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-9 text-destructive hover:text-destructive"
+                onClick={() => setLogo(null)}
+              >
+                Remover
+              </Button>
+            )}
+          </div>
           {erro && <p className="min-w-0 break-words text-xs text-destructive">{erro}</p>}
         </div>
       </div>

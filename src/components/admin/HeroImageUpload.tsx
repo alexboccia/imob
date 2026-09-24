@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { BotaoEscolherArquivo } from "@/components/admin/BotaoEscolherArquivo";
 import { Label } from "@/components/ui/label";
 import { IMAGEM_HERO_PADRAO } from "@/lib/site-config";
 import { HERO_LARGURA_MINIMA, HERO_ALTURA_MINIMA } from "@/lib/hero-image-limits";
@@ -70,26 +71,28 @@ export function HeroImageUpload({ heroImageInicial }: { heroImageInicial: string
         )}
       </div>
 
-      <div className="min-w-0 space-y-1 pt-1">
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={handleArquivo}
-          disabled={enviando}
-          className="block w-full min-w-0 max-w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
-        />
-        {heroImage && (
-          <Button
-            type="button"
-            variant="link"
-            size="sm"
-            className="h-auto p-0 block"
-            onClick={() => setHeroImage(null)}
+      <div className="min-w-0 space-y-2 pt-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <BotaoEscolherArquivo
+            onArquivo={handleArquivo}
+            accept="image/jpeg,image/png,image/webp"
             disabled={enviando}
-          >
-            Restaurar imagem padrão
-          </Button>
-        )}
+            rotulo={enviando ? "Enviando..." : heroImage ? "Alterar imagem" : "Enviar imagem"}
+            descricaoAcessivel="Enviar imagem principal da Home"
+          />
+          {heroImage && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-9"
+              onClick={() => setHeroImage(null)}
+              disabled={enviando}
+            >
+              Restaurar imagem padrão
+            </Button>
+          )}
+        </div>
         {erro && <p className="min-w-0 break-words text-sm text-destructive">{erro}</p>}
       </div>
 

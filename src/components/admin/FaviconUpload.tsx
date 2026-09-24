@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { BotaoEscolherArquivo } from "@/components/admin/BotaoEscolherArquivo";
 import { Label } from "@/components/ui/label";
 
 export function FaviconUpload({ faviconInicial }: { faviconInicial: string | null }) {
@@ -47,25 +48,29 @@ export function FaviconUpload({ faviconInicial }: { faviconInicial: string | nul
             </div>
           )}
         </div>
-        <div className="min-w-0 space-y-1">
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={handleArquivo}
-            disabled={enviando}
-            className="block w-full min-w-0 max-w-full text-sm text-gray-500 file:mr-3 file:rounded-md file:border-0 file:bg-black file:px-4 file:py-2 file:text-sm file:font-medium file:text-white file:cursor-pointer hover:file:bg-gray-800 active:file:bg-gray-900 file:transition-colors disabled:opacity-50"
-          />
-          {favicon && (
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              className="text-destructive h-auto p-0 block"
-              onClick={() => setFavicon(null)}
-            >
-              Remover favicon
-            </Button>
-          )}
+        <div className="min-w-0 space-y-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {/* Mesmos `accept`, mesma validação e mesmo fallback — só a
+                apresentação do disparador mudou. */}
+            <BotaoEscolherArquivo
+              onArquivo={handleArquivo}
+              accept="image/png,image/jpeg,image/webp"
+              disabled={enviando}
+              rotulo={enviando ? "Enviando..." : favicon ? "Alterar favicon" : "Enviar favicon"}
+              descricaoAcessivel="Enviar arquivo de favicon"
+            />
+            {favicon && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-9 text-destructive hover:text-destructive"
+                onClick={() => setFavicon(null)}
+              >
+                Remover
+              </Button>
+            )}
+          </div>
           {erro && <p className="min-w-0 break-words text-xs text-destructive">{erro}</p>}
         </div>
       </div>

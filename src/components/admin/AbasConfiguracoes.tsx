@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // =======================================================================
@@ -28,6 +29,8 @@ import { cn } from "@/lib/utils";
 export type AbaConfiguracao = {
   id: string;
   rotulo: string;
+  /** Ícone da aba (lucide-react) — apoio do rótulo, nunca o substitui. */
+  icone: LucideIcon;
   conteudo: ReactNode;
 };
 
@@ -53,13 +56,20 @@ export function AbasConfiguracoes({ abas }: { abas: AbaConfiguracao[] }) {
 
   return (
     <div className="min-w-0">
-      {/* `overflow-x-auto` para as cinco abas caberem em 320px sem
-          espremer o rótulo nem estourar a página. */}
+      {/* Fase 63 — eram cinco botões soltos, cada um com o seu próprio
+          fundo. Agora é UMA barra: a borda e o fundo pertencem ao
+          contêiner, e a aba ativa é a única pastilha dentro dele. Lê como
+          navegação secundária em vez de cinco ações independentes.
+          `overflow-x-auto` continua: em 320px as cinco abas com ícone não
+          cabem, e rolar a barra é melhor que esmagar os rótulos. O
+          contêiner é `inline-flex` num wrapper que rola, para a borda
+          acompanhar o conteúdo e não a largura da página. */}
+      <div className="-mx-1 min-w-0 overflow-x-auto px-1 pb-1">
       <div
         role="tablist"
         aria-label="Seções das configurações"
         data-abas-configuracoes
-        className="-mx-1 flex min-w-0 gap-1 overflow-x-auto px-1 pb-1"
+        className="inline-flex min-w-full gap-1 rounded-xl border bg-muted/50 p-1"
       >
         {abas.map((aba) => {
           const selecionada = aba.id === ativa;
@@ -86,16 +96,25 @@ export function AbasConfiguracoes({ abas }: { abas: AbaConfiguracao[] }) {
                 document.getElementById(`aba-${proxima.id}`)?.focus();
               }}
               className={cn(
-                "inline-flex h-9 shrink-0 items-center justify-center rounded-lg px-3 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                // Em desktop as abas dividem a largura da barra; abaixo
+                // disso cada uma fica no seu tamanho e a barra rola.
+                "lg:flex-1",
                 selecionada
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground hover:bg-muted"
+                  ? // Pastilha branca sobre o fundo da barra: o contraste
+                    // do item ativo não depende só de cor — ele é o único
+                    // com fundo, borda e sombra.
+                    "border border-border bg-background text-foreground shadow-sm"
+                  : "border border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
+              {/* O ícone herda a cor do texto — apoia o rótulo, não compete. */}
+              <aba.icone aria-hidden className="size-4 shrink-0" />
               {aba.rotulo}
             </button>
           );
         })}
+      </div>
       </div>
 
       {abas.map((aba) => (

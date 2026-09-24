@@ -136,7 +136,10 @@ test.describe("Configurações", () => {
     await expect(page.getByRole("radio", { name: /Vinho/i })).toBeChecked();
 
     await abrirAba(page, "Geral");
-    await expect(page.getByText(`Ficará assim: ${prefixo.toUpperCase()}-100001`)).toBeVisible();
+    // Fase 63 — o exemplo saiu de uma frase corrida ("Ficará assim: X")
+    // para um bloco "Exemplo" ao lado do prefixo. O valor exibido é o
+    // mesmo, derivado do prefixo digitado.
+    await expect(page.getByText(`${prefixo.toUpperCase()}-100001`)).toBeVisible();
   });
 
   test("gerar tema pelo logotipo: seção aparece, e sem logo salvo mostra erro amigável (sem quebrar)", async ({ page }) => {
@@ -541,19 +544,6 @@ test.describe("Configurações — editor de cores compacto", () => {
     expect(dentroDoForm).toBe(6);
   });
 
-  test("em desktop os controles ficam na horizontal, não numa pilha", async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto("/app/configuracoes?tab=identidade");
-
-    const topos = await page
-      .locator('[data-editor-cores] [data-amostra-cor]')
-      .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
-    expect(topos.length).toBe(6);
-    // Antes da Fase 62 as seis cores eram seis linhas — seis tops
-    // distintos. Em desktop agora partilham a mesma linha.
-    expect(new Set(topos).size).toBe(1);
-  });
-
   test("gerar tema pelo logotipo e restaurar padrão substituem a redundância antiga", async ({
     page,
   }) => {
@@ -605,4 +595,282 @@ test.describe("Configurações — editor de cores compacto", () => {
       expect(rolou, `rolou ${rolou}px em ${largura}px`).toBe(0);
     });
   }
+});
+
+// =====================================================================
+// Fase 63 — polimento: HEX inteiro, prévia sticky, upload acessível
+// =====================================================================
+test.describe("Configurações — acabamento do editor de cores", () => {
+  for (const largura of [390, 768, 1024, 1440, 1920]) {
+    test(`${largura}px: o hexadecimal aparece INTEIRO, sem truncar`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 1000 });
+      await login(page, ORG_A);
+      await page.goto("/app/configuracoes?tab=identidade");
+
+      // ORG_A nunca gerou paleta no seed, então os campos começam vazios
+      // (comportamento pré-existente: sem customTheme não há hex para
+      // mostrar). "Restaurar cores padrão" é o caminho real que os
+      // preenche — e é preenchido que dá para medir truncamento.
+      await page.getByRole("button", { name: "Restaurar cores padrão" }).click();
+
+      // O defeito da Fase 62 era visual, não de valor: o input tinha o
+      // "#0e2555" inteiro, mas mostrava "#0e...". Um input só está
+      // truncado quando o conteúdo é mais largo que a caixa — é isso que
+      // se mede aqui, não o value.
+      const campos = page.locator('[data-editor-cores] input[name^="cor_"]');
+      await expect(campos).toHaveCount(6);
+      await expect(campos.first()).toHaveValue(/^#[0-9a-fA-F]{6}$/);
+
+      const medidas = await campos.evaluateAll((els) =>
+        (els as HTMLInputElement[]).map((el) => ({
+          nome: el.name,
+          valor: el.value,
+          conteudo: el.scrollWidth,
+          caixa: el.clientWidth,
+        }))
+      );
+
+      for (const m of medidas) {
+        expect(m.valor, `${m.nome} tem valor`).toMatch(/^#[0-9a-fA-F]{6}$/);
+        expect(
+          m.conteudo <= m.caixa + 1,
+          `${m.nome} truncado: conteúdo ${m.conteudo}px > caixa ${m.caixa}px`
+        ).toBe(true);
+      }
+    });
+  }
+
+  test("em desktop o editor usa 3 colunas × 2 linhas, não uma linha comprimida", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes?tab=identidade");
+
+    const topos = await page
+      .locator("[data-editor-cores] [data-amostra-cor]")
+      .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
+    expect(topos.length).toBe(6);
+    // Duas linhas distintas, três controles em cada.
+    const linhas = new Set(topos);
+    expect(linhas.size, `linhas: ${[...linhas].join(", ")}`).toBe(2);
+    for (const linha of linhas) {
+      expect(topos.filter((t) => t === linha).length).toBe(3);
+    }
+  });
+
+  test("o conta-gotas continua presente em cada cor", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes?tab=identidade");
+    await expect(
+      page.locator("[data-editor-cores]").getByRole("button", { name: /conta-gotas/i })
+    ).toHaveCount(6);
+  });
+});
+
+test.describe("Configurações — prévia sticky no desktop", () => {
+  test("a prévia continua visível ao descer pelos controles", async ({ page }) => {
+    // xl (1280px+) é onde a prévia fica na coluna ao lado.
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes?tab=identidade");
+
+    const previa = page.locator("[data-previa-identidade]");
+    await expect(previa).toBeVisible();
+    const antes = await previa.boundingBox();
+
+    // Desce o suficiente para o topo do card sair da tela.
+    await page.evaluate(() => window.scrollTo(0, 600));
+    await expect
+      .poll(async () => Math.round((await previa.boundingBox())!.y))
+      .not.toBe(Math.round(antes!.y));
+
+    const depois = await previa.boundingBox();
+    // Sticky de verdade: continua dentro da viewport depois da rolagem.
+    expect(depois!.y, `y=${depois!.y}`).toBeGreaterThanOrEqual(-1);
+    expect(depois!.y).toBeLessThan(800);
+    await expect(previa).toBeInViewport();
+  });
+
+  test("em mobile a prévia NÃO é sticky — fica no fluxo", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes?tab=identidade");
+
+    const posicao = await page
+      .locator("[data-previa-identidade]")
+      .evaluate((el) => getComputedStyle(el.parentElement!).position);
+    expect(posicao).not.toBe("sticky");
+  });
+});
+
+test.describe("Configurações — uploads integrados ao painel", () => {
+  test("logotipo e favicon têm botão próprio, e o input continua acessível", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes?tab=identidade");
+
+    // O disparador visível é um <label>, não o botão nativo do navegador.
+    await expect(page.getByText(/^(Enviar|Alterar) logotipo$/).first()).toBeVisible();
+    await expect(page.getByText(/^(Enviar|Alterar) favicon$/)).toBeVisible();
+
+    // O input de arquivo continua existindo, focável e com nome acessível
+    // — sr-only esconde visualmente sem sair da árvore de acessibilidade.
+    const inputs = page.locator('input[type="file"]');
+    await expect(inputs).toHaveCount(4);
+
+    const logo = page.getByLabel("Enviar arquivo de logotipo");
+    await expect(logo).toHaveCount(1);
+    await logo.focus();
+    await expect(logo).toBeFocused();
+  });
+
+  test("o foco por teclado no upload produz anel visível no botão", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes?tab=identidade");
+
+    const logo = page.getByLabel("Enviar arquivo de logotipo");
+    await logo.focus();
+    // O anel vive no <label> (peer-focus-visible), porque o input é sr-only:
+    // sem isso o teclado navegaria para um controle invisível.
+    const temAnel = await logo.evaluate((el) => {
+      const rotulo = el.parentElement!.querySelector("label")!;
+      const s = getComputedStyle(rotulo);
+      return s.boxShadow !== "none" || s.outlineStyle !== "none";
+    });
+    expect(temAnel).toBe(true);
+  });
+});
+
+test.describe("Configurações — abas como barra de navegação", () => {
+  test("as cinco abas vivem numa barra única, cada uma com ícone", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes");
+
+    const barra = page.locator("[data-abas-configuracoes]");
+    await expect(barra).toBeVisible();
+    // A borda/fundo pertencem à barra, não a cada botão.
+    const temMoldura = await barra.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return s.borderTopWidth !== "0px";
+    });
+    expect(temMoldura).toBe(true);
+
+    const abas = barra.getByRole("tab");
+    await expect(abas).toHaveCount(5);
+    const icones = await abas.evaluateAll((els) =>
+      els.map((el) => el.querySelectorAll("svg").length)
+    );
+    for (const n of icones) expect(n).toBe(1);
+    // Ícones distintos entre si.
+    const desenhos = await barra.locator("svg").evaluateAll((els) => els.map((el) => el.innerHTML));
+    expect(new Set(desenhos).size).toBe(desenhos.length);
+  });
+
+  test("a acessibilidade do tablist sobreviveu à remodelagem", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes");
+
+    const barra = page.locator("[data-abas-configuracoes]");
+    await expect(barra).toHaveAttribute("role", "tablist");
+
+    const ativa = barra.getByRole("tab", { selected: true });
+    await expect(ativa).toHaveCount(1);
+    await expect(ativa).toHaveAttribute("aria-controls", "painel-geral");
+
+    // Roving tabindex e setas continuam valendo.
+    await ativa.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(barra.getByRole("tab", { selected: true })).toHaveAttribute(
+      "aria-controls",
+      "painel-identidade"
+    );
+    await expect(page).toHaveURL(/tab=identidade/);
+  });
+
+  for (const largura of [320, 390, 768, 1440]) {
+    test(`${largura}px: a barra de abas é utilizável e não estoura a página`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await login(page, ORG_A);
+      await page.goto("/app/configuracoes");
+
+      // Rótulos nunca esmagados: cada aba mantém largura legível (a barra
+      // rola horizontalmente quando não cabem).
+      const larguras = await page
+        .locator("[data-abas-configuracoes] [role=tab]")
+        .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)));
+      for (const w of larguras) expect(w, `aba com ${w}px`).toBeGreaterThan(60);
+
+      const rolou = await page.evaluate(() => {
+        window.scrollTo(9999, 0);
+        const x = window.scrollX;
+        window.scrollTo(0, 0);
+        return x;
+      });
+      expect(rolou, `página rolou ${rolou}px`).toBe(0);
+    });
+  }
+});
+
+test.describe("Configurações — barra de ações", () => {
+  test("o Salvar fica numa barra integrada, e continua sendo o único", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes");
+
+    const barra = page.locator("[data-barra-acoes]");
+    await expect(barra).toBeVisible();
+    await expect(barra.getByRole("button", { name: "Salvar alterações" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Salvar alterações" })).toHaveCount(1);
+
+    // A separação visual do conteúdo é real (borda no topo).
+    const temBorda = await barra.evaluate(
+      (el) => getComputedStyle(el).borderTopWidth !== "0px"
+    );
+    expect(temBorda).toBe(true);
+
+    // Sem "Cancelar" inventado: não há estado original para restaurar.
+    await expect(barra.getByRole("button", { name: /Cancelar/i })).toHaveCount(0);
+  });
+});
+
+test.describe("Configurações — aba Geral aproveita a largura", () => {
+  test("em desktop nome público e fuso ficam lado a lado, no mesmo card", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes");
+
+    const nome = await page.locator("#nomePublico").boundingBox();
+    const fuso = await page.locator("#timezone").boundingBox();
+    expect(nome).toBeTruthy();
+    expect(fuso).toBeTruthy();
+    // Mesma linha (topos próximos) e fuso à direita do nome.
+    expect(Math.abs(nome!.y - fuso!.y), "mesma linha").toBeLessThan(8);
+    expect(fuso!.x).toBeGreaterThan(nome!.x);
+
+    // Um card só para os dois — a consolidação da Fase 63.
+    const mesmoCard = await page.evaluate(() => {
+      const n = document.querySelector("#nomePublico")!.closest('[data-slot="card"]');
+      const f = document.querySelector("#timezone")!.closest('[data-slot="card"]');
+      return n !== null && n === f;
+    });
+    expect(mesmoCard).toBe(true);
+  });
+
+  test("em mobile os campos voltam para uma coluna", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes");
+
+    const nome = await page.locator("#nomePublico").boundingBox();
+    const fuso = await page.locator("#timezone").boundingBox();
+    expect(fuso!.y).toBeGreaterThan(nome!.y + 20);
+  });
+
+  test("os campos continuam os mesmos: name, id e persistência intactos", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes");
+    // O que a consolidação de cards NÃO podia mudar.
+    await expect(page.locator('form [name="nomePublico"]')).toHaveCount(1);
+    await expect(page.locator('form [name="timezone"]')).toHaveCount(1);
+    await expect(page.locator('form [name="codigoImovelPrefixo"]')).toHaveCount(1);
+  });
 });

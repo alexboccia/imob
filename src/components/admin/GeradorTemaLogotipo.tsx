@@ -180,11 +180,15 @@ export function GeradorTemaLogotipo({
         </p>
       </div>
 
-      {/* 2 colunas em mobile, 3 em tablet, 6 em desktop — é o que troca a
-          antiga pilha de seis linhas por uma faixa baixa. minmax(0,1fr)
-          em todas para o hex de largura fixa nunca empurrar a grade e
-          criar rolagem horizontal. */}
-      <div className="grid min-w-0 grid-cols-2 items-stretch gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      {/* Fase 63 — eram 6 colunas numa linha. Na largura REAL da coluna de
+          controles (~700px em 1440) cada célula ficava com ~118px e o
+          input mostrava "#0e..." em vez de "#0e2555". Hexadecimal
+          truncado num editor de cores não é aceitável, então a grade
+          passou a 3 colunas × 2 linhas: ~230px por célula, hex inteiro
+          com folga. Legibilidade acima de reproduzir o mockup.
+          1 coluna em mobile (2 apertavam o hex do mesmo jeito), 2 em
+          tablet, 3 a partir de lg. */}
+      <div className="grid min-w-0 grid-cols-1 items-stretch gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
         {CHAVES_COR_EDITAVEIS.map((chave) => {
           const label = ROTULOS_COR_EDITAVEL[chave];
           const idCampo = `cor-${chave}`;
@@ -226,7 +230,10 @@ export function GeradorTemaLogotipo({
                   aria-label={`Cor ${label}`}
                   aria-invalid={invalido || undefined}
                   aria-describedby={invalido ? idErro : undefined}
-                  className="min-w-0 flex-1 font-mono text-xs"
+                  // min-w em ch garante os 7 caracteres de "#RRGGBB"
+                  // independentemente da largura da coluna — é o que
+                  // impede o truncamento voltar num breakpoint novo.
+                  className="min-w-[8ch] flex-1 font-mono text-sm tabular-nums"
                 />
                 <button
                   type="button"

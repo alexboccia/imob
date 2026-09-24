@@ -47,6 +47,12 @@ import type { ImovelPrevia } from "@/lib/previa-identidade-data";
 //
 // Nada aqui é específico de nenhuma organização: logotipo, nome, imagem e
 // imóveis chegam por props, resolvidos no servidor para o tenant da sessão.
+//
+// Fase 63 — a coluna da prévia ganhou largura (38% da grade) e o
+// enquadramento INTERNO cresceu junto: hero 112px -> 144px, foto do card
+// 40px -> 56px, e a tipografia saiu dos 7-11px para 9-14px. Sem isso a
+// miniatura continuaria pequena dentro de um card maior, que era o defeito
+// apontado: o CTA, o preço e o título dos imóveis ficavam ilegíveis.
 
 export function PreviaIdentidade({
   temaInicial,
@@ -133,24 +139,24 @@ export function PreviaIdentidade({
         }
       >
         {/* ---------------- Cabeçalho ---------------- */}
-        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <div className="flex items-center justify-between gap-2 border-b border-border px-3.5 py-2.5">
           <span className="flex min-w-0 items-center gap-2">
             {logo ? (
               // Logotipo REAL da organização. <img> em vez de next/image:
               // a URL vem do R2 do tenant e a miniatura tem altura fixa —
               // não há ganho de otimização e evita configurar domínio.
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logo} alt="" className="h-5 w-auto max-w-24 object-contain" />
+              <img src={logo} alt="" className="h-6 w-auto max-w-28 object-contain" />
             ) : (
-              <span className="min-w-0 truncate text-xs font-bold">{nome}</span>
+              <span className="min-w-0 truncate text-sm font-bold">{nome}</span>
             )}
           </span>
           {/* Mesma navegação do SiteHeader público. */}
-          <span className="flex shrink-0 items-center gap-1.5 text-[9px] text-gray-600">
+          <span className="flex shrink-0 items-center gap-2 text-[10px] text-gray-600">
             <span>Comprar</span>
             <span>Alugar</span>
             <span>Lançamentos</span>
-            <span className="rounded bg-primary-light px-1 py-0.5 text-primary">Favoritos</span>
+            <span className="rounded bg-primary-light px-1.5 py-0.5 text-primary">Favoritos</span>
           </span>
         </div>
 
@@ -160,35 +166,35 @@ export function PreviaIdentidade({
             // Imagem REAL do hero (a configurada, ou o asset padrão que a
             // Home usa quando a organização nunca customizou).
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={heroImagem} alt="" className="h-28 w-full object-cover" />
+            <img src={heroImagem} alt="" className="h-36 w-full object-cover" />
           ) : (
-            <div className="h-28 w-full bg-gradient-to-br from-gray-800 via-gray-900 to-black" />
+            <div className="h-36 w-full bg-gradient-to-br from-gray-800 via-gray-900 to-black" />
           )}
           {/* Mesmo overlay neutro do HeroHome — nunca a cor do tema, para
               o contraste do título funcionar em qualquer organização. */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/25 to-transparent" />
-          <div className="absolute inset-0 flex flex-col justify-end gap-1 p-3">
+          <div className="absolute inset-0 flex flex-col justify-end gap-1 p-3.5">
             {/* Texto REAL do hero, da mesma constante que o site usa. */}
-            <p className="text-[11px] leading-tight font-bold text-white">{HERO_TITULO}</p>
-            <p className="line-clamp-1 text-[8px] text-white/90">{HERO_SUBTITULO}</p>
-            <span className="mt-0.5 inline-block w-fit rounded bg-primary px-2 py-1 text-[9px] font-medium text-primary-foreground">
+            <p className="text-sm leading-tight font-bold text-white">{HERO_TITULO}</p>
+            <p className="line-clamp-1 text-[10px] text-white/90">{HERO_SUBTITULO}</p>
+            <span className="mt-1 inline-block w-fit rounded-md bg-primary px-2.5 py-1.5 text-[11px] font-medium text-primary-foreground">
               Buscar imóveis
             </span>
           </div>
         </div>
 
         {/* ---------------- Destaques ---------------- */}
-        <div className="bg-secondary/40 px-3 py-2.5">
-          <p className="mb-2 text-[10px] font-bold text-gray-900">{SECAO_DESTAQUES_TITULO}</p>
+        <div className="bg-secondary/40 px-3.5 py-3">
+          <p className="mb-2.5 text-xs font-bold text-gray-900">{SECAO_DESTAQUES_TITULO}</p>
 
           {imoveis.length === 0 ? (
             // Estado vazio honesto: sem imóvel publicado a prévia diz isso,
             // em vez de inventar cartões que não existem no site.
-            <p className="text-[9px] text-gray-500">
+            <p className="text-[11px] text-gray-500">
               Seus imóveis publicados aparecem aqui.
             </p>
           ) : (
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-3 gap-2">
               {imoveis.map((imovel) => (
                 <div
                   key={imovel.id}
@@ -197,17 +203,17 @@ export function PreviaIdentidade({
                   {imovel.foto ? (
                     // Foto de capa REAL do imóvel.
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={imovel.foto} alt="" className="h-10 w-full object-cover" />
+                    <img src={imovel.foto} alt="" className="h-14 w-full object-cover" />
                   ) : (
-                    <div className="h-10 w-full bg-primary-light" />
+                    <div className="h-14 w-full bg-primary-light" />
                   )}
-                  <div className="space-y-0.5 p-1">
-                    <p className="line-clamp-1 text-[8px] leading-tight font-semibold text-gray-900">
+                  <div className="space-y-0.5 p-1.5">
+                    <p className="line-clamp-2 text-[10px] leading-tight font-semibold text-gray-900">
                       {imovel.titulo}
                     </p>
-                    <p className="line-clamp-1 text-[7px] text-gray-500">{imovel.local}</p>
+                    <p className="line-clamp-1 text-[9px] text-gray-500">{imovel.local}</p>
                     {/* Preço REAL, com a formatação do card público. */}
-                    <p className="text-[8px] font-bold text-primary">{imovel.preco}</p>
+                    <p className="text-[10px] font-bold text-primary">{imovel.preco}</p>
                   </div>
                 </div>
               ))}
@@ -216,11 +222,11 @@ export function PreviaIdentidade({
         </div>
 
         {/* ---------------- Rodapé ---------------- */}
-        <div className="flex items-center justify-between gap-2 bg-primary px-3 py-2">
-          <span className="min-w-0 truncate text-[8px] font-medium text-primary-foreground">
+        <div className="flex items-center justify-between gap-2 bg-primary px-3.5 py-2.5">
+          <span className="min-w-0 truncate text-[10px] font-medium text-primary-foreground">
             {nome}
           </span>
-          <span className="shrink-0 text-[7px] text-primary-foreground/70">
+          <span className="shrink-0 text-[9px] text-primary-foreground/70">
             Contato · Imóveis
           </span>
         </div>

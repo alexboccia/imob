@@ -99,15 +99,17 @@ export function AdminMobileNav({
             </a>
           )}
           <nav className="flex-1 space-y-1 overflow-y-auto text-sm" aria-label="Navegação principal">
-            {navLinks.map((link) => {
+            {navLinks.map((link, indice) => {
               const Icone = ICONES_NAV[link.icone];
               const ativo = itemAtivo(pathname, link.href);
+              // Mesmo respiro entre grupos da sidebar desktop.
+              const grupo = link.iniciaGrupo && indice > 0 ? " mt-2" : "";
               if (!link.liberado) {
                 return (
                   <span
                     key={link.href}
                     title="Disponível em planos superiores"
-                    className="flex cursor-not-allowed items-center gap-2.5 rounded-md px-3 py-2 text-gray-400"
+                    className={`flex cursor-not-allowed items-center gap-2.5 rounded-md px-3 py-2 text-gray-400${grupo}`}
                   >
                     <Icone aria-hidden className="size-[18px] shrink-0" />
                     <span className="min-w-0 flex-1 truncate">{link.label}</span>
@@ -123,11 +125,11 @@ export function AdminMobileNav({
                   href={link.href}
                   aria-current={ativo ? "page" : undefined}
                   onClick={() => setOpen(false)}
-                  className={
+                  className={`flex items-center gap-2.5 rounded-md px-3 py-2${grupo} ${
                     ativo
-                      ? "flex items-center gap-2.5 rounded-md bg-primary/10 px-3 py-2 font-medium text-primary"
-                      : "flex items-center gap-2.5 rounded-md px-3 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                  }
+                      ? "bg-primary/10 font-medium text-primary"
+                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                  }`}
                 >
                   <Icone aria-hidden className="size-[18px] shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{link.label}</span>

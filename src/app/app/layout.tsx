@@ -30,6 +30,12 @@ const TODOS_NAV_LINKS: {
   // String, não componente: esta lista atravessa a fronteira servidor →
   // cliente (sidebar e menu mobile são componentes de cliente).
   icone: ChaveIconeNav;
+  // Fase 63 — primeiro item de um grupo conceitual: recebe um respiro de
+  // 8px acima, sem título e sem divisor. É só para o olho encontrar as
+  // seções mais rápido; não muda ordem, rota, papel nem visibilidade, e um
+  // item filtrado por papel simplesmente não aparece (o respiro vai com
+  // ele, ver AdminSidebarNav).
+  iniciaGrupo?: boolean;
 }[] = [
   { href: "/app", label: "Dashboard", icone: "dashboard" },
   { href: "/app/imoveis", label: "Imóveis", icone: "imoveis" },
@@ -41,7 +47,7 @@ const TODOS_NAV_LINKS: {
   // Clientes/Pipeline/Agenda já mostram linha a linha. Fica logo depois
   // delas, fechando o bloco de CRM, e nunca antes de Imóveis/Clientes
   // (que são o trabalho diário, não a leitura gerencial).
-  { href: "/app/analytics", label: "Analytics", modulo: "crm", icone: "analytics" },
+  { href: "/app/analytics", label: "Analytics", modulo: "crm", icone: "analytics", iniciaGrupo: true },
   // Fase 35 — a carteira financeira do corretor. Mesmo portão de módulo
   // do resto do CRM e NENHUM recorte por papel: o saldo é pessoal, a
   // consulta filtra pelo membro da sessão, e todo mundo que participa de
@@ -63,10 +69,10 @@ const TODOS_NAV_LINKS: {
   // Fase 38 — junto dos outros catálogos por organização, e com o
   // mesmo portão de leitura: um corretor precisa reconhecer os
   // empreendimentos que vai selecionar no cadastro do imóvel.
-  { href: "/app/empreendimentos", label: "Empreendimentos", icone: "empreendimentos" },
+  { href: "/app/empreendimentos", label: "Empreendimentos", icone: "empreendimentos", iniciaGrupo: true },
   { href: "/app/caracteristicas", label: "Características", icone: "caracteristicas" },
   { href: "/app/tipos-imovel", label: "Tipos de imóvel", icone: "tipos-imovel" },
-  { href: "/app/usuarios", label: "Usuários", icone: "usuarios" },
+  { href: "/app/usuarios", label: "Usuários", icone: "usuarios", iniciaGrupo: true },
   // Autoatendimento do próprio perfil público — separado de "Usuários"
   // de propósito: manter a própria identidade no site não é gestão de
   // pessoas. Só aparece para quem pode ter perfil público; um assistente
@@ -93,6 +99,7 @@ const TODOS_NAV_LINKS: {
     label: "Configurações",
     papeis: PAPEIS_GESTAO_CONFIGURACOES,
     icone: "configuracoes",
+    iniciaGrupo: true,
   },
   // Fase 27 — o contrato da imobiliária com o produto. Recortado por
   // PAPEIS_FINANCEIRO: um gestor comercial não responde pelo contrato.
@@ -170,6 +177,7 @@ export default async function AdminLayout({
     label: link.label,
     liberado: !link.modulo || Boolean(modulosHabilitados.get(link.modulo)),
     icone: link.icone,
+    iniciaGrupo: link.iniciaGrupo ?? false,
   }));
 
   return (

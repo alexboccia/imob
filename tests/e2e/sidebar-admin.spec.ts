@@ -234,3 +234,47 @@ test.describe("Sidebar do painel — mobile preservado", () => {
     for (const svgs of contagens) expect(svgs).toBe(1);
   });
 });
+
+test.describe("Sidebar do painel — agrupamento visual (Fase 63)", () => {
+  test("há respiro entre grupos, sem título e sem divisor", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app");
+
+    const espacos = await sidebar(page)
+      .locator("a, span[title]")
+      .evaluateAll((els) =>
+        els.map((el) => ({
+          label: (el.textContent ?? "").replace(/\s*Pro\s*$/, "").trim(),
+          margem: Math.round(parseFloat(getComputedStyle(el).marginTop)),
+        }))
+      );
+
+    // Os quatro itens que abrem um grupo têm respiro; os outros não.
+    const comRespiro = espacos.filter((e) => e.margem >= 8).map((e) => e.label);
+    expect(comRespiro).toEqual([
+      "Analytics",
+      "Empreendimentos",
+      "Usuários",
+      "Configurações",
+    ]);
+
+    // O primeiro item nunca ganha respiro — separaria o menu de nada.
+    expect(espacos[0].label).toBe("Dashboard");
+    expect(espacos[0].margem).toBeLessThan(8);
+
+    // Discreto: nada de divisor pesado nem cabeçalho de grupo.
+    const divisores = await sidebar(page).locator("hr").count();
+    expect(divisores).toBe(0);
+  });
+
+  test("o agrupamento não mexeu em itens, ordem, rotas nem permissões", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app");
+
+    // Mesma lista, mesma ordem que a Fase 62 fixou.
+    const rotulos = await sidebar(page)
+      .locator("a, span[title]")
+      .evaluateAll((els) => els.map((el) => (el.textContent ?? "").replace(/\s*Pro\s*$/, "").trim()));
+    expect(rotulos).toEqual(ITENS_ESPERADOS_OWNER);
+  });
+});
