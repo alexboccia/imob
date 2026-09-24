@@ -31,7 +31,10 @@ import { buscarMetricasDashboard } from "@/lib/dashboard";
 import { contarAgenda } from "@/lib/agenda";
 import { DashboardKpiCards } from "@/components/admin/DashboardKpiCards";
 import { DashboardCharts } from "@/components/admin/DashboardCharts";
-import { Clock } from "lucide-react";
+import { ChartNoAxesCombined, Clock, Inbox } from "lucide-react";
+import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
+import { CompromissosAtrasados } from "@/components/admin/CompromissosAtrasados";
 
 // Redesenho do Dashboard — mesmo padrão estrutural de Pipeline/Agenda/
 // Usuários/Clientes: `<div className="space-y-5">` sem max-w (o <main>
@@ -157,32 +160,29 @@ export default async function DashboardPage({
     contarAgenda(organizationId, fuso, whereAtividade(escopo)),
   ]);
 
+  // A seção de atenção só se justifica quando há algo nela: contatos novos
+  // na fila, captações a identificar ou compromissos atrasados. Sem nada
+  // disso, o cabeçalho "o que precisa da sua atenção" apareceria sobre o
+  // vazio todos os dias.
+  const temAtencao =
+    novosContatos.itens.length > 0 ||
+    captacoes.length > 0 ||
+    (central?.atrasadas.total ?? 0) > 0;
+
   return (
-    <div className="space-y-5">
-      <div className="min-w-0">
-        {/* break-words: a coluna real de conteúdo em 360px (atrás da
-            sidebar fixa) tem só ~88px — menos que a largura natural da
-            palavra "Dashboard" sozinha em text-2xl (~125px). Sem
-            break-words a palavra (sem espaço pra quebrar) vaza da própria
-            caixa em vez de quebrar — mesma proteção que já existia no
-            h1 do Dashboard antes deste redesenho, mantida aqui. */}
-        <h1 className="min-w-0 break-words text-2xl font-semibold">
-          {/* Saudação sem "bom dia/boa tarde": mesmo com fuso da
-              organização (Fase 18), o produto sabe o dia comercial — não
-              a hora local de QUEM olha. Afirmar período do dia
-              continuaria sendo chute. */}
-          {session?.user.name ? `Olá, ${session.user.name}` : "Início"}
-        </h1>
-        <p className="text-sm text-muted-foreground">O que precisa da sua atenção agora.</p>
-      </div>
+    <div className="space-y-6">
+      <CabecalhoPagina
+        // Saudação sem "bom dia/boa tarde": mesmo com fuso da organização
+        // (Fase 18), o produto sabe o dia comercial — não a hora local de
+        // QUEM olha. Afirmar período do dia continuaria sendo chute.
+        titulo={session?.user.name ? `Olá, ${session.user.name}` : "Início"}
+        descricao="O que precisa da sua atenção agora."
+      />
 
       {/* Fase 19 — adoção do fuso: aparece só enquanto ninguém escolheu,
           nunca bloqueia a Central. */}
       <AvisoFusoNaoConfigurado fusoConfigurado={fusoConfigurado} />
 
-      {/* AÇÃO primeiro, contexto depois: a Central operacional abre a
-          tela, e a visão agregada da operação (KPIs e gráficos, que já
-          existiam e continuam valendo) segue abaixo. */}
       {/* O alternador só existe para quem tem autoridade gerencial. Para
           um BROKER a Home continua sendo, literalmente, a mesma tela de
           antes — nenhum controle novo, nenhum aviso de acesso negado. */}
@@ -193,50 +193,94 @@ export default async function DashboardPage({
           de ser o que fazer a seguir. */}
       <PrimeirosPassos dados={onboarding} />
 
-      <NovosContatos
-        dados={novosContatos}
-        meuMemberId={membroId}
-        podeAtribuir={podeAtribuirContato}
-        membros={membrosParaAtribuir}
-      />
+      {/* ===== O QUE PRECISA DA SUA ATENÇÃO =====
+          AÇÃO primeiro, contexto depois: o trabalho operacional abre a
+          tela, e a visão agregada da operação (KPIs e gráficos, que já
+          existiam e continuam valendo) segue abaixo.
 
-      {captacoes.length > 0 && (
-        <CaptacoesPendentes
-          captacoes={captacoes}
-          total={captacoesPendentes}
-          fuso={fuso}
-          href="/app/captacoes"
-        />
+          A seção só existe quando há algo dentro dela — um cabeçalho
+          "precisa da sua atenção" sobre o vazio seria ruído diário. */}
+      {temAtencao && (
+        <section className="min-w-0 space-y-4">
+          <CabecalhoSecao
+            icone={Inbox}
+            titulo="O que precisa da sua atenção"
+            descricao="Priorizamos os contatos e compromissos que precisam de ação."
+          />
+
+          {/* Novos contatos ocupa a área maior; atrasadas fica como coluna
+              secundária à direita. A proporção 3/2 acompanha a quantidade
+              real de informação: um contato traz foto, imóvel, mensagem e
+              ações; um atraso traz uma linha por compromisso. Empilha
+              abaixo de xl — em lg a coluna secundária já ficaria estreita
+              demais para as linhas de compromisso. */}
+          <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:items-start">
+            <div className="min-w-0 space-y-4">
+              <NovosContatos
+                dados={novosContatos}
+                meuMemberId={membroId}
+                podeAtribuir={podeAtribuirContato}
+                membros={membrosParaAtribuir}
+              />
+
+              {captacoes.length > 0 && (
+                <CaptacoesPendentes
+                  captacoes={captacoes}
+                  total={captacoesPendentes}
+                  fuso={fuso}
+                  href="/app/captacoes"
+                />
+              )}
+            </div>
+
+            {central && <CompromissosAtrasados atrasadas={central.atrasadas} fuso={fuso} />}
+          </div>
+        </section>
       )}
 
+      {/* ===== AGENDA E NEGOCIAÇÕES ===== */}
       {central && <CentralTrabalho dados={central} fuso={fuso} />}
       {equipe && <CentralEquipe dados={equipe} fuso={fuso} />}
 
-      <div className="min-w-0 pt-2">
-        <h2 className="min-w-0 break-words text-lg font-semibold">Visão geral</h2>
-        <p className="text-sm text-muted-foreground">Panorama da operação imobiliária.</p>
-      </div>
+      {/* ===== VISÃO GERAL ===== */}
+      <section className="min-w-0 space-y-4 pt-1">
+        <CabecalhoSecao
+          icone={ChartNoAxesCombined}
+          titulo="Visão geral"
+          descricao="Panorama da operação imobiliária."
+        />
 
-      <DashboardKpiCards metricas={metricas} />
+        <DashboardKpiCards metricas={metricas} />
 
-      {agenda.atrasadas > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
-              <Clock className="size-4.5" />
+        {agenda.atrasadas > 0 && (
+          // Callout discreto, não faixa de alerta: ele REPETE de propósito
+          // uma informação que o card "Atrasadas" acima já dá, porque aqui
+          // o escopo é outro — o contador da Agenda (contarAgenda) conta a
+          // organização/carteira segundo a política de visibilidade, e não
+          // só os compromissos pessoais da Central. Remover seria perder
+          // esse recorte, não eliminar duplicidade.
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-orange-200 bg-orange-50/50 p-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+                <Clock aria-hidden className="size-4" />
+              </span>
+              <p className="min-w-0 break-words text-sm">
+                <span className="font-medium">
+                  {agenda.atrasadas === 1
+                    ? "1 visita atrasada"
+                    : `${agenda.atrasadas} visitas atrasadas`}
+                </span>{" "}
+                <span className="text-muted-foreground">precisam de atenção.</span>
+              </p>
             </div>
-            <p className="text-sm">
-              <span className="font-medium">
-                {agenda.atrasadas === 1 ? "1 visita atrasada" : `${agenda.atrasadas} visitas atrasadas`}
-              </span>{" "}
-              <span className="text-muted-foreground">precisam de atenção.</span>
-            </p>
+            <Link
+              href="/app/agenda?aba=anteriores&status=ATRASADAS"
+              className="shrink-0 text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Ver agenda →
+            </Link>
           </div>
-          <Link href="/app/agenda?aba=anteriores&status=ATRASADAS" className="text-sm font-medium text-primary hover:underline">
-            Ver agenda →
-          </Link>
-        </div>
-      )}
+        )}
 
       <DashboardCharts
         tendencia={metricas.tendencia}
@@ -244,6 +288,7 @@ export default async function DashboardPage({
         composicaoBairro={metricas.composicaoBairro}
         composicaoStatus={metricas.composicaoStatus}
       />
+      </section>
     </div>
   );
 }

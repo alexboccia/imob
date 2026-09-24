@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { UserRound, Users } from "lucide-react";
+import {
+  BarraSegmentada,
+  classesItemSegmentado,
+} from "@/components/admin/ui/BarraSegmentada";
 
 // Alternador Meu trabalho / Equipe (Fase 21).
 //
@@ -11,8 +15,8 @@ import { cn } from "@/lib/utils";
 //
 // Nenhuma rota nova: é a mesma Central, o mesmo `/app`.
 const OPCOES = [
-  { chave: "pessoal" as const, rotulo: "Meu trabalho", href: "/app" },
-  { chave: "equipe" as const, rotulo: "Equipe", href: "/app?visao=equipe" },
+  { chave: "pessoal" as const, rotulo: "Meu trabalho", href: "/app", icone: UserRound },
+  { chave: "equipe" as const, rotulo: "Equipe", href: "/app?visao=equipe", icone: Users },
 ];
 
 export function AlternadorVisaoCentral({
@@ -21,10 +25,17 @@ export function AlternadorVisaoCentral({
   visaoAtual: "pessoal" | "equipe";
 }) {
   return (
-    // `tablist` seria mentira: não há painéis alternados no cliente, são
-    // navegações. `nav` + aria-current é a semântica honesta, e o leitor
-    // de tela anuncia qual está ativa sem depender de cor.
-    <nav aria-label="Visão da central" className="flex flex-wrap gap-2">
+    // Fase 65 — só a APARÊNCIA passou a ser a da barra segmentada do
+    // backoffice. A semântica continua exatamente a mesma: `tablist`
+    // seria mentira, porque não há painéis alternados no cliente — são
+    // navegações resolvidas no servidor por `?visao=`. `nav` +
+    // aria-current é a semântica honesta, e o leitor de tela anuncia qual
+    // está ativa sem depender de cor.
+    <BarraSegmentada
+      role="navigation"
+      aria-label="Visão da central"
+      data-visao-central
+    >
       {OPCOES.map((opcao) => {
         const ativa = opcao.chave === visaoAtual;
         return (
@@ -32,19 +43,15 @@ export function AlternadorVisaoCentral({
             key={opcao.chave}
             href={opcao.href}
             aria-current={ativa ? "page" : undefined}
-            className={cn(
-              "rounded-lg border px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              ativa
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-input text-muted-foreground hover:bg-muted"
-            )}
+            className={classesItemSegmentado(ativa)}
           >
+            <opcao.icone aria-hidden className="size-4 shrink-0" />
             {opcao.rotulo}
             {/* Estado em TEXTO, não só em cor/preenchimento. */}
             {ativa && <span className="sr-only"> (visão atual)</span>}
           </Link>
         );
       })}
-    </nav>
+    </BarraSegmentada>
   );
 }

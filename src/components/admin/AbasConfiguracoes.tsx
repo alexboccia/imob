@@ -3,7 +3,10 @@
 import { useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  BarraSegmentada,
+  classesItemSegmentado,
+} from "@/components/admin/ui/BarraSegmentada";
 
 // =======================================================================
 // Abas da tela de Configurações (Fase 61)
@@ -64,12 +67,10 @@ export function AbasConfiguracoes({ abas }: { abas: AbaConfiguracao[] }) {
           cabem, e rolar a barra é melhor que esmagar os rótulos. O
           contêiner é `inline-flex` num wrapper que rola, para a borda
           acompanhar o conteúdo e não a largura da página. */}
-      <div className="-mx-1 min-w-0 overflow-x-auto px-1 pb-1">
-      <div
+      <BarraSegmentada
         role="tablist"
         aria-label="Seções das configurações"
         data-abas-configuracoes
-        className="inline-flex min-w-full gap-1 rounded-xl border bg-muted/50 p-1"
       >
         {abas.map((aba) => {
           const selecionada = aba.id === ativa;
@@ -95,18 +96,9 @@ export function AbasConfiguracoes({ abas }: { abas: AbaConfiguracao[] }) {
                 abrir(proxima.id);
                 document.getElementById(`aba-${proxima.id}`)?.focus();
               }}
-              className={cn(
-                "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                // Em desktop as abas dividem a largura da barra; abaixo
-                // disso cada uma fica no seu tamanho e a barra rola.
-                "lg:flex-1",
-                selecionada
-                  ? // Pastilha branca sobre o fundo da barra: o contraste
-                    // do item ativo não depende só de cor — ele é o único
-                    // com fundo, borda e sombra.
-                    "border border-border bg-background text-foreground shadow-sm"
-                  : "border border-transparent text-muted-foreground hover:text-foreground"
-              )}
+              // Em desktop as abas dividem a largura da barra; abaixo
+              // disso cada uma fica no seu tamanho e a barra rola.
+              className={classesItemSegmentado(selecionada, "lg:flex-1")}
             >
               {/* O ícone herda a cor do texto — apoia o rótulo, não compete. */}
               <aba.icone aria-hidden className="size-4 shrink-0" />
@@ -114,8 +106,7 @@ export function AbasConfiguracoes({ abas }: { abas: AbaConfiguracao[] }) {
             </button>
           );
         })}
-      </div>
-      </div>
+      </BarraSegmentada>
 
       {abas.map((aba) => (
         <div

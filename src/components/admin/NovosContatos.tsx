@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { Inbox } from "lucide-react";
 import Image from "next/image";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { iniciaisDoNome } from "@/lib/iniciais";
 import { buttonVariants } from "@/components/ui/button";
 import { BotaoCriarOportunidade } from "@/components/admin/BotaoCriarOportunidade";
 import { RegistrarAtendimento } from "@/components/admin/RegistrarAtendimento";
@@ -67,29 +70,45 @@ function ItemContato({
   );
 
   return (
-    <li className="border-b py-3 last:border-b-0 last:pb-0">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <Link
-          href={`/app/clientes/${contato.pessoa.id}`}
-          className="min-w-0 break-words font-medium text-primary underline-offset-4 hover:underline"
-        >
-          {contato.pessoa.nome}
-        </Link>
-        {origem && (
-          <Badge variant="outline" className="shrink-0">
-            {origem}
-          </Badge>
-        )}
-        <span
-          className={
-            alerta
-              ? "shrink-0 text-xs font-medium text-destructive"
-              : "shrink-0 text-xs text-muted-foreground"
-          }
-        >
-          {tempoDeEspera(contato.aguardandoHaHoras)}
-        </span>
-      </div>
+    // Fase 65 — a leitura passou a seguir a hierarquia da informação:
+    // IDENTIDADE (avatar + nome + tipo + tempo), CONTEXTO (imóvel,
+    // mensagem, responsável pelo imóvel), RESPONSABILIDADE e AÇÕES. Antes
+    // era tudo na mesma pilha, sem nada indicando o que vinha primeiro.
+    // Nenhum dado novo: o avatar são as INICIAIS do nome que já estava ali
+    // (a pessoa não tem foto no modelo, e inventar uma seria mentir).
+    <li className="border-b py-4 first:pt-0 last:border-b-0 last:pb-0">
+      <div className="flex min-w-0 gap-3">
+        <Avatar className="mt-0.5 size-9 shrink-0">
+          <AvatarFallback className="bg-primary-light text-xs font-medium text-primary">
+            {iniciaisDoNome(contato.pessoa.nome)}
+          </AvatarFallback>
+        </Avatar>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+            <Link
+              href={`/app/clientes/${contato.pessoa.id}`}
+              className="min-w-0 break-words font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {contato.pessoa.nome}
+            </Link>
+            {/* O tempo de espera fica na ponta direita: é o eixo pelo qual
+                a fila é lida. */}
+            <span
+              className={
+                alerta
+                  ? "shrink-0 text-xs font-medium text-destructive"
+                  : "shrink-0 text-xs text-muted-foreground"
+              }
+            >
+              {tempoDeEspera(contato.aguardandoHaHoras)}
+            </span>
+          </div>
+          {origem && (
+            <Badge variant="outline" className="mt-1 shrink-0">
+              {origem}
+            </Badge>
+          )}
 
       {/* Contexto do imóvel: o suficiente para reconhecer, nunca uma
           segunda ficha. Foto pequena, título, código e o preço da
@@ -155,7 +174,10 @@ function ItemContato({
           conversar). "Abrir cliente" saiu: o nome da pessoa, logo acima,
           já é esse link, e um botão a mais transformaria o card numa
           árvore de botões sem acrescentar capacidade. */}
-      <div data-acoes-contato className="mt-2 flex flex-wrap items-center gap-2">
+      <div
+        data-acoes-contato
+        className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3"
+      >
         <RegistrarAtendimento interactionId={contato.id} nomePessoa={contato.pessoa.nome} />
         {whatsapp && (
           <a
@@ -176,6 +198,8 @@ function ItemContato({
         {oportunidadeElegivel({ origin: contato.origem, propertyId: contato.imovel?.id ?? null }) && (
           <BotaoCriarOportunidade interactionId={contato.id} />
         )}
+          </div>
+        </div>
       </div>
     </li>
   );
@@ -202,14 +226,19 @@ export function NovosContatos({
 
   return (
     <Card data-novos-contatos>
-      <CardHeader className="pb-2">
-        <h2 className="flex flex-wrap items-center gap-2 font-semibold">
+      <CardHeader className="pb-3">
+        {/* <h3>: este card vive dentro da seção "O que precisa da sua
+            atenção", que é o <h2> da página. */}
+        <h3 className="flex flex-wrap items-center gap-2 font-semibold">
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary-light text-primary">
+            <Inbox aria-hidden className="size-3.5" />
+          </span>
           Novos contatos
           <Badge variant="secondary">
             {dados.total}
             {dados.truncado && "+"}
           </Badge>
-        </h2>
+        </h3>
         <p className="text-sm text-muted-foreground">
           Chegaram pelo site e ninguém registrou atendimento ainda.
         </p>

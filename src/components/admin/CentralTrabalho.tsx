@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { CalendarClock, CalendarDays, Handshake } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
 import { Badge } from "@/components/ui/badge";
 import { formatarDataHoraNoFuso, formatarHoraNoFuso } from "@/lib/fuso-horario";
 import { ESTAGIO_INTERESSE_LABEL } from "@/lib/property-interest-schema";
@@ -16,7 +18,7 @@ import type { CentralTrabalho as DadosCentral, CompromissoCentral } from "@/lib/
 // trabalho e navegação — concluir/cancelar/mover continuam nas telas que
 // já são donas dessas ações, para não duplicar regra de negócio aqui.
 
-function LinhaCompromisso({
+export function LinhaCompromisso({
   compromisso,
   mostrarDia,
   fuso,
@@ -63,25 +65,23 @@ function LinhaCompromisso({
 }
 
 // CardTitle do design system renderiza um <div> — sem semântica de
-// heading. A Central usa <h2> de verdade (a Home já tem o <h1>), para que
-// leitor de tela e navegação por cabeçalho funcionem. Mesmas classes do
-// CardTitle, para não destoar visualmente e sem alterar o componente
-// compartilhado, o que mexeria em todos os cards do produto.
-function TituloBloco({ children }: { children: React.ReactNode }) {
+// heading. A Central usa heading de verdade, para que leitor de tela e
+// navegação por cabeçalho funcionem.
+//
+// Fase 65 — passou a <h3>: os cards da Central vivem DENTRO da seção "O
+// que precisa da sua atenção" (um <h2>), então <h2> aqui quebraria a
+// hierarquia de cabeçalhos da página. O visual é o mesmo.
+export function TituloBloco({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="flex flex-wrap items-center gap-2 font-heading text-base leading-snug font-medium">
+    <h3 className="flex flex-wrap items-center gap-2 font-heading text-base leading-snug font-medium">
       {children}
-    </h2>
+    </h3>
   );
-}
-
-function Vazio({ texto }: { texto: string }) {
-  return <p className="py-2 text-sm text-muted-foreground">{texto}</p>;
 }
 
 // "Ver todos" só aparece quando a lista foi de fato truncada — o número
 // do título continua sendo o total exato, nunca o tamanho da lista.
-function VerTodos({ href, total, exibidos }: { href: string; total: number; exibidos: number }) {
+export function VerTodos({ href, total, exibidos }: { href: string; total: number; exibidos: number }) {
   if (total <= exibidos) return null;
   return (
     <Link
@@ -98,39 +98,10 @@ function VerTodos({ href, total, exibidos }: { href: string; total: number; exib
 // nos dois lados é também o que evita mismatch de hidratação — sem ele o
 // servidor renderiza num fuso e o navegador re-renderiza no dele.
 export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: string }) {
-  const { atrasadas, hoje, proximas, negociacoes } = dados;
+  const { hoje, proximas, negociacoes } = dados;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      {/* ATRASADAS primeiro: é o que trava a operação. Só aparece quando
-          existe — um card vazio de "nenhum atraso" seria ruído diário. */}
-      {atrasadas.total > 0 && (
-        <Card className="min-w-0 lg:col-span-2">
-          <CardHeader>
-            <TituloBloco>
-              Atrasadas
-              {/* Texto junto do número: o estado não depende só de cor. */}
-              <Badge variant="outline" className="border-orange-300 text-orange-700">
-                {atrasadas.total}{" "}
-                {atrasadas.total === 1 ? "compromisso em aberto" : "compromissos em aberto"}
-              </Badge>
-            </TituloBloco>
-            <p className="pt-1 text-sm text-muted-foreground">
-              Compromissos cujo dia já passou e que continuam sem conclusão. Mais antigo
-              primeiro.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <ul className="text-sm">
-              {atrasadas.itens.map((c) => (
-                <LinhaCompromisso key={c.id} compromisso={c} mostrarDia fuso={fuso} />
-              ))}
-            </ul>
-            <VerTodos href="/app/agenda" total={atrasadas.total} exibidos={atrasadas.itens.length} />
-          </CardContent>
-        </Card>
-      )}
-
       <Card className="min-w-0">
         <CardHeader>
           <TituloBloco>Hoje</TituloBloco>
@@ -140,7 +111,11 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
         </CardHeader>
         <CardContent>
           {hoje.itens.length === 0 ? (
-            <Vazio texto="Nenhum compromisso para hoje." />
+            <EstadoVazio
+              icone={CalendarDays}
+              titulo="Nenhum compromisso para hoje."
+              descricao="Visitas, reuniões e ligações agendadas para hoje aparecem aqui."
+            />
           ) : (
             <>
               <ul className="text-sm">
@@ -163,7 +138,11 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
         </CardHeader>
         <CardContent>
           {proximas.length === 0 ? (
-            <Vazio texto="Nenhum compromisso agendado para os próximos dias." />
+            <EstadoVazio
+              icone={CalendarClock}
+              titulo="Nenhum compromisso agendado para os próximos dias."
+              descricao="O que for agendado a partir de amanhã aparece aqui."
+            />
           ) : (
             <>
               <ul className="text-sm">
@@ -194,7 +173,11 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
         </CardHeader>
         <CardContent>
           {negociacoes.itens.length === 0 ? (
-            <Vazio texto="Você não tem negociações em andamento." />
+            <EstadoVazio
+              icone={Handshake}
+              titulo="Você não tem negociações em andamento."
+              descricao="As negociações sob sua responsabilidade aparecem aqui."
+            />
           ) : (
             <>
               <ul className="text-sm">

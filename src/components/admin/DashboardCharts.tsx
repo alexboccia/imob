@@ -15,7 +15,12 @@ import {
   Cell,
 } from "recharts";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { Building2 } from "lucide-react";
+import {
+  BarraSegmentada,
+  classesItemSegmentado,
+} from "@/components/admin/ui/BarraSegmentada";
+import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
 import type { PontoTendencia, ItemComposicao } from "@/lib/dashboard";
 
 export type { PontoTendencia, ItemComposicao };
@@ -145,33 +150,37 @@ export function DashboardCharts({
               linha; sem flex-wrap aqui, isso empurrava o scrollWidth do
               DOCUMENTO inteiro (373 vs 360 medido). Aditivo: em telas
               largas as 3 continuam lado a lado normalmente. */}
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Dimensão da composição do portfólio">
+          {/* Fase 65 — mesma moldura das outras opções segmentadas do
+              backoffice. A semântica NÃO mudou: continuam <button
+              aria-pressed>, porque é estado local do gráfico, não
+              navegação. A barra rola em vez de quebrar em ~88-118px de
+              coluna real (360-390px atrás da sidebar fixa), onde as três
+              pills nunca couberam numa linha — antes isso empurrava o
+              scrollWidth do documento inteiro. */}
+          <BarraSegmentada role="group" aria-label="Dimensão da composição do portfólio">
             {(Object.keys(DIMENSAO_LABEL) as Dimensao[]).map((chave) => (
               <button
                 key={chave}
                 type="button"
                 aria-pressed={dimensao === chave}
                 onClick={() => setDimensao(chave)}
-                className={cn(
-                  "h-8 rounded-lg px-3 text-sm font-medium transition-colors",
-                  dimensao === chave
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-secondary text-secondary-foreground hover:bg-muted"
-                )}
+                className={classesItemSegmentado(dimensao === chave)}
               >
                 {DIMENSAO_LABEL[chave]}
               </button>
             ))}
-          </div>
+          </BarraSegmentada>
         </CardHeader>
         <CardContent>
           {dados.length === 0 ? (
-            <div className="flex h-72 flex-col items-center justify-center gap-1 text-center">
-              <p className="text-sm text-muted-foreground">Nenhum imóvel cadastrado ainda.</p>
-              <p className="text-xs text-muted-foreground">
-                A composição por {DIMENSAO_LABEL[dimensao].toLowerCase()} aparece aqui assim que houver imóveis.
-              </p>
-            </div>
+            // Copy preservada palavra por palavra — só o invólucro passou
+            // a ser o estado vazio padrão do backoffice.
+            <EstadoVazio
+              className="h-72 justify-center"
+              icone={Building2}
+              titulo="Nenhum imóvel cadastrado ainda."
+              descricao={`A composição por ${DIMENSAO_LABEL[dimensao].toLowerCase()} aparece aqui assim que houver imóveis.`}
+            />
           ) : (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
