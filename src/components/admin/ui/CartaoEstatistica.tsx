@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,7 @@ export function CartaoEstatistica({
   rotulo,
   valor,
   contexto,
+  href,
 }: {
   icone: LucideIcon;
   tom?: TomEstatistica;
@@ -49,9 +51,21 @@ export function CartaoEstatistica({
   valor: number | string;
   /** Período ou qualificação do número ("neste mês", "há mais de 90 dias"). */
   contexto?: string;
+  /**
+   * Fase 65.1 — tela que investiga este número, quando existe uma. Sem
+   * href o cartão é um fato legível e NÃO ganha afordância de clique:
+   * card estático com hover seria um botão morto.
+   */
+  href?: string;
 }) {
-  return (
-    <Card size="sm" className="min-w-0">
+  const conteudo = (
+    <Card
+      size="sm"
+      className={cn(
+        "min-w-0",
+        href && "h-full transition-colors hover:border-primary/40 hover:bg-primary-light/40"
+      )}
+    >
       <CardContent className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
         <span
           className={cn(
@@ -74,6 +88,19 @@ export function CartaoEstatistica({
         </div>
       </CardContent>
     </Card>
+  );
+
+  if (!href) return conteudo;
+
+  return (
+    <Link
+      href={href}
+      // O cartão inteiro é o alvo — o número e o rótulo já dizem para onde
+      // se vai, então não há texto de link separado a acrescentar.
+      className="block min-w-0 rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      {conteudo}
+    </Link>
   );
 }
 

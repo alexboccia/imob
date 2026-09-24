@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CalendarClock, CalendarDays, Handshake } from "lucide-react";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
 import { Badge } from "@/components/ui/badge";
@@ -101,7 +102,20 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
   const { hoje, proximas, negociacoes } = dados;
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <>
+      {/* Fase 65.1 — Agenda e Negociações ganharam cabeçalho de seção.
+          Antes os dois cards apareciam soltos logo depois de "O que
+          precisa da sua atenção", sem nada dizendo que eram um domínio
+          próprio. NÃO viraram abas: o Dashboard é uma visão operacional
+          consolidada, e esconder a agenda atrás de uma aba obrigaria a
+          clicar para saber se há algo hoje. */}
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={CalendarDays}
+          titulo="Agenda"
+          descricao="Seus compromissos e próximos atendimentos."
+        />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card className="min-w-0">
         <CardHeader>
           <TituloBloco>Hoje</TituloBloco>
@@ -161,10 +175,23 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
         </CardContent>
       </Card>
 
-      <Card className="min-w-0 lg:col-span-2">
-        <CardHeader>
-          <TituloBloco>Minhas negociações</TituloBloco>
-          <p className="pt-1 text-sm text-muted-foreground">
+        </div>
+      </section>
+
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={Handshake}
+          titulo="Minhas negociações"
+          descricao="Negociações em andamento sob sua responsabilidade."
+        />
+      <Card className="min-w-0">
+        {/* O título saiu daqui: quem nomeia a seção agora é o
+            CabecalhoSecao acima (um <h2> de verdade). Repetir "Minhas
+            negociações" dentro do card criaria dois cabeçalhos para o
+            mesmo conteúdo. A contagem e o critério de ordenação — que são
+            informação, não título — continuam visíveis. */}
+        <CardHeader className="pb-3">
+          <p className="min-w-0 break-words text-sm text-muted-foreground">
             {negociacoes.total === 1
               ? "1 negociação em andamento sob sua responsabilidade"
               : `${negociacoes.total} negociações em andamento sob sua responsabilidade`}
@@ -182,8 +209,18 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
             <>
               <ul className="text-sm">
                 {negociacoes.itens.map((n) => (
-                  <li key={n.id} className="border-b py-2 last:border-b-0 last:pb-0">
-                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  // Fase 65.1 — a negociação era uma linha de texto corrida
+                  // dentro de um card largo. Agora tem hierarquia: cliente
+                  // e estágio na primeira linha, imóvel na segunda, e os
+                  // dois fatos temporais rotulados numa grade.
+                  //
+                  // NÃO há "Ver negociação": o produto não tem rota por
+                  // negociação (/app/pipeline é um board, não há
+                  // /app/pipeline/[id]). Criar o botão seria inventar um
+                  // destino. A navegação real por item continua sendo o
+                  // nome do cliente, que já era um link.
+                  <li key={n.id} className="border-b py-3 first:pt-0 last:border-b-0 last:pb-0">
+                    <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
                       {n.pessoa ? (
                         <Link
                           href={`/app/clientes/${n.pessoa.id}`}
@@ -196,34 +233,49 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
                           Cliente indisponível
                         </span>
                       )}
-                      <Badge variant="secondary">
+                      <Badge variant="secondary" className="shrink-0">
                         {ESTAGIO_INTERESSE_LABEL[n.stage] ?? n.stage}
                       </Badge>
-                      {n.imovel && (
-                        <span className="min-w-0 break-words text-xs text-muted-foreground">
-                          {n.imovel.title}
-                        </span>
-                      )}
                     </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {/* Fato verificável, não julgamento: a agenda
-                          futura desta negociação está vazia. */}
-                      {/* Fase 19 — o próximo compromisso é nomeado: pode
-                          ser visita ou follow-up, e "com visita agendada"
-                          passaria a ser falso metade das vezes. */}
-                      {n.proximoCompromisso
-                        ? `${TIPO_ATIVIDADE_LABEL[n.proximoCompromisso.tipo]} em ${formatarDataHoraNoFuso(
-                            n.proximoCompromisso.scheduledAtISO,
-                            fuso
-                          )}`
-                        : "Sem próximo compromisso"}
-                      {" · "}
-                      {/* null = nenhuma interação registrada. Nunca
-                          "sem contato há muito tempo". */}
-                      {n.ultimoContatoISO
-                        ? `último contato em ${formatarDataHoraNoFuso(n.ultimoContatoISO, fuso)}`
-                        : "sem contato registrado"}
-                    </p>
+
+                    {n.imovel && (
+                      <p className="mt-1 min-w-0 break-words text-sm text-muted-foreground">
+                        {n.imovel.title}
+                      </p>
+                    )}
+
+                    {/* Os dois fatos temporais ganharam rótulo: antes eram
+                        uma frase corrida separada por "·", e era preciso
+                        ler tudo para descobrir qual data era qual. */}
+                    <dl className="mt-2 grid min-w-0 grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2">
+                      <div className="min-w-0">
+                        <dt className="text-muted-foreground">Último contato</dt>
+                        {/* null = nenhuma interação registrada. Nunca
+                            "sem contato há muito tempo". */}
+                        <dd className="min-w-0 break-words tabular-nums">
+                          {n.ultimoContatoISO
+                            ? formatarDataHoraNoFuso(n.ultimoContatoISO, fuso)
+                            : "Sem contato registrado"}
+                        </dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-muted-foreground">Próximo compromisso</dt>
+                        {/* Fato verificável, não julgamento: a agenda
+                            futura desta negociação está vazia.
+                            Fase 19 — o compromisso é NOMEADO pelo tipo:
+                            pode ser visita ou follow-up, e "com visita
+                            agendada" passaria a ser falso metade das
+                            vezes. */}
+                        <dd className="min-w-0 break-words">
+                          {n.proximoCompromisso
+                            ? `${TIPO_ATIVIDADE_LABEL[n.proximoCompromisso.tipo]} em ${formatarDataHoraNoFuso(
+                                n.proximoCompromisso.scheduledAtISO,
+                                fuso
+                              )}`
+                            : "Sem próximo compromisso"}
+                        </dd>
+                      </div>
+                    </dl>
                   </li>
                 ))}
               </ul>
@@ -236,6 +288,7 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
           )}
         </CardContent>
       </Card>
-    </div>
+      </section>
+    </>
   );
 }

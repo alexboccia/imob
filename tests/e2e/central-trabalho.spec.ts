@@ -90,3 +90,62 @@ test.describe("Central de trabalho", () => {
     });
   }
 });
+
+// =====================================================================
+// Fase 65.1 — Agenda e Minhas negociações com hierarquia de seção
+// =====================================================================
+test.describe("Central de trabalho — seções do novo padrão", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_CENTRAL);
+    await page.goto("/app");
+  });
+
+  test("existe uma seção Agenda, e Hoje/Próximos vivem dentro dela", async ({ page }) => {
+    const titulo = page.getByRole("heading", { name: "Agenda", exact: true });
+    await expect(titulo).toBeVisible();
+    // Seção (h2), não título de card (h3) — é o nível acima de "Hoje".
+    expect(await titulo.evaluate((el) => el.tagName)).toBe("H2");
+    await expect(page.getByText("Seus compromissos e próximos atendimentos.")).toBeVisible();
+
+    const secao = titulo.locator("xpath=ancestor::section[1]");
+    await expect(secao.getByRole("heading", { name: "Hoje" })).toBeVisible();
+    await expect(secao.getByRole("heading", { name: "Próximos compromissos" })).toBeVisible();
+  });
+
+  test("Agenda NÃO virou aba — o conteúdo continua visível sem clique", async ({ page }) => {
+    // A regra oficial do backoffice: abas só para contextos distintos
+    // entre os quais se alterna. O Dashboard é visão consolidada; esconder
+    // a agenda obrigaria a clicar para saber se há algo hoje.
+    await expect(page.getByRole("tab", { name: "Agenda" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Hoje" })).toBeVisible();
+  });
+
+  test("Minhas negociações é seção e rotula os dois fatos temporais", async ({ page }) => {
+    const titulo = page.getByRole("heading", { name: "Minhas negociações" });
+    await expect(titulo).toBeVisible();
+    expect(await titulo.evaluate((el) => el.tagName)).toBe("H2");
+    // Um cabeçalho só para o mesmo conteúdo — o card não repete o título.
+    await expect(page.getByRole("heading", { name: "Minhas negociações" })).toHaveCount(1);
+
+    const texto = (await page.locator("main").innerText()).replace(/ /g, " ");
+    // A contagem e o critério de ordenação continuam visíveis.
+    expect(texto).toContain("4 negociações em andamento sob sua responsabilidade");
+    expect(texto).toContain("sem alteração há mais tempo primeiro");
+
+    // Antes era uma frase corrida separada por "·": não dava para saber
+    // qual data era qual sem ler tudo. Agora cada fato tem rótulo.
+    expect(texto).toContain("Último contato");
+    expect(texto).toContain("Próximo compromisso");
+    // Os fatos em si não mudaram.
+    expect(texto).toContain("Sem próximo compromisso");
+    expect(texto).toContain("Visita em ");
+  });
+
+  test("nenhuma ação fictícia foi criada nas negociações", async ({ page }) => {
+    // Não existe rota por negociação (/app/pipeline é um board, não há
+    // /app/pipeline/[id]) — um botão "Ver negociação" seria um destino
+    // inventado. A navegação por item continua sendo o nome do cliente.
+    await expect(page.getByRole("link", { name: /Ver negociação/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Ver negociação/i })).toHaveCount(0);
+  });
+});

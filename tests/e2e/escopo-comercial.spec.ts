@@ -121,7 +121,7 @@ test.describe("RESTRICTED — gestor mantém a organização", () => {
 
     // E a visão de equipe da Fase 21 continua funcionando.
     await page.goto("/app?visao=equipe");
-    await expect(page.getByRole("heading", { name: "Resumo da equipe" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visão da equipe" })).toBeVisible();
     const equipe = (await page.locator("main").innerText()).replace(/ /g, " ");
     expect(equipe).toContain("Ana Restrita");
     expect(equipe).toContain("Bruno Restrito");
