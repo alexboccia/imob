@@ -95,28 +95,46 @@ test("edita um imóvel existente", async ({ page }) => {
 // e2e-imovel-editar-a (sem badges) — os únicos 2 imóveis fixos, nunca
 // zerados entre rodadas (ver prisma/seed-e2e.ts).
 test.describe("Imóveis", () => {
-  test("KPIs renderizam com números não-negativos, e '+ Novo imóvel' aponta para o fluxo real", async ({
+  test("KPIs renderizam com números não-negativos, e 'Novo imóvel' aponta para o fluxo real", async ({
     page,
   }) => {
     await page.goto("/app/imoveis");
 
+    // Fase 67 — os KPIs passaram a usar o cartão compartilhado do
+    // backoffice (CartaoEstatistica). As asserções deixaram de depender de
+    // classes utilitárias (`p.text-2xl`), que descreviam o CSS de uma
+    // versão e quebrariam a cada ajuste visual, e passaram às âncoras
+    // estruturais do componente. A INTENÇÃO é a mesma: os quatro rótulos
+    // visíveis e valores numéricos não-negativos.
     for (const titulo of ["Total de imóveis", "Disponíveis", "Oportunidades", "Destaques"]) {
-      await expect(page.locator("main p.text-sm.text-muted-foreground", { hasText: titulo }).first()).toBeVisible();
+      await expect(page.locator("[data-kpi-rotulo]", { hasText: titulo }).first()).toBeVisible();
     }
-    const valores = await page.locator("main p.text-2xl").allTextContents();
+    const valores = await page.locator("[data-grade-kpis] [data-kpi-valor]").allTextContents();
+    expect(valores).toHaveLength(4);
     for (const v of valores) {
       expect(Number(v), `valor "${v}" deveria ser um número >= 0`).toBeGreaterThanOrEqual(0);
     }
     // e2e-imovel-badges-a garante Oportunidades/Destaques >= 1, sempre.
-    const oportunidadesCard = page.locator("main p.text-sm.text-muted-foreground", { hasText: "Oportunidades" }).locator("..");
-    expect(Number(await oportunidadesCard.locator("p.text-2xl").textContent())).toBeGreaterThanOrEqual(1);
+    const oportunidadesCard = page
+      .locator("[data-grade-kpis] [data-slot=card]")
+      .filter({ has: page.locator("[data-kpi-rotulo]", { hasText: "Oportunidades" }) });
+    expect(
+      Number(await oportunidadesCard.locator("[data-kpi-valor]").textContent())
+    ).toBeGreaterThanOrEqual(1);
 
     // Preserva o fluxo real de criação já existente (novo/page.tsx) — não
     // uma segunda implementação. Base UI renderiza role="button" mesmo
     // quando o elemento composto (render={<Link/>}) é uma <a> de verdade —
     // por isso o role aqui é "button", não "link"; o href real continua
     // sendo verificado no DOM.
-    await expect(page.getByRole("button", { name: "+ Novo imóvel" })).toHaveAttribute("href", "/app/imoveis/novo");
+    // Fase 67 — o "+" literal do rótulo virou o ícone Plus (aria-hidden),
+    // como nos demais botões de ação do painel, então o nome acessível
+    // passou a ser "Novo imóvel". Rota, permissão e comportamento são os
+    // mesmos, e o href continua sendo verificado no DOM.
+    await expect(page.getByRole("button", { name: "Novo imóvel" })).toHaveAttribute(
+      "href",
+      "/app/imoveis/novo"
+    );
   });
 
   test("busca encontra o imóvel esperado; badges do imóvel com todos os rótulos aparecem", async ({ page }) => {
@@ -512,5 +530,228 @@ test.describe("Imóveis — cadastro de lançamento", () => {
     ).toHaveCount(0);
     await expect(cab.getByText("Previsão de entrega:")).toBeVisible();
     await expect(cab.getByText("Junho de 2027")).toBeVisible();
+  });
+});
+
+// =====================================================================
+// Fase 67 — Imóveis na linguagem do backoffice (Fases 65/65.1/66)
+// =====================================================================
+// Cobertura ESTRUTURAL e comportamental: o que não pode regredir é a
+// hierarquia da informação, o contrato de URL dos filtros, a ordenação, a
+// paginação e a ausência de overflow — não o valor de um padding.
+test.describe("Imóveis — estrutura do novo backoffice", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/app/imoveis");
+  });
+
+  test("cabeçalho, subtítulo e ação principal seguem o padrão", async ({ page }) => {
+    const h1 = page.locator("main h1");
+    await expect(h1).toHaveCount(1);
+    await expect(h1).toHaveText("Imóveis");
+    await expect(
+      page.getByText(
+        "Gerencie seu portfólio de imóveis e acompanhe disponibilidade, finalidade e oportunidades."
+      )
+    ).toBeVisible();
+    // A ação principal continua no cabeçalho, com o mesmo destino.
+    await expect(page.getByRole("button", { name: "Novo imóvel" })).toBeVisible();
+  });
+
+  test("a seção Portfólio contém filtros e listagem", async ({ page }) => {
+    const titulo = page.getByRole("heading", { name: "Portfólio de imóveis" });
+    await expect(titulo).toBeVisible();
+    expect(await titulo.evaluate((el) => el.tagName)).toBe("H2");
+
+    const secao = titulo.locator("xpath=ancestor::section[1]");
+    await expect(secao.getByLabel("Buscar imóveis")).toBeVisible();
+    await expect(secao.locator("table")).toHaveCount(1);
+  });
+
+  test("os KPIs não são links — não prometem navegação que não existe", async ({ page }) => {
+    const grade = page.locator("[data-grade-kpis]");
+    await expect(grade).toBeVisible();
+    await expect(grade.locator("a")).toHaveCount(0);
+  });
+
+  test("a busca tem mais peso que os filtros categóricos e vem antes deles", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/app/imoveis");
+
+    const busca = await page.locator("#imoveis-busca").boundingBox();
+    const status = await page.locator("#imoveis-status").boundingBox();
+    expect(busca!.width).toBeGreaterThan(status!.width);
+    expect(busca!.y, "a busca aparece acima dos selects").toBeLessThan(status!.y);
+  });
+
+  test("os filtros continuam URL-driven, sem submit e sem parâmetro novo", async ({ page }) => {
+    // Não existe botão de aplicar nesta tela: os selects navegam no
+    // onChange e a busca tem debounce. Criar um botão seria inventar um
+    // mecanismo que o produto não tem.
+    await expect(page.getByRole("button", { name: "Filtrar" })).toHaveCount(0);
+
+    await page.locator("#imoveis-status").selectOption("AVAILABLE");
+    await expect(page).toHaveURL(/filters=/);
+    const url = new URL(page.url());
+    // Contrato preservado: status/tipo/finalidade num JSON em `filters`.
+    expect(JSON.parse(url.searchParams.get("filters")!)).toEqual({ status: "AVAILABLE" });
+  });
+
+  test("filtros ativos aparecem como chips removíveis, com rótulo legível", async ({ page }) => {
+    await page.locator("#imoveis-status").selectOption("AVAILABLE");
+    const ativos = page.locator("[data-filtros-ativos]");
+    await expect(ativos).toBeVisible();
+
+    // Rótulo traduzido, nunca o valor cru da URL.
+    const chip = ativos.getByRole("button", { name: /Remover filtro/ });
+    await expect(chip).toHaveCount(1);
+    await expect(chip).toContainText("Disponível");
+
+    // Remover o chip devolve o filtro a "todos" — mesmo caminho do select.
+    await chip.click();
+    await expect(page).not.toHaveURL(/filters=/);
+    await expect(page.locator("[data-filtros-ativos]")).toHaveCount(0);
+  });
+
+  test("a busca preserva os filtros já aplicados na URL", async ({ page }) => {
+    await page.locator("#imoveis-status").selectOption("AVAILABLE");
+    await expect(page).toHaveURL(/filters=/);
+
+    await page.getByLabel("Buscar imóveis").fill("apartamento");
+    await expect(page).toHaveURL(/search=apartamento/);
+    // O filtro não pode ser descartado pela busca.
+    await expect(page).toHaveURL(/filters=/);
+  });
+
+  test("a tabela mantém as colunas e a semântica de cabeçalho", async ({ page }) => {
+    const cabecalhos = await page
+      .locator("table thead th")
+      .evaluateAll((els) => els.map((el) => (el.textContent ?? "").trim()));
+
+    expect(cabecalhos.some((c) => c.startsWith("Imóvel"))).toBe(true);
+    for (const coluna of ["Tipo", "Finalidade", "Localização", "Preço", "Status"]) {
+      expect(cabecalhos, `coluna ${coluna}`).toContain(coluna);
+    }
+  });
+
+  test("o título do imóvel continua sendo o link para a ficha", async ({ page }) => {
+    const primeiro = page.locator("table tbody tr").first().locator("a").first();
+    await expect(primeiro).toHaveAttribute("href", /^\/app\/imoveis\/[\w-]+$/);
+    const href = await primeiro.getAttribute("href");
+    await primeiro.click();
+    await expect(page).toHaveURL(new RegExp(`${href}$`));
+  });
+
+  test("ordenação: coluna ordenável, coluna ativa e direção são identificáveis", async ({
+    page,
+  }) => {
+    await page.goto("/app/imoveis?sort=price:asc");
+    // A direção não depende só de cor: o nome acessível do controle diz
+    // qual é, e um ícone de seta acompanha.
+    const preco = page.getByRole("button", { name: /Preço/ }).first();
+    await expect(preco).toBeVisible();
+    await expect(preco.locator("svg")).toHaveCount(1);
+
+    await preco.click();
+    await expect(page).toHaveURL(/sort=price%3Adesc|sort=price:desc/);
+  });
+
+  test("ordenação do bloco Imóvel oferece Código e Título, com direção anunciada", async ({
+    page,
+  }) => {
+    const porCodigo = page.getByRole("button", { name: /Ordenar por Código/ });
+    await expect(porCodigo).toHaveCount(1);
+    await porCodigo.click();
+    await expect(page).toHaveURL(/sort=code(%3A|:)asc/);
+    // Ativo: o nome acessível passa a declarar a direção.
+    await expect(
+      page.getByRole("button", { name: /Ordenar por Código, ordem ascendente/ })
+    ).toHaveCount(1);
+  });
+
+  test("paginação preserva contagem, seletor e regras de disabled", async ({ page }) => {
+    await expect(page.getByText(/Página \d+ de \d+/)).toBeVisible();
+    await expect(page.getByText(/registro\(s\)/)).toBeVisible();
+    // O seletor ganhou nome acessível nesta fase (era um <span> solto ao
+    // lado, sem associação com o controle).
+    await expect(page.getByRole("combobox", { name: "Itens por página" })).toBeVisible();
+  });
+
+  test("zero resultados e zero cadastrados são estados vazios DIFERENTES", async ({ page }) => {
+    await page.goto("/app/imoveis?search=zzz-nao-existe-zzz-67");
+    const vazio = page.locator("[data-estado-vazio]").first();
+    await expect(vazio).toBeVisible();
+    // Filtro sem resultado fala de filtros, não de portfólio vazio.
+    await expect(vazio).toContainText("Nenhum imóvel encontrado com esses filtros.");
+    await expect(vazio).not.toContainText("Nenhum imóvel cadastrado ainda.");
+  });
+
+  test("a hierarquia de cabeçalhos não tem salto", async ({ page }) => {
+    const niveis = await page
+      .locator("main h1, main h2, main h3")
+      .evaluateAll((els) => els.map((el) => Number(el.tagName[1])));
+    expect(niveis[0]).toBe(1);
+    for (let i = 1; i < niveis.length; i += 1) {
+      expect(
+        niveis[i] - niveis[i - 1],
+        `salto de h${niveis[i - 1]} para h${niveis[i]}`
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test("a sidebar marca Imóveis como item atual", async ({ page }) => {
+    const atual = page.locator('aside nav[aria-label="Navegação principal"] a[aria-current="page"]');
+    await expect(atual).toHaveCount(1);
+    await expect(atual).toHaveText("Imóveis");
+  });
+});
+
+test.describe("Imóveis — responsividade do novo layout", () => {
+  for (const [largura, altura] of [
+    [1920, 1080],
+    [1440, 900],
+    [1366, 768],
+    [1024, 768],
+    [768, 1024],
+    [390, 844],
+  ]) {
+    test(`${largura}×${altura}: sem overflow do documento`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: altura });
+      await page.goto("/app/imoveis");
+
+      await expect(page.locator("main h1")).toBeVisible();
+      await expect(page.locator("[data-grade-kpis]")).toBeVisible();
+
+      const rolou = await page.evaluate(() => {
+        window.scrollTo(9999, 0);
+        const x = window.scrollX;
+        window.scrollTo(0, 0);
+        return x;
+      });
+      expect(rolou, `documento rolou ${rolou}px em ${largura}px`).toBe(0);
+    });
+  }
+
+  test("em desktop a tabela é a representação, e seu scroll fica contido", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto("/app/imoveis");
+
+    const tabela = page.locator("table");
+    await expect(tabela).toBeVisible();
+    // O container da tabela é quem rola horizontalmente, se precisar.
+    const overflow = await tabela.evaluate(
+      (el) => getComputedStyle(el.parentElement!).overflowX
+    );
+    expect(overflow).toBe("auto");
+  });
+
+  test("em 390px a tabela dá lugar aos cards já existentes", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/app/imoveis");
+
+    // Comportamento PRÉ-EXISTENTE do DataTable (prop `cards`), preservado:
+    // a tabela é escondida abaixo de md e os cards assumem.
+    await expect(page.locator("table")).toBeHidden();
+    const linhas = page.locator("[data-slot=card]");
+    expect(await linhas.count()).toBeGreaterThan(0);
   });
 });

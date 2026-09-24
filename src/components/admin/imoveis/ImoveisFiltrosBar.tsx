@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -105,18 +105,59 @@ export function ImoveisFiltrosBar({
     router.push(`${pathname}?${novo.toString()}`);
   }
 
+  // Rótulo legível de cada filtro ativo — traduzido pelas MESMAS listas
+  // de opções que os selects usam, nunca o valor cru da URL.
+  const chipsAtivos = [
+    {
+      chave: "status" as const,
+      valor: statusAtual,
+      rotulo: statusOpcoes.find((o) => o.value === statusAtual)?.label,
+    },
+    { chave: "tipo" as const, valor: tipoAtual, rotulo: tipoAtual },
+    {
+      chave: "finalidade" as const,
+      valor: finalidadeAtual,
+      rotulo: finalidadeOpcoes.find((o) => o.value === finalidadeAtual)?.label,
+    },
+  ].flatMap((f) =>
+    f.valor !== TODOS && f.rotulo ? [{ chave: f.chave, rotulo: f.rotulo }] : []
+  );
+
   const classeSelect =
-    "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+    "h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
   const classeLabel = "block text-xs text-muted-foreground";
 
   return (
     <Card size="sm" className="min-w-0">
       <CardContent className="min-w-0 space-y-3">
-        {/* grid-cols-1 sm:grid-cols-3: 3 colunas equilibradas em desktop
-            (cada select ocupa a largura da própria coluna, sem largura
-            fixa), empilhado em mobile — mesmo padrão de grid já usado em
-            Características/Tipos de imóvel, aplicado aqui a campos de
-            filtro em vez de cards de grupo. */}
+        {/* Fase 67 — a BUSCA subiu para a primeira linha e ganhou peso: é
+            o controle que o corretor usa para achar um imóvel específico,
+            e estava embaixo dos três selects categóricos. Altura h-9 (os
+            selects acompanham) e largura cheia.
+
+            O MECANISMO NÃO MUDOU: não há botão de aplicar porque não há
+            submit — os selects navegam no `onChange` e a busca tem
+            debounce de 400ms, os dois escrevendo na URL (`filters` em
+            JSON e `search`). Nenhum parâmetro novo, nenhum contrato
+            alterado. */}
+        <div className="min-w-0 space-y-1">
+          <label htmlFor="imoveis-busca" className={classeLabel}>
+            Buscar imóveis
+          </label>
+          <div className="relative min-w-0">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <TableSearchInput
+              resetToken={resetBusca}
+              id="imoveis-busca"
+              placeholder="Buscar por código, título, tipo, cidade ou bairro..."
+              className="h-9 w-full pl-8"
+            />
+          </div>
+        </div>
+
         <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="min-w-0 space-y-1">
             <label htmlFor="imoveis-status" className={classeLabel}>
@@ -174,40 +215,56 @@ export function ImoveisFiltrosBar({
           </div>
         </div>
 
-        {/* flex-col no mobile (busca full-width, botão empilha abaixo) e
-            sm:flex-row sm:items-end no desktop (busca ocupa o espaço
-            sobrando via flex-1, botão alinhado à base do campo). */}
-        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="min-w-0 flex-1 space-y-1">
-            <label htmlFor="imoveis-busca" className={classeLabel}>
-              Buscar imóveis
-            </label>
-            <div className="relative min-w-0">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <TableSearchInput
-                resetToken={resetBusca}
-                id="imoveis-busca"
-                placeholder="Buscar por código, título, tipo, cidade ou bairro..."
-                className="h-8 w-full pl-8"
-              />
-            </div>
-          </div>
-          {temFiltroOuBuscaAtivo && (
-            // min-w-0 shrink whitespace-normal: mesma correção do Finding
-            // #2 da auditoria de Usuários — em 360px a coluna real de
-            // conteúdo é mais estreita que a largura mínima intrínseca
-            // deste botão com o shrink-0 padrão do design system.
+        {/* FILTROS ATIVOS — nenhuma lógica nova: cada chip chama o MESMO
+            `aplicar(chave, TODOS)` que o select já usa para voltar a
+            "Todos". Só os três filtros categóricos entram; a busca não,
+            porque o texto dela já está visível no próprio campo acima.
+            O rótulo vai junto do "×" para o chip não depender de cor. */}
+        {chipsAtivos.length > 0 && (
+          <div
+            data-filtros-ativos
+            className="flex min-w-0 flex-wrap items-center gap-2 border-t pt-3"
+          >
+            <span className="shrink-0 text-xs text-muted-foreground">Filtros ativos:</span>
+            {chipsAtivos.map((chip) => (
+              <button
+                key={chip.chave}
+                type="button"
+                onClick={() => aplicar(chip.chave, TODOS)}
+                aria-label={`Remover filtro ${chip.rotulo}`}
+                className="inline-flex min-w-0 items-center gap-1 rounded-full border bg-muted/50 px-2.5 py-1 text-xs font-medium transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <span className="min-w-0 truncate">{chip.rotulo}</span>
+                <X aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+              </button>
+            ))}
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={limpar}
-              className="min-w-0 shrink-0 whitespace-normal self-start sm:self-auto"
+              className="min-w-0 shrink-0 whitespace-normal"
             >
               Limpar filtros
             </Button>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Busca ativa SEM filtro categórico: o "Limpar filtros" continua
+            alcançável, como antes desta fase. */}
+        {chipsAtivos.length === 0 && temFiltroOuBuscaAtivo && (
+          <div className="flex min-w-0 flex-wrap border-t pt-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={limpar}
+              className="min-w-0 shrink-0 whitespace-normal"
+            >
+              Limpar filtros
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

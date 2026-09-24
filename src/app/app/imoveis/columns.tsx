@@ -8,6 +8,7 @@ import {
   formatarPreco,
   rotulosAtivos,
 } from "@/lib/format";
+import { MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ImovelColunaOrdenacao } from "@/components/admin/imoveis/ImovelColunaOrdenacao";
 import type { DataTableColumn } from "@/components/admin/data-table/DataTable";
@@ -93,6 +94,34 @@ export function BadgesImovel({ imovel }: { imovel: { lancamento: boolean; destaq
   );
 }
 
+// Tratamento visual dos SEIS status reais do produto (STATUS_IMOVEL_LABEL:
+// DRAFT, AVAILABLE, RESERVED, SOLD, RENTED, INACTIVE) — todos verificados
+// antes de decidir, não só o "Disponível" do print.
+//
+// Deliberadamente CONTIDO: nada de verde saturado só porque um imóvel está
+// disponível. Disponível é o estado NORMAL do portfólio; se ele gritasse,
+// a coluna inteira gritaria. A cor aqui é um apoio discreto — o rótulo em
+// texto continua sendo o que comunica o estado, e cada badge o carrega.
+function classeStatus(status: string): string {
+  switch (status) {
+    // O estado saudável e mais comum: um verde de baixa saturação.
+    case "AVAILABLE":
+      return "border-success-muted-border bg-success-muted text-success-muted-foreground";
+    // Compromissado, ainda não concluído — atenção, não erro.
+    case "RESERVED":
+      return "border-orange-200 bg-orange-50 text-orange-800";
+    // Negócios concluídos: neutros, sem competir com o que está ativo.
+    case "SOLD":
+    case "RENTED":
+      return "border-border bg-muted text-muted-foreground";
+    // Fora do ar (rascunho/inativo): o mais apagado da escala.
+    case "DRAFT":
+    case "INACTIVE":
+    default:
+      return "border-dashed border-border bg-transparent text-muted-foreground";
+  }
+}
+
 export const imovelColumns: DataTableColumn<ImovelRow>[] = [
   {
     id: "imovel",
@@ -128,8 +157,20 @@ export const imovelColumns: DataTableColumn<ImovelRow>[] = [
   },
   {
     id: "localizacao",
+    // accessorFn PRESERVADO: é o que alimenta a ordenação por cidade
+    // (SORT_MAP) e o valor bruto da célula. O `cell` abaixo só muda a
+    // apresentação — mesmo texto, com um marcador de lugar para deixar de
+    // ser mais uma linha cinza idêntica às vizinhas.
     accessorFn: (row) => formatarLocalizacaoImovel(row.bairro, row.cidade, row.estado),
     header: "Localização",
+    cell: ({ row }) => (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <MapPin aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 break-words">
+          {formatarLocalizacaoImovel(row.original.bairro, row.original.cidade, row.original.estado)}
+        </span>
+      </span>
+    ),
   },
   {
     id: "preco",
@@ -138,12 +179,15 @@ export const imovelColumns: DataTableColumn<ImovelRow>[] = [
     cell: ({ row }) => {
       const { preco, precoAluguel } = row.original;
       if (preco == null && precoAluguel == null) return "-";
+      // `tabular-nums`: dígitos de mesma largura alinham os valores
+      // verticalmente numa coluna de preços. Nenhum valor é recalculado
+      // ou normalizado — a formatação continua sendo formatarPreco.
       return (
-        <>
+        <span className="whitespace-nowrap tabular-nums">
           {preco != null && formatarPreco(preco)}
           {preco != null && precoAluguel != null && " · "}
           {precoAluguel != null && `${formatarPreco(precoAluguel)}/mês`}
-        </>
+        </span>
       );
     },
   },
@@ -151,7 +195,7 @@ export const imovelColumns: DataTableColumn<ImovelRow>[] = [
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => (
-      <Badge variant="secondary">
+      <Badge variant="outline" className={classeStatus(row.original.status)}>
         {STATUS_IMOVEL_LABEL[
           row.original.status as keyof typeof STATUS_IMOVEL_LABEL
         ] ?? row.original.status}

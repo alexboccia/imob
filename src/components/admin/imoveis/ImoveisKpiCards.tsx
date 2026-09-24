@@ -1,23 +1,22 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { Building2, CheckCircle2, Sparkles, Star } from "lucide-react";
+import {
+  CartaoEstatistica,
+  GradeEstatisticas,
+} from "@/components/admin/ui/CartaoEstatistica";
 
-// Redesenho de Imóveis — mesmo padrão visual de DashboardKpiCards (ícone +
-// número + legenda, flex-col abaixo de `sm`, `sm:flex-row` a partir daí,
-// `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`). Reproduzido byte a byte —
-// não `grid-cols-2` fixo (usado em Usuários/Clientes) — pela mesma razão
-// já documentada em DashboardKpiCards.tsx: em ~88-118px de coluna real
-// (atrás da sidebar fixa, 360-390px de viewport), 2 colunas fixas deixa
-// menos espaço do que ícone (36px) + gap (12px) consomem, colapsando o
-// título. Título com `break-words`, legenda com `truncate` — mesma
-// correção do Finding MEDIUM do Dashboard, aplicada aqui desde o início
-// (nunca reproduzida) porque o prompt deste redesenho pede explicitamente
-// pra não repetir esse bug.
+// KPIs do portfólio de imóveis.
 //
-// "Total"/"Disponíveis"/"Oportunidades"/"Destaques" são os 4 KPIs
-// propostos originalmente — e correspondem 1:1 a campos reais do domínio
-// (Property.status === "AVAILABLE", Property.isOpportunity,
-// Property.isFeatured), sem precisar de nenhuma substituição: ver
-// investigação registrada no relatório final.
+// Fase 67 — migrados para o cartão compartilhado do backoffice, o mesmo
+// do Dashboard e do Pipeline. Puramente apresentacional: os quatro
+// números já vêm de `prisma.property.count()` em page.tsx — nenhuma
+// consulta nova, nenhum cálculo alterado.
+//
+// SEM `href`: estes cards não navegam hoje, e dar afordância de clique a
+// um card que não é clicável seria prometer uma navegação que não existe.
+//
+// Ganho colateral da migração: o cartão compartilhado já carrega as
+// proteções de coluna estreita (ícone empilhado abaixo de `sm`,
+// `break-words` no rótulo) que este componente reproduzia à mão.
 export function ImoveisKpiCards({
   total,
   disponiveis,
@@ -29,53 +28,40 @@ export function ImoveisKpiCards({
   oportunidades: number;
   destaques: number;
 }) {
-  const cards = [
-    {
-      icone: Building2,
-      corIcone: "bg-primary/10 text-primary",
-      titulo: "Total de imóveis",
-      valor: total,
-      legenda: "no portfólio",
-    },
-    {
-      icone: CheckCircle2,
-      corIcone: "bg-success-muted text-success-muted-foreground",
-      titulo: "Disponíveis",
-      valor: disponiveis,
-      legenda: total > 0 ? `${disponiveis} de ${total} imóveis` : "Nenhum imóvel ainda",
-    },
-    {
-      icone: Sparkles,
-      corIcone: "bg-blue-100 text-blue-700",
-      titulo: "Oportunidades",
-      valor: oportunidades,
-      legenda: "marcados como oportunidade",
-    },
-    {
-      icone: Star,
-      corIcone: "bg-orange-100 text-orange-700",
-      titulo: "Destaques",
-      valor: destaques,
-      legenda: "marcados como destaque",
-    },
-  ];
-
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {cards.map((card) => (
-        <Card key={card.titulo} size="sm" className="min-w-0">
-          <CardContent className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${card.corIcone}`}>
-              <card.icone className="size-4.5" />
-            </div>
-            <div className="min-w-0">
-              <p className="min-w-0 break-words text-sm text-muted-foreground">{card.titulo}</p>
-              <p className="text-2xl font-semibold leading-tight">{card.valor}</p>
-              <p className="text-xs text-muted-foreground truncate">{card.legenda}</p>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+    <GradeEstatisticas>
+      <CartaoEstatistica
+        icone={Building2}
+        tom="marca"
+        rotulo="Total de imóveis"
+        valor={total}
+        contexto="no portfólio"
+      />
+      <CartaoEstatistica
+        icone={CheckCircle2}
+        tom="positivo"
+        rotulo="Disponíveis"
+        valor={disponiveis}
+        // Texto preservado: com zero imóveis, "0 de 0 imóveis" seria pior
+        // que dizer que ainda não há nada.
+        contexto={total > 0 ? `${disponiveis} de ${total} imóveis` : "Nenhum imóvel ainda"}
+      />
+      <CartaoEstatistica
+        icone={Sparkles}
+        tom="info"
+        rotulo="Oportunidades"
+        valor={oportunidades}
+        contexto="marcados como oportunidade"
+      />
+      <CartaoEstatistica
+        icone={Star}
+        // Destaque é curadoria, não problema — mas é o tom âmbar que o
+        // produto já usava aqui, preservado.
+        tom="atencao"
+        rotulo="Destaques"
+        valor={destaques}
+        contexto="marcados como destaque"
+      />
+    </GradeEstatisticas>
   );
 }

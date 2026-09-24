@@ -16,7 +16,11 @@ import {
   normalizarBusca,
 } from "@/lib/pagination";
 import { construirWhereImoveis } from "@/lib/listagens-admin-query";
+import { Building2, Plus, SearchX } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
+import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
 import { DataTable } from "@/components/admin/data-table/DataTable";
 import { ImoveisKpiCards } from "@/components/admin/imoveis/ImoveisKpiCards";
 import { ImoveisFiltrosBar } from "@/components/admin/imoveis/ImoveisFiltrosBar";
@@ -144,29 +148,27 @@ export default async function AdminImoveisPage({
   const temFiltroOuBuscaAtivo = Boolean(busca || statusFiltro || tipoFiltro || finalidadeFiltro);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Imóveis</h1>
-          <p className="text-sm text-muted-foreground">
-            Gerencie seu portfólio de imóveis e acompanhe disponibilidade, finalidade e oportunidades.
-          </p>
-        </div>
-        {/* min-w-0 shrink whitespace-normal: mesma correção do Finding #2
-            da auditoria de Usuários (aplicada aqui em vez de reproduzida) —
-            "+ Novo imóvel" é 2 caracteres mais longo que "Novo usuário", o
-            suficiente pra estourar os mesmos ~2px de sobra que a versão
-            shrink-0 padrão do design system já deixava por pouco em
-            Usuários a 360px (medido: scrollWidth 362 vs innerWidth 360
-            antes desta correção). */}
-        <Button
-          nativeButton={false}
-          render={<Link href="/app/imoveis/novo" />}
-          className="min-w-0 shrink whitespace-normal"
-        >
-          + Novo imóvel
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <CabecalhoPagina
+        titulo="Imóveis"
+        descricao="Gerencie seu portfólio de imóveis e acompanhe disponibilidade, finalidade e oportunidades."
+        acoes={
+          // Rota, permissão e comportamento preservados — só ganhou ícone,
+          // como os demais botões de ação do painel.
+          //
+          // min-w-0 shrink whitespace-normal: correção preservada da
+          // auditoria de Usuários — "Novo imóvel" estourava por ~2px a
+          // coluna real de conteúdo em 360px com o shrink-0 padrão.
+          <Button
+            nativeButton={false}
+            render={<Link href="/app/imoveis/novo" />}
+            className="min-w-0 shrink whitespace-normal"
+          >
+            <Plus aria-hidden className="size-4" />
+            Novo imóvel
+          </Button>
+        }
+      />
 
       <ImoveisKpiCards
         total={total}
@@ -175,13 +177,24 @@ export default async function AdminImoveisPage({
         destaques={destaques}
       />
 
-      <ImoveisFiltrosBar
-        statusOpcoes={Object.entries(STATUS_IMOVEL_LABEL).map(([value, label]) => ({ value, label }))}
-        tipoOpcoes={tipoOpcoes}
-        finalidadeOpcoes={Object.entries(FINALIDADE_LABEL).map(([value, label]) => ({ value, label }))}
-      />
+      {/* Seção PORTFÓLIO — filtros e listagem são uma coisa só: encontrar
+          um imóvel. Mesmo padrão de "Negociações" no Pipeline. NÃO é aba:
+          esta página tem um domínio só, e esconder a listagem atrás de
+          navegação não organizaria nada. */}
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={Building2}
+          titulo="Portfólio de imóveis"
+          descricao="Gerencie, filtre e encontre rapidamente os imóveis cadastrados."
+        />
 
-      <DataTable
+        <ImoveisFiltrosBar
+          statusOpcoes={Object.entries(STATUS_IMOVEL_LABEL).map(([value, label]) => ({ value, label }))}
+          tipoOpcoes={tipoOpcoes}
+          finalidadeOpcoes={Object.entries(FINALIDADE_LABEL).map(([value, label]) => ({ value, label }))}
+        />
+
+        <DataTable
         columns={imovelColumns}
         data={linhas}
         totalCount={totalCount}
@@ -189,15 +202,28 @@ export default async function AdminImoveisPage({
         pageSize={pageSize}
         sortableColumns={SORT_MAP}
         hideSearchBar
+        // Os dois vazios continuam SEMANTICAMENTE diferentes: "não há
+        // nada cadastrado" e "a busca não achou" pedem ações opostas.
         emptyMessage={
-          temFiltroOuBuscaAtivo
-            ? "Nenhum imóvel encontrado com esses filtros."
-            : "Nenhum imóvel cadastrado ainda."
+          temFiltroOuBuscaAtivo ? (
+            <EstadoVazio
+              icone={SearchX}
+              titulo="Nenhum imóvel encontrado com esses filtros."
+              descricao="Ajuste a busca, o status, o tipo ou a finalidade."
+            />
+          ) : (
+            <EstadoVazio
+              icone={Building2}
+              titulo="Nenhum imóvel cadastrado ainda."
+              descricao="Cadastre o primeiro imóvel para começar a montar o portfólio."
+            />
+          )
         }
         cards={linhas.map((imovel) => (
           <ImovelCardMobile key={imovel.id} imovel={imovel} />
         ))}
-      />
+        />
+      </section>
     </div>
   );
 }

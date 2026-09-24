@@ -257,12 +257,22 @@ export function DataTable<TData extends Record<string, unknown>>({
               único item do flex-wrap pai, então só quebra linha por
               dentro se ele MESMO também puder quebrar. */}
           <div className="flex flex-wrap items-center gap-1.5">
-            <span>Itens por página</span>
+            <span id="rotulo-itens-por-pagina">Itens por página</span>
             <Select
               value={String(pageSize)}
               onValueChange={(value) => navegarCom({ pageSize: value, page: null })}
             >
-              <SelectTrigger size="sm" className="w-[70px]">
+              {/* Fase 67 — o texto ao lado era um <span> solto, sem
+                  associação com o controle: o select ficava sem nome
+                  acessível ("caixa de combinação" e nada mais). Correção
+                  puramente aditiva — nenhum comportamento, valor ou
+                  parâmetro muda — e vale para as cinco telas que usam
+                  este DataTable. */}
+              <SelectTrigger
+                size="sm"
+                aria-labelledby="rotulo-itens-por-pagina"
+                className="w-[70px]"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
