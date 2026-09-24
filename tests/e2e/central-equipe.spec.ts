@@ -97,7 +97,10 @@ test.describe("gestor vê a equipe", () => {
     await expect(page.getByText(/1 negociação sem responsável/)).toBeVisible();
     await page.getByRole("link", { name: /Atribuir no Pipeline/ }).click();
     await page.waitForURL(/\/app\/pipeline\?responsavel=SEM/);
-    await expect(page.getByRole("heading", { name: "Pipeline" })).toBeVisible();
+    // `exact`: a Fase 66 acrescentou a seção "Análise do pipeline" à
+    // página, e sem isto o nome "Pipeline" casaria os dois cabeçalhos.
+    // Mais preciso que antes — passa a apontar o título da página.
+    await expect(page.getByRole("heading", { name: "Pipeline", exact: true })).toBeVisible();
     const pipeline = (await page.locator("main").innerText()).replace(/ /g, " ");
     expect(pipeline).toContain("Central Sem Responsavel");
 

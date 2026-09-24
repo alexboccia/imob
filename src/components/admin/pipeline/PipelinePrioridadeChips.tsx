@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import {
+  BarraSegmentada,
+  classesItemSegmentado,
+} from "@/components/admin/ui/BarraSegmentada";
 import type { FiltroPrioridadePipeline } from "@/lib/pipeline";
 
 const PRIORIDADE_LABEL: Record<Exclude<FiltroPrioridadePipeline, "TODAS">, string> = {
@@ -27,26 +30,33 @@ export function PipelinePrioridadeChips({
   const niveis: FiltroPrioridadePipeline[] = ["TODAS", "ALTA", "MEDIA", "NORMAL"];
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-sm" aria-label="Prioridades das negociações abertas">
-      <span className="text-muted-foreground">Prioridade:</span>
-      {niveis.map((nivel) => (
-        <Link
-          key={nivel}
-          href={href(nivel)}
-          aria-current={filtroAtual === nivel ? "page" : undefined}
-          className={cn(
-            // inline-flex items-center justify-center: mesmo achado de
-            // PipelineTabs.tsx — <a> é inline por padrão, height sozinho
-            // não centraliza o texto sem display flex.
-            "inline-flex h-8 items-center justify-center rounded-lg px-3 text-sm font-medium transition-colors",
-            filtroAtual === nivel
-              ? "bg-primary text-primary-foreground"
-              : "bg-secondary text-secondary-foreground hover:bg-muted"
-          )}
-        >
-          {nivel === "TODAS" ? "Todas" : PRIORIDADE_LABEL[nivel]} ({nivel === "TODAS" ? total : contagem[nivel]})
-        </Link>
-      ))}
+    // Fase 66 — mesma moldura segmentada do resto do backoffice, mas
+    // CLARAMENTE secundária: rótulo "Prioridade:" ao lado e altura menor
+    // que a barra Em andamento/Encerradas, que é a navegação principal.
+    // Semântica inalterada: são LINKS URL-driven (?prioridade=), com
+    // aria-current — nunca abas.
+    <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+      <span id="rotulo-prioridade" className="shrink-0 text-muted-foreground">
+        Prioridade:
+      </span>
+      <BarraSegmentada role="navigation" aria-labelledby="rotulo-prioridade">
+        {niveis.map((nivel) => {
+          const ativo = filtroAtual === nivel;
+          return (
+            <Link
+              key={nivel}
+              href={href(nivel)}
+              aria-current={ativo ? "page" : undefined}
+              className={classesItemSegmentado(ativo, "h-8 text-xs")}
+            >
+              {nivel === "TODAS" ? "Todas" : PRIORIDADE_LABEL[nivel]} (
+              {nivel === "TODAS" ? total : contagem[nivel]})
+              {/* O filtro ativo é dito em texto, não só pelo fundo. */}
+              {ativo && <span className="sr-only"> (filtro ativo)</span>}
+            </Link>
+          );
+        })}
+      </BarraSegmentada>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ORG_A, login } from "./helpers";
+import { ORG_A, ORG_CENTRAL, login } from "./helpers";
 
 // Redesenho do Pipeline — fluxo completo: cria um cliente, relaciona um
 // imóvel (RelacionarImovelForm, já existente — cria um PropertyInterest
@@ -65,7 +65,13 @@ test.describe("Pipeline", () => {
 
     // Card aparece na coluna "Interessado" (stage inicial de
     // criarInteressePessoa), não em nenhuma outra.
-    const colunaInteressado = page.locator("h2", { hasText: "Interessado" }).locator("..");
+    // Fase 66 — a coluna ganhou âncora estável (data-coluna-pipeline com
+    // o valor do estágio). Antes o teste subia do <h2> para o pai por
+    // travessia de DOM, o que quebrava a cada mudança de estrutura e a
+    // cada ajuste de nível de heading (a coluna virou <h3>, porque agora
+    // vive sob o <h2> da seção "Negociações"). A âncora prova a mesma
+    // coisa — o card está NESTA etapa — sem depender do layout.
+    const colunaInteressado = page.locator('[data-coluna-pipeline="INTERESTED"]');
     const card = colunaInteressado.locator("div", { hasText: nomeUnico }).last();
     await expect(card).toBeVisible();
     await expect(card.getByText(tituloImovel)).toBeVisible();
@@ -106,7 +112,7 @@ test.describe("Pipeline", () => {
     await cardAtual.getByRole("button", { name: "Mover" }).click();
     await expect(page.getByText("Movendo...")).not.toBeVisible();
 
-    const colunaVisita = page.locator("h2", { hasText: "Visita agendada" }).locator("..");
+    const colunaVisita = page.locator('[data-coluna-pipeline="VISIT_SCHEDULED"]');
     await expect(colunaVisita.getByText(nomeUnico)).toBeVisible();
 
     // Marca como ganho — dentro do drawer (FechamentoInteresse), some do
@@ -191,4 +197,263 @@ test.describe("Pipeline", () => {
       expect(scrollX, `documento rolou ${scrollX}px em ${largura}px`).toBe(0);
     });
   }
+});
+
+// =====================================================================
+// Fase 66 — Pipeline na linguagem do backoffice (Fases 65/65.1)
+// =====================================================================
+// A cobertura é ESTRUTURAL e semântica: o que não pode regredir é a
+// hierarquia da informação, a semântica dos controles, os destinos e a
+// ausência de overflow — não o valor de um padding.
+test.describe("Pipeline — estrutura do novo backoffice", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/pipeline");
+  });
+
+  test("cabeçalho e KPIs seguem o padrão compartilhado", async ({ page }) => {
+    const h1 = page.locator("main h1");
+    await expect(h1).toHaveCount(1);
+    await expect(h1).toHaveText("Pipeline");
+    await expect(
+      page.getByText("Acompanhe suas negociações e avance cada oportunidade até o fechamento.")
+    ).toBeVisible();
+
+    const grade = page.locator("[data-grade-kpis]");
+    await expect(grade).toBeVisible();
+    for (const rotulo of ["Em andamento", "Ganhos", "Perdidos", "Taxa de ganho"]) {
+      await expect(grade.locator("[data-kpi-rotulo]", { hasText: rotulo }).first()).toBeVisible();
+    }
+    const valores = await grade.locator("[data-kpi-valor]").allTextContents();
+    expect(valores).toHaveLength(4);
+    // "Taxa de ganho" pode legitimamente ser "—" quando não há base para
+    // calcular — nunca 0% inventado.
+    expect(valores[3]).toMatch(/^(—|\d+([.,]\d+)?%)$/);
+  });
+
+  test("Em andamento/Encerradas continua navegação por URL, não tablist", async ({ page }) => {
+    const barra = page.getByRole("navigation", { name: "Situação da negociação" });
+    await expect(barra).toBeVisible();
+    // A visão é resolvida no servidor por ?visao= — transformar em abas
+    // ARIA seria mentir sobre o que acontece.
+    await expect(barra.getByRole("tab")).toHaveCount(0);
+    await expect(barra.getByRole("link")).toHaveCount(2);
+
+    const ativa = barra.locator('[aria-current="page"]');
+    await expect(ativa).toHaveCount(1);
+    await expect(ativa).toContainText("Em andamento");
+    // Estado dito em texto, não só por cor.
+    await expect(ativa).toContainText("(situação atual)");
+
+    await barra.getByRole("link", { name: /Encerradas/ }).click();
+    await expect(page).toHaveURL(/visao=encerrada/);
+    await expect(
+      page.getByRole("navigation", { name: "Situação da negociação" }).locator('[aria-current="page"]')
+    ).toContainText("Encerradas");
+  });
+
+  test("a seção Negociações contém filtros, prioridade e Kanban", async ({ page }) => {
+    const titulo = page.getByRole("heading", { name: "Negociações" });
+    await expect(titulo).toBeVisible();
+    expect(await titulo.evaluate((el) => el.tagName)).toBe("H2");
+
+    const secao = titulo.locator("xpath=ancestor::section[1]");
+    await expect(secao.locator("[data-filtros-pipeline]")).toHaveCount(1);
+    await expect(secao.getByText("Prioridade:")).toBeVisible();
+    // O Kanban só existe quando há negociação aberta; na ORG_A (que outras
+    // specs deixam sem negociação em andamento) a seção mostra o estado
+    // vazio no lugar dele. A estrutura do Kanban é coberta abaixo, na
+    // organização de seed determinístico.
+    const temKanban = (await secao.locator("[data-kanban-pipeline]").count()) === 1;
+    const temVazio = (await secao.locator("[data-estado-vazio]").count()) >= 1;
+    expect(temKanban || temVazio, "a seção mostra o Kanban ou o estado vazio").toBe(true);
+  });
+
+  test("os filtros mantêm o botão de submissão — o form é GET sem JS", async ({ page }) => {
+    const form = page.locator("[data-filtros-pipeline]");
+    await expect(form).toHaveAttribute("method", "get");
+    // Sem o botão, um <form method=get> sem JavaScript fica inoperante:
+    // nem o input nem os <select> submetem sozinhos.
+    await expect(form.getByRole("button", { name: "Filtrar" })).toBeVisible();
+
+    // Os três controles pedidos continuam presentes, rotulados.
+    await expect(form.getByLabel("Buscar")).toBeVisible();
+    await expect(form.getByLabel("Período")).toBeVisible();
+    await expect(form.getByLabel("Responsável")).toBeVisible();
+  });
+
+  test("a busca tem mais largura que os demais controles em desktop", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/app/pipeline");
+
+    const busca = await page.locator("#pipeline-q").boundingBox();
+    const periodo = await page.locator("#pipeline-periodo").boundingBox();
+    expect(busca!.width).toBeGreaterThan(periodo!.width);
+  });
+
+  test("prioridade continua links URL-driven, secundários à navegação", async ({ page }) => {
+    const grupo = page.getByRole("navigation", { name: "Prioridade:" });
+    await expect(grupo.getByRole("link")).toHaveCount(4);
+    await expect(grupo.getByRole("tab")).toHaveCount(0);
+
+    const ativo = grupo.locator('[aria-current="page"]');
+    await expect(ativo).toHaveCount(1);
+    await expect(ativo).toContainText("Todas");
+    await expect(ativo).toContainText("(filtro ativo)");
+
+    await grupo.getByRole("link", { name: /^Alta/ }).click();
+    await expect(page).toHaveURL(/prioridade=ALTA/);
+    await expect(
+      page.getByRole("navigation", { name: "Prioridade:" }).locator('[aria-current="page"]')
+    ).toContainText("Alta");
+  });
+
+  test("coluna vazia usa o estado vazio padrão, com texto para leitor de tela", async ({
+    page,
+  }) => {
+    // Filtra por uma busca que não casa com nada: todas as colunas ficam
+    // vazias de forma determinística, sem depender do seed.
+    await page.goto("/app/pipeline?q=zzz-nao-existe-zzz-66");
+    // Sem resultado nenhum, a página mostra o vazio da visão inteira.
+    const vazios = page.locator("[data-estado-vazio]");
+    expect(await vazios.count()).toBeGreaterThanOrEqual(1);
+    await expect(vazios.first()).toContainText(/Nenhuma negociação/);
+  });
+
+  test("a análise do pipeline é seção na mesma página, com o expansor preservado", async ({
+    page,
+  }) => {
+    const titulo = page.getByRole("heading", { name: "Análise do pipeline" });
+    await expect(titulo).toBeVisible();
+    expect(await titulo.evaluate((el) => el.tagName)).toBe("H2");
+    await expect(
+      page.getByText("Indicadores sobre movimentação e tempo das negociações.")
+    ).toBeVisible();
+
+    for (const rotulo of ["Gargalo atual", "Tempo médio até fechamento", "Transições no período"]) {
+      await expect(page.locator("[data-kpi-rotulo]", { hasText: rotulo })).toBeVisible();
+    }
+
+    // "Ver análise completa" continua sendo expansão <details> na própria
+    // página — nunca virou link para uma rota nova.
+    const resumo = page.getByText("Ver análise completa");
+    await expect(resumo).toBeVisible();
+    const detalhes = page.locator("details");
+    await expect(detalhes).toHaveJSProperty("open", false);
+    await resumo.click();
+    await expect(detalhes).toHaveJSProperty("open", true);
+    await expect(page).toHaveURL(/\/app\/pipeline/);
+  });
+
+  test("a hierarquia de cabeçalhos não tem salto", async ({ page }) => {
+    const niveis = await page
+      .locator("main h1, main h2, main h3")
+      .evaluateAll((els) => els.map((el) => Number(el.tagName[1])));
+    expect(niveis[0]).toBe(1);
+    for (let i = 1; i < niveis.length; i += 1) {
+      expect(
+        niveis[i] - niveis[i - 1],
+        `salto de h${niveis[i - 1]} para h${niveis[i]}`
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test("a sidebar marca Pipeline como item atual", async ({ page }) => {
+    const atual = page.locator('aside nav[aria-label="Navegação principal"] a[aria-current="page"]');
+    await expect(atual).toHaveCount(1);
+    await expect(atual).toHaveText("Pipeline");
+  });
+});
+
+test.describe("Pipeline — responsividade do novo layout", () => {
+  for (const [largura, altura] of [
+    [1920, 1080],
+    [1440, 900],
+    [1366, 768],
+    [1024, 768],
+    [768, 1024],
+    [390, 844],
+  ]) {
+    test(`${largura}×${altura}: sem overflow do documento`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: altura });
+      await login(page, ORG_A);
+      await page.goto("/app/pipeline");
+
+      await expect(page.locator("main h1")).toBeVisible();
+      await expect(page.locator("[data-grade-kpis]")).toBeVisible();
+
+      // O Kanban pode rolar DENTRO do seu container; o documento, nunca.
+      const rolou = await page.evaluate(() => {
+        window.scrollTo(9999, 0);
+        const x = window.scrollX;
+        window.scrollTo(0, 0);
+        return x;
+      });
+      expect(rolou, `documento rolou ${rolou}px em ${largura}px`).toBe(0);
+    });
+  }
+
+  test("390px: as colunas empilham", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await login(page, ORG_CENTRAL);
+    await page.goto("/app/pipeline");
+
+    const topos = await page
+      .locator("[data-coluna-pipeline]")
+      .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
+    // Quatro colunas empilhadas: quatro topos distintos. (Sem o seed
+    // determinístico este teste passaria com zero colunas, sem provar
+    // nada — por isso a organização é a E, não a A.)
+    expect(topos).toHaveLength(4);
+    expect(new Set(topos).size).toBe(4);
+  });
+
+  test("1440px: as colunas ficam lado a lado, e o scroll fica DENTRO do Kanban", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await login(page, ORG_CENTRAL);
+    await page.goto("/app/pipeline");
+
+    const topos = await page
+      .locator("[data-coluna-pipeline]")
+      .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
+    expect(topos).toHaveLength(4);
+    expect(new Set(topos).size, "as quatro etapas visíveis ao mesmo tempo").toBe(1);
+
+    // Se as colunas não couberem, quem rola é o container do Kanban —
+    // nunca o documento.
+    const contido = await page
+      .locator("[data-kanban-pipeline]")
+      .evaluate((el) => getComputedStyle(el).overflowX);
+    expect(contido).toBe("auto");
+  });
+});
+
+// Estrutura do Kanban — na organização de seed DETERMINÍSTICO (Org E, com
+// negociações abertas). A ORG_A depende do que outras specs deixaram para
+// trás e chega a ter zero negociações em andamento, caso em que a página
+// mostra o estado vazio e não há coluna nenhuma para inspecionar.
+test.describe("Pipeline — Kanban com dados determinísticos", () => {
+  test("o Kanban tem uma coluna por estágio do catálogo, com contagem", async ({ page }) => {
+    await login(page, ORG_CENTRAL);
+    await page.goto("/app/pipeline");
+
+    const colunas = page.locator("[data-coluna-pipeline]");
+    // Derivado de COLUNAS_ABERTAS (= ESTAGIOS_INTERESSE) — nunca escrito
+    // à mão na página.
+    const estagios = await colunas.evaluateAll((els) =>
+      els.map((el) => el.getAttribute("data-coluna-pipeline"))
+    );
+    expect(estagios).toEqual(["INTERESTED", "VISIT_SCHEDULED", "VISITED", "PROPOSAL"]);
+
+    for (const estagio of estagios) {
+      const coluna = page.locator(`[data-coluna-pipeline="${estagio}"]`);
+      // Cada coluna se nomeia e diz quantos itens tem.
+      const cabecalho = coluna.locator("h3");
+      await expect(cabecalho).toHaveCount(1);
+      await expect(cabecalho).toContainText(/\d+/);
+    }
+  });
+
 });

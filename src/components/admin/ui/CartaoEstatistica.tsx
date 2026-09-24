@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 // `tom` é semântico, não decorativo — diz o que a métrica significa
 // (neutro, positivo, atenção), e por isso é um conjunto fechado em vez de
 // uma classe livre.
-export type TomEstatistica = "marca" | "info" | "positivo" | "atencao";
+export type TomEstatistica = "marca" | "info" | "positivo" | "atencao" | "negativo";
 
 const TONS: Record<TomEstatistica, string> = {
   // A cor da própria identidade, via token configurável pela organização.
@@ -35,6 +35,11 @@ const TONS: Record<TomEstatistica, string> = {
   info: "bg-blue-100 text-blue-700",
   positivo: "bg-success-muted text-success-muted-foreground",
   atencao: "bg-orange-100 text-orange-700",
+  // Fase 66 — "negativo" é resultado adverso consumado (negócio perdido),
+  // distinto de "atencao", que é algo a resolver (compromisso atrasado).
+  // A separação existe justamente para o vermelho não ser gasto em atraso
+  // operacional, que acontece todo dia.
+  negativo: "bg-destructive/10 text-destructive",
 };
 
 export function CartaoEstatistica({

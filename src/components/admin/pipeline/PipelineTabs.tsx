@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { CircleDot, CircleCheck } from "lucide-react";
+import {
+  BarraSegmentada,
+  classesItemSegmentado,
+} from "@/components/admin/ui/BarraSegmentada";
 import type { VisaoPipeline } from "@/lib/pipeline";
 
 // Redesenho do Pipeline — mesmo mecanismo de sempre (2 <Link>, URL-driven,
@@ -18,34 +22,46 @@ export function PipelineTabs({
   hrefEncerrada: string;
 }) {
   const tabs = [
-    { valor: "ABERTA" as const, label: "Em andamento", contagem: emAndamento, href: hrefAberta },
-    { valor: "ENCERRADA" as const, label: "Encerradas", contagem: null, href: hrefEncerrada },
+    {
+      valor: "ABERTA" as const,
+      label: "Em andamento",
+      contagem: emAndamento,
+      href: hrefAberta,
+      icone: CircleDot,
+    },
+    {
+      valor: "ENCERRADA" as const,
+      label: "Encerradas",
+      contagem: null,
+      href: hrefEncerrada,
+      icone: CircleCheck,
+    },
   ];
 
   return (
-    <nav className="flex flex-wrap gap-2" aria-label="Situação da negociação">
-      {tabs.map((tab) => (
-        <Link
-          key={tab.valor}
-          href={tab.href}
-          aria-current={visao === tab.valor ? "page" : undefined}
-          className={cn(
-            // inline-flex items-center justify-center: <a> é inline por
-            // padrão — height sozinho não centraliza o texto
-            // verticalmente na ausência de display flex (achado real: o
-            // texto ficava colado no topo da pill, com toda a folga
-            // sobrando embaixo). Mesmo padrão de centralização já usado
-            // no Button (buttonVariants).
-            "inline-flex h-8 items-center justify-center rounded-lg px-3 text-sm font-medium transition-colors",
-            visao === tab.valor
-              ? "bg-primary text-primary-foreground"
-              : "bg-secondary text-secondary-foreground hover:bg-muted"
-          )}
-        >
-          {tab.label}
-          {tab.contagem !== null && ` (${tab.contagem})`}
-        </Link>
-      ))}
-    </nav>
+    // Fase 66 — só a APARÊNCIA virou a barra segmentada do backoffice. A
+    // semântica é a mesma de sempre e é a correta: são LINKS resolvidos
+    // pela URL (?visao=), com os demais filtros preservados no href pelo
+    // caller. Transformar em role="tablist" seria mentir — não há painéis
+    // alternados no cliente, e o conteúdo vem do servidor.
+    <BarraSegmentada role="navigation" aria-label="Situação da negociação">
+      {tabs.map((tab) => {
+        const ativa = visao === tab.valor;
+        return (
+          <Link
+            key={tab.valor}
+            href={tab.href}
+            aria-current={ativa ? "page" : undefined}
+            className={classesItemSegmentado(ativa)}
+          >
+            <tab.icone aria-hidden className="size-4 shrink-0" />
+            {tab.label}
+            {tab.contagem !== null && ` (${tab.contagem})`}
+            {/* Estado em TEXTO, não só em cor/preenchimento. */}
+            {ativa && <span className="sr-only"> (situação atual)</span>}
+          </Link>
+        );
+      })}
+    </BarraSegmentada>
   );
 }

@@ -30,6 +30,11 @@ import { PipelineInsights } from "@/components/admin/pipeline/PipelineInsights";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { CircleCheck, Inbox, KanbanSquare, SearchX } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
+import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
 
 // Pipeline (Fase P.4, redesenhado pra seguir o mesmo padrão visual/UX do
 // CRM de Clientes) — projeção operacional de PropertyInterest (nunca uma
@@ -127,14 +132,10 @@ export default async function PipelinePage({
   const membroAtualId = session?.user.organizationMemberId ?? null;
 
   const Cabecalho = (
-    <div>
-      <h1 className="text-2xl font-semibold">Pipeline</h1>
-      <p className="text-sm text-muted-foreground">
-        {filtros.visao === "ABERTA"
-          ? "Negociações em andamento, agrupadas por etapa."
-          : "Negociações encerradas — ganhas ou perdidas."}
-      </p>
-    </div>
+    <CabecalhoPagina
+      titulo="Pipeline"
+      descricao="Acompanhe suas negociações e avance cada oportunidade até o fechamento."
+    />
   );
 
   const Kpis = <PipelineKpiCards metricas={metricas} periodoLabel={PERIODO_PIPELINE_LABEL[periodo]} />;
@@ -212,49 +213,90 @@ export default async function PipelinePage({
       (filtros.busca !== "" || filtroPrioridade !== "TODAS" || filtros.responsavel !== "");
 
     return (
-      <div className="space-y-5">
+      <div className="space-y-6">
         {Cabecalho}
         {Kpis}
+        {Tabs}
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {Tabs}
+        {/* Seção NEGOCIAÇÕES — reúne filtros, prioridade e Kanban, que
+            juntos são uma coisa só: encontrar e trabalhar as oportunidades.
+            NÃO é uma aba: "Em andamento | Encerradas" já é a divisão de
+            contexto desta tela, e esconder o Kanban ou a análise atrás de
+            abas obrigaria a clicar para ver o trabalho do dia. */}
+        <section className="min-w-0 space-y-4">
+          <CabecalhoSecao
+            icone={KanbanSquare}
+            titulo="Negociações"
+            descricao="Acompanhe e organize as oportunidades em cada etapa do funil."
+          />
+
+          {FiltrosBar}
+
           <PipelinePrioridadeChips
             filtroAtual={filtroPrioridade}
             total={prioridadesPorItem.size}
             contagem={contagemPrioridade}
             href={(nivel) => construirHref(params, { prioridade: nivel }, true)}
           />
-        </div>
-
-        {FiltrosBar}
 
         {totalAberto === 0 ? (
-          <div className="rounded-xl border bg-card p-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              {semResultadoPorFiltro
-                ? "Nenhuma negociação encontrada com estes filtros."
-                : "Nenhuma negociação em andamento."}
-            </p>
-          </div>
+          <Card>
+            <CardContent>
+              <EstadoVazio
+                icone={semResultadoPorFiltro ? SearchX : KanbanSquare}
+                titulo={
+                  semResultadoPorFiltro
+                    ? "Nenhuma negociação encontrada com estes filtros."
+                    : "Nenhuma negociação em andamento."
+                }
+                descricao={
+                  semResultadoPorFiltro
+                    ? "Ajuste a busca, o período, o responsável ou a prioridade."
+                    : undefined
+                }
+              />
+            </CardContent>
+          </Card>
         ) : (
           // Desktop: colunas lado a lado, scroll horizontal CONTIDO neste
           // container (nunca no documento inteiro). Mobile: empilhadas
           // (flex-col), scroll só vertical, sem nenhum overflow horizontal
           // novo — mesmo mecanismo já validado antes do redesenho, só
           // restilizado.
-          <div className="flex flex-col gap-4 md:flex-row md:overflow-x-auto md:pb-2">
+          // As colunas vêm de COLUNAS_ABERTAS (= ESTAGIOS_INTERESSE), nunca
+          // escritas à mão aqui: acrescentar um estágio ao catálogo já o
+          // faz aparecer como coluna.
+          //
+          // Desktop: colunas lado a lado, scroll horizontal CONTIDO neste
+          // container (nunca no documento inteiro). Mobile: empilhadas
+          // (flex-col), scroll só vertical — mesmo mecanismo já validado,
+          // preservado.
+          <div
+            data-kanban-pipeline
+            className="flex flex-col gap-4 md:flex-row md:overflow-x-auto md:pb-2"
+          >
             {COLUNAS_ABERTAS.map((coluna) => (
-              <div key={coluna} className="space-y-2 md:w-72 md:shrink-0">
-                <h2 className="flex items-center justify-between text-sm font-medium">
-                  {COLUNA_LABEL[coluna]}
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
+              // Superfície MUITO sutil para delimitar a coluna sem virar
+              // um bloco colorido — e sem cor arbitrária por etapa, que
+              // sugeriria uma semântica que o produto não tem.
+              <div
+                key={coluna}
+                data-coluna-pipeline={coluna}
+                className="min-w-0 space-y-2 rounded-xl border bg-muted/30 p-2.5 md:w-76 md:shrink-0"
+              >
+                {/* <h3>: a coluna vive sob o <h2> da seção "Negociações". */}
+                <h3 className="flex min-w-0 items-center justify-between gap-2 text-sm font-medium">
+                  <span className="min-w-0 break-words">{COLUNA_LABEL[coluna]}</span>
+                  <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-xs font-normal text-muted-foreground tabular-nums">
                     {colunasExibidas[coluna].length}
                   </span>
-                </h2>
+                </h3>
                 {colunasExibidas[coluna].length === 0 ? (
-                  <div className="rounded-lg border border-dashed p-4 text-center">
-                    <p className="text-xs text-muted-foreground">Nenhuma negociação nesta etapa.</p>
-                  </div>
+                  <EstadoVazio
+                    className="gap-1.5 rounded-lg border border-dashed bg-background/60 px-3 py-6"
+                    icone={Inbox}
+                    titulo="Nenhuma negociação nesta etapa."
+                  />
                 ) : (
                   <div className="space-y-2">
                     {colunasExibidas[coluna].map((item) => (
@@ -272,6 +314,7 @@ export default async function PipelinePage({
             ))}
           </div>
         )}
+        </section>
 
         {Insights}
       </div>
@@ -294,18 +337,30 @@ export default async function PipelinePage({
   const temProximaPagina = skip + itens.length < total;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {Cabecalho}
       {Kpis}
       {Tabs}
       {FiltrosBar}
 
       {itens.length === 0 ? (
-        <div className="rounded-xl border bg-card p-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            {temFiltroAtivo ? "Nenhuma negociação encontrada com estes filtros." : "Nenhuma negociação encerrada."}
-          </p>
-        </div>
+        <Card>
+          <CardContent>
+            <EstadoVazio
+              icone={temFiltroAtivo ? SearchX : CircleCheck}
+              titulo={
+                temFiltroAtivo
+                  ? "Nenhuma negociação encontrada com estes filtros."
+                  : "Nenhuma negociação encerrada."
+              }
+              descricao={
+                temFiltroAtivo
+                  ? "Ajuste a busca, o período, o responsável ou o resultado."
+                  : undefined
+              }
+            />
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid max-w-2xl grid-cols-1 gap-2">
           {itens.map((item) => (

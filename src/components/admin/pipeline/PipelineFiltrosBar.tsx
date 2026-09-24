@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -52,9 +53,18 @@ export function PipelineFiltrosBar({
     filtros.busca !== "" || filtros.resultado !== "TODOS" || filtros.responsavel !== "";
 
   return (
+    // Fase 66 — a busca ganhou protagonismo (lg:flex-[2], o dobro dos
+    // demais controles), que é o pedido da fase.
+    //
+    // O BOTÃO "FILTRAR" FICA, e isto foi verificado no código, não
+    // assumido: este é um <form method="get"> sem nenhum JavaScript — o
+    // <input> e os <select> NÃO submetem sozinhos. Remover o botão
+    // deixaria a barra inteira inoperante sem teclado. A única mudança
+    // nele é de apresentação.
     <form
       method="get"
-      className="flex flex-col gap-2 rounded-xl border bg-card p-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-end"
+      data-filtros-pipeline
+      className="flex flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm lg:flex-row lg:flex-wrap lg:items-end"
     >
       <input type="hidden" name="visao" value={visao === "ENCERRADA" ? "encerrada" : "aberta"} />
       {params.prioridade && <input type="hidden" name="prioridade" value={params.prioridade} />}
@@ -67,13 +77,25 @@ export function PipelineFiltrosBar({
           "Bu" do placeholder. Abaixo de `sm`, este campo ocupa sua própria
           linha inteira (w-full); a partir de `sm`, volta a dividir espaço
           com os demais campos (sm:flex-1). */}
-      <div className="w-full space-y-1 sm:min-w-0 sm:flex-1">
+      <div className="w-full space-y-1 lg:min-w-0 lg:flex-[2]">
         <label htmlFor="pipeline-q" className="text-xs text-muted-foreground">
           Buscar
         </label>
-        <Input id="pipeline-q" name="q" defaultValue={filtros.busca} placeholder="Buscar cliente ou imóvel..." />
+        <div className="relative min-w-0">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            id="pipeline-q"
+            name="q"
+            defaultValue={filtros.busca}
+            placeholder="Buscar cliente ou imóvel..."
+            className="h-9 pl-8"
+          />
+        </div>
       </div>
-      <div className="min-w-0 max-w-full space-y-1">
+      <div className="w-full min-w-0 space-y-1 lg:w-44 lg:flex-none">
         <label htmlFor="pipeline-periodo" className="text-xs text-muted-foreground">
           Período
         </label>
@@ -87,7 +109,7 @@ export function PipelineFiltrosBar({
           id="pipeline-periodo"
           name="periodo"
           defaultValue={periodo}
-          className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           {PERIODOS_PIPELINE_OPCOES.map((opcao) => (
             <option key={opcao} value={opcao}>
@@ -102,7 +124,7 @@ export function PipelineFiltrosBar({
           continua cabendo em 375px. O valor de "Meus negócios" é o id do
           próprio membro — nunca User.id, que é identidade global e não
           casaria com responsibleMemberId. */}
-      <div className="min-w-0 max-w-full space-y-1">
+      <div className="w-full min-w-0 space-y-1 lg:w-44 lg:flex-none">
         <label htmlFor="pipeline-responsavel" className="text-xs text-muted-foreground">
           Responsável
         </label>
@@ -110,7 +132,7 @@ export function PipelineFiltrosBar({
           id="pipeline-responsavel"
           name="responsavel"
           defaultValue={filtros.responsavel}
-          className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <option value="">Todos</option>
           {membroAtualId && <option value={membroAtualId}>Meus negócios</option>}
@@ -125,7 +147,7 @@ export function PipelineFiltrosBar({
         </select>
       </div>
       {visao === "ENCERRADA" && (
-        <div className="min-w-0 max-w-full space-y-1">
+        <div className="w-full min-w-0 space-y-1 lg:w-44 lg:flex-none">
           <label htmlFor="pipeline-resultado" className="text-xs text-muted-foreground">
             Resultado
           </label>
@@ -133,7 +155,7 @@ export function PipelineFiltrosBar({
             id="pipeline-resultado"
             name="resultado"
             defaultValue={filtros.resultado}
-            className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <option value="TODOS">Todos</option>
             <option value="GANHO">Ganho</option>
@@ -150,17 +172,26 @@ export function PipelineFiltrosBar({
           buttonVariants nem outras telas que usam o mesmo padrão
           size="sm" ao lado de <select> h-8 (ex: Agenda), que ficam fora
           de escopo desta correção pontual do Pipeline. */}
-      <button type="submit" className={cn(buttonVariants({ variant: "default" }))}>
-        Filtrar
-      </button>
-      {temFiltroAtivo && (
-        <Link
-          href={construirHref({ visao: params.visao, periodo: params.periodo }, {}, true)}
-          className={cn(buttonVariants({ variant: "ghost" }))}
+      {/* h-9 acompanha a altura dos campos (achado preservado: com
+          items-end, alturas diferentes alinham só a base e o topo do
+          botão fica visivelmente mais baixo). */}
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <button
+          type="submit"
+          className={cn(buttonVariants({ variant: "default" }), "h-9")}
         >
-          Limpar filtros
-        </Link>
-      )}
+          <Search aria-hidden className="size-4" />
+          Filtrar
+        </button>
+        {temFiltroAtivo && (
+          <Link
+            href={construirHref({ visao: params.visao, periodo: params.periodo }, {}, true)}
+            className={cn(buttonVariants({ variant: "ghost" }), "h-9")}
+          >
+            Limpar filtros
+          </Link>
+        )}
+      </div>
     </form>
   );
 }
