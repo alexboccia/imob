@@ -230,14 +230,21 @@ export default async function PipelinePage({
             descricao="Acompanhe e organize as oportunidades em cada etapa do funil."
           />
 
-          {FiltrosBar}
+          {/* Fase 66.1 — filtros e prioridade formam UMA área funcional:
+              16px entre eles (space-y-3 no bloco) em vez dos 24px que a
+              seção aplicava, e o respiro maior fica antes do Kanban. Eles
+              parecem relacionados sem virar uma única linha de controles —
+              a prioridade continua visivelmente secundária. */}
+          <div className="min-w-0 space-y-3">
+            {FiltrosBar}
 
-          <PipelinePrioridadeChips
-            filtroAtual={filtroPrioridade}
-            total={prioridadesPorItem.size}
-            contagem={contagemPrioridade}
-            href={(nivel) => construirHref(params, { prioridade: nivel }, true)}
-          />
+            <PipelinePrioridadeChips
+              filtroAtual={filtroPrioridade}
+              total={prioridadesPorItem.size}
+              contagem={contagemPrioridade}
+              href={(nivel) => construirHref(params, { prioridade: nivel }, true)}
+            />
+          </div>
 
         {totalAberto === 0 ? (
           <Card>
@@ -274,6 +281,45 @@ export default async function PipelinePage({
           <div
             data-kanban-pipeline
             className="flex flex-col gap-4 md:flex-row md:overflow-x-auto md:pb-2"
+            // Fase 66.1 — INDICAÇÃO DE CONTINUIDADE HORIZONTAL, 100% CSS.
+            //
+            // O problema: em larguras intermediárias a última coluna
+            // aparece cortada, e um corte sem sinal nenhum lê como layout
+            // quebrado em vez de "há mais etapas ao lado".
+            //
+            // A técnica são quatro camadas de background. Duas "tampas"
+            // com `background-attachment: local` ROLAM JUNTO do conteúdo;
+            // duas sombras com `scroll` ficam presas às bordas do
+            // container. No início, a tampa esquerda está sobre a sombra
+            // esquerda e a esconde; ao rolar, a tampa sai e a sombra
+            // aparece. No fim do scroll acontece o mesmo à direita. Sem
+            // overflow, as duas tampas cobrem as duas sombras e nada é
+            // exibido — que é exatamente o "não indicar conteúdo que não
+            // existe" pedido.
+            //
+            // POR QUE NÃO JAVASCRIPT: detectar início/fim exigiria um
+            // listener de scroll + ResizeObserver por página, re-render a
+            // cada pixel rolado, e um estado novo num componente de
+            // servidor. O CSS entrega o mesmo comportamento sem nada
+            // disso. Limitação aceita e documentada: as tampas usam
+            // `var(--background)`, então dependem do fundo da página ser
+            // sólido — é o caso aqui.
+            //
+            // É decorativo por construção: background não entra na árvore
+            // de acessibilidade, não recebe foco e não intercepta clique,
+            // então nunca bloqueia um card.
+            style={{
+              backgroundImage: [
+                "linear-gradient(to right, var(--background), transparent)",
+                "linear-gradient(to left, var(--background), transparent)",
+                "linear-gradient(to right, rgba(0,0,0,0.10), transparent)",
+                "linear-gradient(to left, rgba(0,0,0,0.10), transparent)",
+              ].join(", "),
+              backgroundPosition: "left center, right center, left center, right center",
+              backgroundRepeat: "no-repeat",
+              backgroundSize: "24px 100%, 24px 100%, 12px 100%, 12px 100%",
+              backgroundAttachment: "local, local, scroll, scroll",
+            }}
           >
             {COLUNAS_ABERTAS.map((coluna) => (
               // Superfície MUITO sutil para delimitar a coluna sem virar

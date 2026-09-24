@@ -457,3 +457,170 @@ test.describe("Pipeline — Kanban com dados determinísticos", () => {
   });
 
 });
+
+// =====================================================================
+// Fase 66.1 — polimento: continuidade do Kanban, filtros, responsável
+// =====================================================================
+test.describe("Pipeline — polimento (dados determinísticos)", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_CENTRAL);
+    await page.goto("/app/pipeline");
+  });
+
+  test("a região do Kanban continua sendo quem rola, não o documento", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto("/app/pipeline");
+
+    const kanban = page.locator("[data-kanban-pipeline]");
+    const medida = await kanban.evaluate((el) => ({
+      overflowX: getComputedStyle(el).overflowX,
+      conteudo: el.scrollWidth,
+      caixa: el.clientWidth,
+    }));
+    expect(medida.overflowX).toBe("auto");
+    // Nesta largura as quatro colunas não cabem — é justamente o caso em
+    // que a indicação de continuidade precisa existir.
+    expect(medida.conteudo).toBeGreaterThan(medida.caixa);
+
+    const rolouDocumento = await page.evaluate(() => {
+      window.scrollTo(9999, 0);
+      const x = window.scrollX;
+      window.scrollTo(0, 0);
+      return x;
+    });
+    expect(rolouDocumento, "o documento nunca rola horizontalmente").toBe(0);
+  });
+
+  test("existe indicação visual de continuidade horizontal, e ela é decorativa", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto("/app/pipeline");
+
+    const kanban = page.locator("[data-kanban-pipeline]");
+    const fundo = await kanban.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return {
+        imagens: s.backgroundImage,
+        attachment: s.backgroundAttachment,
+      };
+    });
+
+    // Quatro camadas: duas "tampas" que rolam com o conteúdo (local) e
+    // duas sombras presas às bordas (scroll). É o que faz o indicador
+    // sumir nas extremidades sem nenhum JavaScript.
+    expect(fundo.imagens).toContain("linear-gradient");
+    expect(fundo.attachment).toBe("local, local, scroll, scroll");
+
+    // Decorativo por construção: o efeito vive no `background` do próprio
+    // container de rolagem, então não entra na árvore de acessibilidade,
+    // não recebe foco e não intercepta clique.
+    //
+    // A prova de que NENHUM overlay foi criado é que os filhos diretos do
+    // Kanban continuam sendo exatamente as colunas — nada a mais.
+    const filhos = await kanban.evaluate((el) =>
+      Array.from(el.children).map((filho) => filho.getAttribute("data-coluna-pipeline"))
+    );
+    expect(filhos).toEqual(["INTERESTED", "VISIT_SCHEDULED", "VISITED", "PROPOSAL"]);
+  });
+
+  test("a indicação não bloqueia a interação com os cards", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto("/app/pipeline");
+
+    // O card continua clicável: "Abrir negociação" abre o drawer.
+    const botao = page.getByRole("button", { name: "Abrir negociação" }).first();
+    await expect(botao).toBeVisible();
+    await botao.click();
+    await expect(page.locator('[data-slot="sheet-content"]')).toBeVisible();
+  });
+
+  test("filtros e prioridade ficam próximos, e a prioridade continua abaixo", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/app/pipeline");
+
+    const filtros = await page.locator("[data-filtros-pipeline]").boundingBox();
+    const prioridade = await page
+      .getByRole("navigation", { name: "Prioridade:" })
+      .boundingBox();
+
+    // Ordem preservada: prioridade DEPOIS dos filtros.
+    expect(prioridade!.y).toBeGreaterThan(filtros!.y);
+    // Relacionados, mas não colados: o vão entre os dois é modesto.
+    const vao = prioridade!.y - (filtros!.y + filtros!.height);
+    expect(vao, `vão de ${vao}px entre filtros e prioridade`).toBeGreaterThan(0);
+    expect(vao).toBeLessThanOrEqual(20);
+  });
+
+  test("responsável: rótulo, valor e 'Trocar' não se sobrepõem", async ({ page }) => {
+    const trocar = page.locator("[data-trocar-responsavel]").first();
+    await expect(trocar).toBeVisible();
+
+    const caixaTrocar = await trocar.boundingBox();
+    // O valor do responsável fica à esquerda do botão, sem invadi-lo.
+    const valor = await trocar
+      .locator("xpath=preceding-sibling::p[1]")
+      .boundingBox();
+    expect(valor).toBeTruthy();
+    expect(
+      valor!.x + valor!.width,
+      "o valor termina antes do botão começar"
+    ).toBeLessThanOrEqual(caixaTrocar!.x + 1);
+  });
+
+  test("'Trocar' continua ação secundária e abre o diálogo", async ({ page }) => {
+    const trocar = page.locator("[data-trocar-responsavel]").first();
+    // Discreta: sem fundo preenchido de botão primário.
+    const fundo = await trocar.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(fundo).toBe("rgba(0, 0, 0, 0)");
+
+    await trocar.click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+  });
+
+  test("um nome de responsável longo não alarga o card", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/app/pipeline");
+
+    // Mede o card contra a coluna que o contém: quebra de texto correta
+    // significa que o card nunca excede a largura da própria coluna.
+    const medidas = await page
+      .locator("[data-coluna-pipeline]")
+      .evaluateAll((colunas) =>
+        colunas.flatMap((coluna) => {
+          const larguraColuna = coluna.clientWidth;
+          return Array.from(coluna.querySelectorAll('[data-slot="card"]')).map((card) => ({
+            card: Math.round(card.getBoundingClientRect().width),
+            coluna: larguraColuna,
+          }));
+        })
+      );
+
+    expect(medidas.length).toBeGreaterThan(0);
+    for (const m of medidas) {
+      expect(m.card, `card de ${m.card}px numa coluna de ${m.coluna}px`).toBeLessThanOrEqual(
+        m.coluna + 1
+      );
+    }
+  });
+
+  for (const largura of [1920, 1440, 1366, 1024, 768, 390]) {
+    test(`${largura}px: responsável legível e documento sem overflow`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.goto("/app/pipeline");
+
+      const trocar = page.locator("[data-trocar-responsavel]").first();
+      await expect(trocar).toBeVisible();
+      const caixa = await trocar.boundingBox();
+      expect(caixa!.width, `"Trocar" com ${caixa!.width}px`).toBeGreaterThan(20);
+
+      const rolou = await page.evaluate(() => {
+        window.scrollTo(9999, 0);
+        const x = window.scrollX;
+        window.scrollTo(0, 0);
+        return x;
+      });
+      expect(rolou, `documento rolou ${rolou}px em ${largura}px`).toBe(0);
+    });
+  }
+});

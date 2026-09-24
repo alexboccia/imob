@@ -44,33 +44,47 @@ export function ResponsavelNegociacao({
   const [estado, formAction, pendente] = useActionState(acao, ESTADO_INICIAL_ACAO);
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <p className="text-xs text-muted-foreground">
-        Responsável:{" "}
-        {responsavel ? (
-          <span className="font-medium text-foreground">{responsavel.nome}</span>
-        ) : (
-          // null NÃO é zero: a negociação existe e simplesmente não tem
-          // dono registrado. Nunca inventamos um a partir de quem criou,
-          // de quem fechou ou do responsável pelo imóvel.
-          <span className="italic">{SEM_RESPONSAVEL_LABEL}</span>
-        )}
-        {responsavel?.inativo && (
-          // Membro desativado continua sendo o responsável HISTÓRICO.
-          // Vira "(inativo)" ao lado do nome, nunca "Sem responsável".
-          <span className="ml-1 text-muted-foreground">(inativo)</span>
-        )}
-      </p>
+    // Fase 66.1 — o valor e a ação ficavam lado a lado num flex-wrap: com
+    // nome longo ou coluna estreita, o "Trocar" encostava no valor e lia
+    // como "Sem responsávelTrocar". Agora o rótulo tem linha própria, o
+    // valor ocupa a largura disponível e o "Trocar" fica na ponta direita,
+    // com `shrink-0` para nunca ser espremido e `ml-auto` para nunca
+    // colar no texto. `min-w-0` + `break-words` no valor: um nome longo
+    // quebra dentro do card em vez de alargá-lo.
+    //
+    // Comportamento, permissões e a regra de `encerrada` continuam os
+    // mesmos — a mudança é de layout.
+    <div className="min-w-0 text-xs">
+      <p className="text-muted-foreground">Responsável:</p>
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <p className="min-w-0 flex-1 break-words">
+          {responsavel ? (
+            <span className="font-medium text-foreground">{responsavel.nome}</span>
+          ) : (
+            // null NÃO é zero: a negociação existe e simplesmente não tem
+            // dono registrado. Nunca inventamos um a partir de quem criou,
+            // de quem fechou ou do responsável pelo imóvel.
+            <span className="italic text-muted-foreground">{SEM_RESPONSAVEL_LABEL}</span>
+          )}
+          {responsavel?.inativo && (
+            // Membro desativado continua sendo o responsável HISTÓRICO.
+            // Vira "(inativo)" ao lado do nome, nunca "Sem responsável".
+            <span className="ml-1 text-muted-foreground">(inativo)</span>
+          )}
+        </p>
 
-      {!encerrada && (
-        <button
-          type="button"
-          onClick={() => setAberto(true)}
-          className="rounded-md text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          Trocar
-        </button>
-      )}
+        {!encerrada && (
+          <button
+            type="button"
+            data-trocar-responsavel
+            onClick={() => setAberto(true)}
+            // Ação secundária e discreta — nunca um botão primário.
+            className="ml-auto shrink-0 rounded-md text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            Trocar
+          </button>
+        )}
+      </div>
 
       {/* MONTA SÓ QUANDO ABERTO — mesma correção da Fase 10: o Kanban
           renderiza um destes por card, e diálogos ociosos empilhavam
