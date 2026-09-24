@@ -62,7 +62,7 @@ export function SecaoCaptacao({
               <li key={beneficio} className="flex min-w-0 items-start gap-3">
                 <span
                   aria-hidden
-                  className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+                  className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-primary"
                 >
                   <IconeCheck className="size-4" />
                 </span>

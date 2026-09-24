@@ -299,8 +299,14 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
                 há nada para a prévia cobrir. max-h + overflow-y-auto para a
                 miniatura nunca ficar mais alta que a viewport. */}
             <div className="min-w-0 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto">
-              <Card className="min-w-0">
-                <CardContent className="min-w-0 pt-6">
+              {/* Fase 64 — a miniatura ganha largura útil sem mexer na
+                  divisão das colunas (aprovada na Fase 63): o padding do
+                  card cai de 16px para 12px de cada lado e o topo de 24px
+                  para 16px. São ~8px horizontais devolvidos à maquete —
+                  ajuste deliberadamente sutil, que não altera proporção,
+                  bordas nem o sticky. */}
+              <Card className="min-w-0 [--card-spacing:--spacing(3)]">
+                <CardContent className="min-w-0 pt-4">
                   <PreviaIdentidade
                     temaInicial={config.themeId}
                     temaCustomizado={

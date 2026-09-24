@@ -8,7 +8,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        // Fase 64 — o hover do botão primário passou a usar
+        // --primary-hover, que é justamente o token que o administrador
+        // configura em "Primária no hover" e que até aqui nenhum
+        // componente consumia. Dentro do site público o valor é o da
+        // organização; fora dele, o fallback de globals.css deriva de
+        // --primary, então o painel continua coerente.
+        default: "bg-primary text-primary-foreground hover:bg-primary-hover",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:

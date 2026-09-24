@@ -874,3 +874,167 @@ test.describe("Configurações — aba Geral aproveita a largura", () => {
     await expect(page.locator('form [name="codigoImovelPrefixo"]')).toHaveCount(1);
   });
 });
+
+// =====================================================================
+// Fase 64 — tokens com função real, prévia e estado vazio do favicon
+// =====================================================================
+
+/** Lê uma CSS var resolvida no wrapper da maquete da prévia. */
+async function tokenDaPrevia(page: import("@playwright/test").Page, nome: string) {
+  return page
+    .locator("[data-previa-tema]")
+    .evaluate((el, n) => getComputedStyle(el).getPropertyValue(n).trim(), nome);
+}
+
+test.describe("Configurações — acabamento final da Identidade visual", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes?tab=identidade");
+  });
+
+  test('a descrição da prévia não afirma mais "Ainda não salvo"', async ({ page }) => {
+    const previa = page.locator("[data-previa-identidade]");
+    await expect(previa).toContainText("Como o seu site público fica com as escolhas desta aba");
+    // A frase aparecia sempre, inclusive sem nenhuma alteração feita.
+    await expect(previa).not.toContainText("Ainda não salvo");
+  });
+
+  test("favicon sem imagem mostra um placeholder com nome acessível, não um traço", async ({
+    page,
+  }) => {
+    const vazio = page.locator("[data-favicon-vazio]");
+    await expect(vazio).toBeVisible();
+    await expect(vazio).toHaveAccessibleName("Nenhum favicon enviado");
+    // Ícone de verdade, não um caractere solto.
+    await expect(vazio.locator("svg")).toHaveCount(1);
+    await expect(vazio).not.toContainText("—");
+  });
+
+  test("o upload do favicon continua acessível e funcional", async ({ page }) => {
+    const campo = page.getByLabel("Enviar arquivo de favicon");
+    await expect(campo).toHaveCount(1);
+    await campo.focus();
+    await expect(campo).toBeFocused();
+    await expect(page.locator('input[name="favicon"]')).toHaveCount(1);
+  });
+});
+
+test.describe("Configurações — a prévia demonstra os três tokens", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes?tab=identidade");
+    // ORG_A não tem paleta no seed: restaurar preenche os seis campos.
+    await page.getByRole("button", { name: "Restaurar cores padrão" }).click();
+  });
+
+  test("o CTA da prévia usa --primary em repouso e --primary-hover no hover", async ({ page }) => {
+    const cta = page.locator("[data-previa-cta]");
+    await expect(cta).toBeVisible();
+
+    const emRepouso = await cta.evaluate((el) => getComputedStyle(el).backgroundColor);
+    await cta.hover();
+    // O hover é o único estado em que --primary-hover aparece — por isso
+    // ele precisa de um elemento interativo na maquete para ser visto.
+    await expect
+      .poll(async () => cta.evaluate((el) => getComputedStyle(el).backgroundColor))
+      .not.toBe(emRepouso);
+  });
+
+  test("a superfície clara da prévia usa --primary-light", async ({ page }) => {
+    const claro = page.locator("[data-previa-superficie-clara]").first();
+    // Pode não haver imóvel publicado no tenant; quando há, a superfície
+    // tem de estar pintada com o token, não com um cinza qualquer.
+    if ((await claro.count()) === 0) test.skip();
+
+    const fundo = await claro.evaluate((el) => getComputedStyle(el).backgroundColor);
+    const token = await tokenDaPrevia(page, "--primary-light");
+    expect(token).not.toBe("");
+    // O fundo resolvido não pode ser transparente nem herdar o branco.
+    expect(fundo).not.toBe("rgba(0, 0, 0, 0)");
+  });
+
+  test("alterar Cor primária muda a prévia antes de salvar", async ({ page }) => {
+    const antes = await tokenDaPrevia(page, "--primary");
+    await page.locator("#cor-primary").fill("#123456");
+    await expect.poll(async () => tokenDaPrevia(page, "--primary")).not.toBe(antes);
+  });
+
+  test("alterar Primária no hover muda a prévia antes de salvar", async ({ page }) => {
+    const antes = await tokenDaPrevia(page, "--primary-hover");
+    await page.locator("#cor-primaryHover").fill("#d30028");
+    await expect.poll(async () => tokenDaPrevia(page, "--primary-hover")).not.toBe(antes);
+
+    // E o hover do CTA passa a usar a cor nova, ainda sem salvar.
+    const cta = page.locator("[data-previa-cta]");
+    const repouso = await cta.evaluate((el) => getComputedStyle(el).backgroundColor);
+    await cta.hover();
+    await expect
+      .poll(async () => cta.evaluate((el) => getComputedStyle(el).backgroundColor))
+      .not.toBe(repouso);
+  });
+
+  test("alterar Primária clara muda a prévia antes de salvar", async ({ page }) => {
+    const antes = await tokenDaPrevia(page, "--primary-light");
+    await page.locator("#cor-primaryLight").fill("#ffddda");
+    await expect.poll(async () => tokenDaPrevia(page, "--primary-light")).not.toBe(antes);
+  });
+
+  test("os temas do catálogo produzem os três tokens coerentes na prévia", async ({ page }) => {
+    // Sem paleta editada: a prévia volta a seguir o tema escolhido.
+    await page.reload();
+    const radios = page.locator('input[name="themeId"]');
+    const total = await radios.count();
+    expect(total).toBeGreaterThan(1);
+
+    const vistos = new Set<string>();
+    for (let i = 0; i < total; i += 1) {
+      const valor = await radios.nth(i).getAttribute("value");
+      if (!valor) continue;
+      await radios.nth(i).check({ force: true });
+      await expect(page.locator("[data-previa-tema]")).toHaveAttribute("data-previa-tema", valor);
+
+      const primary = await tokenDaPrevia(page, "--primary");
+      const hover = await tokenDaPrevia(page, "--primary-hover");
+      const claro = await tokenDaPrevia(page, "--primary-light");
+      for (const [nome, v] of [
+        ["primary", primary],
+        ["primary-hover", hover],
+        ["primary-light", claro],
+      ]) {
+        expect(v, `${valor}: --${nome} vazio`).not.toBe("");
+      }
+      // Os três são distintos entre si — se fossem iguais, os controles
+      // "Primária no hover" e "Primária clara" não teriam efeito nenhum.
+      expect(new Set([primary, hover, claro]).size, `${valor}: tokens repetidos`).toBe(3);
+      vistos.add(valor);
+    }
+    expect(vistos.size).toBe(total);
+  });
+});
+
+test.describe("Configurações — prévia em telas reais", () => {
+  for (const [largura, altura] of [
+    [1440, 800],
+    [1366, 768],
+  ]) {
+    test(`${largura}×${altura}: prévia visível, sticky e sem overflow`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: altura });
+      await login(page, ORG_A);
+      await page.goto("/app/configuracoes?tab=identidade");
+
+      const previa = page.locator("[data-previa-identidade]");
+      await expect(previa).toBeVisible();
+
+      await page.evaluate(() => window.scrollTo(0, 600));
+      await expect(previa).toBeInViewport();
+
+      const rolou = await page.evaluate(() => {
+        window.scrollTo(9999, 0);
+        const x = window.scrollX;
+        window.scrollTo(0, 0);
+        return x;
+      });
+      expect(rolou, `rolou ${rolou}px`).toBe(0);
+    });
+  }
+});

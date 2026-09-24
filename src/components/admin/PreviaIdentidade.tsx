@@ -110,9 +110,13 @@ export function PreviaIdentidade({
   return (
     <div className="min-w-0" data-previa-identidade>
       <p className="text-sm font-medium">Pré-visualização do site</p>
+      {/* Fase 64 — a frase terminava com "Ainda não salvo.", que aparecia
+          sempre, inclusive ao abrir a tela sem ter mexido em nada: sugeria
+          uma pendência inexistente. Como o formulário é não-controlado e
+          não há dirty-state confiável, a correção é remover a afirmação —
+          não inventar o estado só para sustentá-la. */}
       <p className="mb-3 text-sm text-muted-foreground">
-        Como o seu site público fica com as escolhas desta aba. Ainda não
-        salvo.
+        Como o seu site público fica com as escolhas desta aba.
       </p>
 
       {/* As CSS vars do tema escopadas neste wrapper — mesma técnica do
@@ -177,9 +181,20 @@ export function PreviaIdentidade({
             {/* Texto REAL do hero, da mesma constante que o site usa. */}
             <p className="text-sm leading-tight font-bold text-white">{HERO_TITULO}</p>
             <p className="line-clamp-1 text-[10px] text-white/90">{HERO_SUBTITULO}</p>
-            <span className="mt-1 inline-block w-fit rounded-md bg-primary px-2.5 py-1.5 text-[11px] font-medium text-primary-foreground">
+            {/* CTA com hover REAL: é o que deixa o administrador ver a
+                cor de "Primária no hover" — um token que só existe no
+                estado :hover e, portanto, não daria para demonstrar num
+                elemento estático. <button type="button"> porque um <span>
+                não responde a hover de forma acessível; ele não faz nada
+                (a maquete inteira é aria-hidden e o botão é inerte). */}
+            <button
+              type="button"
+              tabIndex={-1}
+              data-previa-cta
+              className="mt-1 inline-block w-fit cursor-default rounded-md bg-primary px-2.5 py-1.5 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
+            >
               Buscar imóveis
-            </span>
+            </button>
           </div>
         </div>
 
@@ -213,7 +228,15 @@ export function PreviaIdentidade({
                     </p>
                     <p className="line-clamp-1 text-[9px] text-gray-500">{imovel.local}</p>
                     {/* Preço REAL, com a formatação do card público. */}
-                    <p className="text-[10px] font-bold text-primary">{imovel.preco}</p>
+                    {/* Superfície clara derivada da identidade — o mesmo
+                        papel que --primary-light cumpre no site público
+                        (chips e ícones circulares). */}
+                    <p
+                      data-previa-superficie-clara
+                      className="w-fit rounded bg-primary-light px-1 py-0.5 text-[10px] font-bold text-primary"
+                    >
+                      {imovel.preco}
+                    </p>
                   </div>
                 </div>
               ))}

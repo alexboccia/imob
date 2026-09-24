@@ -273,7 +273,7 @@ export function SiteHeader({
                   href={link.href}
                   aria-current={ativo ? "page" : undefined}
                   className={`rounded-md px-2 py-2.5 text-base font-medium ${
-                    ativo ? "bg-primary/10 text-primary" : "text-gray-700"
+                    ativo ? "bg-primary-light text-primary" : "text-gray-700"
                   }`}
                   onClick={() => setAberto(false)}
                 >
@@ -286,7 +286,7 @@ export function SiteHeader({
                 data-link-favoritos
                 aria-current={favoritosAtivo ? "page" : undefined}
                 className={`flex items-center gap-2 rounded-md px-2 py-2.5 text-base font-medium ${
-                  favoritosAtivo ? "bg-primary/10 text-primary" : "text-gray-700"
+                  favoritosAtivo ? "bg-primary-light text-primary" : "text-gray-700"
                 }`}
                 onClick={() => setAberto(false)}
               >

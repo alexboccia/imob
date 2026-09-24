@@ -53,7 +53,7 @@ function Canal({
   Icone,
   rotulo,
   valor,
-  corChip = "bg-primary/10 text-primary",
+  corChip = "bg-primary-light text-primary",
 }: {
   href: string;
   externo?: boolean;

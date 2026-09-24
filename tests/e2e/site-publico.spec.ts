@@ -1964,3 +1964,96 @@ test.describe("Detalhe — relacionados não são 'unidades'", () => {
     ).toBeVisible();
   });
 });
+
+// =====================================================================
+// Fase 64 — --primary-hover e --primary-light passam a ter uso real
+// =====================================================================
+// Até a Fase 63 os dois tokens eram configuráveis pelo administrador mas
+// NENHUM componente os consumia: mexer em "Primária no hover" ou
+// "Primária clara" não produzia efeito nenhum no site. O que se verifica
+// aqui é que deixaram de ser decorativos.
+//
+// ATENÇÃO ao medir: o wrapper que injeta o tema é `display: contents`
+// DENTRO do <body> (ver [orgSlug]/layout.tsx), então o próprio body NÃO
+// herda os tokens da organização — ler deles em `document.body` devolve os
+// fallbacks de :root e não prova nada. Toda sonda abaixo nasce dentro do
+// subtree temático (a partir do <header> do site).
+test.describe("Site público — tokens da identidade em uso", () => {
+  test("os três tokens do tema chegam ao site com valores distintos", async ({ page }) => {
+    await page.goto("/");
+
+    const tokens = await page.evaluate(() => {
+      const dentro = document.querySelector("header")!;
+      const s = getComputedStyle(dentro);
+      return {
+        primary: s.getPropertyValue("--primary").trim(),
+        hover: s.getPropertyValue("--primary-hover").trim(),
+        claro: s.getPropertyValue("--primary-light").trim(),
+      };
+    });
+
+    for (const [nome, valor] of Object.entries(tokens)) {
+      expect(valor, `--${nome} vazio no site público`).not.toBe("");
+    }
+    // Três papéis visuais distintos — não três apelidos da mesma cor.
+    expect(new Set(Object.values(tokens)).size).toBe(3);
+  });
+
+  test("o CTA primário da Home muda de fundo no hover", async ({ page }) => {
+    await page.goto("/");
+
+    const cta = page.locator("form button[type=submit]").first();
+    await expect(cta).toBeVisible();
+
+    // "Muda no hover" NÃO bastaria como asserção: a versão anterior usava
+    // hover:bg-primary/80, que também muda a cor. O que prende a regressão
+    // é o fundo no hover ser EXATAMENTE --primary-hover — o token que o
+    // administrador configura.
+    const esperado = await cta.evaluate((botao) => {
+      // A sonda nasce ao lado do próprio CTA: mesmo subtree, mesmos tokens.
+      const sonda = document.createElement("div");
+      sonda.style.backgroundColor = "var(--primary-hover)";
+      botao.parentElement!.appendChild(sonda);
+      const cor = getComputedStyle(sonda).backgroundColor;
+      sonda.remove();
+      return cor;
+    });
+    expect(esperado).not.toBe("rgba(0, 0, 0, 0)");
+
+    const repouso = await cta.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(repouso).not.toBe(esperado);
+
+    await cta.hover();
+    await expect
+      .poll(async () => cta.evaluate((el) => getComputedStyle(el).backgroundColor))
+      .toBe(esperado);
+  });
+
+  test("uma superfície clara da Home é pintada com --primary-light", async ({ page }) => {
+    await page.goto("/");
+
+    // Os ícones circulares da faixa institucional são o caso canônico de
+    // superfície suave derivada da identidade.
+    const medida = await page.evaluate(() => {
+      const alvo = document.querySelector<HTMLElement>(
+        '[aria-label="Como trabalhamos"] .bg-primary-light'
+      );
+      if (!alvo) return null;
+      // Sonda: resolve --primary-light para a mesma notação de cor que o
+      // computed style devolve, para a comparação ser exata.
+      const sonda = document.createElement("div");
+      sonda.style.backgroundColor = "var(--primary-light)";
+      alvo.parentElement!.appendChild(sonda);
+      const token = getComputedStyle(sonda).backgroundColor;
+      sonda.remove();
+      return { token, fundo: getComputedStyle(alvo).backgroundColor };
+    });
+
+    expect(medida, "faixa institucional presente com superfície clara").not.toBeNull();
+    // Antes da Fase 64 era bg-primary/10 (uma transparência da primária),
+    // que NÃO resolve para --primary-light — é isso que esta igualdade
+    // impede de voltar.
+    expect(medida!.fundo).toBe(medida!.token);
+    expect(medida!.fundo).not.toBe("rgba(0, 0, 0, 0)");
+  });
+});

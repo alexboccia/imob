@@ -95,12 +95,25 @@
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
 
-  /* Fallback fora do [orgSlug] (nunca sobrescrito lá) — mesmos valores do
-     tema classic-blue, ver src/lib/branding/temas.ts. Só existe pra
-     --primary-hover/--primary-light/--link nunca ficarem "unset" se algum
-     componente os usar fora do wrapper de tema. */
-  --primary-hover: oklch(0.47 0.19 255);
-  --primary-light: oklch(0.93 0.03 255);
+  /* Fallback fora do [orgSlug], onde o tema por organização não existe
+     (painel administrativo e /platform).
+
+     Fase 64 — estes dois DERIVAM de --primary em vez de repetirem as cores
+     fixas do classic-blue. O motivo é concreto: agora que o botão primário
+     usa hover:bg-primary-hover (ver components/ui/button.tsx), um valor
+     azul escrito à mão aqui pintaria de azul o hover de todos os botões do
+     painel, cujo --primary é quase preto. Derivando, cada contexto ganha um
+     hover/tom claro coerentes com a SUA primária, e o site público continua
+     mandando: [orgSlug]/layout.tsx sobrescreve os dois com o que a
+     organização configurou.
+
+     Os deltas espelham a calibração do catálogo e do gerador (ver
+     branding/temas.ts e branding/gerar-paleta.ts): o hover escurece um
+     pouco, o "light" é um tom bem claro da mesma matiz.
+
+     --link continua fixo: não é derivado de primary em lugar nenhum. */
+  --primary-hover: color-mix(in oklch, var(--primary), black 12%);
+  --primary-light: color-mix(in oklch, var(--primary), white 88%);
   --link: oklch(0.55 0.18 255);
 
   --chart-1: oklch(0.87 0 0);

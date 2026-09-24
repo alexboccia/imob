@@ -310,7 +310,7 @@ export default async function AnunciePage({
               <li key={titulo} className="flex min-w-0 items-start gap-4">
                 <span
                   aria-hidden="true"
-                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-light font-semibold text-primary"
                 >
                   {i + 1}
                 </span>

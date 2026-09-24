@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BotaoEscolherArquivo } from "@/components/admin/BotaoEscolherArquivo";
 import { Label } from "@/components/ui/label";
@@ -39,13 +40,22 @@ export function FaviconUpload({ faviconInicial }: { faviconInicial: string | nul
       <Label>Favicon</Label>
       <input type="hidden" name="favicon" value={favicon ?? ""} />
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-        <div className="relative w-8 h-8 shrink-0 rounded overflow-hidden border bg-gray-50">
+        <div className="relative size-9 shrink-0 overflow-hidden rounded-md border bg-muted/40">
           {favicon ? (
             <Image src={favicon} alt="Favicon" fill className="object-contain" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-400 text-[8px]">
-              —
-            </div>
+            // Fase 64 — era um hífen solto num quadradinho, que lia como
+            // elemento quebrado em vez de "ainda não enviado". Ícone da
+            // lucide-react (já no projeto), em tom muted, com nome
+            // acessível: o estado vazio passa a se explicar.
+            <span
+              role="img"
+              aria-label="Nenhum favicon enviado"
+              data-favicon-vazio
+              className="flex size-full items-center justify-center text-muted-foreground"
+            >
+              <ImageIcon aria-hidden className="size-4" />
+            </span>
           )}
         </div>
         <div className="min-w-0 space-y-2">

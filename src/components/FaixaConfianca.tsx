@@ -37,7 +37,7 @@ export function FaixaConfianca() {
           <li key={titulo} className="flex min-w-0 items-start gap-3">
             <span
               aria-hidden
-              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-light text-primary"
             >
               <Icone className="size-5" />
             </span>
