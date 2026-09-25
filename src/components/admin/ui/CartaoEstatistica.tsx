@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,7 @@ export function CartaoEstatistica({
   rotulo,
   valor,
   contexto,
+  detalhe,
   href,
 }: {
   icone: LucideIcon;
@@ -56,6 +58,14 @@ export function CartaoEstatistica({
   valor: number | string;
   /** Período ou qualificação do número ("neste mês", "há mais de 90 dias"). */
   contexto?: string;
+  /**
+   * Fase 68 — linha extra ENTRE o valor e o contexto, para o que não é
+   * texto simples. Existe por uma necessidade concreta: o card "Contatos
+   * recebidos" do Analytics mostra a variação contra o período anterior
+   * (seta + texto colorido), que não cabe em `contexto: string`. Aditivo:
+   * nenhum chamador existente é afetado.
+   */
+  detalhe?: ReactNode;
   /**
    * Fase 65.1 — tela que investiga este número, quando existe uma. Sem
    * href o cartão é um fato legível e NÃO ganha afordância de clique:
@@ -84,9 +94,10 @@ export function CartaoEstatistica({
           <p data-kpi-rotulo className="min-w-0 break-words text-sm text-muted-foreground">
             {rotulo}
           </p>
-          <p data-kpi-valor className="text-2xl leading-tight font-semibold">
+          <p data-kpi-valor className="text-2xl leading-tight font-semibold tabular-nums">
             {valor}
           </p>
+          {detalhe}
           {contexto && (
             <p className="min-w-0 truncate text-xs text-muted-foreground">{contexto}</p>
           )}

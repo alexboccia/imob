@@ -13,7 +13,7 @@ import { ORG_ANALYTICS, ORG_AGENDA, login } from "./helpers";
 test.describe("Analytics — participação na comissão", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, ORG_ANALYTICS);
-    await page.goto("/app/analytics");
+    await page.goto("/app/analytics?tab=comissoes");
   });
 
   test("declara o atribuído e o não distribuído, sem inventar destino", async ({ page }) => {
@@ -39,14 +39,23 @@ test.describe("Analytics — participação na comissão", () => {
 
   test("participação e responsável são blocos separados, ambos presentes", async ({ page }) => {
     // A Fase 11 não foi substituída: as duas dimensões coexistem.
+    //
+    // Fase 68 — cada uma passou a viver no seu domínio ("quem conduziu" é
+    // Comercial; "quem participa do dinheiro" é Comissões). O que este
+    // teste protege continua igual: são blocos SEPARADOS e os dois
+    // existem — nenhum foi fundido no outro.
+    await page.goto("/app/analytics?tab=comercial");
     await expect(page.getByRole("region", { name: "Performance por responsável" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Participação na comissão" })).toHaveCount(0);
+
+    await page.goto("/app/analytics?tab=comissoes");
     await expect(page.getByRole("region", { name: "Participação na comissão" })).toBeVisible();
   });
 
   for (const largura of [375, 768, 1024, 1280, 1440]) {
     test(`${largura}px: tabela de participação sem overflow`, async ({ page }) => {
       await page.setViewportSize({ width: largura, height: 900 });
-      await page.goto("/app/analytics");
+      await page.goto("/app/analytics?tab=comissoes");
       await expect(page.getByRole("region", { name: "Participação na comissão" })).toBeVisible();
       const scrollX = await page.evaluate(() => {
         window.scrollTo(9999, 0);

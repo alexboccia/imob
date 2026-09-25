@@ -47,6 +47,11 @@ test.describe("Resultado comercial — Analytics", () => {
   });
 
   test("canal de aquisição atribui oportunidade e ganho ao canal de origem", async ({ page }) => {
+    // Fase 68 — "Canal de aquisição" passou a viver na aba Aquisição do
+    // Analytics (painéis inativos ficam escondidos). O deep link `?tab=`
+    // abre a aba direto; as asserções sobre os dados são as mesmas.
+    await page.goto("/app/analytics?tab=aquisicao");
+
     const aquisicao = page.getByRole("region", { name: "Canal de aquisição" });
     await expect(aquisicao).toBeVisible();
 

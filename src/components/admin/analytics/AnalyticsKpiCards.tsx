@@ -1,5 +1,8 @@
 import { MessageSquare, Users, Building2, Megaphone, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  CartaoEstatistica,
+  GradeEstatisticas,
+} from "@/components/admin/ui/CartaoEstatistica";
 import { cn } from "@/lib/utils";
 import { formatarNumero } from "@/lib/format";
 import {
@@ -49,67 +52,54 @@ export function AnalyticsKpiCards({
   const direcao = direcaoVariacao(analytics.contatos);
   const IconeDirecao = ICONE_DIRECAO[direcao];
 
-  const cards = [
-    {
-      icone: MessageSquare,
-      corIcone: "bg-primary/10 text-primary",
-      titulo: "Contatos recebidos",
-      valor: analytics.contatos.atual,
-      legenda: `pelos formulários do site · ${periodoLabel.toLowerCase()}`,
-      variacao: true,
-    },
-    {
-      icone: Users,
-      corIcone: "bg-blue-100 text-blue-700",
-      titulo: "Pessoas que procuraram",
-      // A distinção que evita o erro clássico de ler contatos como leads:
-      // 18 contatos podem ser 12 pessoas.
-      valor: analytics.pessoasDistintas,
-      legenda: "pessoas diferentes por trás desses contatos",
-      variacao: false,
-    },
-    {
-      icone: Building2,
-      corIcone: "bg-orange-100 text-orange-700",
-      titulo: "Imóveis com contato",
-      valor: analytics.imoveisComContato,
-      legenda: "imóveis que receberam ao menos 1 contato",
-      variacao: false,
-    },
-    {
-      icone: Megaphone,
-      corIcone: "bg-success-muted text-success-muted-foreground",
-      titulo: "Querem anunciar",
-      valor: analytics.proprietariosAnunciando,
-      legenda: "proprietários vindos de “Anuncie seu imóvel”",
-      variacao: false,
-    },
-  ];
-
+  // Fase 68 — migrado para o cartão compartilhado do backoffice. Os
+  // quatro números, seus rótulos, suas legendas e a variação continuam os
+  // MESMOS: tudo já vem calculado de buscarAnalyticsComercial, e nenhuma
+  // fórmula foi tocada.
+  //
+  // A variação contra o período anterior aparece só no primeiro card,
+  // como antes — é a única métrica com base comparável calculada
+  // (analytics.contatos traz atual e anterior). Ela vai no slot `detalhe`,
+  // não convertida em texto: a seta e a cor fazem parte da leitura, e o
+  // TEXTO ao lado diz a direção, então não depende de cor.
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {cards.map((card) => (
-        <Card key={card.titulo} size="sm" className="min-w-0">
-          <CardContent className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-start sm:gap-3">
-            <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${card.corIcone}`}>
-              <card.icone className="size-4.5" />
-            </div>
-            <div className="min-w-0">
-              <p className="min-w-0 break-words text-sm text-muted-foreground">{card.titulo}</p>
-              <p className="text-2xl font-semibold leading-tight tabular-nums">
-                {formatarNumero(card.valor)}
-              </p>
-              {card.variacao ? (
-                <p className={cn("mt-0.5 flex items-start gap-1 text-xs", COR_DIRECAO[direcao])}>
-                  <IconeDirecao className="mt-px size-3.5 shrink-0" aria-hidden />
-                  <span className="min-w-0 break-words">{textoVariacao(analytics.contatos)}</span>
-                </p>
-              ) : null}
-              <p className="mt-0.5 min-w-0 break-words text-xs text-muted-foreground">{card.legenda}</p>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+    <GradeEstatisticas>
+      <CartaoEstatistica
+        icone={MessageSquare}
+        tom="marca"
+        rotulo="Contatos recebidos"
+        valor={formatarNumero(analytics.contatos.atual)}
+        detalhe={
+          <p className={cn("mt-0.5 flex items-start gap-1 text-xs", COR_DIRECAO[direcao])}>
+            <IconeDirecao className="mt-px size-3.5 shrink-0" aria-hidden />
+            <span className="min-w-0 break-words">{textoVariacao(analytics.contatos)}</span>
+          </p>
+        }
+        contexto={`pelos formulários do site · ${periodoLabel.toLowerCase()}`}
+      />
+      <CartaoEstatistica
+        icone={Users}
+        tom="info"
+        rotulo="Pessoas que procuraram"
+        valor={formatarNumero(analytics.pessoasDistintas)}
+        // A distinção que evita o erro clássico de ler contatos como
+        // leads: 18 contatos podem ser 12 pessoas.
+        contexto="pessoas diferentes por trás desses contatos"
+      />
+      <CartaoEstatistica
+        icone={Building2}
+        tom="atencao"
+        rotulo="Imóveis com contato"
+        valor={formatarNumero(analytics.imoveisComContato)}
+        contexto="imóveis que receberam ao menos 1 contato"
+      />
+      <CartaoEstatistica
+        icone={Megaphone}
+        tom="positivo"
+        rotulo="Querem anunciar"
+        valor={formatarNumero(analytics.proprietariosAnunciando)}
+        contexto="proprietários vindos de “Anuncie seu imóvel”"
+      />
+    </GradeEstatisticas>
   );
 }

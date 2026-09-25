@@ -11,6 +11,9 @@ import { auth } from "@/lib/auth";
 import { escopoComercialDaSessao } from "@/lib/escopo-comercial-sessao";
 import { buscarAnalyticsCarteira } from "@/lib/analytics-carteira";
 import { AnalyticsCarteira } from "@/components/admin/analytics/AnalyticsCarteira";
+import { ChevronDown, Info } from "lucide-react";
+import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
+import { AbasAnalytics } from "@/components/admin/analytics/AbasAnalytics";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { AnalyticsPeriodoChips } from "@/components/admin/analytics/AnalyticsPeriodoChips";
 import { AnalyticsKpiCards } from "@/components/admin/analytics/AnalyticsKpiCards";
@@ -56,7 +59,9 @@ import { AnalyticsLiquidacao } from "@/components/admin/analytics/AnalyticsLiqui
 
 export const metadata = { title: "Analytics comercial" };
 
-type SearchParams = { periodo?: string };
+// `tab` é lido só para ser PRESERVADO nos links de período — quem
+// interpreta a aba é AbasAnalytics, no cliente.
+type SearchParams = { periodo?: string; tab?: string };
 
 export default async function AnalyticsPage({
   searchParams,
@@ -105,15 +110,15 @@ export default async function AnalyticsPage({
       : null;
   if (carteira) {
     return (
-      <div className="space-y-5">
-        <div className="min-w-0">
-          <h1 className="min-w-0 break-words text-2xl font-semibold">Analytics comercial</h1>
-          {/* O título de escopo é textual e explícito: nunca "Resultado
-              da imobiliária" com números do usuário. */}
-          <p className="text-sm text-muted-foreground">
-            Minha carteira — os números abaixo são apenas seus.
-          </p>
-        </div>
+      <div className="space-y-6">
+        {/* O título de escopo é textual e explícito: nunca "Resultado da
+            imobiliária" com números do usuário. Este escopo NÃO recebe as
+            quatro abas: ele tem um conteúdo só (a carteira do membro), e
+            abas sobre um único domínio não organizariam nada. */}
+        <CabecalhoPagina
+          titulo="Analytics comercial"
+          descricao="Minha carteira — os números abaixo são apenas seus."
+        />
 
         <AnalyticsPeriodoChips periodo={periodo} />
         <AnalyticsCarteira dados={carteira} periodoLabel={periodoLabel} />
@@ -127,74 +132,137 @@ export default async function AnalyticsPage({
   const analytics = await buscarAnalyticsComercial(organizationId, fuso, { periodo });
 
   return (
-    <div className="space-y-5">
-      {/* min-w-0 + break-words no h1: mesma proteção do Dashboard — atrás
-          da sidebar fixa, a coluna real em 360px é menor que a largura
-          natural de uma palavra longa em text-2xl. */}
-      <div className="min-w-0">
-        <h1 className="min-w-0 break-words text-2xl font-semibold">Analytics comercial</h1>
-        <p className="text-sm text-muted-foreground">
-          Visão da imobiliária — como o mercado procurou a sua imobiliária pelos formulários do
-          site.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <CabecalhoPagina
+        titulo="Analytics comercial"
+        // Subtítulo PRESERVADO: ele declara o escopo real da medição —
+        // "pelos formulários do site". Trocar por algo genérico sobre
+        // "resultados" afirmaria mais do que a página mede.
+        descricao="Visão da imobiliária — como o mercado procurou a sua imobiliária pelos formulários do site."
+      />
 
-      <AnalyticsPeriodoChips periodo={periodo} />
+      {/* O período é o recorte de TODA a tela, então fica acima das abas —
+          trocar de domínio não muda o período, e vice-versa. `extras`
+          preserva a aba aberta ao trocar de período. */}
+      <AnalyticsPeriodoChips periodo={periodo} extras={{ tab: params.tab }} />
 
+      {/* Os quatro KPIs de entrada ficam FORA das abas: são a leitura de
+          topo da operação e valem para qualquer domínio que se esteja
+          olhando. */}
       <AnalyticsKpiCards analytics={analytics} periodoLabel={periodoLabel} />
 
-      <AnalyticsSerieContatos
-        serie={analytics.serie}
-        granularidade={analytics.granularidade}
-        periodoLabel={periodoLabel}
+      {/* =============================================================
+          QUATRO DOMÍNIOS EM ABAS REAIS
+          =============================================================
+          POR QUE ABAS DE CLIENTE, e não links URL-driven como no Dashboard
+          e no Pipeline: buscarAnalyticsComercial é UMA chamada com 12
+          consultas Prisma, sem cache. Resolver o domínio no servidor
+          faria cada troca de aba reexecutar as 12 para devolver dados que
+          o usuário já tem na tela. Com painéis alternados no cliente, as
+          consultas rodam uma vez por carregamento.
+          
+          E aqui `role="tablist"` é a semântica HONESTA: são painéis de
+          verdade, alternados no cliente — diferente de "Meu trabalho |
+          Equipe", que é conteúdo resolvido pelo servidor e por isso é
+          <nav> + links.
+
+          AbasConfiguracoes (via AbasAnalytics) já entrega tablist, aria-selected,
+          aria-controls, roving tabindex, setas ←/→ e deep link por
+          `?tab=`, gravado com replaceState (sem navegação, então o período
+          na URL sobrevive). Reaproveitado em vez de reimplementado. */}
+      <AbasAnalytics
+        geral={
+          <>
+            {/* SÍNTESE, não repetição: a evolução dos contatos (a série que
+                responde "como está o período") e o resultado comercial
+                agregado. As versões detalhadas de aquisição e comissões
+                vivem nas abas próprias. */}
+            <AnalyticsSerieContatos
+              serie={analytics.serie}
+              granularidade={analytics.granularidade}
+              periodoLabel={periodoLabel}
+            />
+            <AnalyticsResultado resultado={analytics.resultado} periodoLabel={periodoLabel} />
+          </>
+        }
+        aquisicao={
+          <>
+            {/* Funil digital e Origem dos contatos lado a lado: as duas
+                respondem "de onde veio o interesse", uma pelo comportamento
+                no site, outra pela página que originou o contato —
+                conceitos DIFERENTES, preservados separados. */}
+            <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+              <AnalyticsFunilDigital funil={analytics.funil} periodoLabel={periodoLabel} />
+              <AnalyticsOrigens origens={analytics.origens} total={analytics.contatos.atual} />
+            </div>
+
+            {/* Canal de aquisição descreve A VISITA (de onde a pessoa
+                chegou desta vez); a origem cadastral acima é o campo
+                "Origem" da ficha. Não são a mesma coisa e continuam em
+                blocos distintos. */}
+            <AnalyticsAquisicao
+              aquisicao={analytics.aquisicao}
+              periodoLabel={periodoLabel}
+              semVinculoDeOrigem={analytics.resultado.semVinculoDeOrigem}
+            />
+
+            <AnalyticsTopImoveis imoveis={analytics.topImoveis} />
+          </>
+        }
+        comercial={
+          <>
+            <AnalyticsResultado resultado={analytics.resultado} periodoLabel={periodoLabel} />
+            {/* "quanto a operação fez" -> "quem conduziu". */}
+            <AnalyticsResponsaveis
+              responsaveis={analytics.responsaveis}
+              periodoLabel={periodoLabel}
+              semOwnership={analytics.semOwnership}
+            />
+          </>
+        }
+        comissoes={
+          <>
+            {/* A cadeia que esta aba torna explícita: ATRIBUÍDA (declarada
+                pela equipe, participante por participante) é diferente de
+                PAGA (registrada com a data em que ocorreu). Os dois blocos
+                coexistem e nenhum substitui o outro — juntá-los afirmaria
+                que atribuir é pagar. */}
+            <AnalyticsParticipacao
+              participacao={analytics.participacao}
+              periodoLabel={periodoLabel}
+            />
+            <AnalyticsLiquidacao liquidacao={analytics.liquidacao} periodoLabel={periodoLabel} />
+          </>
+        }
       />
-
-      {/* Funil digital (Fase 6) ao lado da origem dos contatos: as duas
-          respondem "de onde veio o interesse", uma pelo comportamento no
-          site, outra pela página que originou o contato. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <AnalyticsFunilDigital funil={analytics.funil} periodoLabel={periodoLabel} />
-        <AnalyticsOrigens origens={analytics.origens} total={analytics.contatos.atual} />
-      </div>
-
-      <AnalyticsResultado resultado={analytics.resultado} periodoLabel={periodoLabel} />
-
-      {/* Fase 11 — depois do resultado agregado e antes da aquisição:
-          "quanto a operação fez" -> "quem conduziu" -> "de onde veio". */}
-      <AnalyticsResponsaveis
-        responsaveis={analytics.responsaveis}
-        periodoLabel={periodoLabel}
-        semOwnership={analytics.semOwnership}
-      />
-
-      {/* Fase 12 — logo depois de "quem conduziu", vem "quem participa
-          do dinheiro". As duas dimensões coexistem, nunca se substituem. */}
-      <AnalyticsParticipacao participacao={analytics.participacao} periodoLabel={periodoLabel} />
-
-      {/* Fase 13 — fecha a cadeia: conduziu -> atribuído -> PAGO. Cada
-          bloco responde uma pergunta diferente e nenhum substitui outro. */}
-      <AnalyticsLiquidacao liquidacao={analytics.liquidacao} periodoLabel={periodoLabel} />
-
-      <AnalyticsAquisicao
-        aquisicao={analytics.aquisicao}
-        periodoLabel={periodoLabel}
-        semVinculoDeOrigem={analytics.resultado.semVinculoDeOrigem}
-      />
-
-      <AnalyticsTopImoveis imoveis={analytics.topImoveis} />
 
       {/* Nota de método — a tela declara em texto o que ela conta e o que
           ela NÃO conta. É isso que impede o corretor de ler estes números
           como "todo o movimento do CRM" e de estranhar um total menor que
           o histórico da ficha de um cliente. */}
+      {/* Fase 68 — o bloco continua INTEGRALMENTE aqui, regra por regra,
+          palavra por palavra: é ele que impede o corretor de ler estes
+          números como "todo o movimento do CRM". O que mudou é que ele
+          deixou de estar sempre aberto competindo com os dados. <details>
+          nativo, fechado por padrão, focável e operável por teclado sem
+          biblioteca — o mesmo padrão do "Ver análise completa" do
+          Pipeline. */}
       <section
         aria-labelledby="analytics-metodo"
         className="rounded-xl border bg-card p-4 text-sm text-muted-foreground shadow-sm"
       >
-        <h2 id="analytics-metodo" className="font-medium text-foreground">
-          Como estes números são calculados
-        </h2>
-        <ul className="mt-2 list-disc space-y-1 pl-5">
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-foreground outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+            <Info aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+            <h2 id="analytics-metodo" className="font-medium">
+              Entenda os indicadores
+            </h2>
+            <ChevronDown
+              aria-hidden
+              className="size-3.5 transition-transform group-open:rotate-180"
+            />
+          </summary>
+        <ul className="mt-3 list-disc space-y-1 border-t pl-5 pt-3">
           <li>
             Conta apenas contatos recebidos pelos formulários do site: página de um imóvel, página
             de contato e “anuncie seu imóvel”.
@@ -269,6 +337,7 @@ export default async function AnalyticsPage({
             </li>
           )}
         </ul>
+        </details>
       </section>
     </div>
   );

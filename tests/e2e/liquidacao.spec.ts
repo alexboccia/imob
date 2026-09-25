@@ -15,7 +15,7 @@ const HOJE = new Date().toISOString().slice(0, 10);
 test.describe("Analytics — liquidação", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, ORG_ANALYTICS);
-    await page.goto("/app/analytics");
+    await page.goto("/app/analytics?tab=comissoes");
   });
 
   test("mostra o pago no período e declara a coorte por data de pagamento", async ({ page }) => {
@@ -38,7 +38,14 @@ test.describe("Analytics — liquidação", () => {
   });
 
   test("os três blocos financeiros coexistem, cada um com sua pergunta", async ({ page }) => {
+    // Fase 68 — os três continuam existindo, agora em dois domínios:
+    // "quem conduziu" é Comercial, "atribuído" e "pago" são Comissões. A
+    // garantia que este teste protege é a MESMA: nenhum bloco foi fundido
+    // nem substituiu outro, e cada um segue respondendo a sua pergunta.
+    await page.goto("/app/analytics?tab=comercial");
     await expect(page.getByRole("region", { name: "Performance por responsável" })).toBeVisible();
+
+    await page.goto("/app/analytics?tab=comissoes");
     await expect(page.getByRole("region", { name: "Participação na comissão" })).toBeVisible();
     await expect(page.getByRole("region", { name: "Liquidação de comissão" })).toBeVisible();
 
@@ -51,7 +58,7 @@ test.describe("Analytics — liquidação", () => {
   for (const largura of [375, 768, 1024, 1280, 1440]) {
     test(`${largura}px: bloco de liquidação sem overflow`, async ({ page }) => {
       await page.setViewportSize({ width: largura, height: 900 });
-      await page.goto("/app/analytics");
+      await page.goto("/app/analytics?tab=comissoes");
       await expect(page.getByRole("region", { name: "Liquidação de comissão" })).toBeVisible();
       const scrollX = await page.evaluate(() => {
         window.scrollTo(9999, 0);

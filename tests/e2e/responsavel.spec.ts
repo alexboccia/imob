@@ -13,7 +13,7 @@ import { ORG_ANALYTICS, ORG_AGENDA, login } from "./helpers";
 test.describe("Analytics — performance por responsável", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, ORG_ANALYTICS);
-    await page.goto("/app/analytics");
+    await page.goto("/app/analytics?tab=comercial");
   });
 
   test("separa a linha do responsável da linha 'Sem responsável'", async ({ page }) => {
@@ -47,7 +47,7 @@ test.describe("Analytics — performance por responsável", () => {
   for (const largura of [375, 768, 1024, 1280, 1440]) {
     test(`${largura}px: tabela de responsáveis sem overflow`, async ({ page }) => {
       await page.setViewportSize({ width: largura, height: 900 });
-      await page.goto("/app/analytics");
+      await page.goto("/app/analytics?tab=comercial");
       await expect(page.getByRole("region", { name: "Performance por responsável" })).toBeVisible();
       const semOverflow = await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth + 1

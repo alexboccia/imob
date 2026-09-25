@@ -43,6 +43,11 @@ test.describe("Analytics — resultado financeiro", () => {
   });
 
   test("canal e campanha recebem o valor fechado da interação de origem", async ({ page }) => {
+    // Fase 68 — as seções do Analytics passaram a viver em quatro abas, com
+    // os painéis inativos escondidos. O deep link `?tab=` abre a aba direto:
+    // as asserções sobre os dados continuam as mesmas.
+    await page.goto("/app/analytics?tab=aquisicao");
+
     const aquisicao = page.getByRole("region", { name: "Canal de aquisição" });
     await expect(aquisicao).toBeVisible();
     await expect(aquisicao.getByRole("columnheader", { name: "Valor fechado" })).toHaveCount(2);

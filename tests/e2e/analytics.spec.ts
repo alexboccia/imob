@@ -23,10 +23,22 @@ import { ORG_ANALYTICS, ORG_AGENDA, ORG_B, login } from "./helpers";
 // Lê o valor de um card de KPI pelo título — o número é o <p> irmão
 // dentro do mesmo card, nunca um texto solto da página.
 function valorKpi(page: Page, titulo: string) {
+  // Fase 68 — os KPIs passaram a usar o cartão compartilhado do backoffice.
+  // Âncoras estruturais do componente em vez de classes utilitárias, que
+  // descreviam o CSS de uma versão. Mesma intenção de antes: o número é o
+  // do card com AQUELE título, nunca um texto solto da página.
   return page
-    .locator("main .grid > div", { hasText: titulo })
-    .first()
-    .locator("p.text-2xl");
+    .locator("[data-grade-kpis] [data-slot=card]")
+    .filter({ has: page.locator("[data-kpi-rotulo]", { hasText: titulo }) })
+    .locator("[data-kpi-valor]");
+}
+
+// Fase 68 — as seções analíticas passaram a viver em quatro abas (Visão
+// geral / Aquisição / Comercial / Comissões), com os painéis inativos
+// escondidos. O deep link `?tab=` abre a aba direto: as asserções
+// continuam provando a MESMA intenção, sem clique e sem enfraquecer nada.
+function urlAba(aba: string, extra = ""): string {
+  return `/app/analytics?tab=${aba}${extra}`;
 }
 
 test.describe("Analytics comercial — tenant com dados", () => {
@@ -50,6 +62,7 @@ test.describe("Analytics comercial — tenant com dados", () => {
   });
 
   test("origem dos contatos usa os rótulos do catálogo, com número e percentual", async ({ page }) => {
+    await page.goto(urlAba("aquisicao"));
     await expect(page.getByText("Página do imóvel", { exact: true })).toBeVisible();
     await expect(page.getByText("Página de contato", { exact: true })).toBeVisible();
     await expect(page.getByText("Anuncie seu imóvel", { exact: true })).toBeVisible();
@@ -62,6 +75,7 @@ test.describe("Analytics comercial — tenant com dados", () => {
   });
 
   test("ranking de movimento: contato primeiro, e o imóvel só visto passa a existir", async ({ page }) => {
+    await page.goto(urlAba("aquisicao"));
     const tabela = page.locator("table", {
       has: page.getByRole("columnheader", { name: "Imóvel" }),
     });
@@ -84,6 +98,7 @@ test.describe("Analytics comercial — tenant com dados", () => {
   });
 
   test("funil digital mostra as três etapas e as duas taxas reais", async ({ page }) => {
+    await page.goto(urlAba("aquisicao"));
     const funil = page.getByRole("region", { name: "Funil digital" });
     await expect(funil).toBeVisible();
 
@@ -105,6 +120,7 @@ test.describe("Analytics comercial — tenant com dados", () => {
   });
 
   test("canal de aquisição separa tráfego de contexto comercial", async ({ page }) => {
+    await page.goto(urlAba("aquisicao"));
     const aquisicao = page.getByRole("region", { name: "Canal de aquisição" });
     await expect(aquisicao).toBeVisible();
 
@@ -155,7 +171,11 @@ test.describe("Analytics comercial — tenant com dados", () => {
   });
 
   test("nota de método declara o que é contado e divulga o que ficou de fora", async ({ page }) => {
-    const nota = page.getByRole("region", { name: "Como estes números são calculados" });
+    // Fase 68 — o bloco virou "Entenda os indicadores", um <details>
+    // fechado por padrão: ele continua na página, com TODAS as regras, mas
+    // deixou de competir com os dados. O teste abre e verifica o conteúdo.
+    const nota = page.getByRole("region", { name: "Entenda os indicadores" });
+    await nota.getByText("Entenda os indicadores").click();
     await expect(nota).toContainText("apenas contatos recebidos pelos formulários do site");
     await expect(nota).toContainText("não entram");
     // A única interação origin=null do período é divulgada, nunca somada
@@ -224,9 +244,14 @@ test.describe("Analytics comercial — tenant sem contatos", () => {
     await expect(valorKpi(page, "Pessoas que procuraram")).toHaveText("0");
     await expect(page.getByText("Sem variação vs. período anterior")).toBeVisible();
 
+    // A série vive na Visão geral (aba inicial).
     await expect(
       page.getByText("Ainda não há contatos neste período.", { exact: false }).first()
     ).toBeVisible();
+
+    // Origem, ranking de imóveis e funil vivem em Aquisição — cada estado
+    // vazio continua explicando a ausência com as MESMAS palavras.
+    await page.goto(urlAba("aquisicao"));
     await expect(
       page.getByText("Ainda não há contatos neste período para distribuir por origem.")
     ).toBeVisible();
@@ -237,7 +262,9 @@ test.describe("Analytics comercial — tenant sem contatos", () => {
     // começou agora, em vez de mostrar zeros como se fossem desempenho.
     await expect(page.getByText(/A medição de visualizações e cliques começou agora/)).toBeVisible();
 
-    // Nenhum artefato de cálculo vazando pra tela.
+    // Nenhum artefato de cálculo vazando pra tela — verificado em TODAS as
+    // abas, porque os painéis inativos continuam montados (hidden) e o
+    // textContent os alcança.
     const corpo = (await page.locator("main").textContent()) ?? "";
     expect(corpo).not.toMatch(/NaN|undefined|Infinity|∞/);
   });
@@ -260,5 +287,198 @@ test.describe("Analytics comercial — isolamento e autorização", () => {
     await page.goto("/app/analytics");
     await expect(page.getByText("CRM não incluído no seu plano")).toBeVisible();
     await expect(page.getByText("Contatos recebidos")).toHaveCount(0);
+  });
+});
+
+// =====================================================================
+// Fase 68 — Analytics em quatro domínios, na linguagem do backoffice
+// =====================================================================
+// A cobertura aqui prova SEMÂNTICA, não layout: que as abas são abas de
+// verdade (painéis alternados no cliente), que período e domínio são
+// independentes na URL, e que conceitos diferentes continuam separados.
+test.describe("Analytics — quatro domínios", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_ANALYTICS);
+    await page.goto("/app/analytics");
+  });
+
+  test("cabeçalho e KPIs de topo seguem o padrão compartilhado", async ({ page }) => {
+    const h1 = page.locator("main h1");
+    await expect(h1).toHaveCount(1);
+    await expect(h1).toHaveText("Analytics comercial");
+    // Subtítulo PRESERVADO: declara o escopo real da medição.
+    await expect(
+      page.getByText(/como o mercado procurou a sua imobiliária pelos formulários do site/)
+    ).toBeVisible();
+
+    // Os quatro KPIs ficam FORA das abas — valem para qualquer domínio.
+    const grade = page.locator("[data-grade-kpis]");
+    await expect(grade).toBeVisible();
+    for (const rotulo of [
+      "Contatos recebidos",
+      "Pessoas que procuraram",
+      "Imóveis com contato",
+      "Querem anunciar",
+    ]) {
+      await expect(grade.locator("[data-kpi-rotulo]", { hasText: rotulo })).toBeVisible();
+    }
+    // Não navegam hoje: nenhuma afordância de clique inventada.
+    await expect(grade.locator("a")).toHaveCount(0);
+  });
+
+  test("são ABAS de verdade: tablist, um painel visível, teclado", async ({ page }) => {
+    const barra = page.locator("[data-abas-configuracoes]");
+    await expect(barra).toHaveAttribute("role", "tablist");
+
+    const abas = barra.getByRole("tab");
+    await expect(abas).toHaveCount(4);
+    const rotulos = await abas.evaluateAll((els) =>
+      els.map((el) => (el.textContent ?? "").trim())
+    );
+    expect(rotulos).toEqual(["Visão geral", "Aquisição", "Comercial", "Comissões"]);
+
+    // Aqui role="tab" é HONESTO: existem painéis alternados no cliente —
+    // diferente de "Meu trabalho | Equipe", que é resolvido no servidor.
+    await expect(barra.getByRole("tab", { selected: true })).toHaveCount(1);
+    const visiveis = await page
+      .locator("[role=tabpanel]")
+      .evaluateAll((els) => els.filter((el) => !el.hasAttribute("hidden")).length);
+    expect(visiveis, "exatamente um painel visível").toBe(1);
+
+    // Setas percorrem as abas.
+    await barra.getByRole("tab", { selected: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(barra.getByRole("tab", { selected: true })).toContainText("Aquisição");
+  });
+
+  test("a aba fica na URL, sobrevive ao refresh e aceita deep link", async ({ page }) => {
+    await page.getByRole("tab", { name: "Comissões" }).click();
+    await expect(page).toHaveURL(/tab=comissoes/);
+
+    await page.reload();
+    await expect(page.getByRole("tab", { selected: true })).toContainText("Comissões");
+
+    // Deep link direto.
+    await page.goto(urlAba("comercial"));
+    await expect(page.getByRole("tab", { selected: true })).toContainText("Comercial");
+  });
+
+  test("período e domínio são independentes: trocar um preserva o outro", async ({ page }) => {
+    await page.goto(urlAba("aquisicao"));
+    // Antes desta fase os links de período reescreviam a URL do zero e
+    // descartavam todo o resto — a aba aberta seria perdida.
+    await page.getByRole("link", { name: /7 dias/ }).click();
+    await expect(page).toHaveURL(/periodo=7d/);
+    await expect(page).toHaveURL(/tab=aquisicao/);
+    await expect(page.getByRole("tab", { selected: true })).toContainText("Aquisição");
+
+    // E trocar de aba preserva o período.
+    await page.getByRole("tab", { name: "Comissões" }).click();
+    await expect(page).toHaveURL(/periodo=7d/);
+    await expect(page).toHaveURL(/tab=comissoes/);
+  });
+
+  test("Aquisição mantém origem cadastral e canal da visita SEPARADOS", async ({ page }) => {
+    await page.goto(urlAba("aquisicao"));
+    // São duas perguntas diferentes sobre o mesmo contato e continuam em
+    // blocos distintos — normalizá-las num só seria perder significado.
+    await expect(page.getByText("Origem dos contatos", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Canal de aquisição" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Funil digital" })).toBeVisible();
+  });
+
+  test("Comissões separa ATRIBUÍDA de PAGA, sem tratar uma como a outra", async ({ page }) => {
+    await page.goto(urlAba("comissoes"));
+    const painel = page.locator('[data-painel="comissoes"]');
+
+    // Os dois blocos coexistem: atribuição é declarada pela equipe,
+    // pagamento é registrado com a data em que ocorreu.
+    await expect(painel).toContainText(/[Pp]articipação na comissão/);
+    await expect(painel).toContainText(/[Ll]iquidação/);
+    // A tela nunca afirma que atribuído é recebido.
+    await expect(painel).not.toContainText("Receita recebida");
+    await expect(painel).not.toContainText("Comissão recebida pela imobiliária");
+  });
+
+  test("Comercial traz resultado e quem conduziu, sem linguagem de ranking", async ({ page }) => {
+    await page.goto(urlAba("comercial"));
+    const painel = page.locator('[data-painel="comercial"]');
+    await expect(painel).toContainText(/[Rr]esultado comercial/);
+
+    // A tabela descreve resultados, não avalia pessoas.
+    const texto = (await painel.innerText()).toLowerCase();
+    for (const proibido of ["melhor corretor", "pior", "top vendedor", "baixa performance", "ranking"]) {
+      expect(texto, `Comercial não pode conter "${proibido}"`).not.toContain(proibido);
+    }
+  });
+
+  test("'Entenda os indicadores' fica fechado e preserva as regras", async ({ page }) => {
+    const detalhes = page.locator("details").last();
+    // Fechado por padrão: deixou de competir com os dados.
+    await expect(detalhes).toHaveJSProperty("open", false);
+
+    await page.getByText("Entenda os indicadores").click();
+    await expect(detalhes).toHaveJSProperty("open", true);
+
+    // As regras que impedem leituras erradas continuam escritas, palavra
+    // por palavra — e continuam na MESMA página, sem rota nova.
+    await expect(detalhes).toContainText("apenas contatos recebidos pelos formulários do site");
+    await expect(detalhes).toContainText("Comissão atribuída” não é valor recebido");
+    await expect(detalhes).toContainText("só conta quando alguém registra o pagamento");
+    await expect(page).toHaveURL(/\/app\/analytics/);
+  });
+
+  test("a hierarquia de cabeçalhos não tem salto", async ({ page }) => {
+    const niveis = await page
+      .locator("main h1, main h2, main h3")
+      .evaluateAll((els) => els.map((el) => Number(el.tagName[1])));
+    expect(niveis[0]).toBe(1);
+    for (let i = 1; i < niveis.length; i += 1) {
+      expect(
+        niveis[i] - niveis[i - 1],
+        `salto de h${niveis[i - 1]} para h${niveis[i]}`
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+test.describe("Analytics — responsividade dos quatro domínios", () => {
+  for (const [largura, altura] of [
+    [1920, 1080],
+    [1440, 900],
+    [1366, 768],
+    [1024, 768],
+    [768, 1024],
+    [390, 844],
+  ]) {
+    test(`${largura}×${altura}: sem overflow do documento em todas as abas`, async ({ page }) => {
+      await page.setViewportSize({ width: largura, height: altura });
+      await login(page, ORG_ANALYTICS);
+
+      for (const aba of ["geral", "aquisicao", "comercial", "comissoes"]) {
+        await page.goto(urlAba(aba));
+        await expect(page.locator("main h1")).toBeVisible();
+
+        const rolou = await page.evaluate(() => {
+          window.scrollTo(9999, 0);
+          const x = window.scrollX;
+          window.scrollTo(0, 0);
+          return x;
+        });
+        expect(rolou, `aba ${aba} rolou ${rolou}px em ${largura}px`).toBe(0);
+      }
+    });
+  }
+
+  test("390px: as abas rolam na barra em vez de esmagar os rótulos", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await login(page, ORG_ANALYTICS);
+    await page.goto("/app/analytics");
+
+    const larguras = await page
+      .locator("[data-abas-configuracoes] [role=tab]")
+      .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)));
+    expect(larguras).toHaveLength(4);
+    for (const w of larguras) expect(w, `aba com ${w}px`).toBeGreaterThan(60);
   });
 });

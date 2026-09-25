@@ -1,4 +1,4 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -42,9 +42,19 @@ export function AnalyticsAquisicao({
   return (
     <Card className="min-w-0" role="region" aria-labelledby="analytics-aquisicao-titulo">
       <CardHeader>
-        <CardTitle className="text-base" id="analytics-aquisicao-titulo">
+        {/* Fase 68 — <h2> de verdade. CardTitle renderiza um <div>, sem
+            semântica de heading, e havia uma quebra PRÉ-EXISTENTE de
+            hierarquia aqui: o bloco "Campanhas" abaixo é um <h3>, e sem
+            nenhum <h2> antes dele a página saltava de h1 para h3. Mesmas
+            classes do CardTitle, então nada muda visualmente e o
+            componente compartilhado (usado por muitas telas) fica
+            intocado — o mesmo caminho já adotado em CentralTrabalho. */}
+        <h2
+          id="analytics-aquisicao-titulo"
+          className="font-heading text-base leading-snug font-medium"
+        >
           Canal de aquisição
-        </CardTitle>
+        </h2>
         <p className="pt-1 text-sm text-muted-foreground">
           {periodoLabel} · como as pessoas chegaram ao site nesta visita
         </p>

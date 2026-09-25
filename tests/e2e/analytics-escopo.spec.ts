@@ -32,8 +32,16 @@ const SECOES_ORGANIZACIONAIS = [
   "Canal de aquisição",
 ];
 
+// Fase 68 — "Canal de aquisição" deixou de ser um CardTitle (um <div>) e
+// passou a ser um <h2> de verdade, para fechar uma quebra de hierarquia de
+// cabeçalhos que era pré-existente. O helper passou a aceitar as duas
+// formas: o que o teste quer provar é que a SEÇÃO está na tela, não com
+// qual elemento ela é desenhada.
 const secao = (page: import("@playwright/test").Page, titulo: string) =>
-  page.locator('[data-slot="card-title"]', { hasText: titulo });
+  page
+    .locator('[data-slot="card-title"], h2, h3')
+    .filter({ hasText: titulo })
+    .first();
 
 test.describe("RESTRICTED — corretor vê a própria carteira", () => {
   test("a tela declara o escopo e mostra só o que tem dono", async ({ page }) => {
@@ -98,7 +106,12 @@ test.describe("RESTRICTED — corretor vê a própria carteira", () => {
 test.describe("RESTRICTED — gestor mantém a visão da imobiliária", () => {
   test("o OWNER continua com o Analytics organizacional completo", async ({ page }) => {
     await login(page, ORG_RESTRITA);
-    await page.goto("/app/analytics");
+        // Fase 68 — as seções analíticas passaram a viver em quatro abas
+    // (Visão geral / Aquisição / Comercial / Comissões), com os painéis
+    // inativos escondidos. O deep link `?tab=` abre a aba direto, então as
+    // asserções continuam provando a MESMA intenção — a seção existe e traz
+    // os números certos — sem depender de clique nem enfraquecer nada.
+    await page.goto("/app/analytics?tab=aquisicao");
 
     const texto = (await page.locator("main").innerText()).replace(/ /g, " ");
     expect(texto).toContain("Visão da imobiliária");
@@ -117,7 +130,7 @@ test.describe("COLLABORATIVE — nada regride", () => {
     // absolutos há várias fases. Se a Fase 23 tivesse mexido no caminho
     // organizacional, seria aqui que apareceria.
     await login(page, ORG_ANALYTICS);
-    await page.goto("/app/analytics");
+    await page.goto("/app/analytics?tab=aquisicao");
     const texto = (await page.locator("main").innerText()).replace(/ /g, " ");
     expect(texto).toContain("Visão da imobiliária");
     await expect(secao(page, "Funil digital")).toBeVisible();
