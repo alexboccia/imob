@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -28,6 +28,26 @@ import {
 // A aba escolhida vai para a URL por `history.replaceState`, e não por
 // navegação do router: uma navegação re-renderizaria a página e
 // descartaria o que ainda não foi salvo.
+
+// Fase 68.1 — contexto que permite a um descendente qualquer de uma aba
+// (por exemplo, um botão "Ver análise comercial →" dentro do painel
+// "Visão geral" do Analytics) trocar de aba SEM duplicar o mecanismo de
+// navegação: ele chama a MESMA função `abrir` que os botões de aba usam,
+// então o comportamento (URL, replaceState, foco) é idêntico, nunca uma
+// segunda implementação de troca de aba.
+//
+// Puramente aditivo: nenhum consumidor existente (Configurações) precisa
+// dele, e não usar o hook não muda nada no comportamento atual.
+const ContextoAbas = createContext<((id: string) => void) | null>(null);
+
+/**
+ * Hook para um componente de cliente DENTRO de um painel trocar de aba.
+ * Devolve `null` fora de um `AbasConfiguracoes` (uso incorreto) — quem
+ * chama decide o que fazer nesse caso (normalmente, nada).
+ */
+export function useAbrirAba(): ((id: string) => void) | null {
+  return useContext(ContextoAbas);
+}
 
 export type AbaConfiguracao = {
   id: string;
@@ -58,6 +78,7 @@ export function AbasConfiguracoes({ abas }: { abas: AbaConfiguracao[] }) {
   }
 
   return (
+    <ContextoAbas.Provider value={abrir}>
     <div className="min-w-0">
       {/* Fase 63 — eram cinco botões soltos, cada um com o seu próprio
           fundo. Agora é UMA barra: a borda e o fundo pertencem ao
@@ -124,5 +145,6 @@ export function AbasConfiguracoes({ abas }: { abas: AbaConfiguracao[] }) {
         </div>
       ))}
     </div>
+    </ContextoAbas.Provider>
   );
 }

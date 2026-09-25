@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { ORG_ANALYTICS, ORG_AGENDA, ORG_B, login } from "./helpers";
+import { ORG_ANALYTICS, ORG_AGENDA, ORG_B, ORG_RECURSOS, login } from "./helpers";
 
 // Analytics comercial (Fase 5) — três cenários agrupados, nenhum write
 // pelo navegador. Todo o estado vem do seed determinístico
@@ -312,7 +312,11 @@ test.describe("Analytics — quatro domínios", () => {
     ).toBeVisible();
 
     // Os quatro KPIs ficam FORA das abas — valem para qualquer domínio.
-    const grade = page.locator("[data-grade-kpis]");
+    // Fase 68.1 — `.first()`: a síntese comercial da Visão geral também
+    // usa GradeEstatisticas (Oportunidades/Ganhas/Perdidas/Taxa), então
+    // agora há duas grades na página; esta é sempre a primeira no DOM,
+    // porque vem antes das abas.
+    const grade = page.locator("[data-grade-kpis]").first();
     await expect(grade).toBeVisible();
     for (const rotulo of [
       "Contatos recebidos",
@@ -440,6 +444,241 @@ test.describe("Analytics — quatro domínios", () => {
       ).toBeLessThanOrEqual(1);
     }
   });
+});
+
+// =====================================================================
+// Fase 68.1 — Visão geral como síntese, não a aba Comercial copiada
+// =====================================================================
+test.describe("Visão geral — síntese, não repetição", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_ANALYTICS);
+    await page.goto("/app/analytics");
+  });
+
+  test("Evolução dos contatos continua na Visão geral", async ({ page }) => {
+    const geral = page.locator('[data-painel="geral"]');
+    await expect(geral.getByText("Evolução dos contatos", { exact: true })).toBeVisible();
+    await expect(geral.getByText(/7 contatos no total/)).toBeVisible();
+  });
+
+  test("'Resultado no período' é uma seção real, com heading próprio", async ({ page }) => {
+    const titulo = page.getByRole("heading", { name: "Resultado no período" });
+    await expect(titulo).toBeVisible();
+    expect(await titulo.evaluate((el) => el.tagName)).toBe("H2");
+    await expect(
+      page.getByText("Resumo do avanço comercial no período selecionado.")
+    ).toBeVisible();
+  });
+
+  test("a síntese mostra as seis métricas, todas vindas do MESMO objeto de resultado", async ({
+    page,
+  }) => {
+    const geral = page.locator('[data-painel="geral"]');
+    // Seed da Org D: 2 oportunidades criadas, 2 ganhas, 0 perdidas,
+    // 100% de taxa, R$ 850.000 fechados — os MESMOS números que a aba
+    // Comercial afirma (ver "mostra oportunidades, ganhos e as duas
+    // taxas" e "mostra valor fechado e ticket médio"), porque vêm do
+    // mesmo `analytics.resultado`, sem query nova.
+    for (const [rotulo, valor] of [
+      ["Oportunidades", "2"],
+      ["Ganhas", "2"],
+      ["Perdidas", "0"],
+      ["Taxa de ganho", "100%"],
+    ] as const) {
+      // `has` precisa de um locator RAIZ em `page` (mesmo padrão de
+      // `valorKpi` no topo do arquivo) — um locator já escopado a `geral`
+      // aqui dentro do filtro combina mal com o escopo do candidato e a
+      // busca não encontra nada.
+      const card = geral
+        .locator("[data-slot=card]")
+        .filter({ has: page.locator("[data-kpi-rotulo]", { hasText: rotulo }) });
+      await expect(card.locator("[data-kpi-valor]")).toHaveText(valor);
+    }
+    await expect(geral).toContainText("R$ 850.000");
+  });
+
+  test("comissão NÃO aparece na síntese — continua só em Comercial/Comissões", async ({
+    page,
+  }) => {
+    const geral = page.locator('[data-painel="geral"]');
+    for (const proibido of ["Comissão registrada", "Comissão média", "Comissão efetiva"]) {
+      await expect(geral.getByText(proibido, { exact: true })).toHaveCount(0);
+    }
+
+    // Nada foi apagado do produto: os três continuam na aba Comercial.
+    await page.goto(urlAba("comercial"));
+    const comercial = page.locator('[data-painel="comercial"]');
+    for (const presente of ["Comissão registrada", "Comissão média", "Comissão efetiva"]) {
+      await expect(comercial.getByText(presente, { exact: true })).toBeVisible();
+    }
+  });
+
+  test("conversões detalhadas NÃO aparecem na síntese — continuam em Comercial", async ({
+    page,
+  }) => {
+    const geral = page.locator('[data-painel="geral"]');
+    for (const proibido of ["Contato vira oportunidade", "Oportunidade vira ganho"]) {
+      await expect(geral.getByText(proibido, { exact: true })).toHaveCount(0);
+    }
+
+    await page.goto(urlAba("comercial"));
+    const comercial = page.locator('[data-painel="comercial"]');
+    for (const presente of ["Contato vira oportunidade", "Oportunidade vira ganho"]) {
+      await expect(comercial.getByText(presente, { exact: true })).toBeVisible();
+    }
+  });
+
+  test("metodologia extensa não domina a síntese", async ({ page }) => {
+    const geral = page.locator('[data-painel="geral"]');
+    // A explicação de atribuição de origem é detalhe de investigação, não
+    // de resumo executivo — continua em Comercial, onde já vivia.
+    await expect(
+      geral.getByText(/Nenhuma oportunidade tem contato de origem registrado/)
+    ).toHaveCount(0);
+    await expect(
+      geral.getByText(/nenhum dos dois é receita da imobiliária/)
+    ).toHaveCount(0);
+  });
+
+  test("'Ver análise comercial' troca de aba pelo MESMO mecanismo — sem navegação", async ({
+    page,
+  }) => {
+    const geral = page.locator('[data-painel="geral"]');
+    const botao = geral.getByRole("button", { name: /Ver análise comercial/ });
+    await expect(botao).toBeVisible();
+
+    await botao.click();
+    // Mesmo efeito de clicar na aba: aria-selected muda e a URL grava
+    // ?tab= por replaceState (nunca um push/reload).
+    await expect(page.getByRole("tab", { selected: true })).toHaveText(/Comercial/);
+    await expect(page).toHaveURL(/tab=comercial/);
+    await expect(page.locator('[data-painel="comercial"]')).not.toHaveAttribute("hidden", "");
+  });
+
+  test("0 (real) e — (indisponível) continuam distintos na síntese", async ({ page }) => {
+    // ORG_RECURSOS (Organização E2E Recursos) é usada só por specs de
+    // mídia/galeria/locais próximos — nenhuma delas fecha negociação, e
+    // o seed nunca cria PropertyInterest para ela. `fechamentosGanhos`
+    // é 0 de forma ESTRUTURAL ali, não por sorte de ordem de execução —
+    // ao contrário de ORG_AGENDA, que é justamente a organização onde
+    // comissao/oportunidade/valor-fechamento/liquidação RODAM A JORNADA
+    // do corretor de propósito (ver cabeçalho de comissao.spec.ts) e por
+    // isso pode ter oportunidades ganhas a qualquer momento.
+    //
+    // Com Ganhas=0 garantido, dois fatos são consequência matemática do
+    // próprio cálculo em buscarAnalyticsComercial, não desta fase:
+    //   valorFechado  = soma dos ganhos COM valor -> 0 ganhos = R$ 0 (zero
+    //                   REAL, nunca omitido);
+    //   ticketMedio   = valorFechado / ganhos COM valor -> null (SEM
+    //                   base), portanto "—", nunca "R$ 0".
+    await page.context().clearCookies();
+    await login(page, ORG_RECURSOS);
+    await page.goto("/app/analytics");
+    const geral = page.locator('[data-painel="geral"]');
+
+    const cartao = (rotulo: string) =>
+      geral
+        .locator("[data-slot=card]")
+        .filter({ has: page.locator("[data-kpi-rotulo]", { hasText: rotulo }) });
+
+    // Há oportunidade(s) — a síntese renderiza a grade, não o vazio.
+    const oportunidades = Number(await cartao("Oportunidades").locator("[data-kpi-valor]").textContent());
+    expect(oportunidades).toBeGreaterThan(0);
+
+    await expect(cartao("Ganhas").locator("[data-kpi-valor]")).toHaveText("0");
+    await expect(cartao("Perdidas").locator("[data-kpi-valor]")).toHaveText("0");
+    // Taxa É calculável (0 ganhas ÷ N oportunidades = 0%) — DIFERENTE de
+    // "sem base", que seria o caso só com zero oportunidades também.
+    await expect(cartao("Taxa de ganho").locator("[data-kpi-valor]")).toHaveText("0%");
+    // Zero REAL — nunca omitido, porque a soma de zero ganhos é R$ 0 de
+    // verdade, não "não medido".
+    await expect(cartao("Valor fechado").locator("[data-kpi-valor]")).toHaveText("R$ 0");
+    // Travessão — NUNCA "R$ 0": não existe base para dividir.
+    await expect(cartao("Ticket médio").locator("[data-kpi-valor]")).toHaveText("—");
+  });
+});
+
+// =====================================================================
+// Fase 68.1 — truncamento real dos KPIs de topo
+// =====================================================================
+// scrollWidth<=clientWidth sozinho não pega `line-clamp` (o texto pode
+// caber na LARGURA e ainda ser cortado na ALTURA). Esta medição cobre os
+// três sinais: truncamento de uma linha (overflow+ellipsis+nowrap),
+// line-clamp multi-linha (scrollHeight vs. clientHeight) e overflow
+// horizontal cru.
+async function medirTruncamento(
+  page: Page,
+  card: ReturnType<Page["locator"]>
+) {
+  return card.locator("p").evaluateAll((els) =>
+    els
+      .filter((el) => !el.hasAttribute("data-kpi-rotulo") && !el.hasAttribute("data-kpi-valor"))
+      .map((el) => {
+        const s = getComputedStyle(el);
+        const clamp = s.getPropertyValue("-webkit-line-clamp") || s.getPropertyValue("line-clamp");
+        return {
+          texto: (el.textContent ?? "").trim(),
+          truncadoUmaLinha:
+            (s.overflowX === "hidden" || s.overflow === "hidden") &&
+            s.textOverflow === "ellipsis" &&
+            s.whiteSpace === "nowrap",
+          clampAtivo: clamp !== "" && clamp !== "none" && clamp !== "unset",
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+          scrollHeight: el.scrollHeight,
+          clientHeight: el.clientHeight,
+        };
+      })
+  );
+}
+
+test.describe("KPIs de topo — sem truncamento silencioso", () => {
+  for (const largura of [1440, 1366, 1024, 768, 390]) {
+    test(`${largura}px: o texto auxiliar dos quatro KPIs está inteiro na tela`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await login(page, ORG_ANALYTICS);
+      await page.goto("/app/analytics");
+
+      const grade = page.locator("[data-grade-kpis]").first();
+      const cartoes = grade.locator("[data-slot=card]");
+      await expect(cartoes).toHaveCount(4);
+
+      for (let i = 0; i < 4; i += 1) {
+        const medidas = await medirTruncamento(page, cartoes.nth(i));
+        for (const m of medidas) {
+          expect(m.texto.length, `parágrafo vazio no card ${i}`).toBeGreaterThan(0);
+          expect(
+            m.truncadoUmaLinha,
+            `"${m.texto}" cortado com reticências em ${largura}px`
+          ).toBe(false);
+          if (m.clampAtivo) {
+            expect(
+              m.scrollHeight,
+              `"${m.texto}" cortado por line-clamp em ${largura}px`
+            ).toBeLessThanOrEqual(m.clientHeight + 1);
+          }
+          expect(
+            m.scrollWidth,
+            `"${m.texto}" com overflow horizontal em ${largura}px`
+          ).toBeLessThanOrEqual(m.clientWidth + 1);
+        }
+      }
+
+      // Conteúdo essencial de fato presente, não só "não cortado
+      // visualmente" — a frase INTEIRA de cada card está na página.
+      // Período não muda entre estas larguras: sempre "últimos 30 dias".
+      const grade2 = page.locator("[data-grade-kpis]").first();
+      await expect(grade2).toContainText("pelos formulários do site");
+      await expect(grade2).toContainText("últimos 30 dias");
+      await expect(grade2).toContainText("pessoas diferentes por trás desses contatos");
+      await expect(grade2).toContainText("imóveis que receberam ao menos 1 contato");
+      await expect(grade2).toContainText("proprietários vindos de");
+      // A variação continua com ícone + texto, não só cor.
+      await expect(grade2.locator("svg")).toHaveCount(4 + 1); // 4 ícones de card + 1 seta de variação
+    });
+  }
 });
 
 test.describe("Analytics — responsividade dos quatro domínios", () => {

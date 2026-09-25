@@ -18,7 +18,11 @@ import { ORG_ANALYTICS, ORG_AGENDA, ORG_A, login } from "./helpers";
 test.describe("Resultado comercial — Analytics", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, ORG_ANALYTICS);
-    await page.goto("/app/analytics");
+    // Fase 68.1 — "Resultado comercial" (com as taxas de conversão e as
+    // notas de atribuição) saiu da Visão geral, que agora mostra só a
+    // síntese. O detalhamento completo continua, intocado, na aba
+    // Comercial.
+    await page.goto("/app/analytics?tab=comercial");
   });
 
   test("mostra oportunidades, ganhos e as duas taxas", async ({
@@ -79,7 +83,7 @@ test.describe("Resultado comercial — Analytics", () => {
     // e /app/login redireciona pra /app quando há sessão.
     await page.context().clearCookies();
     await login(page, ORG_AGENDA);
-    await page.goto("/app/analytics");
+    await page.goto("/app/analytics?tab=comercial");
 
     const resultado = page.getByRole("region", { name: "Resultado comercial" });
     // A explicação honesta: a coluna está vazia porque o vínculo passou a
@@ -90,7 +94,7 @@ test.describe("Resultado comercial — Analytics", () => {
   for (const largura of [375, 768, 1024, 1280, 1440]) {
     test(`${largura}px: resultado comercial sem overflow`, async ({ page }) => {
       await page.setViewportSize({ width: largura, height: 900 });
-      await page.goto("/app/analytics");
+      await page.goto("/app/analytics?tab=comercial");
       await expect(page.getByRole("region", { name: "Resultado comercial" })).toBeVisible();
       const semOverflow = await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth + 1

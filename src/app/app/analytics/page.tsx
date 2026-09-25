@@ -23,6 +23,7 @@ import { AnalyticsTopImoveis } from "@/components/admin/analytics/AnalyticsTopIm
 import { AnalyticsFunilDigital } from "@/components/admin/analytics/AnalyticsFunilDigital";
 import { AnalyticsAquisicao } from "@/components/admin/analytics/AnalyticsAquisicao";
 import { AnalyticsResultado } from "@/components/admin/analytics/AnalyticsResultado";
+import { AnalyticsResumoComercial } from "@/components/admin/analytics/AnalyticsResumoComercial";
 import { AnalyticsResponsaveis } from "@/components/admin/analytics/AnalyticsResponsaveis";
 import { AnalyticsParticipacao } from "@/components/admin/analytics/AnalyticsParticipacao";
 import { AnalyticsLiquidacao } from "@/components/admin/analytics/AnalyticsLiquidacao";
@@ -141,15 +142,24 @@ export default async function AnalyticsPage({
         descricao="Visão da imobiliária — como o mercado procurou a sua imobiliária pelos formulários do site."
       />
 
-      {/* O período é o recorte de TODA a tela, então fica acima das abas —
-          trocar de domínio não muda o período, e vice-versa. `extras`
-          preserva a aba aberta ao trocar de período. */}
-      <AnalyticsPeriodoChips periodo={periodo} extras={{ tab: params.tab }} />
+      {/* Fase 68.1 — período e KPIs viviam soltos no mesmo space-y-6 do
+          resto da página, com o mesmo respiro que separa qualquer outra
+          seção — visualmente eles pareciam dois blocos independentes, não
+          "o mesmo recorte temporal". Agrupados aqui com um espaçamento
+          menor (space-y-3) para serem lidos como uma unidade; o respiro
+          maior antes das abas continua vindo do space-y-6 do container
+          externo. */}
+      <div className="space-y-3">
+        {/* O período é o recorte de TODA a tela, então fica acima das
+            abas — trocar de domínio não muda o período, e vice-versa.
+            `extras` preserva a aba aberta ao trocar de período. */}
+        <AnalyticsPeriodoChips periodo={periodo} extras={{ tab: params.tab }} />
 
-      {/* Os quatro KPIs de entrada ficam FORA das abas: são a leitura de
-          topo da operação e valem para qualquer domínio que se esteja
-          olhando. */}
-      <AnalyticsKpiCards analytics={analytics} periodoLabel={periodoLabel} />
+        {/* Os quatro KPIs de entrada ficam FORA das abas: são a leitura de
+            topo da operação e valem para qualquer domínio que se esteja
+            olhando. */}
+        <AnalyticsKpiCards analytics={analytics} periodoLabel={periodoLabel} />
+      </div>
 
       {/* =============================================================
           QUATRO DOMÍNIOS EM ABAS REAIS
@@ -173,16 +183,18 @@ export default async function AnalyticsPage({
       <AbasAnalytics
         geral={
           <>
-            {/* SÍNTESE, não repetição: a evolução dos contatos (a série que
-                responde "como está o período") e o resultado comercial
-                agregado. As versões detalhadas de aquisição e comissões
-                vivem nas abas próprias. */}
+            {/* Fase 68.1 — SÍNTESE de verdade, não a aba Comercial
+                copiada. A evolução dos contatos responde "como está o
+                período"; AnalyticsResumoComercial resume avanço + resultado
+                financeiro em seis números (nenhum novo — os mesmos de
+                `analytics.resultado`), sem comissão e sem conversões
+                detalhadas, que continuam na aba Comercial completa. */}
             <AnalyticsSerieContatos
               serie={analytics.serie}
               granularidade={analytics.granularidade}
               periodoLabel={periodoLabel}
             />
-            <AnalyticsResultado resultado={analytics.resultado} periodoLabel={periodoLabel} />
+            <AnalyticsResumoComercial resultado={analytics.resultado} periodoLabel={periodoLabel} />
           </>
         }
         aquisicao={

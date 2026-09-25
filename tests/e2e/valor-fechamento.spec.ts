@@ -12,7 +12,11 @@ import { ORG_ANALYTICS, ORG_A, login } from "./helpers";
 test.describe("Analytics — resultado financeiro", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, ORG_ANALYTICS);
-    await page.goto("/app/analytics");
+    // Fase 68.1 — "Resultado comercial" (Valor fechado/Ticket médio com
+    // as notas de "ganho sem valor") saiu da Visão geral, que agora
+    // mostra só a síntese. O detalhamento completo continua, intocado, na
+    // aba Comercial.
+    await page.goto("/app/analytics?tab=comercial");
   });
 
   test("mostra valor fechado e ticket médio, e distingue ganho sem valor", async ({ page }) => {
@@ -69,7 +73,7 @@ test.describe("Analytics — resultado financeiro", () => {
   for (const largura of [375, 768, 1024, 1280, 1440]) {
     test(`${largura}px: valores monetários sem overflow`, async ({ page }) => {
       await page.setViewportSize({ width: largura, height: 900 });
-      await page.goto("/app/analytics");
+      await page.goto("/app/analytics?tab=comercial");
       await expect(page.getByRole("region", { name: "Resultado comercial" })).toBeVisible();
       const semOverflow = await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth + 1

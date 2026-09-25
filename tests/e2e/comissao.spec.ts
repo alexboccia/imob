@@ -22,7 +22,12 @@ import { ORG_ANALYTICS, ORG_AGENDA, login } from "./helpers";
 test.describe("Analytics — comissão registrada", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, ORG_ANALYTICS);
-    await page.goto("/app/analytics");
+    // Fase 68.1 — "Resultado comercial" (com Comissão registrada/média/
+    // efetiva) saiu da Visão geral, que agora mostra só a síntese
+    // (Oportunidades/Ganhas/Perdidas/Taxa/Valor fechado/Ticket médio, sem
+    // comissão). O detalhamento completo continua, intocado, na aba
+    // Comercial.
+    await page.goto("/app/analytics?tab=comercial");
   });
 
   test("mostra comissão total, média e efetiva, e declara os ganhos sem comissão", async ({
@@ -73,7 +78,7 @@ test.describe("Analytics — comissão registrada", () => {
   for (const largura of [375, 768, 1024, 1280, 1440]) {
     test(`${largura}px: valores de comissão sem overflow`, async ({ page }) => {
       await page.setViewportSize({ width: largura, height: 900 });
-      await page.goto("/app/analytics");
+      await page.goto("/app/analytics?tab=comercial");
       await expect(page.getByRole("region", { name: "Resultado comercial" })).toBeVisible();
       const semOverflow = await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth + 1
