@@ -1,7 +1,9 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import {
+  login,
   entrarComo,
   esperarJanelaAntiSpam,
+  ORG_A,
   ORG_CAPTACAO,
   ORG_CAPTACAO_CORRETOR,
   COLISAO_CAPTACAO,
@@ -136,4 +138,151 @@ test.describe("Captação ambígua — nada se perde", () => {
       await expect(page.getByText("Contato identificado e adicionado ao histórico do cliente.")).toBeVisible();
     });
   });
+});
+
+// =======================================================================
+// Redesenho visual — sistema de backoffice (Fase 70)
+// =======================================================================
+// Estes testes cobrem SÓ a apresentação: hierarquia, ausência de
+// funcionalidade inventada, estado vazio e responsividade. A garantia de
+// captura (dado nunca se perde, a única ação é vincular) já está provada
+// acima e continua passando sem nenhuma adaptação — a prova de que o
+// redesenho não mudou uma regra sequer.
+
+function secaoContatosPendentes(page: Page) {
+  return page.getByRole("heading", { level: 2 }).filter({ hasText: "Contatos pendentes" });
+}
+
+test.describe("estrutura da tela redesenhada (Fase 70)", () => {
+  test("hierarquia de cabeçalhos sem salto: h1 -> h2, nunca h1 -> h3", async ({ page }) => {
+    const nome = `Visitante Hierarquia ${Date.now()}`;
+    await enviarContatoAmbiguo(page, nome);
+    await entrarComo(page, ORG_CAPTACAO);
+    await page.goto("/app/captacoes");
+
+    const h1 = page.getByRole("heading", { level: 1 });
+    await expect(h1).toHaveText("Contatos a identificar");
+    await expect(secaoContatosPendentes(page)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3 })).toHaveCount(0);
+    // Só um h1 na página.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  });
+
+  test("nenhuma aba, busca ou filtro foi inventado", async ({ page }) => {
+    const nome = `Visitante SemFiltro ${Date.now()}`;
+    await enviarContatoAmbiguo(page, nome);
+    await entrarComo(page, ORG_CAPTACAO);
+    await page.goto("/app/captacoes");
+
+    await expect(page.getByRole("tablist")).toHaveCount(0);
+    await expect(page.locator('input[type="search"]')).toHaveCount(0);
+    await expect(page.getByRole("searchbox")).toHaveCount(0);
+    await expect(page.locator("select")).toHaveCount(0);
+  });
+
+  test("nenhum CTA inventado: sem 'adicionar', 'importar' ou 'criar cliente'", async ({
+    page,
+  }) => {
+    const nome = `Visitante SemCTA ${Date.now()}`;
+    await enviarContatoAmbiguo(page, nome);
+    await entrarComo(page, ORG_CAPTACAO);
+    await page.goto("/app/captacoes");
+
+    // A ÚNICA ação real é vincular ao cliente (por candidato). Nenhuma
+    // destas quatro existe no código (ResolverCaptacao.tsx é explícito:
+    // "sem opção criar novo cliente e sem unificar cadastros").
+    for (const rotulo of [
+      "Adicionar contato",
+      "Novo contato",
+      "Importar contatos",
+      "Criar cliente",
+    ]) {
+      await expect(page.getByRole("button", { name: rotulo })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: rotulo })).toHaveCount(0);
+    }
+  });
+
+  test("captação sem imóvel de origem não mostra linha de imóvel", async ({ page }) => {
+    // O formulário geral de /contato nunca envia imovelId — é o caminho
+    // real coberto pelo resto deste arquivo, e o campo é condicional no
+    // componente (só aparece quando `captacao.imovel` existe).
+    const nome = `Visitante SemImovel ${Date.now()}`;
+    await enviarContatoAmbiguo(page, nome);
+    await entrarComo(page, ORG_CAPTACAO);
+    await page.goto("/app/captacoes");
+
+    const item = page.locator("li").filter({ hasText: nome });
+    await expect(item).toBeVisible();
+    await expect(item.getByText("Imóvel:")).toHaveCount(0);
+  });
+});
+
+test.describe("estado vazio (Fase 70)", () => {
+  // Org A nunca recebeu uma captação ambígua (nenhum spec cria conflito
+  // de identidade lá) — mesma fixture que admin-responsivo.spec.ts já
+  // usa para este mesmo vazio.
+  test("usa o componente compartilhado, com texto factual e sem CTA inventado", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/captacoes");
+
+    await expect(page.getByRole("heading", { level: 1, name: "Contatos a identificar" })).toBeVisible();
+    await expect(secaoContatosPendentes(page)).toBeVisible();
+
+    const vazio = page.locator("[data-estado-vazio]");
+    await expect(vazio).toBeVisible();
+    await expect(vazio.getByText("Nenhum contato para identificar")).toBeVisible();
+    // A frase é factual sobre a REGRA real (e-mail e telefone apontando
+    // para clientes diferentes) — não um genérico "nada aqui ainda".
+    await expect(
+      vazio.getByText(/e-mail e telefone apontando para clientes diferentes/)
+    ).toBeVisible();
+    await expect(vazio.getByRole("button")).toHaveCount(0);
+    await expect(vazio.getByRole("link")).toHaveCount(0);
+  });
+});
+
+test.describe("responsivo (Fase 70)", () => {
+  // Larguras alinhadas ao conjunto canônico já usado nas demais páginas
+  // redesenhadas do backoffice (Dashboard/Pipeline/Imóveis/Analytics/
+  // Minhas comissões), em vez de um conjunto próprio desta spec.
+  for (const largura of [1920, 1440, 1366, 1024, 768, 390]) {
+    test(`${largura}px: sem overflow e sem truncamento`, async ({ page }) => {
+      const nome = `Visitante Responsivo ${largura} ${Date.now()}`;
+      await enviarContatoAmbiguo(page, nome);
+      await entrarComo(page, ORG_CAPTACAO);
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.goto("/app/captacoes");
+
+      await expect(page.getByRole("heading", { level: 1, name: "Contatos a identificar" })).toBeVisible();
+      const item = page.locator("li").filter({ hasText: nome });
+      await expect(item).toBeVisible();
+
+      const semOverflowDocumento = await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth + 1
+      );
+      expect(semOverflowDocumento, `overflow horizontal do documento em ${largura}px`).toBe(true);
+
+      // Nome, contador e data-hora — os três textos mais suscetíveis a
+      // cortar numa coluna estreita atrás da sidebar — medidos contra o
+      // scrollWidth real, não só a ausência de overflow do documento.
+      const medidas = await page
+        .locator("h1, h2")
+        .filter({ hasText: /Contatos/ })
+        .evaluateAll((els) =>
+          els.map((el) => ({
+            texto: (el.textContent ?? "").trim(),
+            scrollWidth: el.scrollWidth,
+            clientWidth: el.clientWidth,
+          }))
+        );
+      for (const m of medidas) {
+        expect(
+          m.scrollWidth,
+          `"${m.texto}" cortado em ${largura}px`
+        ).toBeLessThanOrEqual(m.clientWidth + 1);
+      }
+    });
+  }
 });

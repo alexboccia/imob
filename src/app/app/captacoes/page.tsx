@@ -9,11 +9,13 @@ import {
   buscarCaptacoesPendentes,
   contarCaptacoesPendentes,
 } from "@/lib/captacao-pendente";
-import { CaptacoesPendentes } from "@/components/admin/CaptacoesPendentes";
+import { ContatosAIdentificar } from "@/components/admin/ContatosAIdentificar";
+import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
 
-// Fila de identificação (Fase 24). A autorização é verificada AQUI, no
-// servidor, antes de qualquer consulta — e novamente dentro da action.
-// Esconder o item de menu não é controle de acesso.
+// Fila de identificação (Fase 24; redesenho visual na Fase 70). A
+// autorização é verificada AQUI, no servidor, antes de qualquer consulta
+// — e novamente dentro da action. Esconder o item de menu não é controle
+// de acesso.
 export default async function CaptacoesPage() {
   const session = await auth();
   if (!session) redirect("/app/login");
@@ -29,21 +31,17 @@ export default async function CaptacoesPage() {
   ]);
 
   return (
-    <div className="space-y-5">
-      <div className="min-w-0">
-        <h1 className="min-w-0 break-words text-2xl font-semibold">Contatos a identificar</h1>
-        <p className="text-sm text-muted-foreground">
-          Contatos recebidos pelo site que o sistema guardou sem decidir a quem pertencem.
-        </p>
-      </div>
+    <div className="space-y-6">
+      {/* Fase 70 — cabeçalho migrado para o componente compartilhado.
+          Título e descrição PRESERVADOS palavra por palavra: nenhum CTA
+          global foi adicionado, porque não existe ação de página aqui
+          (a única ação real é por contato — ver ContatosAIdentificar). */}
+      <CabecalhoPagina
+        titulo="Contatos a identificar"
+        descricao="Contatos recebidos pelo site que o sistema guardou sem decidir a quem pertencem."
+      />
 
-      {total === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Nenhum contato aguardando identificação.
-        </p>
-      ) : (
-        <CaptacoesPendentes captacoes={captacoes} total={total} fuso={fuso} />
-      )}
+      <ContatosAIdentificar captacoes={captacoes} total={total} fuso={fuso} />
     </div>
   );
 }
