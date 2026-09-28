@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { IDS_E2E, ORG_COMISSOES, ORG_COMISSOES_BRUNO, login } from "./helpers";
+import { IDS_E2E, ORG_COMISSOES, ORG_COMISSOES_BRUNO, ORG_FUSO, login } from "./helpers";
 
 // =======================================================================
 // Comissão a receber — a carteira financeira do corretor (Fase 35)
@@ -23,17 +23,24 @@ import { IDS_E2E, ORG_COMISSOES, ORG_COMISSOES_BRUNO, login } from "./helpers";
 const CARTEIRA = "/app/minhas-comissoes";
 const HOJE = new Date().toISOString().slice(0, 10);
 
-// toContainText não normaliza o espaço não-separável que toLocaleString
-// emite depois de "R$" — mesma precaução de liquidacao.spec.ts.
-async function texto(page: Page, seletor: string) {
-  return (await page.locator(seletor).innerText()).replace(/ /g, " ");
+// Fase 69 — o resumo deixou de ser UM card com o título "Resumo": agora
+// é uma <section> (CabecalhoSecao "Resumo das comissões" + a grade de
+// CartaoEstatistica). Esta função escopa a essa seção, não a um card
+// específico dentro dela.
+function secaoResumo(page: Page) {
+  return page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Resumo das comissões" }) });
 }
 
-function cardDe(page: Page, titulo: string) {
-  return page
+// Lê o valor de um KPI pelo rótulo — mesma âncora estrutural usada nos
+// testes de Dashboard/Pipeline/Imóveis/Analytics (data-kpi-rotulo/
+// data-kpi-valor), em vez de procurar texto dentro de um card genérico.
+function valorKpi(page: Page, rotulo: string) {
+  return secaoResumo(page)
     .locator('[data-slot="card"]')
-    .filter({ has: page.getByText(titulo, { exact: true }) })
-    .first();
+    .filter({ has: page.locator("[data-kpi-rotulo]", { hasText: rotulo }) })
+    .locator("[data-kpi-valor]");
 }
 
 function negocio(page: Page, imovel: string) {
@@ -51,16 +58,16 @@ test.describe("carteira do corretor", () => {
 
   test("responde as três perguntas de uma vez, com os rótulos em texto", async ({ page }) => {
     await expect(page.getByRole("heading", { level: 1, name: "Minhas comissões" })).toBeVisible();
+    // A seção também é um heading de verdade — h2, abaixo do h1 da página.
+    const tituloResumo = page.getByRole("heading", { level: 2, name: "Resumo das comissões" });
+    await expect(tituloResumo).toBeVisible();
 
-    const resumo = await texto(page, '[data-slot="card"]:has-text("Resumo")');
-    expect(resumo).toContain("A receber");
-    expect(resumo).toContain("R$ 18.000,00");
-    expect(resumo).toContain("Minha participação");
-    expect(resumo).toContain("R$ 23.000,00");
-    expect(resumo).toContain("Já recebido");
-    expect(resumo).toContain("R$ 5.000,00");
+    await expect(valorKpi(page, "A receber")).toHaveText("R$ 18.000,00");
+    await expect(valorKpi(page, "Minha participação")).toHaveText("R$ 23.000,00");
+    await expect(valorKpi(page, "Já recebido")).toHaveText("R$ 5.000,00");
 
     // 23.000 − 5.000 = 18.000. A conta fecha na tela, não só no servidor.
+    const resumo = (await secaoResumo(page).innerText()).replace(/ /g, " ");
     expect(resumo).toContain("em 3 negócios ganhos");
   });
 
@@ -93,7 +100,7 @@ test.describe("carteira do corretor", () => {
       " "
     );
     expect(jardins).toContain("Comissão do negócio R$ 30.000");
-    const resumo = await texto(page, '[data-slot="card"]:has-text("Resumo")');
+    const resumo = (await secaoResumo(page).innerText()).replace(/ /g, " ");
     expect(resumo).not.toContain("R$ 30.000");
   });
 
@@ -116,7 +123,7 @@ test.describe("carteira do corretor", () => {
     await expect(linha.getByText("Não definido")).toHaveCount(2);
     await expect(linha).toContainText("Recebido");
 
-    const resumo = await texto(page, '[data-slot="card"]:has-text("Resumo")');
+    const resumo = (await secaoResumo(page).innerText()).replace(/ /g, " ");
     expect(resumo).toContain("1 participação sua ainda não tem valor definido");
   });
 
@@ -236,7 +243,10 @@ test.describe("o saldo segue o que realmente aconteceu", () => {
 // Responsivo
 // -----------------------------------------------------------------------
 test.describe("responsivo", () => {
-  for (const largura of [320, 390, 768, 1280, 1440]) {
+  // Fase 69 — larguras alinhadas ao conjunto canônico já usado em
+  // Dashboard/Pipeline/Imóveis/Analytics, em vez do conjunto próprio que
+  // esta spec tinha antes do redesenho.
+  for (const largura of [1920, 1440, 1366, 1024, 768, 390]) {
     test(`${largura}px: sem overflow e com o saldo legível`, async ({ page }) => {
       await page.setViewportSize({ width: largura, height: 900 });
       await login(page, ORG_COMISSOES_BRUNO);
@@ -245,7 +255,29 @@ test.describe("responsivo", () => {
       await expect(page.getByRole("heading", { level: 1, name: "Minhas comissões" })).toBeVisible();
       // "A receber" é a pergunta que traz o corretor até aqui: no celular
       // ela precisa estar visível sem rolar.
-      await expect(cardDe(page, "Resumo").getByText("R$ 18.000,00")).toBeInViewport();
+      await expect(valorKpi(page, "A receber")).toHaveText("R$ 18.000,00");
+      await expect(valorKpi(page, "A receber")).toBeInViewport();
+
+      // Rótulo não colapsado nem valor monetário cortado — mesma medição
+      // usada nas demais páginas do backoffice para pegar o bug real
+      // (scrollWidth > clientWidth), não só a ausência de overflow do
+      // documento.
+      const medidas = await secaoResumo(page)
+        .locator("[data-kpi-rotulo], [data-kpi-valor]")
+        .evaluateAll((els) =>
+          els.map((el) => ({
+            texto: (el.textContent ?? "").trim(),
+            scrollWidth: el.scrollWidth,
+            clientWidth: el.clientWidth,
+          }))
+        );
+      expect(medidas.length).toBe(6); // 3 rótulos + 3 valores
+      for (const m of medidas) {
+        expect(
+          m.scrollWidth,
+          `"${m.texto}" cortado em ${largura}px`
+        ).toBeLessThanOrEqual(m.clientWidth + 1);
+      }
 
       const semOverflow = await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth + 1
@@ -253,4 +285,123 @@ test.describe("responsivo", () => {
       expect(semOverflow, `overflow @ ${largura}px`).toBe(true);
     });
   }
+});
+
+// -----------------------------------------------------------------------
+// Estrutura, acessibilidade e ausência do que não deveria existir
+// -----------------------------------------------------------------------
+// Fase 69 — cobertura do REDESENHO, não do cálculo (que já está provado
+// acima e nos testes unitários de src/lib/comissao-a-receber.test.ts).
+test.describe("estrutura da tela redesenhada", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_COMISSOES_BRUNO);
+    await page.goto(CARTEIRA);
+  });
+
+  test("hierarquia de cabeçalhos sem salto: h1 -> h2, nunca h1 -> h3", async ({ page }) => {
+    const niveis = await page
+      .locator("main h1, main h2, main h3")
+      .evaluateAll((els) => els.map((el) => Number(el.tagName[1])));
+    expect(niveis[0]).toBe(1);
+    for (let i = 1; i < niveis.length; i += 1) {
+      expect(
+        niveis[i] - niveis[i - 1],
+        `salto de h${niveis[i - 1]} para h${niveis[i]}`
+      ).toBeLessThanOrEqual(1);
+    }
+    // As duas seções são h2 reais — não o <div> que CardTitle renderiza.
+    await expect(page.getByRole("heading", { level: 2, name: "Resumo das comissões" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Negócios" })).toBeVisible();
+  });
+
+  test("os três KPIs não são links — não prometem navegação que não existe", async ({ page }) => {
+    const grade = secaoResumo(page).locator("[data-slot=card]").filter({
+      has: page.locator("[data-kpi-rotulo]"),
+    });
+    await expect(grade).toHaveCount(3);
+    await expect(grade.locator("a")).toHaveCount(0);
+  });
+
+  test("não existem abas: Resumo e Negócios são seções na mesma página, não domínios navegáveis", async ({
+    page,
+  }) => {
+    // A regra do backoffice (ver ui/README.md): abas só quando houver
+    // contextos distintos que justifiquem navegação — não é o caso aqui.
+    await expect(page.getByRole("tablist")).toHaveCount(0);
+    await expect(page.getByRole("tab")).toHaveCount(0);
+    // As duas seções continuam visíveis SIMULTANEAMENTE, sem clique.
+    await expect(page.getByRole("heading", { name: "Resumo das comissões" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Negócios" })).toBeVisible();
+  });
+
+  test("nenhum CTA inventado: sem botões de ação além do que já existia (nenhum)", async ({
+    page,
+  }) => {
+    // A tela é de leitura (ver também "a tela é de leitura" acima). Nomes
+    // proibidos explicitamente pela fase — nenhum deles tem destino real.
+    for (const rotulo of [
+      "Adicionar comissão",
+      "Solicitar comissão",
+      "Configurar participação",
+      "Ver oportunidades",
+    ]) {
+      await expect(page.getByRole("button", { name: rotulo })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: rotulo })).toHaveCount(0);
+    }
+  });
+
+  test("nenhum período/filtro foi inventado", async ({ page }) => {
+    // A lib documenta explicitamente por que não há janela temporal
+    // (é ESTOQUE, não FLUXO) — a tela não pode contradizer isso.
+    await expect(page.getByRole("combobox")).toHaveCount(0);
+    await expect(page.getByRole("searchbox")).toHaveCount(0);
+    for (const rotulo of ["Período", "Este mês", "Últimos 30 dias", "Status"]) {
+      await expect(page.getByText(rotulo, { exact: true })).toHaveCount(0);
+    }
+  });
+});
+
+// -----------------------------------------------------------------------
+// Zero real vs. ausência — o outro extremo do mesmo cuidado
+// -----------------------------------------------------------------------
+// Org F (fuso) nunca recebeu nenhuma participação de comissão: nenhuma
+// outra spec cria PropertyInterestParticipant nela (confirmado lendo o
+// seed). É um zero ESTRUTURAL, não uma corrida contra outra spec — ao
+// contrário de orgs como ORG_AGENDA, que hospedam jornadas de fechamento
+// de propósito.
+test.describe("carteira genuinamente vazia (zero real, nunca '—')", () => {
+  test("R$ 0,00 nos três KPIs — zero é um valor real, não indisponibilidade", async ({ page }) => {
+    await login(page, ORG_FUSO);
+    await page.goto(CARTEIRA);
+
+    await expect(valorKpi(page, "A receber")).toHaveText("R$ 0,00");
+    await expect(valorKpi(page, "Minha participação")).toHaveText("R$ 0,00");
+    await expect(valorKpi(page, "Já recebido")).toHaveText("R$ 0,00");
+
+    // "R$ 0,00" nunca é "—": ausência (participação não definida) e zero
+    // (zero negócios ganhos) são fatos diferentes, e aqui o fato é zero.
+    const resumo = (await secaoResumo(page).innerText()).replace(/ /g, " ");
+    expect(resumo).not.toContain("—");
+  });
+
+  test("o estado vazio usa o componente compartilhado, com o texto preservado e sem CTA", async ({
+    page,
+  }) => {
+    await login(page, ORG_FUSO);
+    await page.goto(CARTEIRA);
+
+    const vazio = page.locator("[data-estado-vazio]");
+    await expect(vazio).toBeVisible();
+    await expect(vazio.getByText("Nenhuma comissão atribuída")).toBeVisible();
+    await expect(vazio).toContainText(
+      "Você ainda não é beneficiário da comissão de nenhum negócio ganho."
+    );
+    // A regra de negócio some no texto secundário, palavra por palavra.
+    await expect(vazio).toContainText(
+      "A divisão da comissão é declarada na ficha do cliente, negócio a negócio."
+    );
+    // Nenhuma ação — nem dentro do estado vazio, nem fora dele.
+    await expect(vazio.getByRole("button")).toHaveCount(0);
+    await expect(vazio.getByRole("link")).toHaveCount(0);
+  });
 });

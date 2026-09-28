@@ -5,6 +5,7 @@ import { hasModule } from "@/lib/entitlements";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import { buscarComissaoAReceber } from "@/lib/comissao-a-receber";
 import { ComissaoAReceber } from "@/components/admin/ComissaoAReceber";
+import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
 
 export const metadata = { title: "Minhas comissões" };
 
@@ -72,13 +73,15 @@ export default async function MinhasComissoesPage() {
   ]);
 
   return (
-    <div className="space-y-5">
-      <div className="min-w-0">
-        <h1 className="min-w-0 break-words text-2xl font-semibold">Minhas comissões</h1>
-        <p className="text-sm text-muted-foreground">
-          Quanto da comissão é seu, quanto já foi pago e quanto ainda falta receber.
-        </p>
-      </div>
+    <div className="space-y-6">
+      {/* Fase 69 — cabeçalho migrado para o componente compartilhado do
+          backoffice. Título e subtítulo PRESERVADOS palavra por palavra:
+          nenhum botão foi adicionado, porque não existe ação real de
+          página aqui (a tela é de leitura, ver ComissaoAReceber.tsx). */}
+      <CabecalhoPagina
+        titulo="Minhas comissões"
+        descricao="Quanto da comissão é seu, quanto já foi pago e quanto ainda falta receber."
+      />
 
       <ComissaoAReceber carteira={carteira} fuso={fuso} />
     </div>
