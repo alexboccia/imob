@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { ORG_A, login } from "./helpers";
+import { ORG_A, ORG_B, ORG_CONTATOS, ORG_CAPTACAO_CORRETOR, login, entrarComo } from "./helpers";
 
 // Redesenho de Tipos de Imóvel — roda em ORG_A, seedada com "Apartamento"
 // e "Casa em condomínio fechado com área de lazer completa" (residencial)
@@ -8,19 +8,27 @@ import { ORG_A, login } from "./helpers";
 // Características — testes de contagem por grupo usam delta (antes/depois
 // de uma ação própria), nunca valor absoluto hardcoded, mesmo padrão do
 // resto do projeto.
+//
+// Fase 72 — cada grupo agora é um <section> com um <h2> real acima do
+// Card (CabecalhoSecao): "Imóveis residenciais"/"Imóveis comerciais"
+// deixaram de ser um <div> estilizado (CardTitle não tem semântica de
+// heading — achado de acessibilidade da própria fase) para virar
+// heading de verdade. Os helpers abaixo escopam pelo <section>, não mais
+// pelo Card sozinho — mudança estrutural legítima, não um enfraquecimento:
+// o Card continua existindo dentro da section, só o título saiu dele.
 test.beforeEach(async ({ page }) => {
   await login(page, ORG_A);
 });
 
 function grupoResidencial(page: Page) {
-  return page.locator('[data-slot="card"]').filter({
-    has: page.locator('[data-slot="card-title"]', { hasText: "Imóveis residenciais" }),
+  return page.locator("section").filter({
+    has: page.getByRole("heading", { level: 2, name: "Imóveis residenciais" }),
   });
 }
 
 function grupoComercial(page: Page) {
-  return page.locator('[data-slot="card"]').filter({
-    has: page.locator('[data-slot="card-title"]', { hasText: "Imóveis comerciais" }),
+  return page.locator("section").filter({
+    has: page.getByRole("heading", { level: 2, name: "Imóveis comerciais" }),
   });
 }
 
@@ -163,7 +171,7 @@ test.describe("Tipos de imóvel", () => {
       `innerWidth=${m.innerWidth} scrollWidth=${m.scrollWidth} bodyScrollWidth=${m.bodyScrollWidth}`
     ).toBe(true);
 
-    const titulo = grupoComercial(page).locator('[data-slot="card-title"]');
+    const titulo = grupoComercial(page).getByRole("heading", { level: 2, name: "Imóveis comerciais" });
     const medida = await titulo.evaluate((el) => {
       const r = el.getBoundingClientRect();
       const lineHeight = parseFloat(getComputedStyle(el).lineHeight || "20");
@@ -214,5 +222,125 @@ test.describe("Tipos de imóvel", () => {
     const boxComercial = await grupoComercial(page).boundingBox();
     expect(boxResidencial && boxComercial && Math.abs(boxComercial.y - boxResidencial.y) < 5).toBe(true);
     expect(boxResidencial && boxComercial && boxComercial.x > boxResidencial.x).toBe(true);
+  });
+});
+
+// =======================================================================
+// Redesenho visual — sistema de backoffice (Fase 72)
+// =======================================================================
+// A garantia de negócio (criar, remover, isolamento por categoria,
+// nome duplicado, tenant) já está coberta acima e continua passando com
+// a MESMA regra — só os helpers de localização foram adaptados para a
+// nova estrutura semântica (ver comentário no topo do arquivo). Aqui:
+// hierarquia de headings, ausência de funcionalidade inventada, label
+// real do campo de criação, permissão sem gestão e estados vazios.
+
+test.describe("estrutura da tela redesenhada (Fase 72)", () => {
+  test("hierarquia de cabeçalhos: h1 -> dois h2, sem h3", async ({ page }) => {
+    await page.goto("/app/tipos-imovel");
+
+    await expect(page.getByRole("heading", { level: 1, name: "Tipos de imóvel" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Imóveis residenciais" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Imóveis comerciais" })
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 3 })).toHaveCount(0);
+  });
+
+  test("o campo de criação tem um label real, distinto por categoria", async ({ page }) => {
+    await page.goto("/app/tipos-imovel");
+
+    // getByLabel só resolve com associação de verdade (htmlFor/id) —
+    // prova que não é só o placeholder fazendo esse papel.
+    await expect(page.getByLabel("Novo tipo de imóvel residencial")).toBeVisible();
+    await expect(page.getByLabel("Novo tipo de imóvel comercial")).toBeVisible();
+  });
+
+  test("nenhuma aba, busca, filtro, ordenação ou paginação foi inventada", async ({ page }) => {
+    await page.goto("/app/tipos-imovel");
+
+    await expect(page.getByRole("tablist")).toHaveCount(0);
+    await expect(page.locator('input[type="search"]')).toHaveCount(0);
+    await expect(page.getByRole("searchbox")).toHaveCount(0);
+    await expect(page.locator("select")).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: /páginas|paginação/i })).toHaveCount(0);
+  });
+
+  test("um papel sem gestão vê os dois grupos mas nenhuma ação administrativa", async ({
+    page,
+  }) => {
+    await entrarComo(page, ORG_CAPTACAO_CORRETOR);
+    await page.goto("/app/tipos-imovel");
+
+    await expect(page.getByRole("heading", { level: 1, name: "Tipos de imóvel" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Imóveis residenciais" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Imóveis comerciais" })
+    ).toBeVisible();
+
+    // Nem o formulário de criação, nem qualquer lixeira — não é só o
+    // botão escondido, o affordance inteiro não existe para este papel.
+    await expect(page.getByRole("button", { name: "Adicionar" })).toHaveCount(0);
+    await expect(page.locator('input[name="nome"]')).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Remover tipo de imóvel/ })).toHaveCount(0);
+  });
+
+  test("criar um tipo com nome longo não estoura a coluna em 390px", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto("/app/tipos-imovel");
+
+    const nomeLongo = `Apartamento cobertura duplex com vista panorâmica E2E ${Date.now()}`;
+    await grupoResidencial(page).getByLabel("Novo tipo de imóvel residencial").fill(nomeLongo);
+    await grupoResidencial(page).getByRole("button", { name: "Adicionar" }).click();
+    await expect(grupoResidencial(page).getByText(nomeLongo, { exact: true })).toBeVisible();
+
+    const semOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1
+    );
+    expect(semOverflow).toBe(true);
+  });
+});
+
+test.describe("estados vazios (Fase 72)", () => {
+  test("ambas as categorias vazias usam o componente compartilhado, sem CTA duplicado", async ({
+    page,
+  }) => {
+    // Org B nunca recebeu nenhum tipo (nenhuma chamada de
+    // garantirTipoImovel no seed) — vazio garantido nas duas categorias.
+    await entrarComo(page, ORG_B);
+    await page.goto("/app/tipos-imovel");
+
+    const vazioResidencial = grupoResidencial(page).locator("[data-estado-vazio]");
+    const vazioComercial = grupoComercial(page).locator("[data-estado-vazio]");
+    await expect(vazioResidencial).toBeVisible();
+    await expect(vazioComercial).toBeVisible();
+    await expect(vazioResidencial.getByText("Nenhum tipo residencial cadastrado")).toBeVisible();
+    await expect(vazioComercial.getByText("Nenhum tipo comercial cadastrado")).toBeVisible();
+
+    // O formulário de criação já está no mesmo Card, logo acima — o
+    // vazio não duplica um segundo botão "Adicionar".
+    await expect(vazioResidencial.getByRole("button")).toHaveCount(0);
+    await expect(vazioComercial.getByRole("button")).toHaveCount(0);
+  });
+
+  test("uma categoria com dado e a outra vazia — cada card no seu próprio estado", async ({
+    page,
+  }) => {
+    // Org Contatos tem exatamente "Apartamento" (residencial) e nada em
+    // comercial — ver garantirTipoImovel no seed E2E.
+    await entrarComo(page, ORG_CONTATOS);
+    await page.goto("/app/tipos-imovel");
+
+    await expect(grupoResidencial(page).getByText("Apartamento", { exact: true })).toBeVisible();
+    await expect(grupoResidencial(page).locator("[data-estado-vazio]")).toHaveCount(0);
+    await expect(grupoComercial(page).locator("[data-estado-vazio]")).toBeVisible();
+    await expect(
+      grupoComercial(page).getByText("Nenhum tipo comercial cadastrado")
+    ).toBeVisible();
   });
 });

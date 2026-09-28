@@ -4,6 +4,7 @@ import { withOrganization } from "@/lib/tenant-context";
 import { temPapel, PAPEIS_GESTAO_CATALOGOS } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
 import { TiposImovelGrupoCard } from "@/components/admin/tipos-imovel/TiposImovelGrupoCard";
+import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
 
 export default async function TiposImovelPage() {
   const organizationId = await requireOrganizationId();
@@ -32,23 +33,19 @@ export default async function TiposImovelPage() {
     .sort(porNome);
 
   return (
-    <div className="space-y-5">
-      <div className="min-w-0">
-        <h1 className="min-w-0 break-words text-2xl font-semibold">Tipos de imóvel</h1>
-        {/* min-w-0 break-words: achado real em 375/360px — "(residencial/comercial)"
-            é um único token sem espaço (o "/" não é ponto de quebra
-            garantido) e não cabia na coluna estreita disponível atrás da
-            sidebar fixa (scrollWidth 393 vs innerWidth 375 antes desta
-            correção), mesma classe de bug já corrigida em outros títulos/
-            textos do projeto. */}
-        <p className="min-w-0 break-words text-sm text-muted-foreground">
-          Gerencie as opções de tipo (residencial/comercial) que aparecem no
-          cadastro de imóveis. Remover um tipo daqui não afeta imóveis que já
-          o possuem — só deixa de aparecer como opção para novos cadastros.
-        </p>
-      </div>
+    <div className="space-y-6">
+      {/* Fase 72 — cabeçalho migrado para o componente compartilhado.
+          Texto PRESERVADO palavra por palavra (inclusive o break-words:
+          "(residencial/comercial)" é um único token sem espaço e não
+          cabia em 375/360px sem ele — achado real, preservado). Nenhum
+          CTA global: a única ação de criação é por categoria, dentro de
+          cada card abaixo. */}
+      <CabecalhoPagina
+        titulo="Tipos de imóvel"
+        descricao="Gerencie as opções de tipo (residencial/comercial) que aparecem no cadastro de imóveis. Remover um tipo daqui não afeta imóveis que já o possuem — só deixa de aparecer como opção para novos cadastros."
+      />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
         <TiposImovelGrupoCard
           titulo="Imóveis residenciais"
           categoria="RESIDENTIAL"
