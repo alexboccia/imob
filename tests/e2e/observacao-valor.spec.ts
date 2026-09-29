@@ -214,15 +214,19 @@ test.describe("admin", () => {
   test("cria com observação, edita, limpa — e o campo é opcional", async ({ page }) => {
     await page.goto("/app/imoveis/novo");
 
-    // Fica no card dos valores, junto do preço, e começa vazio.
+    // Fica na mesma seção dos valores, junto do preço, e começa vazio.
     const campo = page.locator(CAMPO);
     await expect(campo).toHaveValue("");
-    // No MESMO card do preço, que é o card "Valores".
+    // Na MESMA seção do preço, cujo h2 diz "Valores" (Fase 76 — o título
+    // da seção virou um h2 real via CabecalhoSecao, fora do Card; antes
+    // vivia como CardTitle, um <div> sem semântica, dentro do próprio
+    // card. O fato verificado é o mesmo: observacaoValor e preco
+    // pertencem ao mesmo agrupamento visual "Valores".
     const vizinhanca = await campo.evaluate((el) => {
-      const card = el.closest('[data-slot="card"]')!;
+      const secao = el.closest("section")!;
       return {
-        titulo: card.querySelector('[data-slot="card-title"]')?.textContent?.trim(),
-        temPreco: !!card.querySelector("#preco"),
+        titulo: secao.querySelector("h2")?.textContent?.trim(),
+        temPreco: !!secao.querySelector("#preco"),
       };
     });
     expect(vizinhanca).toEqual({ titulo: "Valores", temPreco: true });

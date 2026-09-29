@@ -1,6 +1,17 @@
 "use client";
 
 import { useActionState } from "react";
+import {
+  Banknote,
+  FileText,
+  Image as ImageIcon,
+  Landmark,
+  ListChecks,
+  MapPin,
+  Megaphone,
+  Ruler,
+  Tag,
+} from "lucide-react";
 import { FINALIDADE_LABEL, STATUS_IMOVEL_LABEL } from "@/lib/format";
 import { ESTADO_INICIAL_ACAO, type ActionState } from "@/lib/action-result";
 import { MediaUploader, type MidiaItem } from "@/components/admin/MediaUploader";
@@ -15,6 +26,7 @@ import { BotaoSalvarImovel } from "@/components/admin/BotaoSalvarImovel";
 import { CampoMoeda } from "@/components/admin/CampoMoeda";
 import { ErroCampo } from "@/components/admin/ErroCampo";
 import { LocaisProximosEditor } from "@/components/admin/LocaisProximosEditor";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import type { LocalProximo } from "@/lib/locais-proximos";
 import {
   LIMITE_FRASE_DESTAQUE,
@@ -33,13 +45,7 @@ import { Label } from "@/components/ui/label";
 import { MAX_DESTAQUES_HOME, type OcupacaoVitrine } from "@/lib/vitrine-home";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -149,11 +155,14 @@ export function ImovelForm({
       ? v.tipo
       : null;
 
-  // Mesmo padrão das telas de Configurações: o formulário é uma pilha de
-  // CARDS, um por assunto, cada um com título e uma linha dizendo o que
-  // aquele bloco decide. Antes era uma coluna única com vinte e poucos
-  // campos seguidos, sem hierarquia — a mesma informação, mas sem nada
-  // que dissesse onde um assunto termina e outro começa.
+  // Fase 76 — o formulário continua sendo uma pilha de seções, uma por
+  // assunto (decisão de uma fase anterior, que já resolveu "coluna única
+  // sem hierarquia"). O que muda é a marcação do título de cada seção:
+  // CabecalhoSecao (h2 real) FORA do Card, em vez de CardTitle (que
+  // renderiza um <div> sem semântica de heading) DENTRO dele — mesmo
+  // padrão já usado em Dashboard/Empreendimentos/Assinatura/Usuários.
+  // Sem Card por fora do CabecalhoSecao: CardContent sozinho já é a
+  // moldura, evitando card dentro de card.
   //
   // Nenhum campo mudou de nome, de valor padrão ou de ordem: isto é
   // reorganização visual, e o que a action recebe continua idêntico.
@@ -165,13 +174,13 @@ export function ImovelForm({
         </Alert>
       )}
 
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Identificação</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            Como o imóvel é apresentado e em que situação ele está.
-          </CardDescription>
-        </CardHeader>
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={Tag}
+          titulo="Identificação"
+          descricao="Como o imóvel é apresentado e em que situação ele está."
+        />
+        <Card className="min-w-0">
         <CardContent className="min-w-0 space-y-6">
           <div className="space-y-1.5">
             <Label htmlFor="titulo">Título</Label>
@@ -326,15 +335,16 @@ export function ImovelForm({
           </div>
 
         </CardContent>
-      </Card>
+        </Card>
+      </section>
 
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Divulgação</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            Onde este imóvel aparece no site e com quais selos.
-          </CardDescription>
-        </CardHeader>
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={Megaphone}
+          titulo="Divulgação"
+          descricao="Onde este imóvel aparece no site e com quais selos."
+        />
+        <Card className="min-w-0">
         <CardContent className="min-w-0 space-y-6">
           {/* "Lançamento" saiu deste grupo e virou seção própria (abaixo),
           junto dos campos que só existem por causa dele. Aqui ficam os
@@ -410,15 +420,16 @@ export function ImovelForm({
           </label>
 
         </CardContent>
-      </Card>
+        </Card>
+      </section>
 
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Endereço</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            Onde o imóvel fica. Define bairro e cidade nos filtros do site.
-          </CardDescription>
-        </CardHeader>
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={MapPin}
+          titulo="Endereço"
+          descricao="Onde o imóvel fica. Define bairro e cidade nos filtros do site."
+        />
+        <Card className="min-w-0">
         <CardContent className="min-w-0">
           <CamposEndereco
             valoresIniciais={{
@@ -436,15 +447,16 @@ export function ImovelForm({
           />
 
         </CardContent>
-      </Card>
+        </Card>
+      </section>
 
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Valores</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            O site mostra o preço da finalidade escolhida acima.
-          </CardDescription>
-        </CardHeader>
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={Banknote}
+          titulo="Valores"
+          descricao="O site mostra o preço da finalidade escolhida acima."
+        />
+        <Card className="min-w-0">
         <CardContent className="min-w-0">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="space-y-1.5">
@@ -511,15 +523,16 @@ export function ImovelForm({
           </div>
 
         </CardContent>
-      </Card>
+        </Card>
+      </section>
 
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Medidas e cômodos</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            Alimentam os filtros de área, dormitórios e vagas do site.
-          </CardDescription>
-        </CardHeader>
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={Ruler}
+          titulo="Medidas e cômodos"
+          descricao="Alimentam os filtros de área, dormitórios e vagas do site."
+        />
+        <Card className="min-w-0">
         <CardContent className="min-w-0">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
@@ -581,15 +594,16 @@ export function ImovelForm({
           </div>
 
         </CardContent>
-      </Card>
+        </Card>
+      </section>
 
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Características</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            O que o imóvel e o condomínio oferecem. Viram filtros no site.
-          </CardDescription>
-        </CardHeader>
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={ListChecks}
+          titulo="Características"
+          descricao="O que o imóvel e o condomínio oferecem. Viram filtros no site."
+        />
+        <Card className="min-w-0">
         <CardContent className="min-w-0">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <SeletorCaracteristicas
@@ -607,19 +621,20 @@ export function ImovelForm({
           </div>
 
         </CardContent>
-      </Card>
+        </Card>
+      </section>
 
       {/* Fotos e materiais eram separados por uma linha (`border-t`), que
           é o mesmo recurso que as Configurações usam DENTRO de um card
           para dividir assuntos próximos. Aqui são assuntos inteiros, e
-          viram cards como os demais. */}
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Fotos</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            A primeira foto é a capa nas listagens e no compartilhamento.
-          </CardDescription>
-        </CardHeader>
+          viram seções inteiras como as demais. */}
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={ImageIcon}
+          titulo="Fotos"
+          descricao="A primeira foto é a capa nas listagens e no compartilhamento."
+        />
+        <Card className="min-w-0">
         <CardContent className="min-w-0 space-y-6">
           {/* Fase 45 — conteúdo da FOTO DE DESTAQUE. Fica aqui, junto da
               explicação da capa, e acima da lista de fotos de propósito:
@@ -669,40 +684,43 @@ export function ImovelForm({
           <MediaUploader midiasIniciais={midiasIniciais} propertyId={propertyId} />
           <ErroCampo erros={estado.fieldErrors?.midiasJson} />
         </CardContent>
-      </Card>
+        </Card>
+      </section>
 
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Materiais de apresentação</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            Book, plantas e tabelas — entregues no site após o visitante se identificar.
-          </CardDescription>
-        </CardHeader>
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={FileText}
+          titulo="Materiais de apresentação"
+          descricao="Book, plantas e tabelas — entregues no site após o visitante se identificar."
+        />
+        <Card className="min-w-0">
         <CardContent className="min-w-0">
           <MateriaisUploader
             materiaisIniciais={materiaisIniciais}
             propertyId={propertyId}
           />
         </CardContent>
-      </Card>
+        </Card>
+      </section>
 
-      {/* Mesma anatomia do card de Características: título, uma linha do
-          que o bloco decide e o editor direto no conteúdo, sem card
+      {/* Mesma anatomia da seção de Características: cabeçalho, uma linha
+          do que o bloco decide e o editor direto no conteúdo, sem card
           dentro de card. */}
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">O que tem por perto</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            Cadastre os principais serviços, comércios e pontos de interesse próximos ao imóvel.
-          </CardDescription>
-        </CardHeader>
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={Landmark}
+          titulo="O que tem por perto"
+          descricao="Cadastre os principais serviços, comércios e pontos de interesse próximos ao imóvel."
+        />
+        <Card className="min-w-0">
         <CardContent className="min-w-0">
           <LocaisProximosEditor
             locaisIniciais={locaisProximosIniciais}
             erros={estado.fieldErrors?.locaisProximos}
           />
         </CardContent>
-      </Card>
+        </Card>
+      </section>
 
       <BotaoSalvarImovel />
     </form>

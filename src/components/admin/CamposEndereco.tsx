@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { ESTADOS_BRASIL } from "@/lib/estados-brasil";
 import { ErroCampo } from "@/components/admin/ErroCampo";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const MapaLocalizacao = dynamic(
   () => import("@/components/admin/MapaLocalizacao").then((m) => m.MapaLocalizacao),
@@ -157,10 +159,17 @@ export function CamposEndereco({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">CEP</label>
-          <input
+      {/* grid-cols-4 sem breakpoint espremia CEP/Logradouro/Número (achado
+          real: Cidade/UF chegavam a ~30px de largura em 390px, campo
+          inutilizável, embora sem overflow de documento — minmax(0,1fr)
+          encolhe em vez de estourar). lg: (1024px), não sm:/md: — medido:
+          em 768px 1/4 de linha dividido ainda pela metade (Cidade/UF)
+          continuava com a mesma largura inutilizável. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="cep">CEP</Label>
+          <Input
+            id="cep"
             name="cep"
             value={cep}
             onChange={(e) => setCep(formatarCep(e.target.value))}
@@ -168,51 +177,52 @@ export function CamposEndereco({
             placeholder="00000-000"
             inputMode="numeric"
             maxLength={9}
-            className="w-full border rounded-md px-3 py-2"
           />
           {buscandoCep && (
-            <p className="text-xs text-gray-400 mt-1">Buscando endereço...</p>
+            <p className="text-xs text-muted-foreground" aria-live="polite">
+              Buscando endereço...
+            </p>
           )}
         </div>
-        <div className="col-span-2">
-          <label className="block text-sm font-medium mb-1">Logradouro</label>
-          <input
+        <div className="lg:col-span-2 space-y-1.5">
+          <Label htmlFor="logradouro">Logradouro</Label>
+          <Input
+            id="logradouro"
             name="logradouro"
             value={logradouro}
             onChange={(e) => setLogradouro(e.target.value)}
-            className="w-full border rounded-md px-3 py-2"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Número</label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="numero">Número</Label>
+          <Input
+            id="numero"
             name="numero"
             value={numero}
             onChange={(e) => setNumero(e.target.value)}
-            className="w-full border rounded-md px-3 py-2"
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
-        <div className="col-span-2">
-          <label className="block text-sm font-medium mb-1">Complemento</label>
-          <input
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <div className="lg:col-span-2 space-y-1.5">
+          <Label htmlFor="complemento">Complemento</Label>
+          <Input
+            id="complemento"
             name="complemento"
             value={complemento}
             onChange={(e) => setComplemento(e.target.value)}
-            className="w-full border rounded-md px-3 py-2"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Bairro</label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="bairro">Bairro</Label>
+          <Input
+            id="bairro"
             name="bairro"
             value={bairro}
             onChange={(e) => setBairro(e.target.value)}
             list="lista-bairros"
             required
-            className="w-full border rounded-md px-3 py-2"
           />
           <datalist id="lista-bairros">
             {bairros.map((b) => (
@@ -222,9 +232,10 @@ export function CamposEndereco({
           <ErroCampo erros={erros?.bairro} />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-sm font-medium mb-1">Cidade</label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="cidade">Cidade</Label>
+            <Input
+              id="cidade"
               name="cidade"
               value={cidade}
               onChange={(e) => {
@@ -233,7 +244,6 @@ export function CamposEndereco({
               }}
               list="lista-cidades"
               required
-              className="w-full border rounded-md px-3 py-2"
             />
             <datalist id="lista-cidades">
               {cidades.map((c) => (
@@ -242,9 +252,10 @@ export function CamposEndereco({
             </datalist>
             <ErroCampo erros={erros?.cidade} />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">UF</label>
+          <div className="space-y-1.5">
+            <Label htmlFor="estado">UF</Label>
             <select
+              id="estado"
               name="estado"
               value={estado}
               onChange={(e) => {
@@ -252,7 +263,7 @@ export function CamposEndereco({
                 setCidades([]);
               }}
               required
-              className="w-full border rounded-md px-3 py-2"
+              className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <option value="">UF</option>
               {ESTADOS_BRASIL.map((e) => (
@@ -266,9 +277,9 @@ export function CamposEndereco({
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-1">Localização no mapa</label>
-        <div className="flex items-center gap-3 mb-2">
+      <fieldset className="space-y-1.5 border-0 p-0 m-0">
+        <legend className="text-sm font-medium mb-1">Localização no mapa</legend>
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={buscarCoordenadas}
@@ -280,7 +291,9 @@ export function CamposEndereco({
               : "Buscar coordenadas pelo endereço"}
           </button>
           {erroGeocode && (
-            <p className="text-sm text-red-600">{erroGeocode}</p>
+            <p className="text-sm text-destructive" role="alert">
+              {erroGeocode}
+            </p>
           )}
         </div>
 
@@ -293,37 +306,37 @@ export function CamposEndereco({
             setLongitude(String(lng));
           }}
         />
-        <p className="text-xs text-gray-500 mt-2">
+        <p className="text-xs text-muted-foreground mt-2">
           Clique no mapa ou arraste o marcador para ajustar a posição exata.
         </p>
 
         <div className="grid grid-cols-2 gap-4 mt-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">Latitude</label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="latitude">Latitude</Label>
+            <Input
+              id="latitude"
               name="latitude"
               type="number"
               step="0.000001"
               value={latitude}
               onChange={(e) => setLatitude(e.target.value)}
               placeholder="-23.561684"
-              className="w-full border rounded-md px-3 py-2"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Longitude</label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="longitude">Longitude</Label>
+            <Input
+              id="longitude"
               name="longitude"
               type="number"
               step="0.000001"
               value={longitude}
               onChange={(e) => setLongitude(e.target.value)}
               placeholder="-46.655981"
-              className="w-full border rounded-md px-3 py-2"
             />
           </div>
         </div>
-      </div>
+      </fieldset>
     </div>
   );
 }

@@ -537,8 +537,10 @@ test.describe("admin", () => {
       await page.setViewportSize({ width: largura, height: DOBRA });
       await page.goto(edicao(IDS_E2E.imovelEditorialCompleto));
       await expect(itens(page)).toHaveCount(7);
-      const card = page.locator('[data-slot="card"]').filter({
-        has: page.locator('[data-slot="card-title"]', { hasText: /^Fotos$/ }),
+      // Fase 76 — o título "Fotos" virou h2 real (CabecalhoSecao), fora do
+      // card: o escopo passa a ser o <section> que os dois compartilham.
+      const card = page.locator("section").filter({
+        has: page.getByRole("heading", { level: 2, name: /^Fotos$/ }),
       });
       const c = await caixa(card);
       for (const item of await itens(page).all()) {

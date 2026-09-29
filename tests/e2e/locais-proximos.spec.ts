@@ -22,9 +22,16 @@ function secaoPublica(page: Page) {
   return page.locator("[data-locais-proximos]");
 }
 
+// Fase 76 — o título da seção deixou de ser um CardTitle DENTRO do card
+// (um <div>, sem semântica) e virou um h2 real via CabecalhoSecao, FORA
+// do card, como irmão dele dentro do <section> do formulário (mesmo
+// padrão de Dashboard/Empreendimentos/Assinatura/Usuários). O locator
+// escopa pelo <section>, não mais pelo card: toda busca abaixo
+// (getByLabel/getByTestId/getByText/getByRole) continua funcionando
+// igual, pois procura descendentes de qualquer ancestral comum.
 function cardPorTitulo(page: Page, titulo: string): Locator {
-  return page.locator('[data-slot="card"]').filter({
-    has: page.locator('[data-slot="card-title"]', { hasText: new RegExp(`^${titulo}$`) }),
+  return page.locator("section").filter({
+    has: page.getByRole("heading", { level: 2, name: new RegExp(`^${titulo}$`) }),
   });
 }
 
@@ -122,26 +129,34 @@ test.describe("admin — mesma anatomia do card de Características", () => {
     await expect(referencia).toHaveCount(1);
     await expect(novo).toHaveCount(1);
 
-    await expect(novo.locator('[data-slot="card-description"]')).toHaveText(DESCRICAO);
+    // A descrição é o primeiro <p> da seção: o de CabecalhoSecao, antes de
+    // qualquer texto que o conteúdo do card possa ter.
+    await expect(novo.locator("p").first()).toHaveText(DESCRICAO);
 
-    // Mesma árvore de slots, com as MESMAS classes em cada nível.
-    const anatomia = (card: Locator) =>
-      card.evaluate((el) => {
-        const cls = (sel: string) => el.querySelector(`:scope > ${sel}`)?.getAttribute("class");
-        const header = el.querySelector(':scope > [data-slot="card-header"]');
+    // Mesma árvore — CabecalhoSecao (h2 + descrição) seguido do card, com
+    // as MESMAS classes em cada nível.
+    const anatomia = (secao: Locator) =>
+      secao.evaluate((el) => {
+        const card = el.querySelector(':scope > [data-slot="card"]');
+        const h2 = el.querySelector(":scope h2");
+        const descricao = h2?.parentElement?.querySelector("p") ?? null;
         return {
-          card: el.getAttribute("class"),
-          header: cls('[data-slot="card-header"]'),
-          titulo: header?.querySelector('[data-slot="card-title"]')?.getAttribute("class"),
-          descricao: header?.querySelector('[data-slot="card-description"]')?.getAttribute("class"),
-          conteudo: cls('[data-slot="card-content"]'),
-          filhos: Array.from(el.children).map((c) => c.getAttribute("data-slot")),
+          secao: el.getAttribute("class"),
+          titulo: h2?.getAttribute("class"),
+          descricao: descricao?.getAttribute("class"),
+          card: card?.getAttribute("class"),
+          conteudo: card?.querySelector(':scope > [data-slot="card-content"]')?.getAttribute("class"),
+          filhosCard: card ? Array.from(card.children).map((c) => c.getAttribute("data-slot")) : null,
+          filhosSecao: Array.from(el.children).map((c) => c.tagName),
         };
       });
     expect(await anatomia(novo)).toEqual(await anatomia(referencia));
 
-    // Nenhum card dentro do card.
-    await expect(novo.locator('[data-slot="card"]')).toHaveCount(0);
+    // Nenhum card dentro do card (o único [data-slot="card"] da seção é o
+    // próprio card da seção — procurar dentro DELE por outro é a prova).
+    const card = novo.locator('[data-slot="card"]');
+    await expect(card).toHaveCount(1);
+    await expect(card.locator('[data-slot="card"]')).toHaveCount(0);
 
     // Mesma coluna: mesmo x e mesma largura.
     const a = await referencia.boundingBox();

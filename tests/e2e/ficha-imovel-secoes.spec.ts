@@ -87,8 +87,19 @@ test("as seções têm a mesma largura dos cards do formulário", async ({ page 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(FICHA);
 
+  // "Identificação" é uma seção do formulário (ImovelForm, Fase 76): o
+  // título virou h2 real fora do card, então a largura de referência é a
+  // do <section> — o card lá dentro ocupa a mesma largura (sem padding
+  // horizontal próprio no section). "Clientes interessados"/"Clientes
+  // compatíveis" continuam CardTitle dentro do card, sem mudança.
   const largura = async (titulo: string) => {
-    const caixa = await cardDe(page, titulo).boundingBox();
+    const locator =
+      titulo === "Identificação"
+        ? page
+            .locator("section")
+            .filter({ has: page.getByRole("heading", { level: 2, name: titulo, exact: true }) })
+        : cardDe(page, titulo);
+    const caixa = await locator.boundingBox();
     expect(caixa, `sem bounding box: ${titulo}`).not.toBeNull();
     return Math.round(caixa!.width);
   };

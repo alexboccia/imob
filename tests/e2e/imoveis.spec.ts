@@ -78,6 +78,37 @@ for (const largura of [320, 390, 768, 1280, 1440]) {
   });
 }
 
+// Fase 76 — achado real: a linha Complemento/Bairro/Cidade/UF usava
+// grid-cols-4 sem breakpoint; Cidade e UF (um grid aninhado, metade de
+// 1/4 de linha) chegavam a ~30px de largura em 390px — sem overflow de
+// documento (minmax(0,1fr) encolhe em vez de estourar), mas um campo
+// inutilizável. A correção empilha em 1 coluna abaixo de 1024px
+// (lg:grid-cols-4); isto mede a largura real, não só ausência de scroll.
+for (const largura of [1920, 1440, 1366, 1024, 768, 390]) {
+  test(`${largura}px: Cidade e UF continuam campos utilizáveis`, async ({ page }) => {
+    await page.setViewportSize({ width: largura, height: 900 });
+    await page.goto("/app/imoveis/novo");
+
+    const medidas = await page
+      .locator("#cidade, #estado")
+      .evaluateAll((els) =>
+        els.map((el) => ({
+          id: el.id,
+          rectWidth: el.getBoundingClientRect().width,
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        }))
+      );
+    for (const m of medidas) {
+      expect(m.rectWidth, `#${m.id} estreito demais @ ${largura}px`).toBeGreaterThanOrEqual(48);
+      expect(
+        m.scrollWidth,
+        `#${m.id} cortado @ ${largura}px`
+      ).toBeLessThanOrEqual(m.clientWidth + 1);
+    }
+  });
+}
+
 test("edita um imóvel existente", async ({ page }) => {
   await page.goto(`/app/imoveis/${IDS_E2E.imovelParaEditarOrgA}`);
   await expect(page.locator("#titulo")).toHaveValue("Apartamento E2E para edição");

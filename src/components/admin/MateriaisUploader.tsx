@@ -103,14 +103,16 @@ export function MateriaisUploader({
         value={JSON.stringify(materiais)}
       />
 
-      <div>
-        <h3 className="text-sm font-medium">Materiais de apresentação</h3>
-        <p className="text-xs text-muted-foreground">
-          PDF, até 20MB por arquivo. Ficam disponíveis no site depois que o
-          visitante informa o contato — quem não deixa contato não recebe o
-          arquivo.
-        </p>
-      </div>
+      {/* Fase 76 — o título "Materiais de apresentação" saiu daqui: com a
+          seção envolvente agora usando CabecalhoSecao (h2 real, ver
+          ImovelForm.tsx), repeti-lo aqui seria o mesmo texto duas vezes,
+          uma delas como heading fantasma. A explicação do formato/regra
+          continua, como texto comum. */}
+      <p className="text-xs text-muted-foreground">
+        PDF, até 20MB por arquivo. Ficam disponíveis no site depois que o
+        visitante informa o contato — quem não deixa contato não recebe o
+        arquivo.
+      </p>
 
       {materiais.length > 0 && (
         <ul className="space-y-2">

@@ -177,15 +177,16 @@ export function MediaUploader({
       <input type="hidden" name="midiasJson" value={JSON.stringify(midias)} />
 
       <div>
-        <label className="block text-sm font-medium mb-1">
+        <Label htmlFor="upload-fotos" className="block gap-0 mb-1">
           Fotos
           {fotos.length > 0 && (
             <span className="ml-1 font-normal text-gray-500">
               ({fotos.length})
             </span>
           )}
-        </label>
+        </Label>
         <input
+          id="upload-fotos"
           type="file"
           accept="image/*"
           multiple
@@ -311,18 +312,19 @@ export function MediaUploader({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">
+        <Label htmlFor="upload-plantas" className="block gap-0 mb-1">
           Plantas
           {plantas.length > 0 && (
             <span className="ml-1 font-normal text-gray-500">
               ({plantas.length})
             </span>
           )}
-        </label>
+        </Label>
         <p className="text-xs text-gray-500 mb-1">
           Imagens de plantas do imóvel/empreendimento (opcional).
         </p>
         <input
+          id="upload-plantas"
           type="file"
           accept="image/*"
           multiple
@@ -462,11 +464,12 @@ export function MediaUploader({
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">
+        <Label htmlFor="url-video" className="mb-1">
           Vídeos (link do YouTube/Vimeo não listado)
-        </label>
+        </Label>
         <div className="flex gap-2">
           <Input
+            id="url-video"
             type="text"
             value={urlVideo}
             onChange={(e) => setUrlVideo(e.target.value)}

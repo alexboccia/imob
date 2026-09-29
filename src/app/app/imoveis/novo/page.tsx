@@ -6,6 +6,7 @@ import { listarOpcoesEmpreendimento } from "@/lib/empreendimento-consultas";
 import { requireOrganizationId } from "@/lib/tenant";
 import { buscarOcupacaoVitrine } from "@/lib/vitrine-home-consultas";
 import { withOrganization } from "@/lib/tenant-context";
+import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
 
 export default async function NovoImovelPage() {
   const organizationId = await requireOrganizationId();
@@ -23,12 +24,10 @@ export default async function NovoImovelPage() {
 
   return (
     <div className="space-y-5">
-      <div className="min-w-0">
-        <h1 className="min-w-0 break-words text-2xl font-semibold">Novo imóvel</h1>
-        <p className="text-sm text-muted-foreground">
-          Cadastre o imóvel. Ele só aparece no site quando o status for Disponível.
-        </p>
-      </div>
+      <CabecalhoPagina
+        titulo="Novo imóvel"
+        descricao="Cadastre o imóvel. Ele só aparece no site quando o status for Disponível."
+      />
       <ImovelForm
         action={criarImovel}
         opcoesCaracteristicasImovel={opcoesImovel}
