@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { SlidersHorizontal } from "lucide-react";
 import type { PropertyPurpose } from "@/generated/prisma/client";
 import { salvarPreferenciaPessoa } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
@@ -8,6 +9,7 @@ import { SeletorCaracteristicas } from "@/components/admin/SeletorCaracteristica
 import { SeletorTags } from "@/components/admin/SeletorTags";
 import { CampoMoeda } from "@/components/admin/CampoMoeda";
 import { ErroCampo } from "@/components/admin/ErroCampo";
+import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -71,18 +73,20 @@ export function PreferenciaImovelForm({
 
   if (!mostrarFormulario) {
     return (
-      <div>
-        <p className="text-sm text-muted-foreground mb-3">
-          Nenhuma preferência de imóvel cadastrada.
-        </p>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setMostrarFormulario(true)}
-        >
-          Adicionar preferências
-        </Button>
-      </div>
+      <EstadoVazio
+        icone={SlidersHorizontal}
+        titulo="Nenhuma preferência de imóvel cadastrada"
+        descricao="Registre finalidade, localização, faixa de preço e outros critérios para recomendar imóveis compatíveis a este cliente."
+        acao={
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setMostrarFormulario(true)}
+          >
+            Adicionar preferências
+          </Button>
+        }
+      />
     );
   }
 
@@ -141,8 +145,8 @@ export function PreferenciaImovelForm({
         </div>
       </div>
 
-      <div>
-        <p className="text-sm font-medium mb-2">Faixa de preço (R$)</p>
+      <fieldset className="border-0 p-0 m-0">
+        <legend className="text-sm font-medium mb-2">Faixa de preço (R$)</legend>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="minPrice" className="text-xs text-muted-foreground">
@@ -169,7 +173,7 @@ export function PreferenciaImovelForm({
             <ErroCampo erros={estado.fieldErrors?.maxPrice} />
           </div>
         </div>
-      </div>
+      </fieldset>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="space-y-1.5">
@@ -207,8 +211,8 @@ export function PreferenciaImovelForm({
         </div>
       </div>
 
-      <div>
-        <p className="text-sm font-medium mb-2">Área privativa (m²)</p>
+      <fieldset className="border-0 p-0 m-0">
+        <legend className="text-sm font-medium mb-2">Área privativa (m²)</legend>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="minArea" className="text-xs text-muted-foreground">
@@ -239,7 +243,7 @@ export function PreferenciaImovelForm({
             <ErroCampo erros={estado.fieldErrors?.maxArea} />
           </div>
         </div>
-      </div>
+      </fieldset>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div>

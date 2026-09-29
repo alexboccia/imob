@@ -27,6 +27,10 @@ import { oportunidadeElegivel } from "@/lib/oportunidade";
 import { decimalParaValor } from "@/lib/valor-fechamento";
 import { RecomendacaoImovelItem } from "@/components/admin/RecomendacaoImovelItem";
 import { buscarImoveisCompativeis } from "@/lib/property-matching";
+import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
+import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
+import { SlidersHorizontal, Building2 } from "lucide-react";
 import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
 import { paraResponsavel } from "@/lib/responsavel-negociacao";
 import { paraParticipantes } from "@/lib/participacao-comissao";
@@ -340,11 +344,12 @@ export default async function DetalheClientePage({
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-semibold">{pessoa.name}</h1>
-      <p className="text-muted-foreground">
-        {pessoa.phone ?? "sem telefone"} · {pessoa.email ?? "sem e-mail"} ·{" "}
-        {pessoa.roles.join(", ")}
-      </p>
+      <div className="mb-6">
+        <CabecalhoPagina
+          titulo={pessoa.name}
+          descricao={`${pessoa.phone ?? "sem telefone"} · ${pessoa.email ?? "sem e-mail"} · ${pessoa.roles.join(", ")}`}
+        />
+      </div>
 
       {/* Fase 36 — de quem é este cliente. Mesmo componente da caixa de
           entrada, e mesmas actions: a resposta não pode depender da tela
@@ -401,12 +406,13 @@ export default async function DetalheClientePage({
         </Card>
       )}
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">
-            Preferências de imóvel
-          </CardTitle>
-        </CardHeader>
+      <section className="mb-6 min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={SlidersHorizontal}
+          titulo="Preferências de imóvel"
+          descricao="O que este cliente procura — usado para recomendar imóveis compatíveis, logo abaixo."
+        />
+        <Card className="min-w-0">
         <CardContent>
           <PreferenciaImovelForm
             pessoaId={pessoa.id}
@@ -439,7 +445,8 @@ export default async function DetalheClientePage({
             sugestoesBairros={sugestoesLocalizacao.bairros}
           />
         </CardContent>
-      </Card>
+        </Card>
+      </section>
 
       <Card className="mb-6">
         <CardHeader>
@@ -588,40 +595,51 @@ export default async function DetalheClientePage({
         </CardContent>
       </Card>
 
-      {preferencia && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">
-              Imóveis recomendados
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recomendacoes.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                Nenhum imóvel com compatibilidade suficiente no momento.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {recomendacoes.map((recomendacao) => (
-                  <RecomendacaoImovelItem
-                    key={recomendacao.property.id}
-                    pessoaId={pessoa.id}
-                    // Fase 16 — mesma conversão na fronteira: o resultado
-                    // do matching carrega os preços como Decimal cru.
-                    recomendacao={{
-                      ...recomendacao,
-                      property: {
-                        ...recomendacao.property,
-                        ...precosDoImovel(recomendacao.property),
-                      },
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Fase 77 — a seção agora é sempre renderizada, com três estados
+          reais e distintos (nunca "0 encontrados" para quem não tem
+          perfil, que é uma pergunta diferente de "tem perfil e não bateu
+          nenhum imóvel"). Sem Card envolvendo a lista: cada
+          RecomendacaoImovelItem já É um Card — envolvê-los em outro por
+          fora seria card dentro de card (mesmo padrão já usado por
+          "Histórico de interações", logo abaixo). */}
+      <section className="mb-6 min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={Building2}
+          titulo="Imóveis recomendados"
+          descricao="Imóveis disponíveis que atendem os critérios de Preferências de imóvel, acima."
+        />
+        {!preferencia ? (
+          <EstadoVazio
+            icone={SlidersHorizontal}
+            titulo="Nenhuma preferência cadastrada ainda"
+            descricao="Defina o que este cliente procura em Preferências de imóvel, acima, para ver recomendações aqui."
+          />
+        ) : recomendacoes.length === 0 ? (
+          <EstadoVazio
+            icone={Building2}
+            titulo="Nenhum imóvel corresponde aos critérios atuais"
+            descricao="Ajuste os critérios em Preferências de imóvel, acima, ou aguarde novos imóveis disponíveis."
+          />
+        ) : (
+          <div className="space-y-3">
+            {recomendacoes.map((recomendacao) => (
+              <RecomendacaoImovelItem
+                key={recomendacao.property.id}
+                pessoaId={pessoa.id}
+                // Fase 16 — mesma conversão na fronteira: o resultado
+                // do matching carrega os preços como Decimal cru.
+                recomendacao={{
+                  ...recomendacao,
+                  property: {
+                    ...recomendacao.property,
+                    ...precosDoImovel(recomendacao.property),
+                  },
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
       <Card className="mb-6">
         <CardHeader>
