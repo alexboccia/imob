@@ -5,10 +5,18 @@ import { IDS_E2E, ORG_INBOX, login } from "./helpers";
 // Ficha do imóvel — "Clientes interessados" e "Clientes compatíveis"
 // =======================================================================
 // As duas seções que ficam ABAIXO do formulário seguem o mesmo padrão
-// visual do resto da tela e das Configurações: um card por assunto, com
-// título e uma linha dizendo o que o bloco mostra, e linhas de lista
-// dentro dele — nunca um card dentro de um card, nem um bloco mais
+// visual do resto do backoffice (Fase 80): CabecalhoSecao (h2 real) fora
+// do card, e a largura do restante da página — não um bloco mais
 // estreito que o formulário logo acima.
+//
+// Fase 80 — "Clientes interessados" passou a reusar InteresseImovelItem
+// por inteiro (mesmo componente de "Imóveis relacionados", na ficha do
+// cliente): cada interessado já é um Card por si só, então a seção NÃO
+// tem mais um Card externo envolvendo a lista (envolvê-la seria o card
+// dentro do card que esta mesma suíte já provava não existir). "Clientes
+// compatíveis" continua com um Card único envolvendo <li> de
+// RecomendacaoClienteItem (que nunca foi um Card) — os dois padrões já
+// documentados desde a Fase 78, agora comprovados aqui.
 //
 // Isto é teste de ESTRUTURA, não de estética: sem ele nada impede a
 // recomendação de voltar a ser um card aninhado ou os cabeçalhos de
@@ -24,44 +32,61 @@ test.beforeEach(async ({ page }) => {
   await login(page, ORG_INBOX);
 });
 
-test("as duas seções são cards com título e descrição, como as Configurações", async ({
-  page,
-}) => {
+test("as duas seções têm h2 real e descrição, como o resto do backoffice", async ({ page }) => {
   await page.goto(FICHA);
   await expect(page.getByRole("heading", { level: 1, name: "Editar imóvel" })).toBeVisible();
 
-  await expect(page.getByText("Clientes interessados", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("Quem está negociando este imóvel e qual é o próximo passo de cada um.")
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Clientes interessados" })).toBeVisible();
+  await expect(page.getByText(/Negociações abertas com este imóvel/)).toBeVisible();
 
-  await expect(page.getByText("Clientes compatíveis", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Clientes compatíveis" })).toBeVisible();
   await expect(
     page.getByText("Clientes cujas preferências cadastradas combinam com este imóvel.")
   ).toBeVisible();
 });
 
-test("o interessado é uma linha da lista, com nome, estágio, próxima ação e ações", async ({
+test("o interessado é um card da lista (InteresseImovelItem), com nome, estágio, próxima ação e ações — sem card aninhado", async ({
   page,
 }) => {
   await page.goto(FICHA);
 
-  const card = cardDe(page, "Clientes interessados");
-  const linha = card.locator("li").filter({ hasText: "Vera Dialogo" });
-  await expect(linha).toHaveCount(1);
+  const secao = secaoDe(page, "Clientes interessados");
+  const card = secao.locator('[data-slot="card"]').filter({ hasText: "Vera Dialogo" });
+  await expect(card).toHaveCount(1);
 
   // O nome leva à ficha do cliente; o estágio aparece em texto.
-  await expect(linha.getByRole("link", { name: "Vera Dialogo" })).toHaveAttribute(
+  await expect(card.getByRole("link", { name: "Vera Dialogo" })).toHaveAttribute(
     "href",
     `/app/clientes/${IDS_E2E.pessoaFechamentoDialogo}`
   );
-  await expect(linha).toContainText("Próxima ação:");
-  await expect(linha.getByRole("button", { name: "Agendar visita" })).toBeVisible();
-  await expect(linha.getByRole("button", { name: "Marcar como ganho" })).toBeVisible();
-  await expect(linha.getByRole("button", { name: "Marcar como perdido" })).toBeVisible();
+  await expect(card).toContainText("Próxima ação:");
+  await expect(card.getByRole("button", { name: "Agendar visita" })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Marcar como ganho" })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Marcar como perdido" })).toBeVisible();
 
-  // Linha de lista, nunca uma caixa dentro da caixa.
+  // Cada interessado já É um card — a prova de "nunca card dentro do
+  // card" agora é: nenhum OUTRO card dentro dele mesmo.
   await expect(card.locator('[data-slot="card"]')).toHaveCount(0);
+  // E a seção em si não tem nenhum Card envolvendo a lista inteira.
+  await expect(secao.locator(':scope > [data-slot="card"]')).toHaveCount(0);
+});
+
+test("Fase 80 — Clientes interessados ganhou as mesmas ações de Imóveis relacionados: responsável, comissão e remover", async ({
+  page,
+}) => {
+  await page.goto(FICHA);
+
+  const secao = secaoDe(page, "Clientes interessados");
+  const card = secao.locator('[data-slot="card"]').filter({ hasText: "Vera Dialogo" });
+
+  // Capacidades que só existiam do lado do cliente antes desta fase —
+  // mesmo PropertyInterest, mesmas ações, nos dois lugares agora.
+  await expect(card.getByText("Responsável:")).toBeVisible();
+  await expect(card.getByText(/Divisão da comissão/)).toBeVisible();
+  await expect(card.getByRole("button", { name: "Remover" })).toBeVisible();
+  // Select de estágio manual (oculto só quando a negociação já está
+  // encerrada — não é o caso desta fixture).
+  await expect(card.getByRole("combobox")).toBeVisible();
 });
 
 test("a recomendação compatível é uma linha da lista, não um card dentro do card", async ({
@@ -80,26 +105,19 @@ test("a recomendação compatível é uma linha da lista, não um card dentro do
   await expect(card.locator('[data-slot="card"]')).toHaveCount(0);
 });
 
-// As duas seções compartilham a largura do formulário acima — antes elas
-// eram `max-w-3xl` e ficavam visivelmente mais estreitas que os cards do
+// As seções compartilham a largura do formulário acima — antes eram
+// `max-w-3xl` e ficavam visivelmente mais estreitas que os cards do
 // formulário na mesma página.
 test("as seções têm a mesma largura dos cards do formulário", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(FICHA);
 
-  // "Identificação" é uma seção do formulário (ImovelForm, Fase 76): o
-  // título virou h2 real fora do card, então a largura de referência é a
-  // do <section> — o card lá dentro ocupa a mesma largura (sem padding
-  // horizontal próprio no section). "Clientes interessados"/"Clientes
-  // compatíveis" continuam CardTitle dentro do card, sem mudança.
+  // Fase 80 — as três seções (a do formulário e as duas de clientes)
+  // usam o mesmo padrão <section> + h2 real fora do card: a largura de
+  // referência é sempre a do <section> (sem padding horizontal próprio),
+  // não mais um caso especial só para "Identificação".
   const largura = async (titulo: string) => {
-    const locator =
-      titulo === "Identificação"
-        ? page
-            .locator("section")
-            .filter({ has: page.getByRole("heading", { level: 2, name: titulo, exact: true }) })
-        : cardDe(page, titulo);
-    const caixa = await locator.boundingBox();
+    const caixa = await secaoDe(page, titulo).boundingBox();
     expect(caixa, `sem bounding box: ${titulo}`).not.toBeNull();
     return Math.round(caixa!.width);
   };
@@ -113,7 +131,7 @@ for (const largura of [320, 390, 768, 1280]) {
   test(`${largura}px: as seções de clientes não estouram a tela`, async ({ page }) => {
     await page.setViewportSize({ width: largura, height: 900 });
     await page.goto(FICHA);
-    await expect(page.getByText("Clientes interessados", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Clientes interessados" })).toBeVisible();
 
     const semOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth + 1
@@ -122,12 +140,16 @@ for (const largura of [320, 390, 768, 1280]) {
   });
 }
 
-// O card inteiro a partir do seu título — o título é um <div>
-// (CardTitle), não um heading, então subir até o [data-slot="card"] é o
-// caminho estável.
+function secaoDe(page: import("@playwright/test").Page, titulo: string) {
+  return page.locator("section", {
+    has: page.getByRole("heading", { level: 2, name: titulo, exact: true }),
+  });
+}
+
+// O card real dentro da seção — só faz sentido para "Clientes
+// compatíveis", que ainda envolve sua lista de <li> num único Card.
+// "Clientes interessados" não tem mais Card nenhum na seção (cada item
+// já é o seu próprio Card).
 function cardDe(page: import("@playwright/test").Page, titulo: string) {
-  return page
-    .locator('[data-slot="card"]')
-    .filter({ has: page.getByText(titulo, { exact: true }) })
-    .first();
+  return secaoDe(page, titulo).locator('[data-slot="card"]').first();
 }

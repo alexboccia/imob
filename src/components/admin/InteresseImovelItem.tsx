@@ -53,6 +53,7 @@ export function InteresseImovelItem({
   membros,
   podeLiquidar,
   fuso,
+  pessoa,
 }: {
   // Fuso comercial da organização (Fase 18) — carregado UMA vez pela
   // página e repassado, igual a `membros`. Nunca uma consulta por item.
@@ -64,6 +65,16 @@ export function InteresseImovelItem({
   // Fase 11 — membros ativos, carregados UMA vez pela página e passados
   // a cada item. Nunca uma query por card.
   membros: OpcaoResponsavel[];
+  // Fase 80 — presente SÓ quando este card é renderizado a partir da
+  // FICHA DO IMÓVEL ("Clientes interessados"): ali a página já é sobre
+  // ESTE imóvel (repetido em cada card seria ruído), e quem varia por
+  // linha é o CLIENTE, não o imóvel. Ausente (undefined) na ficha do
+  // cliente, onde é o inverso — mesmo componente, cabeçalho que se
+  // adapta a QUEM já está fixo no contexto da página que o usa. Elimina
+  // a duplicação de regras que existia entre este arquivo e a ficha do
+  // imóvel (ex.: `estagioInteresseEncerrado` bloqueando novo agendamento
+  // era reimplementada nos dois lugares).
+  pessoa?: { id: string; name: string };
   interesse: {
     id: string;
     stage: PropertyInterestStage;
@@ -161,11 +172,22 @@ export function InteresseImovelItem({
     <Card>
       <CardContent className="text-sm space-y-3">
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="font-medium">{interesse.property.title}</p>
-            <p className="text-muted-foreground">
-              {formatarPreco(interesse.property.price ?? interesse.property.rentPrice)}
-            </p>
+          <div className="min-w-0">
+            {pessoa ? (
+              <Link
+                href={`/app/clientes/${pessoa.id}`}
+                className="min-w-0 break-words font-medium text-primary underline-offset-4 hover:underline"
+              >
+                {pessoa.name}
+              </Link>
+            ) : (
+              <>
+                <p className="font-medium">{interesse.property.title}</p>
+                <p className="text-muted-foreground">
+                  {formatarPreco(interesse.property.price ?? interesse.property.rentPrice)}
+                </p>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="secondary">
@@ -338,12 +360,19 @@ export function InteresseImovelItem({
         />
 
         <div className="flex items-center justify-between">
-          <Link
-            href={`/app/imoveis/${interesse.property.id}`}
-            className="text-sm text-blue-600 hover:underline"
-          >
-            Ver imóvel
-          </Link>
+          {/* Fase 80 — omitido quando `pessoa` está presente: nesse
+              contexto (ficha do imóvel) o link apontaria pra própria
+              página que já está aberta, um self-link sem utilidade. */}
+          {pessoa ? (
+            <span />
+          ) : (
+            <Link
+              href={`/app/imoveis/${interesse.property.id}`}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              Ver imóvel
+            </Link>
+          )}
           <form action={formActionRemover}>
             <Button
               type="submit"
