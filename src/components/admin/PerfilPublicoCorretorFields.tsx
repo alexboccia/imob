@@ -88,6 +88,15 @@ export function PerfilPublicoCorretorFields({
         </p>
       </div>
 
+      {/* Fase 74 — separador discreto: a decisão de publicar (acima) e o
+          conteúdo que será publicado (abaixo) são duas perguntas
+          diferentes, e o fieldset inteiro respondia as duas sem nenhuma
+          pausa visual entre elas. Sem cor, sem novo heading, sem dividir
+          o fieldset em vários — só espaço e uma linha fina, a mesma
+          hierarquia proporcional pedida na Fase 74 sem alterar a ordem
+          nem o número de campos (a geometria e a ordem já são cobertas
+          por meu-perfil-publico.spec.ts). */}
+      <div className="min-w-0 space-y-4 border-t pt-4">
       <FotoCorretorUpload
         fotoInicial={valores.foto}
         pasta={pastaDaFoto}
@@ -184,6 +193,7 @@ export function PerfilPublicoCorretorFields({
           links não são interpretados.
         </p>
         <ErroCampo erros={erros?.perfilPublicoBio} />
+      </div>
       </div>
 
       {perfilPublicoHref && (

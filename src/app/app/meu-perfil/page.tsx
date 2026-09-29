@@ -6,6 +6,7 @@ import { temPapel, PAPEIS_PERFIL_PUBLICO_PROPRIO } from "@/lib/authorization";
 import { caminhoPerfilCorretor } from "@/lib/perfil-publico-corretor";
 import { resolverBasePath } from "@/lib/site-url";
 import { MeuPerfilPublicoForm } from "@/components/admin/MeuPerfilPublicoForm";
+import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
 
 // Tela de autoatendimento do perfil público.
 //
@@ -69,20 +70,31 @@ export default async function MeuPerfilPublicoPage() {
   // quando falta papel): numa tela de conteúdo ele espremia o formulário
   // numa coluna de 512px com metade do painel vazia à direita.
   return (
-    <div className="space-y-5">
-      <div className="min-w-0">
-      <h1 className="min-w-0 break-words text-2xl font-semibold">Meu perfil público</h1>
-      <p className="text-sm text-muted-foreground">
-        Estas informações aparecem no seu perfil público e nos imóveis em
-        que você é apresentado como responsável. Nada aqui altera seus
-        dados de acesso ao painel.
-      </p>
-      {!membro.publicProfileEnabled && (
-        <p className="mt-1 text-sm text-muted-foreground" data-testid="perfil-nao-publicado">
-          Seu perfil ainda não está publicado.
-        </p>
-      )}
-      </div>
+    <div className="space-y-6">
+      {/* Fase 74 — cabeçalho migrado para o componente compartilhado.
+          Texto PRESERVADO palavra por palavra, inclusive o aviso
+          condicional de "ainda não publicado" (mesmo data-testid, ainda
+          lido por meu-perfil-publico.spec.ts). Os dois estados de RECUSA
+          acima (sem papel elegível / vínculo não encontrado) continuam
+          com o padrão narrow (`max-w-lg`) que este arquivo já documentava
+          como o mesmo de outras telas de recusa (Configurações) — não são
+          o mesmo tipo de tela que este cabeçalho, e migrá-los quebraria
+          essa convenção cross-page. */}
+      <CabecalhoPagina
+        titulo="Meu perfil público"
+        descricao={
+          <>
+            Estas informações aparecem no seu perfil público e nos imóveis
+            em que você é apresentado como responsável. Nada aqui altera
+            seus dados de acesso ao painel.
+            {!membro.publicProfileEnabled && (
+              <span className="mt-1 block" data-testid="perfil-nao-publicado">
+                Seu perfil ainda não está publicado.
+              </span>
+            )}
+          </>
+        }
+      />
 
       <MeuPerfilPublicoForm
         valores={{

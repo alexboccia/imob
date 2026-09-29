@@ -34,6 +34,12 @@ export function FotoCorretorUpload({
   const [foto, setFoto] = useState(fotoInicial);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // Fase 74 — id derivado de `name` (único por instância; a mesma tela de
+  // edição de usuário renderiza DOIS uploads ao mesmo tempo: "foto" e
+  // "perfilPublicoFoto"). Antes, <Label> não tinha htmlFor nenhum — o
+  // <input type="file"> ficava sem nome acessível associado de verdade,
+  // só o texto solto ao lado.
+  const idInput = `foto-upload-${name}`;
 
   async function handleArquivo(event: React.ChangeEvent<HTMLInputElement>) {
     const arquivo = event.target.files?.[0];
@@ -60,7 +66,7 @@ export function FotoCorretorUpload({
 
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
+      <Label htmlFor={idInput}>{label}</Label>
       {descricao && <p className="text-xs text-muted-foreground">{descricao}</p>}
       <input type="hidden" name={name} value={foto ?? ""} />
       {/* flex-wrap + min-w-0: em container estreito (a tela de
@@ -84,6 +90,7 @@ export function FotoCorretorUpload({
         </div>
         <div className="min-w-0 space-y-1">
           <input
+            id={idInput}
             type="file"
             accept="image/*"
             onChange={handleArquivo}

@@ -51,6 +51,38 @@ async function salvarPerfil(
   await expect(page.getByText("Perfil público atualizado.")).toBeVisible();
 }
 
+test.describe("estrutura da tela redesenhada (Fase 74)", () => {
+  // Cabeçalho migrado para CabecalhoPagina (compartilhado com o resto do
+  // backoffice) — texto preservado, cobertura já existente confirma isso
+  // (teste "a tela existe..."); aqui cobre especificamente a hierarquia
+  // que o componente compartilhado garante.
+  test("h1 único, sem heading duplicado", async ({ page }) => {
+    await login(page, ORG_CENTRAL_CORRETOR);
+    try {
+      await abrirMeuPerfil(page);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    } finally {
+      despublicarPerfisNoBanco();
+    }
+  });
+
+  // FotoCorretorUpload não tinha NENHUM htmlFor/id — o <Label> existia só
+  // visualmente ao lado do input, sem associação real. getByLabel só
+  // resolve quando a associação é de verdade (não por proximidade).
+  test("o campo de foto pública tem um label real associado ao input", async ({ page }) => {
+    await login(page, ORG_CENTRAL_CORRETOR);
+    try {
+      await abrirMeuPerfil(page);
+      await expect(page.getByLabel("Foto pública (opcional)")).toHaveAttribute(
+        "type",
+        "file"
+      );
+    } finally {
+      despublicarPerfisNoBanco();
+    }
+  });
+});
+
 test.describe("corretor mantém o próprio perfil público", () => {
   test("a tela existe, explica a consequência e diz que ainda não está publicado", async ({
     page,
