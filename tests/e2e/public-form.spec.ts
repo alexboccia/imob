@@ -39,10 +39,12 @@ async function abrirHistoricoDoCliente(
   await page.goto("/app/clientes");
   await page.getByRole("link", { name: new RegExp(nome) }).first().click();
   await page.waitForURL(/\/app\/clientes\/.+/);
-  return page
-    .locator("h2")
-    .filter({ hasText: "Histórico de interações" })
-    .locator("xpath=..");
+  // Fase 79 — "Histórico de interações" virou CabecalhoSecao (h2 aninhado
+  // dentro do próprio componente, não mais filho direto do container que
+  // tem a lista) — escopa pelo <section>, não mais subindo do h2 pro pai.
+  return page.locator("section", {
+    has: page.getByRole("heading", { level: 2, name: "Histórico de interações" }),
+  });
 }
 
 test.describe("Captação — contexto do lead no CRM", () => {

@@ -82,10 +82,11 @@ test.describe("Captação ambígua — nada se perde", () => {
     await page.goto("/app/clientes");
     await page.getByRole("link", { name: /Cliente do E-mail/ }).first().click();
     await page.waitForURL(/\/app\/clientes\/.+/);
-    const historico = page
-      .locator("h2")
-      .filter({ hasText: "Histórico de interações" })
-      .locator("xpath=..");
+    // Fase 79 — escopa pelo <section> (h2 agora aninhado dentro do
+    // próprio CabecalhoSecao, não mais filho direto de quem tem a lista).
+    const historico = page.locator("section", {
+      has: page.getByRole("heading", { level: 2, name: "Histórico de interações" }),
+    });
     await expect(
       historico.getByText("Tenho interesse e gostaria de mais detalhes.")
     ).toBeVisible();

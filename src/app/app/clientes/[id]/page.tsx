@@ -17,7 +17,7 @@ import { rotuloOrigemCaptacao } from "@/lib/captacao";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { PreferenciaImovelForm } from "@/components/admin/PreferenciaImovelForm";
 import { InteresseImovelItem } from "@/components/admin/InteresseImovelItem";
@@ -30,7 +30,15 @@ import { buscarImoveisCompativeis } from "@/lib/property-matching";
 import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
 import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
-import { SlidersHorizontal, Building2, Handshake } from "lucide-react";
+import {
+  SlidersHorizontal,
+  Building2,
+  Handshake,
+  Milestone,
+  StickyNote,
+  MessageSquarePlus,
+  History,
+} from "lucide-react";
 import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
 import { paraResponsavel } from "@/lib/responsavel-negociacao";
 import { paraParticipantes } from "@/lib/participacao-comissao";
@@ -366,44 +374,52 @@ export default async function DetalheClientePage({
         />
       </div>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">
-            Estágio no funil
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form action={atualizarEstagioComId} className="flex gap-2">
-            <Select name="estagioFunil" defaultValue={pessoa.pipelineStage}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ESTAGIOS.map((estagio) => (
-                  <SelectItem key={estagio} value={estagio}>
-                    {ESTAGIO_LABEL[estagio]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button type="submit" variant="outline">
-              Atualizar
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      {pessoa.notes && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Observações</CardTitle>
-          </CardHeader>
+      {/* Fase 79 — estágio GERAL da pessoa no funil de leads
+          (Person.pipelineStage: NEW_LEAD/CONTACTED/...), manual, sem
+          relação com PropertyInterest.stage (o estágio de CADA
+          negociação, em Imóveis relacionados/Pipeline abaixo). Os dois
+          usam a palavra "estágio" por coincidência de vocabulário, não
+          porque sejam o mesmo dado — descricao explicita a diferença. */}
+      <section className="mb-6 min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={Milestone}
+          titulo="Estágio no funil"
+          descricao="Estágio geral deste cliente, usado nos filtros da lista de Clientes — diferente do estágio de cada negociação, em Imóveis relacionados."
+        />
+        <Card className="min-w-0">
           <CardContent>
-            <p className="text-sm text-foreground whitespace-pre-line">
-              {pessoa.notes}
-            </p>
+            <form action={atualizarEstagioComId} className="flex gap-2">
+              <Select name="estagioFunil" defaultValue={pessoa.pipelineStage}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ESTAGIOS.map((estagio) => (
+                    <SelectItem key={estagio} value={estagio}>
+                      {ESTAGIO_LABEL[estagio]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="submit" variant="outline">
+                Atualizar
+              </Button>
+            </form>
           </CardContent>
         </Card>
+      </section>
+
+      {pessoa.notes && (
+        <section className="mb-6 min-w-0 space-y-4">
+          <CabecalhoSecao icone={StickyNote} titulo="Observações" />
+          <Card className="min-w-0">
+            <CardContent>
+              <p className="text-sm text-foreground whitespace-pre-line">
+                {pessoa.notes}
+              </p>
+            </CardContent>
+          </Card>
+        </section>
       )}
 
       <section className="mb-6 min-w-0 space-y-4">
@@ -448,12 +464,63 @@ export default async function DetalheClientePage({
         </Card>
       </section>
 
+      {/* Fase 77 — sempre renderizada, com três estados reais e
+          distintos (nunca "0 encontrados" para quem não tem perfil, que
+          é uma pergunta diferente de "tem perfil e não bateu nenhum
+          imóvel"). Sem Card envolvendo a lista: cada RecomendacaoImovelItem
+          já É um Card.
+          Fase 79 — esta seção veio para ANTES de "Imóveis relacionados"
+          (ordem original: relacionados antes de recomendados, invertida):
+          a jornada real é recomendação → corretor decide relacionar, e a
+          seção que ainda não existe (recomendados) fazia mais sentido
+          vir depois da que já é resultado de uma decisão (relacionados)
+          — nenhuma seção tem outra estrutura ou dado alterado, só a
+          posição. */}
+      <section className="mb-6 min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={Building2}
+          titulo="Imóveis recomendados"
+          descricao="Imóveis disponíveis que atendem os critérios de Preferências de imóvel, acima."
+        />
+        {!preferencia ? (
+          <EstadoVazio
+            icone={SlidersHorizontal}
+            titulo="Nenhuma preferência cadastrada ainda"
+            descricao="Defina o que este cliente procura em Preferências de imóvel, acima, para ver recomendações aqui."
+          />
+        ) : recomendacoes.length === 0 ? (
+          <EstadoVazio
+            icone={Building2}
+            titulo="Nenhum imóvel corresponde aos critérios atuais"
+            descricao="Ajuste os critérios em Preferências de imóvel, acima, ou aguarde novos imóveis disponíveis."
+          />
+        ) : (
+          <div className="space-y-3">
+            {recomendacoes.map((recomendacao) => (
+              <RecomendacaoImovelItem
+                key={recomendacao.property.id}
+                pessoaId={pessoa.id}
+                // Fase 16 — mesma conversão na fronteira: o resultado
+                // do matching carrega os preços como Decimal cru.
+                recomendacao={{
+                  ...recomendacao,
+                  property: {
+                    ...recomendacao.property,
+                    ...precosDoImovel(recomendacao.property),
+                  },
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* Fase 78 — esta seção é a curadoria: cada item já é um
           PropertyInterest real (Fase D do CRM), a MESMA negociação que
           aparece no Pipeline (Fase P.4, projeção operacional de
           PropertyInterest — nunca uma segunda fonte de verdade) e na
-          ficha do imóvel ("Clientes interessados"). "Relacionar" (aqui,
-          em "Imóveis recomendados" acima e na ficha do imóvel) sempre
+          ficha do imóvel ("Clientes interessados"). "Relacionar" (em
+          Imóveis recomendados acima e na ficha do imóvel) sempre
           cria/reusa o MESMO registro — não existem dois modelos para a
           mesma relação. Sem Card envolvendo a lista, pelo mesmo motivo
           de "Imóveis recomendados": cada InteresseImovelItem já É um
@@ -468,7 +535,7 @@ export default async function DetalheClientePage({
           <EstadoVazio
             icone={Handshake}
             titulo="Nenhum imóvel relacionado ainda."
-            descricao="Relacione um imóvel manualmente abaixo, ou use 'Relacionar' numa recomendação em Imóveis recomendados."
+            descricao="Relacione um imóvel manualmente abaixo, ou use 'Relacionar' numa recomendação em Imóveis recomendados, acima."
           />
         ) : (
             <div className="space-y-3">
@@ -607,87 +674,43 @@ export default async function DetalheClientePage({
         </Card>
       </section>
 
-      {/* Fase 77 — a seção agora é sempre renderizada, com três estados
-          reais e distintos (nunca "0 encontrados" para quem não tem
-          perfil, que é uma pergunta diferente de "tem perfil e não bateu
-          nenhum imóvel"). Sem Card envolvendo a lista: cada
-          RecomendacaoImovelItem já É um Card — envolvê-los em outro por
-          fora seria card dentro de card (mesmo padrão já usado por
-          "Histórico de interações", logo abaixo). */}
       <section className="mb-6 min-w-0 space-y-4">
-        <CabecalhoSecao
-          icone={Building2}
-          titulo="Imóveis recomendados"
-          descricao="Imóveis disponíveis que atendem os critérios de Preferências de imóvel, acima."
-        />
-        {!preferencia ? (
-          <EstadoVazio
-            icone={SlidersHorizontal}
-            titulo="Nenhuma preferência cadastrada ainda"
-            descricao="Defina o que este cliente procura em Preferências de imóvel, acima, para ver recomendações aqui."
-          />
-        ) : recomendacoes.length === 0 ? (
-          <EstadoVazio
-            icone={Building2}
-            titulo="Nenhum imóvel corresponde aos critérios atuais"
-            descricao="Ajuste os critérios em Preferências de imóvel, acima, ou aguarde novos imóveis disponíveis."
-          />
-        ) : (
-          <div className="space-y-3">
-            {recomendacoes.map((recomendacao) => (
-              <RecomendacaoImovelItem
-                key={recomendacao.property.id}
-                pessoaId={pessoa.id}
-                // Fase 16 — mesma conversão na fronteira: o resultado
-                // do matching carrega os preços como Decimal cru.
-                recomendacao={{
-                  ...recomendacao,
-                  property: {
-                    ...recomendacao.property,
-                    ...precosDoImovel(recomendacao.property),
-                  },
-                }}
-              />
-            ))}
-          </div>
-        )}
+        <CabecalhoSecao icone={MessageSquarePlus} titulo="Registrar nova interação" />
+        <Card className="min-w-0">
+          <CardContent>
+            <form
+              action={registrarInteracaoComId}
+              className="grid grid-cols-1 sm:grid-cols-4 gap-2"
+            >
+              <Select name="tipo" defaultValue="VISIT">
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(TIPO_INTERACAO_LABEL).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input name="notas" placeholder="Notas" className="sm:col-span-2" />
+              <Button type="submit">Registrar</Button>
+            </form>
+          </CardContent>
+        </Card>
       </section>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">
-            Registrar nova interação
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form
-            action={registrarInteracaoComId}
-            className="grid grid-cols-1 sm:grid-cols-4 gap-2"
-          >
-            <Select name="tipo" defaultValue="VISIT">
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(TIPO_INTERACAO_LABEL).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input name="notas" placeholder="Notas" className="sm:col-span-2" />
-            <Button type="submit">Registrar</Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <div>
-        <h2 className="font-semibold mb-3">Histórico de interações</h2>
+      {/* Fase 79 — heading real (já era h2, agora via CabecalhoSecao
+          como o resto da ficha) num <section> real: público-form.spec.ts
+          e captacao-pendente.spec.ts localizavam o histórico subindo do
+          h2 pro pai direto (xpath=..) — com o h2 agora aninhado dentro
+          de CabecalhoSecao, o pai direto não é mais quem contém a lista;
+          os dois specs foram adaptados para escopar pelo <section>. */}
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao icone={History} titulo="Histórico de interações" />
         {pessoa.interactions.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            Nenhuma interação registrada.
-          </p>
+          <EstadoVazio icone={History} titulo="Nenhuma interação registrada" />
         ) : (
           <ul className="space-y-3">
             {pessoa.interactions.map((interacao) => (
@@ -752,7 +775,7 @@ export default async function DetalheClientePage({
             ))}
           </ul>
         )}
-      </div>
+      </section>
     </div>
   );
 }
