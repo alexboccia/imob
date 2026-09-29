@@ -30,7 +30,7 @@ import { buscarImoveisCompativeis } from "@/lib/property-matching";
 import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
 import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
-import { SlidersHorizontal, Building2 } from "lucide-react";
+import { SlidersHorizontal, Building2, Handshake } from "lucide-react";
 import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
 import { paraResponsavel } from "@/lib/responsavel-negociacao";
 import { paraParticipantes } from "@/lib/participacao-comissao";
@@ -448,18 +448,29 @@ export default async function DetalheClientePage({
         </Card>
       </section>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">
-            Imóveis relacionados
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {pessoa.propertyInterests.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              Nenhum imóvel relacionado ainda.
-            </p>
-          ) : (
+      {/* Fase 78 — esta seção é a curadoria: cada item já é um
+          PropertyInterest real (Fase D do CRM), a MESMA negociação que
+          aparece no Pipeline (Fase P.4, projeção operacional de
+          PropertyInterest — nunca uma segunda fonte de verdade) e na
+          ficha do imóvel ("Clientes interessados"). "Relacionar" (aqui,
+          em "Imóveis recomendados" acima e na ficha do imóvel) sempre
+          cria/reusa o MESMO registro — não existem dois modelos para a
+          mesma relação. Sem Card envolvendo a lista, pelo mesmo motivo
+          de "Imóveis recomendados": cada InteresseImovelItem já É um
+          Card. */}
+      <section className="mb-6 min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={Handshake}
+          titulo="Imóveis relacionados"
+          descricao="Negociações abertas com este cliente — a mesma lista aparece no Pipeline."
+        />
+        {pessoa.propertyInterests.length === 0 ? (
+          <EstadoVazio
+            icone={Handshake}
+            titulo="Nenhum imóvel relacionado ainda."
+            descricao="Relacione um imóvel manualmente abaixo, ou use 'Relacionar' numa recomendação em Imóveis recomendados."
+          />
+        ) : (
             <div className="space-y-3">
               {pessoa.propertyInterests.map((interesse) => {
                 // A lista já vem ordenada por scheduledAt: o primeiro de
@@ -583,7 +594,8 @@ export default async function DetalheClientePage({
             </div>
           )}
 
-          <div className="border-t pt-4">
+        <Card className="min-w-0">
+          <CardContent>
             <p className="text-sm font-medium mb-2">Relacionar imóvel</p>
             <RelacionarImovelForm
               pessoaId={pessoa.id}
@@ -591,9 +603,9 @@ export default async function DetalheClientePage({
               membros={membrosAtribuiveis}
               membroAtualId={session?.user.organizationMemberId ?? null}
             />
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </section>
 
       {/* Fase 77 — a seção agora é sempre renderizada, com três estados
           reais e distintos (nunca "0 encontrados" para quem não tem

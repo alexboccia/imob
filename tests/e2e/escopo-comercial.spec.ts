@@ -95,9 +95,10 @@ test.describe("RESTRICTED — cliente compartilhado", () => {
       // asserção "não contém o imóvel alheio" passava por ausência de
       // conteúdo, e a de "contém o meu" falhava. Foi o flake observado
       // no run 34164237912.
-      // CardTitle renderiza <div>, não heading (achado da Fase 17).
+      // "Imóveis relacionados" virou h2 real via CabecalhoSecao (Fase 78) —
+      // âncora estável direto no heading, sem precisar de card-title.
       await expect(
-        page.locator('[data-slot="card-title"]', { hasText: "Imóveis relacionados" })
+        page.getByRole("heading", { level: 2, name: "Imóveis relacionados" })
       ).toBeVisible();
       const ficha = (await page.locator("main").innerText()).replace(/ /g, " ");
       // NEGOCIAÇÕES SEPARADAS: cada um vê um imóvel só.
