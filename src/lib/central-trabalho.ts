@@ -3,6 +3,7 @@ import { withOrganization } from "@/lib/tenant-context";
 import { intervaloDoDia } from "@/lib/fuso-horario";
 import { ESTAGIOS_INTERESSE } from "@/lib/property-interest-schema";
 import { atividadeDoMembro } from "@/lib/responsavel-atividade";
+import { obterProximaAcaoComercial, type ProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import type { ScheduledActivityType } from "@/generated/prisma/client";
 
 // =======================================================================
@@ -105,6 +106,12 @@ export type NegociacaoCentral = {
   // quando o contato OCORREU — nunca createdAt). null = nenhuma
   // interação registrada, jamais "sem contato há muito tempo".
   ultimoContatoISO: string | null;
+  // Fase 81 — mesma regra de sempre (obterProximaAcaoComercial), nunca
+  // reimplementada: idêntica ao que Pipeline (paraItemPipeline) e as
+  // fichas de cliente/imóvel já mostram para o mesmo PropertyInterest.
+  // null só na anomalia cross-tenant (quando `imovel` também é null) —
+  // sem um Property confiável não há status pra decidir a ação.
+  proximaAcao: ProximaAcaoComercial | null;
 };
 
 export type CentralTrabalho = {
@@ -243,7 +250,10 @@ export async function buscarCentralTrabalho(
           id: true,
           stage: true,
           person: { select: { id: true, name: true, organizationId: true } },
-          property: { select: { id: true, title: true, organizationId: true } },
+          // status: true — Fase 81, único campo novo desta fase, na MESMA
+          // consulta que já buscava id/title (zero query nova): é o que
+          // obterProximaAcaoComercial precisa para decidir a ação.
+          property: { select: { id: true, title: true, organizationId: true, status: true } },
           // Próxima visita agendada — batched pelo Prisma numa consulta
           // só para o conjunto inteiro, nunca uma por card (zero N+1).
           // Compromisso futuro mais próximo — batched pelo Prisma numa
@@ -282,27 +292,35 @@ export async function buscarCentralTrabalho(
       proximas: itensProximas.map((l) => paraCompromisso(l, organizationId)),
       negociacoes: {
         total: totalNegociacoes,
-        itens: linhasNegociacoes.map((linha) => ({
-          id: linha.id,
-          stage: linha.stage,
-          pessoa:
-            linha.person.organizationId === organizationId
-              ? { id: linha.person.id, name: linha.person.name }
-              : null,
-          imovel:
+        itens: linhasNegociacoes.map((linha) => {
+          const propertyConfiavel =
             linha.property && linha.property.organizationId === organizationId
-              ? { id: linha.property.id, title: linha.property.title }
+              ? linha.property
+              : null;
+          return {
+            id: linha.id,
+            stage: linha.stage,
+            pessoa:
+              linha.person.organizationId === organizationId
+                ? { id: linha.person.id, name: linha.person.name }
+                : null,
+            imovel: propertyConfiavel
+              ? { id: propertyConfiavel.id, title: propertyConfiavel.title }
               : null,
-          semProximoCompromisso: linha.scheduledActivities.length === 0,
-          proximoCompromisso: linha.scheduledActivities[0]
-            ? {
-                tipo: linha.scheduledActivities[0].type,
-                assunto: linha.scheduledActivities[0].subject,
-                scheduledAtISO: linha.scheduledActivities[0].scheduledAt.toISOString(),
-              }
-            : null,
-          ultimoContatoISO: ultimoPorPessoa.get(linha.person.id)?.toISOString() ?? null,
-        })),
+            semProximoCompromisso: linha.scheduledActivities.length === 0,
+            proximoCompromisso: linha.scheduledActivities[0]
+              ? {
+                  tipo: linha.scheduledActivities[0].type,
+                  assunto: linha.scheduledActivities[0].subject,
+                  scheduledAtISO: linha.scheduledActivities[0].scheduledAt.toISOString(),
+                }
+              : null,
+            ultimoContatoISO: ultimoPorPessoa.get(linha.person.id)?.toISOString() ?? null,
+            proximaAcao: propertyConfiavel
+              ? obterProximaAcaoComercial(linha.stage, propertyConfiavel.status)
+              : null,
+          };
+        }),
       },
     };
   });

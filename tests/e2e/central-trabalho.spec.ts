@@ -49,6 +49,11 @@ test.describe("Central de trabalho", () => {
     // compromisso é um follow-up.
     expect(texto).toContain("Visita em ");
     expect(texto).toContain("Follow-up em ");
+    // Fase 81 — "o que fazer": todas as negociações do seed estão em
+    // INTERESTED com o imóvel disponível, então a MESMA regra que o
+    // Pipeline usa (obterProximaAcaoComercial) responde "Agendar visita"
+    // aqui também — nenhuma derivação nova, só exposta na Central.
+    expect(texto).toContain("Próxima ação: Agendar visita");
     // E nenhuma linguagem de score/prioridade inventada.
     expect(texto).not.toContain("Prioridade");
     expect(texto).not.toContain("lead quente");
@@ -139,6 +144,19 @@ test.describe("Central de trabalho — seções do novo padrão", () => {
     // Os fatos em si não mudaram.
     expect(texto).toContain("Sem próximo compromisso");
     expect(texto).toContain("Visita em ");
+  });
+
+  test("Fase 81 — a próxima ação da Central é a MESMA que o Pipeline mostra para a mesma negociação", async ({
+    page,
+  }) => {
+    // Não é uma segunda derivação: obterProximaAcaoComercial é chamada
+    // com o mesmo stage/status em central-trabalho.ts e em pipeline.ts.
+    // Aqui a prova é ponta a ponta — as duas telas concordam.
+    await expect(page.getByText("Próxima ação: Agendar visita").first()).toBeVisible();
+
+    await page.goto("/app/pipeline");
+    const cardPipeline = page.locator('[data-slot="card"]').filter({ hasText: "Central Atrasada" });
+    await expect(cardPipeline.getByText("Agendar visita")).toBeVisible();
   });
 
   test("nenhuma ação fictícia foi criada nas negociações", async ({ page }) => {

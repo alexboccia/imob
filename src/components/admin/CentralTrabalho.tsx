@@ -244,6 +244,22 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
                       </p>
                     )}
 
+                    {/* Fase 81 — a mesma "próxima ação" que já aparece no
+                        Pipeline e nas fichas de cliente/imóvel para esta
+                        MESMA negociação (obterProximaAcaoComercial, nunca
+                        reimplementada): é o "o que fazer" que faltava
+                        exatamente na tela cujo propósito é responder isso
+                        pessoalmente. Fato determinístico do estágio, não
+                        prioridade nem score — por isso cabe na Central. */}
+                    {n.proximaAcao && (
+                      <p className="mt-1 min-w-0 break-words text-xs text-muted-foreground">
+                        Próxima ação:{" "}
+                        <span className={n.proximaAcao.ativa ? "font-medium text-foreground" : ""}>
+                          {n.proximaAcao.label}
+                        </span>
+                      </p>
+                    )}
+
                     {/* Os dois fatos temporais ganharam rótulo: antes eram
                         uma frase corrida separada por "·", e era preciso
                         ler tudo para descobrir qual data era qual. */}

@@ -39,10 +39,14 @@ const iso = (s: string) => new Date(s);
 
 async function negociacao(
   organizationId: string,
-  opcoes: { responsavelId?: string | null; stage?: string } = {}
+  opcoes: {
+    responsavelId?: string | null;
+    stage?: string;
+    imovelStatus?: "DRAFT" | "AVAILABLE" | "RESERVED" | "SOLD" | "RENTED" | "INACTIVE";
+  } = {}
 ) {
   const pessoa = await criarPessoa({ organizationId });
-  const imovel = await criarImovel({ organizationId });
+  const imovel = await criarImovel({ organizationId, status: opcoes.imovelStatus });
   const interesse = await prisma.propertyInterest.create({
     data: {
       organizationId,
@@ -314,6 +318,38 @@ describe("negociações", () => {
 
     const r = await central(c.organization.id, c.membro.id);
     expect(r.negociacoes.itens[0].ultimoContatoISO).toBeNull();
+  });
+
+  // Fase 81 — "próxima ação" reusa obterProximaAcaoComercial, a MESMA
+  // regra já usada por Pipeline (paraItemPipeline) e pelas fichas de
+  // cliente/imóvel: nada de derivação nova, só o mesmo fato exposto
+  // também na Central.
+  test("próxima ação reflete o estágio, igual ao Pipeline, para o mesmo PropertyInterest", async () => {
+    const c = await novoCenario();
+    await negociacao(c.organization.id, { responsavelId: c.membro.id, stage: "PROPOSAL" });
+
+    const r = await central(c.organization.id, c.membro.id);
+    expect(r.negociacoes.itens[0].proximaAcao).toEqual({
+      key: "ACOMPANHAR_PROPOSTA",
+      label: "Acompanhar proposta",
+      ativa: true,
+    });
+  });
+
+  test("imóvel indisponível vira 'Imóvel indisponível' na próxima ação, mesma regra do Pipeline", async () => {
+    const c = await novoCenario();
+    await negociacao(c.organization.id, {
+      responsavelId: c.membro.id,
+      stage: "VISIT_SCHEDULED",
+      imovelStatus: "RESERVED",
+    });
+
+    const r = await central(c.organization.id, c.membro.id);
+    expect(r.negociacoes.itens[0].proximaAcao).toEqual({
+      key: "INDISPONIVEL",
+      label: "Imóvel indisponível",
+      ativa: false,
+    });
   });
 
   test("negociações vêm da menos movimentada para a mais recente", async () => {
