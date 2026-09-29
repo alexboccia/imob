@@ -12,6 +12,7 @@ import {
 } from "@/lib/pagination";
 import { construirWhereUsuarios } from "@/lib/listagens-admin-query";
 import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
 import { DataTable } from "@/components/admin/data-table/DataTable";
 import { NovoUsuarioSheet } from "@/components/admin/usuarios/NovoUsuarioSheet";
 import { UsuariosKpiCards } from "@/components/admin/usuarios/UsuariosKpiCards";
@@ -138,15 +139,18 @@ export default async function UsuariosPage({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Usuários</h1>
-          <p className="text-sm text-muted-foreground">
-            Gerencie os administradores, gestores e corretores que têm acesso ao painel.
-          </p>
-        </div>
-        {ehAdministrador && <NovoUsuarioSheet />}
-      </div>
+      {/* Fase 73 — auditoria: a página já estava correta na esmagadora
+          maioria (KPIs, filtros URL-driven, ordenação, DataTable
+          compartilhado, acessibilidade) — nada disso foi tocado. O único
+          ponto real de inconsistência era este cabeçalho, ainda com
+          h1/p/CTA escritos à mão em vez do CabecalhoPagina compartilhado
+          (Fase 65+). Texto e CTA PRESERVADOS palavra por palavra; só o
+          invólucro migrou. */}
+      <CabecalhoPagina
+        titulo="Usuários"
+        descricao="Gerencie os administradores, gestores e corretores que têm acesso ao painel."
+        acoes={ehAdministrador ? <NovoUsuarioSheet /> : undefined}
+      />
 
       {!ehAdministrador && (
         <Card>

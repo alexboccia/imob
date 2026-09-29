@@ -11,6 +11,28 @@ test.describe("Usuários", () => {
     await login(page, ORG_A);
   });
 
+  // Fase 73 — auditoria: cabeçalho migrado de h1/p escritos à mão para o
+  // CabecalhoPagina compartilhado (Fase 65+). O resto da tela já estava
+  // correto e não foi tocado (ver relatório da fase). Cobre exatamente a
+  // mudança real: h1 único, texto preservado, e o CTA "Novo usuário"
+  // continua a ação principal, agora dentro do slot `acoes` do
+  // componente compartilhado em vez de um <div> irmão escrito à mão.
+  test("cabeçalho: h1 único, descrição preservada, CTA continua a ação principal", async ({
+    page,
+  }) => {
+    await page.goto("/app/usuarios");
+
+    await expect(page.getByRole("heading", { level: 1, name: "Usuários" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+    await expect(
+      page.getByText(
+        "Gerencie os administradores, gestores e corretores que têm acesso ao painel.",
+        { exact: true }
+      )
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Novo usuário" })).toBeVisible();
+  });
+
   test("KPIs renderizam, cadastra usuário pelo Sheet, busca, filtros de papel e status, alterna status", async ({
     page,
   }) => {
