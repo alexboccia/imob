@@ -867,6 +867,7 @@ type ResultadoAtualizacaoEstagio =
   | { tipo: "atualizado"; from: PropertyInterestStage }
   | { tipo: "no_op" }
   | { tipo: "nao_encontrado" }
+  | { tipo: "encerrado" }
   | { tipo: "corrida_nao_resolvida" };
 
 // Atualiza stage + notes de um relacionamento já existente. Não valida
@@ -1200,6 +1201,20 @@ export async function atualizarEstagioInteresse(
           return { tipo: "no_op" };
         }
 
+        // Fase 93 — GUARDA DE TERMINALIDADE. `stage` (o destino) já é
+        // restrito pelo schema a ESTAGIOS_INTERESSE, então WON/REJECTED
+        // nunca chegam aqui como destino (BU/BV). Mas nada, antes desta
+        // guarda, impedia a ORIGEM de já ser WON/REJECTED: o updateMany
+        // abaixo usa `stage: atual.stage` no WHERE, que casaria
+        // normalmente, e reabriria o negócio em silêncio — exatamente a
+        // regressão que fecharInteresse já se protege de produzir (mesma
+        // função, mesma guarda, ver `transicao_invalida` mais abaixo
+        // neste arquivo). Reabertura continua fora de escopo do produto,
+        // em qualquer direção e por qualquer caminho.
+        if (estagioInteresseEncerrado(atual.stage)) {
+          return { tipo: "encerrado" };
+        }
+
         const atualizado = await tx.propertyInterest.updateMany({
           where: { id: interesseId, organizationId, stage: atual.stage },
           data: { stage, ...dadosNotes },
@@ -1266,6 +1281,8 @@ export async function atualizarEstagioInteresse(
     switch (resultado.tipo) {
       case "nao_encontrado":
         return erroAcessoNegado("Relacionamento não encontrado.");
+      case "encerrado":
+        return erroGenerico("Este relacionamento já foi encerrado — não é possível alterar o estágio.");
       case "corrida_nao_resolvida":
         return erroGenerico("Não foi possível concluir agora devido a uma alteração concorrente — tente novamente.");
       case "no_op":

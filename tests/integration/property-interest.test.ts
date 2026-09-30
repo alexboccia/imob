@@ -1106,6 +1106,63 @@ describe("PropertyInterest — relacionamento Person↔Property (Fase D do CRM)"
     expect(atual?.closedAt).toBeNull();
   });
 
+  // Fase 93 — achado: BU/BV provam que o DESTINO de atualizarEstagioInteresse
+  // nunca pode ser WON/REJECTED (bloqueado pelo próprio schema, que só
+  // aceita ESTAGIOS_INTERESSE). Mas nenhum teste provava o inverso: o que
+  // acontece quando a ORIGEM já é WON/REJECTED? O loop de
+  // atualizarEstagioInteresse não tinha nenhuma checagem de
+  // estagioInteresseEncerrado(atual.stage) antes do updateMany — a mesma
+  // guarda que fecharInteresse já usa (linha ~1449) pra nunca permitir
+  // REJECTED->WON nem WON->REJECTED por ELE MESMO. Sem essa guarda aqui, a
+  // action genérica reabria silenciosamente um negócio encerrado: o
+  // updateMany usa `stage: atual.stage` (WON) no WHERE, que casa
+  // normalmente, e grava `data: { stage: "INTERESTED" }` — precisamente o
+  // "Existe um estado que NÃO deveria ser possível, mas hoje é?" desta
+  // fase. A UI nunca oferece esse caminho (o Select só renderiza para
+  // stage aberto), mas UI escondida não é autorização server-side: a
+  // Server Action, chamada diretamente, reabria mesmo assim.
+  test("CV) atualizarEstagioInteresse (action manual/genérica) NUNCA reabre uma negociação já encerrada — nem WON nem REJECTED voltam a estágio aberto por este caminho", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+
+    const pessoaGanha = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovelGanho = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await relacionar(pessoaGanha.id, { propertyId: imovelGanho.id });
+    const interesseGanho = await buscarInteresse(cenario.organization.id, pessoaGanha.id, imovelGanho.id);
+    await marcarGanho(interesseGanho!.id);
+
+    const resultadoGanho = await mudarEstagio(interesseGanho!.id, { stage: "INTERESTED" });
+    expect(resultadoGanho.success).toBe(false);
+    const aposGanho = await buscarInteresse(cenario.organization.id, pessoaGanha.id, imovelGanho.id);
+    expect(aposGanho?.stage).toBe("WON");
+    expect(aposGanho?.closedAt).not.toBeNull();
+
+    const pessoaPerdida = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovelPerdido = await criarImovel({ organizationId: cenario.organization.id, status: "AVAILABLE" });
+    await relacionar(pessoaPerdida.id, { propertyId: imovelPerdido.id });
+    const interessePerdido = await buscarInteresse(cenario.organization.id, pessoaPerdida.id, imovelPerdido.id);
+    await marcarPerdido(interessePerdido!.id);
+
+    const resultadoPerdido = await mudarEstagio(interessePerdido!.id, { stage: "PROPOSAL" });
+    expect(resultadoPerdido.success).toBe(false);
+    const aposPerdido = await buscarInteresse(cenario.organization.id, pessoaPerdida.id, imovelPerdido.id);
+    expect(aposPerdido?.stage).toBe("REJECTED");
+    expect(aposPerdido?.closedAt).not.toBeNull();
+
+    // Nenhum PropertyInterestStageHistory/ActivityLog novo foi gravado
+    // pela tentativa recusada — só os 2 eventos reais já esperados
+    // (criação em INTERESTED + fechamento em WON), mesma garantia de
+    // "corrida perdida"/"transição inválida" já aplicada em
+    // fecharInteresse.
+    const historicoGanho = await prisma.propertyInterestStageHistory.findMany({
+      where: { organizationId: cenario.organization.id, propertyInterestId: interesseGanho!.id },
+      orderBy: { changedAt: "asc" },
+    });
+    expect(historicoGanho).toHaveLength(2);
+    expect(historicoGanho[0].newStage).toBe("INTERESTED");
+    expect(historicoGanho[1].newStage).toBe("WON");
+  });
+
   // -------------------------------------------------------------------
   // Fechamento oficial da negociação — marcarInteresseComoGanho/Perdido
   // (Fase P.3). Continua a numeração de letras da fundação de fechamento
