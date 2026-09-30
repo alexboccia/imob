@@ -260,9 +260,9 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
                       </p>
                     )}
 
-                    {/* Os dois fatos temporais ganharam rótulo: antes eram
-                        uma frase corrida separada por "·", e era preciso
-                        ler tudo para descobrir qual data era qual. */}
+                    {/* Os fatos temporais ganharam rótulo: antes eram uma
+                        frase corrida separada por "·", e era preciso ler
+                        tudo para descobrir qual data era qual. */}
                     <dl className="mt-2 grid min-w-0 grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2">
                       <div className="min-w-0">
                         <dt className="text-muted-foreground">Último contato</dt>
@@ -274,10 +274,39 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
                             : "Sem contato registrado"}
                         </dd>
                       </div>
+
+                      {/* Fase 83 — achado com um teste que já existia: uma
+                          visita SCHEDULED de 3 dias atrás, nunca concluída,
+                          aparecia idêntica a uma negociação que nunca teve
+                          nada agendado ("Sem próximo compromisso" nos dois
+                          casos). Mesmo padrão de texto de CardPipeline
+                          ("Visita atrasada"/"Follow-up atrasado"), pra não
+                          inventar uma terceira redação do mesmo fato — só
+                          que aqui é dado, não pendência calculada na hora
+                          (acaoOperacionalDaVisita), porque a Central não
+                          tem o "agora" preciso do cliente, só o dia. */}
+                      {n.atividadeAtrasada && (
+                        <div className="min-w-0">
+                          <dt className="text-muted-foreground">Compromisso atrasado</dt>
+                          <dd className="min-w-0 break-words">
+                            {TIPO_ATIVIDADE_LABEL[n.atividadeAtrasada.tipo]}
+                            {n.atividadeAtrasada.tipo === "VISIT" ? " atrasada" : " atrasado"}
+                            {n.atividadeAtrasada.assunto && ` — ${n.atividadeAtrasada.assunto}`}
+                            {" · "}
+                            {formatarDataHoraNoFuso(n.atividadeAtrasada.scheduledAtISO, fuso)}
+                          </dd>
+                        </div>
+                      )}
+
                       <div className="min-w-0">
                         <dt className="text-muted-foreground">Próximo compromisso</dt>
                         {/* Fato verificável, não julgamento: a agenda
-                            futura desta negociação está vazia.
+                            futura desta negociação está vazia — e agora
+                            (Fase 83) só diz isso quando é mesmo verdade:
+                            uma negociação com atividadeAtrasada acima e
+                            nenhum próximo compromisso não repete "Sem
+                            próximo compromisso" aqui, pra não parecer que
+                            não há NADA quando na verdade há algo atrasado.
                             Fase 19 — o compromisso é NOMEADO pelo tipo:
                             pode ser visita ou follow-up, e "com visita
                             agendada" passaria a ser falso metade das
@@ -288,7 +317,9 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
                                 n.proximoCompromisso.scheduledAtISO,
                                 fuso
                               )}`
-                            : "Sem próximo compromisso"}
+                            : n.atividadeAtrasada
+                              ? "Sem outro compromisso agendado"
+                              : "Sem próximo compromisso"}
                         </dd>
                       </div>
                     </dl>

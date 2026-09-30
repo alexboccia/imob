@@ -41,14 +41,27 @@ test.describe("Central de trabalho", () => {
     expect(texto).toContain("4 negociações em andamento sob sua responsabilidade");
     expect(texto).not.toContain("Central De Outro Corretor");
 
-    // Fato derivado, não julgamento: a negociação sem agenda futura é
-    // declarada como tal, e a que tem visita marcada não.
-    expect(texto).toContain("Sem próximo compromisso");
     // Fase 19 — o próximo compromisso é NOMEADO pelo tipo: "Com visita
     // agendada" passaria a ser falso para uma negociação cujo próximo
     // compromisso é um follow-up.
     expect(texto).toContain("Visita em ");
     expect(texto).toContain("Follow-up em ");
+    // Fase 83 — achado com um teste de integração que já existia: "Central
+    // Atrasada" tem uma visita SCHEDULED de 3 dias atrás nunca concluída,
+    // e antes disso aparecia idêntica a uma negociação que nunca teve nada
+    // agendado ("Sem próximo compromisso" nos dois casos). Agora o fato
+    // atrasado tem texto próprio, nunca confundido com "nada agendado".
+    // Escopado à seção "Minhas negociações" — "Central Atrasada" também
+    // aparece como compromisso em "Atrasadas", um <li> diferente.
+    const secaoNegociacoes = page
+      .getByRole("heading", { name: "Minhas negociações" })
+      .locator("xpath=ancestor::section[1]");
+    const cardCentralAtrasada = secaoNegociacoes
+      .locator("li")
+      .filter({ hasText: "Central Atrasada" });
+    await expect(cardCentralAtrasada.getByText("Compromisso atrasado")).toBeVisible();
+    await expect(cardCentralAtrasada.getByText(/Visita atrasada/)).toBeVisible();
+    await expect(cardCentralAtrasada.getByText("Sem outro compromisso agendado")).toBeVisible();
     // Fase 81 — "o que fazer": todas as negociações do seed estão em
     // INTERESTED com o imóvel disponível, então a MESMA regra que o
     // Pipeline usa (obterProximaAcaoComercial) responde "Agendar visita"
@@ -142,8 +155,10 @@ test.describe("Central de trabalho — seções do novo padrão", () => {
     expect(texto).toContain("Último contato");
     expect(texto).toContain("Próximo compromisso");
     // Os fatos em si não mudaram.
-    expect(texto).toContain("Sem próximo compromisso");
     expect(texto).toContain("Visita em ");
+    // Fase 83 — "Compromisso atrasado" também tem rótulo próprio, nunca
+    // fundido com "Próximo compromisso"/"Sem próximo compromisso".
+    expect(texto).toContain("Compromisso atrasado");
   });
 
   test("Fase 81 — a próxima ação da Central é a MESMA que o Pipeline mostra para a mesma negociação", async ({

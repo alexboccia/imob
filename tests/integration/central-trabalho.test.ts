@@ -288,6 +288,104 @@ describe("negociações", () => {
     expect(r.negociacoes.itens[0].semProximoCompromisso).toBe(true);
   });
 
+  // Fase 83 — achado com o teste acima ("'sem próximo compromisso' é
+  // fato"): antes deste campo, uma negociação com uma visita SCHEDULED de
+  // dias atrás e nunca concluída era IDÊNTICA, pros dois campos que
+  // existiam, a uma que nunca teve nada agendado (as duas tinham
+  // semProximoCompromisso=true e proximoCompromisso=null). atividadeAtrasada
+  // é o fato que faltava pra diferenciar as duas situações — reaproveita a
+  // MESMA janela de "atrasada" (scheduledAt < inicioHoje) do bloco
+  // `atrasadas` desta função, nunca uma segunda definição.
+  describe("atividade atrasada (Fase 83)", () => {
+    test("visita SCHEDULED de dias atrás vira atividadeAtrasada, e nunca ter tido nada continua null", async () => {
+      const c = await novoCenario();
+      const comAtraso = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      const semNada = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await visita(c.organization.id, comAtraso, "2026-09-01T10:00:00.000Z");
+
+      const r = await central(c.organization.id, c.membro.id);
+      const porId = new Map(r.negociacoes.itens.map((n) => [n.id, n]));
+
+      // As duas continuam "sem próximo compromisso" (campo inalterado) —
+      // a diferença real agora aparece em atividadeAtrasada.
+      expect(porId.get(comAtraso.id)?.semProximoCompromisso).toBe(true);
+      expect(porId.get(semNada.id)?.semProximoCompromisso).toBe(true);
+
+      expect(porId.get(comAtraso.id)?.atividadeAtrasada).toEqual({
+        tipo: "VISIT",
+        assunto: null,
+        scheduledAtISO: "2026-09-01T10:00:00.000Z",
+      });
+      expect(porId.get(semNada.id)?.atividadeAtrasada).toBeNull();
+    });
+
+    test("visita PASSADA cancelada não conta como atividade atrasada — só SCHEDULED conta", async () => {
+      const c = await novoCenario();
+      const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await visita(c.organization.id, n, "2026-09-01T10:00:00.000Z", "CANCELLED");
+
+      const r = await central(c.organization.id, c.membro.id);
+      expect(r.negociacoes.itens[0].atividadeAtrasada).toBeNull();
+    });
+
+    test("visita de HOJE não conta como atrasada — só o dia calendário conta, mesma regra da Agenda", async () => {
+      const c = await novoCenario();
+      const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      // AGORA = 2026-09-07T12:00:00Z — 09:00 do mesmo dia já passou na
+      // hora, mas o DIA não. estaAtrasada exige dia passado, não hora.
+      await visita(c.organization.id, n, "2026-09-07T09:00:00.000Z");
+
+      const r = await central(c.organization.id, c.membro.id);
+      expect(r.negociacoes.itens[0].atividadeAtrasada).toBeNull();
+    });
+
+    test("atividade atrasada E próximo compromisso coexistem — os dois fatos aparecem, nenhum apaga o outro", async () => {
+      const c = await novoCenario();
+      const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await visita(c.organization.id, n, "2026-09-01T10:00:00.000Z"); // atrasada
+      await visita(c.organization.id, n, "2026-09-09T10:00:00.000Z"); // futura
+
+      const r = await central(c.organization.id, c.membro.id);
+      const item = r.negociacoes.itens[0];
+      expect(item.semProximoCompromisso).toBe(false);
+      expect(item.proximoCompromisso?.scheduledAtISO).toBe("2026-09-09T10:00:00.000Z");
+      expect(item.atividadeAtrasada?.scheduledAtISO).toBe("2026-09-01T10:00:00.000Z");
+    });
+
+    test("a mais antiga atrasada vence quando há mais de uma", async () => {
+      const c = await novoCenario();
+      const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await visita(c.organization.id, n, "2026-09-02T10:00:00.000Z");
+      await visita(c.organization.id, n, "2026-08-20T10:00:00.000Z");
+
+      const r = await central(c.organization.id, c.membro.id);
+      expect(r.negociacoes.itens[0].atividadeAtrasada?.scheduledAtISO).toBe(
+        "2026-08-20T10:00:00.000Z"
+      );
+    });
+
+    test("atividade atrasada de OUTRO membro não aparece na minha central", async () => {
+      const c = await novoCenario();
+      const bruno = await outroMembro(c.organization.id, "Bruno Atrasado");
+      const n = await negociacao(c.organization.id, { responsavelId: bruno.id });
+      await visita(c.organization.id, n, "2026-09-01T10:00:00.000Z");
+
+      const r = await central(c.organization.id, c.membro.id);
+      expect(r.negociacoes.total).toBe(0);
+    });
+
+    test("isolamento entre organizações: atividade atrasada de B nunca aparece na central de A", async () => {
+      const a = await novoCenario();
+      const b = await novoCenario();
+      const nb = await negociacao(b.organization.id, { responsavelId: b.membro.id });
+      await visita(b.organization.id, nb, "2026-09-01T10:00:00.000Z");
+      await negociacao(a.organization.id, { responsavelId: a.membro.id });
+
+      const r = await central(a.organization.id, a.membro.id);
+      expect(r.negociacoes.itens.every((n) => n.atividadeAtrasada === null)).toBe(true);
+    });
+  });
+
   test("último contato usa occurredAt, e a mais recente vence", async () => {
     const c = await novoCenario();
     const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });

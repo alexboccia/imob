@@ -60,9 +60,11 @@ import type { ScheduledActivityType } from "@/generated/prisma/client";
 // O QUE ESTA CENTRAL NÃO AFIRMA
 // -----------------------------------------------------------------------
 // Nada de "lead quente", "risco de perda", "prioridade", "próxima melhor
-// ação" ou score. Nenhum desses tem fato que o sustente no domínio. O
-// único sinal derivado é "sem próximo compromisso", que é verificável:
-// negociação aberta cuja agenda futura está vazia.
+// ação" ou score. Nenhum desses tem fato que o sustente no domínio. Os
+// sinais derivados são só fatos verificáveis: "sem próximo compromisso"
+// (agenda futura vazia), "atividade atrasada" (SCHEDULED cujo dia já
+// passou, Fase 83) e "próxima ação" (rótulo determinístico por estágio,
+// Fase 81, obterProximaAcaoComercial) — nunca combinados num score único.
 // =======================================================================
 
 // Teto de exibição de cada lista. A CONTAGEM continua exata e vem de
@@ -92,16 +94,31 @@ export type NegociacaoCentral = {
   stage: string;
   pessoa: { id: string; name: string } | null;
   imovel: { id: string; title: string } | null;
-  // Fato verificável: nenhum compromisso SCHEDULED futuro para esta
+  // Fato verificável: nenhum compromisso SCHEDULED FUTURO para esta
   // negociação. Desde a Fase 19 isso inclui FOLLOW_UP — uma negociação
   // com follow-up marcado para amanhã NÃO pode continuar aparecendo como
   // "sem próximo compromisso". Não é "lead esquecido": é a ausência de
   // compromisso.
+  //
+  // Fase 83 — este campo SEMPRE foi sobre agenda FUTURA, nunca sobre
+  // "nunca teve nada agendado": uma negociação com uma visita SCHEDULED
+  // de 3 dias atrás (nunca concluída) também tinha semProximoCompromisso
+  // = true, indistinguível de uma que nunca teve nada. Ver
+  // atividadeAtrasada abaixo — o fato que faltava pra diferenciar as
+  // duas situações (achado com teste já existente, nunca antes checado).
   semProximoCompromisso: boolean;
   // O compromisso futuro mais próximo (MIN(scheduledAt) > agora), quando
   // existe. Múltiplos compromissos futuros são permitidos — nenhum
   // unique artificial foi criado.
   proximoCompromisso: { tipo: ScheduledActivityType; assunto: string | null; scheduledAtISO: string } | null;
+  // Fase 83 — a mais antiga atividade SCHEDULED cujo DIA já passou
+  // (mesmo critério de "atrasada" do bloco `atrasadas` desta função e de
+  // src/lib/scheduled-activity-date.ts — o mesmo `inicioHoje`, nunca uma
+  // segunda definição). Independente de proximoCompromisso: uma
+  // negociação pode ter as duas coisas ao mesmo tempo (visita vencida
+  // ainda não resolvida E um follow-up já marcado pra semana que vem) —
+  // os dois fatos são mostrados, nunca fundidos um no outro.
+  atividadeAtrasada: { tipo: ScheduledActivityType; assunto: string | null; scheduledAtISO: string } | null;
   // Data da interação mais recente desta pessoa (Interaction.occurredAt,
   // quando o contato OCORREU — nunca createdAt). null = nenhuma
   // interação registrada, jamais "sem contato há muito tempo".
@@ -270,18 +287,56 @@ export async function buscarCentralTrabalho(
     ]);
 
     // Último contato de todas as pessoas da lista em UMA agregação, e
-    // não uma query por negociação.
+    // não uma query por negociação. A mesma ideia vale pra atividade
+    // atrasada por negociação, logo abaixo — as duas rodam juntas
+    // porque as duas só existem depois de saber quais negociações
+    // vieram na página (dependem de linhasNegociacoes).
     const idsPessoas = [...new Set(linhasNegociacoes.map((l) => l.person.id))];
-    const ultimosContatos = idsPessoas.length
-      ? await prisma.interaction.groupBy({
-          by: ["personId"],
-          where: { organizationId, personId: { in: idsPessoas } },
-          _max: { occurredAt: true },
-        })
-      : [];
+    const idsNegociacoes = linhasNegociacoes.map((l) => l.id);
+    const [ultimosContatos, atividadesAtrasadas] = await Promise.all([
+      idsPessoas.length
+        ? prisma.interaction.groupBy({
+            by: ["personId"],
+            where: { organizationId, personId: { in: idsPessoas } },
+            _max: { occurredAt: true },
+          })
+        : Promise.resolve([]),
+      // Fase 83 — mesma janela de "atrasada" do bloco `atrasadas` acima
+      // (scheduledAt < inicioHoje), reaproveitada, nunca uma segunda
+      // definição. Ordenado ascendente pra achar a mais antiga por
+      // negociação (Map.set só na primeira ocorrência, abaixo).
+      idsNegociacoes.length
+        ? prisma.scheduledActivity.findMany({
+            where: {
+              organizationId,
+              status: "SCHEDULED",
+              propertyInterestId: { in: idsNegociacoes },
+              scheduledAt: { lt: inicioHoje },
+            },
+            orderBy: { scheduledAt: "asc" },
+            select: { propertyInterestId: true, type: true, subject: true, scheduledAt: true },
+          })
+        : Promise.resolve([]),
+    ]);
     const ultimoPorPessoa = new Map(
       ultimosContatos.map((linha) => [linha.personId, linha._max.occurredAt ?? null])
     );
+    const atrasadaPorNegociacao = new Map<
+      string,
+      { tipo: ScheduledActivityType; assunto: string | null; scheduledAtISO: string }
+    >();
+    for (const atividade of atividadesAtrasadas) {
+      // propertyInterestId nunca é null aqui (filtrado por `in:
+      // idsNegociacoes`, todas com id não-nulo) — o tipo do Prisma é
+      // string | null só porque a coluna é nullable em geral.
+      const id = atividade.propertyInterestId!;
+      if (atrasadaPorNegociacao.has(id)) continue; // já tem a mais antiga
+      atrasadaPorNegociacao.set(id, {
+        tipo: atividade.type,
+        assunto: atividade.subject,
+        scheduledAtISO: atividade.scheduledAt.toISOString(),
+      });
+    }
 
     return {
       atrasadas: {
@@ -316,6 +371,7 @@ export async function buscarCentralTrabalho(
                 }
               : null,
             ultimoContatoISO: ultimoPorPessoa.get(linha.person.id)?.toISOString() ?? null,
+            atividadeAtrasada: atrasadaPorNegociacao.get(linha.id) ?? null,
             proximaAcao: propertyConfiavel
               ? obterProximaAcaoComercial(linha.stage, propertyConfiavel.status)
               : null,
