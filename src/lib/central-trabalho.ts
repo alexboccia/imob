@@ -4,6 +4,7 @@ import { intervaloDoDia } from "@/lib/fuso-horario";
 import { ESTAGIOS_INTERESSE } from "@/lib/property-interest-schema";
 import { atividadeDoMembro } from "@/lib/responsavel-atividade";
 import { obterProximaAcaoComercial, type ProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
+import { PAGE_SIZE_MAXIMO } from "@/lib/pagination";
 import type { ScheduledActivityType } from "@/generated/prisma/client";
 
 // =======================================================================
@@ -65,6 +66,34 @@ import type { ScheduledActivityType } from "@/generated/prisma/client";
 // (agenda futura vazia), "atividade atrasada" (SCHEDULED cujo dia já
 // passou, Fase 83) e "próxima ação" (rótulo determinístico por estágio,
 // Fase 81, obterProximaAcaoComercial) — nunca combinados num score único.
+//
+// -----------------------------------------------------------------------
+// "MINHAS NEGOCIAÇÕES" — SELEÇÃO E ORDEM (Fase 89)
+// -----------------------------------------------------------------------
+// Achado: até esta fase, `take: limite` (5) acontecia na MESMA query que
+// ordenava por `updatedAt asc` — o banco escolhia as 5 negociações
+// "mexidas há mais tempo" ANTES de qualquer fato operacional
+// (atividadeAtrasada/semProximoCompromisso) ser sequer calculado. Um
+// corretor com 6+ negociações abertas podia ter uma com atividade
+// ATRASADA completamente escondida atrás de 5 negociações saudáveis, só
+// por causa de updatedAt (achado provado em teste antes da correção —
+// ver describe "priorização operacional do top-5").
+//
+// A correção NÃO cria prioridade/score: agrupa por um fato já existente
+// e documentado, sempre nesta ordem —
+//   1. tem atividade atrasada          (Fase 83)
+//   2. está sem NENHUM próximo passo   (Fase 83, semProximoCompromisso)
+//   3. já tem próximo compromisso      (está com o próximo passo definido)
+// — e dentro de cada grupo preserva a MESMA ordenação histórica ("mexida
+// há mais tempo primeiro"), nunca um desempate novo.
+//
+// Correção também de SELEÇÃO, não só de ordem: a query candidata busca
+// até PAGE_SIZE_MAXIMO (100, mesmo teto já usado em toda listagem
+// paginada do produto — nunca um número novo) negociações abertas antes
+// de aplicar a categorização, para que uma negociação urgente "fora dos
+// 5 mais antigos por updatedAt" ainda seja encontrada. 100 é um teto de
+// ENGENHARIA (evita carregar a organização inteira), não uma regra de
+// negócio — a CONTAGEM (`total`) nunca é afetada por ele, só a lista.
 // =======================================================================
 
 // Teto de exibição de cada lista. A CONTAGEM continua exata e vem de
@@ -243,7 +272,7 @@ export async function buscarCentralTrabalho(
       itensHoje,
       itensProximas,
       totalNegociacoes,
-      linhasNegociacoes,
+      linhasNegociacoesCandidatas,
     ] = await Promise.all([
       prisma.scheduledActivity.count({
         where: { ...baseAtividade, scheduledAt: { lt: inicioHoje } },
@@ -274,12 +303,18 @@ export async function buscarCentralTrabalho(
       prisma.propertyInterest.count({
         where: { organizationId, responsibleMemberId: memberId, stage: { in: [...ESTAGIOS_INTERESSE] } },
       }),
+      // Fase 89 — janela de CANDIDATAS, não mais a lista final: até
+      // PAGE_SIZE_MAXIMO negociações abertas, ordenadas por updatedAt
+      // (a mesma base histórica), com TODAS as ScheduledActivity
+      // SCHEDULED (não só a futura) — é o que permite categorizar por
+      // atrasada/sem-passo/agendada em memória, abaixo, sem uma segunda
+      // consulta por negociação. take:20 na relação é um teto defensivo
+      // (uma negociação com dezenas de compromissos em aberto ao mesmo
+      // tempo seria anomalia, não uso real).
       prisma.propertyInterest.findMany({
         where: { organizationId, responsibleMemberId: memberId, stage: { in: [...ESTAGIOS_INTERESSE] } },
-        // Critério FACTUAL, nunca prioridade inventada: a negociação
-        // mexida há mais tempo aparece primeiro.
         orderBy: { updatedAt: "asc" },
-        take: limite,
+        take: PAGE_SIZE_MAXIMO,
         select: {
           id: true,
           stage: true,
@@ -288,50 +323,50 @@ export async function buscarCentralTrabalho(
           // consulta que já buscava id/title (zero query nova): é o que
           // obterProximaAcaoComercial precisa para decidir a ação.
           property: { select: { id: true, title: true, organizationId: true, status: true } },
-          // Próxima visita agendada — batched pelo Prisma numa consulta
-          // só para o conjunto inteiro, nunca uma por card (zero N+1).
-          // Compromisso futuro mais próximo — batched pelo Prisma numa
-          // consulta só para o conjunto inteiro, nunca uma por card
-          // (zero N+1). Sem filtro de tipo: visita e follow-up contam.
           scheduledActivities: {
-            where: { organizationId, status: "SCHEDULED", scheduledAt: { gt: agora } },
+            where: { organizationId, status: "SCHEDULED" },
             orderBy: { scheduledAt: "asc" },
-            take: 1,
+            take: 20,
             select: { id: true, type: true, subject: true, scheduledAt: true },
           },
         },
       }),
     ]);
 
+    // Fase 89 — categoriza as CANDIDATAS (até PAGE_SIZE_MAXIMO) em
+    // memória, usando só o que já foi buscado acima (zero query extra):
+    // 1. tem atividade atrasada; 2. sem nenhum próximo passo; 3. já
+    // agendada. .filter() preserva a ordem relativa (updatedAt asc) —
+    // dentro de cada grupo o desempate continua sendo o histórico,
+    // nunca um novo. .slice(0, limite) só DEPOIS de agrupar é a correção
+    // do achado: antes, o corte acontecia no SQL, antes de qualquer fato
+    // operacional existir.
+    const candidatasComFatos = linhasNegociacoesCandidatas.map((linha) => {
+      const atrasada = linha.scheduledActivities.find((a) => a.scheduledAt < inicioHoje) ?? null;
+      const proxima = linha.scheduledActivities.find((a) => a.scheduledAt.getTime() > agora.getTime()) ?? null;
+      return { linha, atrasada, proxima };
+    });
+    const categoria1 = candidatasComFatos.filter((c) => c.atrasada);
+    const categoria2 = candidatasComFatos.filter((c) => !c.atrasada && !c.proxima);
+    const categoria3 = candidatasComFatos.filter((c) => !c.atrasada && c.proxima);
+    const linhasNegociacoes = [...categoria1, ...categoria2, ...categoria3].slice(0, limite);
+
     // Último contato de todas as pessoas da lista em UMA agregação, e
     // não uma query por negociação. A mesma ideia vale pra atividade
-    // atrasada por negociação, logo abaixo — as duas rodam juntas
+    // concluída por negociação, logo abaixo — as duas rodam juntas
     // porque as duas só existem depois de saber quais negociações
-    // vieram na página (dependem de linhasNegociacoes).
-    const idsPessoas = [...new Set(linhasNegociacoes.map((l) => l.person.id))];
-    const idsNegociacoes = linhasNegociacoes.map((l) => l.id);
-    const [ultimosContatos, atividadesAtrasadas, atividadesConcluidas] = await Promise.all([
+    // vieram na página (dependem de linhasNegociacoes). atividadeAtrasada
+    // NÃO precisa de query própria aqui: já foi calculada acima, na
+    // categorização, a partir do mesmo scheduledActivities já buscado —
+    // Fase 89 elimina essa query em vez de acrescentar uma.
+    const idsPessoas = [...new Set(linhasNegociacoes.map((c) => c.linha.person.id))];
+    const idsNegociacoes = linhasNegociacoes.map((c) => c.linha.id);
+    const [ultimosContatos, atividadesConcluidas] = await Promise.all([
       idsPessoas.length
         ? prisma.interaction.groupBy({
             by: ["personId"],
             where: { organizationId, personId: { in: idsPessoas } },
             _max: { occurredAt: true },
-          })
-        : Promise.resolve([]),
-      // Fase 83 — mesma janela de "atrasada" do bloco `atrasadas` acima
-      // (scheduledAt < inicioHoje), reaproveitada, nunca uma segunda
-      // definição. Ordenado ascendente pra achar a mais antiga por
-      // negociação (Map.set só na primeira ocorrência, abaixo).
-      idsNegociacoes.length
-        ? prisma.scheduledActivity.findMany({
-            where: {
-              organizationId,
-              status: "SCHEDULED",
-              propertyInterestId: { in: idsNegociacoes },
-              scheduledAt: { lt: inicioHoje },
-            },
-            orderBy: { scheduledAt: "asc" },
-            select: { propertyInterestId: true, type: true, subject: true, scheduledAt: true },
           })
         : Promise.resolve([]),
       // Fase 88 — a mais recente atividade que de fato ACONTECEU nesta
@@ -356,22 +391,6 @@ export async function buscarCentralTrabalho(
     const ultimoPorPessoa = new Map(
       ultimosContatos.map((linha) => [linha.personId, linha._max.occurredAt ?? null])
     );
-    const atrasadaPorNegociacao = new Map<
-      string,
-      { tipo: ScheduledActivityType; assunto: string | null; scheduledAtISO: string }
-    >();
-    for (const atividade of atividadesAtrasadas) {
-      // propertyInterestId nunca é null aqui (filtrado por `in:
-      // idsNegociacoes`, todas com id não-nulo) — o tipo do Prisma é
-      // string | null só porque a coluna é nullable em geral.
-      const id = atividade.propertyInterestId!;
-      if (atrasadaPorNegociacao.has(id)) continue; // já tem a mais antiga
-      atrasadaPorNegociacao.set(id, {
-        tipo: atividade.type,
-        assunto: atividade.subject,
-        scheduledAtISO: atividade.scheduledAt.toISOString(),
-      });
-    }
     const concluidaPorNegociacao = new Map<
       string,
       { tipo: ScheduledActivityType; assunto: string | null; scheduledAtISO: string }
@@ -395,7 +414,7 @@ export async function buscarCentralTrabalho(
       proximas: itensProximas.map((l) => paraCompromisso(l, organizationId)),
       negociacoes: {
         total: totalNegociacoes,
-        itens: linhasNegociacoes.map((linha) => {
+        itens: linhasNegociacoes.map(({ linha, atrasada, proxima }) => {
           const propertyConfiavel =
             linha.property && linha.property.organizationId === organizationId
               ? linha.property
@@ -410,16 +429,26 @@ export async function buscarCentralTrabalho(
             imovel: propertyConfiavel
               ? { id: propertyConfiavel.id, title: propertyConfiavel.title }
               : null,
-            semProximoCompromisso: linha.scheduledActivities.length === 0,
-            proximoCompromisso: linha.scheduledActivities[0]
+            // Definições INALTERADAS desde a Fase 83/81 — só a FONTE dos
+            // fatos mudou (derivada da lista completa de
+            // scheduledActivities já buscada, não mais de um select
+            // separado com where:{gt:agora} e take:1).
+            semProximoCompromisso: !proxima,
+            proximoCompromisso: proxima
               ? {
-                  tipo: linha.scheduledActivities[0].type,
-                  assunto: linha.scheduledActivities[0].subject,
-                  scheduledAtISO: linha.scheduledActivities[0].scheduledAt.toISOString(),
+                  tipo: proxima.type,
+                  assunto: proxima.subject,
+                  scheduledAtISO: proxima.scheduledAt.toISOString(),
                 }
               : null,
             ultimoContatoISO: ultimoPorPessoa.get(linha.person.id)?.toISOString() ?? null,
-            atividadeAtrasada: atrasadaPorNegociacao.get(linha.id) ?? null,
+            atividadeAtrasada: atrasada
+              ? {
+                  tipo: atrasada.type,
+                  assunto: atrasada.subject,
+                  scheduledAtISO: atrasada.scheduledAt.toISOString(),
+                }
+              : null,
             ultimaAtividadeConcluida: concluidaPorNegociacao.get(linha.id) ?? null,
             proximaAcao: propertyConfiavel
               ? obterProximaAcaoComercial(linha.stage, propertyConfiavel.status)

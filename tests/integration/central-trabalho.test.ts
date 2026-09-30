@@ -684,3 +684,153 @@ describe("volume", () => {
     expect(r.negociacoes.itens.every((n) => n.semProximoCompromisso)).toBe(true);
   });
 });
+
+// =======================================================================
+// Fase 89 — priorização operacional do top-5
+// =======================================================================
+// Achado: `take: limite` acontecia NA MESMA query Prisma que already
+// ordenava por `updatedAt asc` — ou seja, o banco escolhia as 5
+// negociações "mexidas há mais tempo" ANTES de qualquer fato
+// operacional (atividadeAtrasada/semProximoCompromisso) ser calculado.
+// Um corretor com 6+ negociações abertas podia ter uma negociação com
+// atividade ATRASADA (o fato mais acionável que a Central já expõe)
+// completamente ESCONDIDA atrás de 5 negociações saudáveis, só porque
+// updatedAt as colocava fora da janela.
+describe("priorização operacional do top-5 (Fase 89)", () => {
+  test("negociação com atividade atrasada não fica escondida atrás de negociações saudáveis só por causa de updatedAt", async () => {
+    const c = await novoCenario();
+    // 5 negociações SAUDÁVEIS (já têm próximo compromisso, nada exige
+    // ação agora) — mexidas há MUITO mais tempo, o que as fazia ganhar
+    // o top-5 pela ordenação antiga (updatedAt asc) mesmo não precisando
+    // de nenhuma atenção.
+    const saudaveis = [];
+    for (let i = 0; i < LIMITE_CENTRAL; i++) {
+      const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await visita(c.organization.id, n, "2026-09-09T10:00:00.000Z"); // futura
+      await prisma.propertyInterest.update({
+        where: { id: n.id, organizationId: c.organization.id },
+        data: { updatedAt: iso(`2026-01-0${i + 1}T10:00:00.000Z`) },
+      });
+      saudaveis.push(n);
+    }
+    // A 6ª: mexida bem mais recentemente (perderia no critério puro de
+    // "mexida há mais tempo primeiro"), mas tem atividade ATRASADA — o
+    // fato mais acionável que a Central já conhece (Fase 83).
+    const urgente = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    await visita(c.organization.id, urgente, "2026-09-01T10:00:00.000Z"); // atrasada
+    await prisma.propertyInterest.update({
+      where: { id: urgente.id, organizationId: c.organization.id },
+      data: { updatedAt: iso("2026-09-06T10:00:00.000Z") },
+    });
+
+    const r = await central(c.organization.id, c.membro.id);
+    expect(r.negociacoes.total).toBe(LIMITE_CENTRAL + 1);
+    expect(r.negociacoes.itens).toHaveLength(LIMITE_CENTRAL);
+
+    const idsExibidos = r.negociacoes.itens.map((n) => n.id);
+    expect(idsExibidos).toContain(urgente.id);
+    // A urgente vem PRIMEIRO: atividade atrasada tem prioridade sobre
+    // negociações que já têm o próximo passo definido.
+    expect(idsExibidos[0]).toBe(urgente.id);
+    expect(r.negociacoes.itens[0].atividadeAtrasada).not.toBeNull();
+  });
+
+  test("negociação sem NENHUM próximo passo vem antes de negociação já agendada, mesmo mexida há menos tempo", async () => {
+    const c = await novoCenario();
+    // 5 negociações saudáveis (com próximo compromisso), mexidas há
+    // muito tempo.
+    for (let i = 0; i < LIMITE_CENTRAL; i++) {
+      const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await visita(c.organization.id, n, "2026-09-09T10:00:00.000Z");
+      await prisma.propertyInterest.update({
+        where: { id: n.id, organizationId: c.organization.id },
+        data: { updatedAt: iso(`2026-01-0${i + 1}T10:00:00.000Z`) },
+      });
+    }
+    // A 6ª: mexida recentemente, sem nada agendado (nunca, nem
+    // atrasado) — precisa de um próximo passo, mas não é tão urgente
+    // quanto uma atrasada (categoria 2, não categoria 1).
+    const semPasso = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    await prisma.propertyInterest.update({
+      where: { id: semPasso.id, organizationId: c.organization.id },
+      data: { updatedAt: iso("2026-09-06T10:00:00.000Z") },
+    });
+
+    const r = await central(c.organization.id, c.membro.id);
+    const idsExibidos = r.negociacoes.itens.map((n) => n.id);
+    expect(idsExibidos).toContain(semPasso.id);
+    expect(idsExibidos[0]).toBe(semPasso.id);
+    expect(r.negociacoes.itens[0].semProximoCompromisso).toBe(true);
+    expect(r.negociacoes.itens[0].atividadeAtrasada).toBeNull();
+  });
+
+  test("atrasada vem antes de sem-próximo-passo, que vem antes de já-agendada — dentro de cada categoria, mexida há mais tempo primeiro", async () => {
+    const c = await novoCenario();
+
+    const agendada = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    await visita(c.organization.id, agendada, "2026-09-09T10:00:00.000Z");
+    await prisma.propertyInterest.update({
+      where: { id: agendada.id, organizationId: c.organization.id },
+      data: { updatedAt: iso("2026-09-01T00:00:00.000Z") },
+    });
+
+    const semPasso = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    await prisma.propertyInterest.update({
+      where: { id: semPasso.id, organizationId: c.organization.id },
+      data: { updatedAt: iso("2026-09-02T00:00:00.000Z") },
+    });
+
+    const atrasada = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    await visita(c.organization.id, atrasada, "2026-09-01T10:00:00.000Z");
+    await prisma.propertyInterest.update({
+      where: { id: atrasada.id, organizationId: c.organization.id },
+      data: { updatedAt: iso("2026-09-03T00:00:00.000Z") },
+    });
+
+    const r = await central(c.organization.id, c.membro.id);
+    expect(r.negociacoes.itens.map((n) => n.id)).toEqual([atrasada.id, semPasso.id, agendada.id]);
+  });
+
+  test("desempate estável: duas atrasadas mantêm a ordem por updatedAt (mais antiga primeiro), nenhuma ordenação inventada", async () => {
+    const c = await novoCenario();
+    const maisAntiga = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    await visita(c.organization.id, maisAntiga, "2026-09-01T10:00:00.000Z");
+    await prisma.propertyInterest.update({
+      where: { id: maisAntiga.id, organizationId: c.organization.id },
+      data: { updatedAt: iso("2026-09-01T00:00:00.000Z") },
+    });
+
+    const maisRecente = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    await visita(c.organization.id, maisRecente, "2026-09-02T10:00:00.000Z");
+    await prisma.propertyInterest.update({
+      where: { id: maisRecente.id, organizationId: c.organization.id },
+      data: { updatedAt: iso("2026-09-02T00:00:00.000Z") },
+    });
+
+    const r = await central(c.organization.id, c.membro.id);
+    expect(r.negociacoes.itens.map((n) => n.id)).toEqual([maisAntiga.id, maisRecente.id]);
+  });
+
+  test("negociação encerrada (WON/REJECTED) nunca entra na priorização, mesmo com atividade atrasada", async () => {
+    const c = await novoCenario();
+    const ganha = await negociacao(c.organization.id, {
+      responsavelId: c.membro.id,
+      stage: "WON",
+    });
+    await visita(c.organization.id, ganha, "2026-09-01T10:00:00.000Z");
+
+    const r = await central(c.organization.id, c.membro.id);
+    expect(r.negociacoes.total).toBe(0);
+    expect(r.negociacoes.itens).toHaveLength(0);
+  });
+
+  test("com mais de 100 candidatos, o teto defensivo não quebra — total exato continua vindo de query própria", async () => {
+    const c = await novoCenario();
+    for (let i = 0; i < 105; i++) {
+      await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    }
+    const r = await central(c.organization.id, c.membro.id);
+    expect(r.negociacoes.total).toBe(105);
+    expect(r.negociacoes.itens).toHaveLength(LIMITE_CENTRAL);
+  });
+});
