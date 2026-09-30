@@ -8,6 +8,7 @@ import { ESTAGIO_INTERESSE_LABEL } from "@/lib/property-interest-schema";
 import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import type { PropertyInterestStage, PropertyStatus } from "@/generated/prisma/client";
 import type { CriterioMatch } from "@/lib/property-matching";
+import { CriteriosCompatibilidade } from "@/components/admin/CriteriosCompatibilidade";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -38,11 +39,6 @@ export function RecomendacaoClienteItem({
     ? obterProximaAcaoComercial(recomendacao.existingInterest.stage, propertyStatus)
     : null;
 
-  // Requisitos (hard filters, weight=0) vs. Compatibilidade (soft
-  // criteria, weight>0) — mesma separação da Fase E, ver
-  // RecomendacaoImovelItem.tsx.
-  const requisitos = recomendacao.criteria.filter((c) => c.active && c.weight === 0);
-  const criteriosCompatibilidade = recomendacao.criteria.filter((c) => c.active && c.weight > 0);
   const temScorePercentual = recomendacao.activeSoftCriteriaCount > 0;
 
   return (
@@ -58,32 +54,7 @@ export function RecomendacaoClienteItem({
         </Badge>
       </div>
 
-      {requisitos.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1">Requisitos atendidos</p>
-          <ul className="text-sm space-y-1">
-            {requisitos.map((criterio) => (
-              <li key={criterio.key}>✓ {criterio.detail ?? criterio.label}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {criteriosCompatibilidade.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1">Compatibilidade</p>
-          <ul className="text-sm space-y-1">
-            {criteriosCompatibilidade.map((criterio) => (
-              <li
-                key={criterio.key}
-                className={criterio.matched ? "text-foreground" : "text-muted-foreground"}
-              >
-                {criterio.matched ? "✓" : "✕"} {criterio.detail ?? criterio.label}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <CriteriosCompatibilidade criteria={recomendacao.criteria} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link

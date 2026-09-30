@@ -206,6 +206,12 @@ test.describe("estado com perfil", () => {
     // Explicação do match: nunca uma caixa-preta — requisitos e
     // compatibilidade aparecem como texto legível, não só um percentual.
     await expect(cardImovel.getByText(/compatível/)).toBeVisible();
+    // Fase 98 — os critérios soft (cidade incluída) ficam atrás de um
+    // <details> recolhido por padrão, pra o card não crescer à toa em
+    // telas estreitas. Precisa expandir antes de enxergar o texto —
+    // exatamente o comportamento que esta fase introduziu.
+    await expect(cardImovel.getByText(cidade)).not.toBeVisible();
+    await cardImovel.getByText("Ver critérios de compatibilidade").click();
     await expect(cardImovel.getByText(cidade)).toBeVisible();
 
     // Reutiliza a MESMA ficha de imóvel já existente — não uma segunda
@@ -214,6 +220,77 @@ test.describe("estado com perfil", () => {
     await page.waitForURL(/\/app\/imoveis\/[^/?]+$/);
     expect(page.url()).toBe(urlImovel);
     await expect(page.getByRole("heading", { name: "Editar imóvel" })).toBeVisible();
+  });
+});
+
+test.describe("Fase 98 — explicabilidade visual do matching", () => {
+  test("requisitos atendidos ficam sempre visíveis, sem precisar expandir nada", async ({ page }) => {
+    const cidade = "São Paulo";
+    const tituloImovel = `Imóvel Requisitos E2E ${Date.now()}`;
+    await criarImovelDisponivel(page, { titulo: tituloImovel, cidade, precoReais: 500_000 });
+
+    const nome = nomeUnico("Cliente Requisitos Visiveis");
+    await criarCliente(page, nome);
+
+    await page.getByRole("button", { name: "Adicionar preferências" }).click();
+    await page.getByRole("combobox", { name: "Finalidade" }).click();
+    await page.getByRole("option", { name: "Comprar" }).click();
+    await page.getByLabel("Cidades", { exact: true }).fill(cidade);
+    await page.keyboard.press("Enter");
+    await Promise.all([
+      page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/app/clientes/")),
+      page.getByRole("button", { name: "Salvar preferências" }).click(),
+    ]);
+    await page.reload();
+
+    const secaoRecomendados = page.locator("section", {
+      has: page.getByRole("heading", { level: 2, name: "Imóveis recomendados" }),
+    });
+    const cardImovel = secaoRecomendados
+      .locator('[data-slot="card"]')
+      .filter({ hasText: tituloImovel });
+    await expect(cardImovel).toBeVisible();
+    // "Comprar" (finalidade) é hard filter — Requisitos atendidos não fica
+    // atrás do <details>: é curto (no máximo 3 itens) e já reaproveitado
+    // como confirmação rápida sem exigir clique nenhum.
+    await expect(cardImovel.getByText("Requisitos atendidos")).toBeVisible();
+    await expect(cardImovel.getByText(/SALE/)).toBeVisible();
+  });
+
+  test("o disclosure de critérios é operável por teclado, sem precisar de mouse", async ({ page }) => {
+    const cidade = "São Paulo";
+    const tituloImovel = `Imóvel Teclado E2E ${Date.now()}`;
+    await criarImovelDisponivel(page, { titulo: tituloImovel, cidade, precoReais: 500_000 });
+
+    const nome = nomeUnico("Cliente Teclado Disclosure");
+    await criarCliente(page, nome);
+
+    await page.getByRole("button", { name: "Adicionar preferências" }).click();
+    await page.getByRole("combobox", { name: "Finalidade" }).click();
+    await page.getByRole("option", { name: "Comprar" }).click();
+    await page.getByLabel("Cidades", { exact: true }).fill(cidade);
+    await page.keyboard.press("Enter");
+    await Promise.all([
+      page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/app/clientes/")),
+      page.getByRole("button", { name: "Salvar preferências" }).click(),
+    ]);
+    await page.reload();
+
+    const secaoRecomendados = page.locator("section", {
+      has: page.getByRole("heading", { level: 2, name: "Imóveis recomendados" }),
+    });
+    const cardImovel = secaoRecomendados
+      .locator('[data-slot="card"]')
+      .filter({ hasText: tituloImovel });
+    const trigger = cardImovel.getByText("Ver critérios de compatibilidade");
+    await expect(cardImovel.getByText(cidade)).not.toBeVisible();
+
+    // <summary> nativo é focável e ativável por teclado sem nenhum JS
+    // próprio (mesmo elemento já usado em PipelineInsights.tsx) — Enter
+    // no elemento focado abre o <details>, sem precisar de clique.
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(cardImovel.getByText(cidade)).toBeVisible();
   });
 });
 

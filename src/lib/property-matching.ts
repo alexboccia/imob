@@ -288,8 +288,24 @@ export function calcularCompatibilidade(
     const atendeu =
       (preference.minArea == null || property.privateArea! >= preference.minArea) &&
       (preference.maxArea == null || property.privateArea! <= preference.maxArea);
+    // Fase 98 — mesma ideia do detail de bedrooms/bathrooms/parkingSpots:
+    // descreve a faixa desejada por extenso (só min, só max, ou os dois)
+    // antes do valor real do imóvel. Só formatação — atendeu continua
+    // vindo exclusivamente da comparação acima.
+    const faixaDesejada =
+      preference.minArea != null && preference.maxArea != null
+        ? `${preference.minArea}–${preference.maxArea} m²`
+        : preference.minArea != null
+          ? `a partir de ${preference.minArea} m²`
+          : `até ${preference.maxArea} m²`;
     criteria.push(
-      criterioBooleano("area", PESOS.area, true, atendeu, `${property.privateArea} m²`)
+      criterioBooleano(
+        "area",
+        PESOS.area,
+        true,
+        atendeu,
+        `desejado ${faixaDesejada} · imóvel tem ${property.privateArea} m²`
+      )
     );
   } else {
     criteria.push(criterioInativo("area", PESOS.area));
@@ -333,7 +349,11 @@ function criterioNumericoMinimo(
   const active = minimo != null && valorImovel != null;
   if (!active) return criterioInativo(key, weight);
   const atendeu = valorImovel! >= minimo!;
-  return criterioBooleano(key, weight, true, atendeu, `${valorImovel}`);
+  // Fase 98 — detail mostra os dois lados da comparação (desejado ×
+  // imóvel), não só o valor do imóvel: é o que permite a UI explicar o
+  // critério sem duplicar esta conta. Formato do número, nunca a decisão
+  // (atendeu/matched continuam vindo só de valorImovel >= minimo).
+  return criterioBooleano(key, weight, true, atendeu, `mínimo ${minimo} · imóvel tem ${valorImovel}`);
 }
 
 function criterioFeatures(

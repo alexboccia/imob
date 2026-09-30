@@ -236,6 +236,42 @@ describe("calcularCompatibilidade — critérios de matching (pura, sem DB)", ()
     );
   });
 
+  // Fase 98 — explicabilidade visual: o `detail` de bedrooms/bathrooms/
+  // parkingSpots/área passou a mostrar os dois lados da comparação
+  // (desejado × imóvel), não só o valor do imóvel — é puramente
+  // apresentação, a decisão de `matched` continua vindo exatamente da
+  // mesma comparação numérica de sempre (provado logo abaixo, lado a
+  // lado com o texto).
+  test("Fase 98 — detail de bedrooms/bathrooms/parkingSpots mostra o mínimo desejado ao lado do valor do imóvel", () => {
+    const preference = preferenciaPadrao({ minBedrooms: 3, minBathrooms: 2, minParkingSpots: 1 });
+    const resultado = calcularCompatibilidade(
+      preference,
+      propertyPadrao({ bedrooms: 3, bathrooms: 1, parkingSpots: 2 })
+    );
+    expect(criterio(resultado, "bedrooms").detail).toBe("mínimo 3 · imóvel tem 3");
+    expect(criterio(resultado, "bedrooms").matched).toBe(true);
+    expect(criterio(resultado, "bathrooms").detail).toBe("mínimo 2 · imóvel tem 1");
+    expect(criterio(resultado, "bathrooms").matched).toBe(false);
+    expect(criterio(resultado, "parkingSpots").detail).toBe("mínimo 1 · imóvel tem 2");
+    expect(criterio(resultado, "parkingSpots").matched).toBe(true);
+  });
+
+  test("Fase 98 — detail de área descreve a faixa desejada (só mínimo, só máximo, ou os dois) antes do valor real", () => {
+    const imovel80 = propertyPadrao({ privateArea: 80 });
+
+    expect(
+      criterio(calcularCompatibilidade(preferenciaPadrao({ minArea: 70, maxArea: 100 }), imovel80), "area").detail
+    ).toBe("desejado 70–100 m² · imóvel tem 80 m²");
+
+    expect(
+      criterio(calcularCompatibilidade(preferenciaPadrao({ minArea: 70 }), imovel80), "area").detail
+    ).toBe("desejado a partir de 70 m² · imóvel tem 80 m²");
+
+    expect(
+      criterio(calcularCompatibilidade(preferenciaPadrao({ maxArea: 100 }), imovel80), "area").detail
+    ).toBe("desejado até 100 m² · imóvel tem 80 m²");
+  });
+
   test("S) propertyFeatures — 100% das desejadas presentes conta peso cheio", () => {
     const preference = preferenciaPadrao({ desiredPropertyFeatures: ["piscina", "churrasqueira"] });
     const resultado = calcularCompatibilidade(
