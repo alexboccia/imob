@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ORG_CENTRAL, ORG_B, login } from "./helpers";
+import { ORG_CENTRAL, ORG_CENTRAL_CORRETOR, ORG_B, login } from "./helpers";
 
 // Central de trabalho (Fase 17).
 //
@@ -180,5 +180,90 @@ test.describe("Central de trabalho — seções do novo padrão", () => {
     // inventado. A navegação por item continua sendo o nome do cliente.
     await expect(page.getByRole("link", { name: /Ver negociação/i })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Ver negociação/i })).toHaveCount(0);
+  });
+});
+
+// =====================================================================
+// Fase 88 — "Última atividade concluída"
+// =====================================================================
+// Achado: um follow-up concluído não gera Interaction (Fase 19/85,
+// "planejado ≠ realizado", decisão deliberada), diferente de uma visita
+// concluída (Fase 37). Consequência: até esta fase, uma negociação cujo
+// único trabalho foi um follow-up concluído era indistinguível, na
+// Central, de uma negociação nunca tocada. Prova ponta a ponta, com
+// dados reais criados pela própria jornada do produto (nunca inseridos
+// direto no banco), de que a Central agora diferencia as duas.
+// ORG_CENTRAL_CORRETOR (segundo corretor de Organização E, Fase 21),
+// nunca ORG_A: Organização A é compartilhada por dezenas de specs desta
+// suíte, e "Minhas negociações" trunca em LIMITE_CENTRAL=5, ordenado por
+// "mexida há mais tempo primeiro" — na suíte completa, o dono da Org A
+// acumula bem mais que 5 negociações de outros specs, e a negociação
+// recém-criada por ESTE teste (a mais recentemente mexida) ficaria fora
+// da janela visível. Achado real: o teste passava isolado e falhava na
+// suíte completa. O segundo corretor da Organização E tem só 1
+// negociação pré-existente no seed — nunca mexida por nenhum outro spec.
+test.describe("Central de trabalho — última atividade concluída (Fase 88)", () => {
+  test("follow-up concluído aparece como 'Última atividade concluída', só quando não há próximo compromisso", async ({
+    page,
+  }) => {
+    const nome = `Cliente Fase88 ${Date.now()}`;
+    await login(page, ORG_CENTRAL_CORRETOR);
+
+    await page.goto("/app/clientes");
+    await page.getByRole("button", { name: "Novo cliente" }).click();
+    await page.getByPlaceholder("Nome", { exact: true }).fill(nome);
+    await page.getByRole("button", { name: "Cadastrar" }).click();
+    await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
+
+    await page.getByPlaceholder("Buscar por nome, telefone ou e-mail...").fill(nome);
+    await page.waitForURL(/search=/);
+    await page.getByRole("link", { name: nome }).click();
+    await page.waitForURL(/\/app\/clientes\/[^/?]+$/);
+
+    // Relaciona um imóvel (cria a negociação, responsável = eu mesmo,
+    // valor padrão do form — é o que faz a negociação aparecer na MINHA
+    // Central).
+    const comboImovel = page.getByRole("combobox", { name: "Imóvel" });
+    await comboImovel.click();
+    await page.getByRole("listbox").getByRole("option").first().click();
+    await page.getByRole("button", { name: "Relacionar imóvel" }).click();
+    await page.waitForTimeout(800);
+    await page.reload();
+
+    // Agenda um follow-up (precisa ser futuro pra ser criado — mesma
+    // regra já provada na Fase 87) e conclui na hora — concluirFollowUp
+    // não exige que a data já tenha passado.
+    await page.getByRole("button", { name: "Agendar follow-up" }).click();
+    await page.getByLabel("O que precisa ser feito").waitFor({ state: "visible" });
+    await page.getByLabel("O que precisa ser feito").fill("Cobrar documentos");
+    // UTC, não hora local da máquina de teste: ORG_A não tem fuso
+    // configurado (fallback UTC), e o campo é lido como "horário de
+    // parede da organização" (Fase 18). Usar getters locais aqui
+    // quebraria em qualquer máquina com offset negativo (ex: UTC-3): "2h
+    // à frente" em hora local, interpretado como UTC, pode cair no
+    // passado.
+    const futuro = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    const valor = `${futuro.getUTCFullYear()}-${String(futuro.getUTCMonth() + 1).padStart(2, "0")}-${String(futuro.getUTCDate()).padStart(2, "0")}T${String(futuro.getUTCHours()).padStart(2, "0")}:${String(futuro.getUTCMinutes()).padStart(2, "0")}`;
+    await page.getByLabel("Data e horário").fill(valor);
+    await page.getByRole("button", { name: "Agendar", exact: true }).click();
+    await page.waitForTimeout(800);
+
+    await Promise.all([
+      page.waitForResponse((r) => r.request().method() === "POST"),
+      page.getByRole("button", { name: "Concluir" }).click(),
+    ]);
+    await page.waitForTimeout(500);
+
+    // Na Central: a negociação aparece com o fato novo, e SEM "Sem
+    // próximo compromisso" (que seria a leitura enganosa — indistinguível
+    // de nunca ter sido tocada).
+    await page.goto("/app");
+    const secaoNegociacoes = page
+      .getByRole("heading", { name: "Minhas negociações" })
+      .locator("xpath=ancestor::section[1]");
+    const card = secaoNegociacoes.locator("li").filter({ hasText: nome });
+    await expect(card).toBeVisible();
+    await expect(card.getByText("Última atividade concluída")).toBeVisible();
+    await expect(card).toContainText("Follow-up — Cobrar documentos");
   });
 });

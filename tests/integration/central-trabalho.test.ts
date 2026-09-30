@@ -386,6 +386,160 @@ describe("negociações", () => {
     });
   });
 
+  // Fase 88 — achado: visita concluída gera Interaction (Fase 37), mas
+  // follow-up concluído não (Fase 19/85, "planejado ≠ realizado",
+  // decisão deliberada e preservada). Consequência nunca testada: uma
+  // negociação cujo único trabalho foi um follow-up concluído ficava
+  // IDÊNTICA a uma nunca tocada (mesmo ultimoContatoISO=null, mesmo
+  // semProximoCompromisso=true, mesmo atividadeAtrasada=null).
+  // ultimaAtividadeConcluida fecha essa lacuna com um fato já existente
+  // (ScheduledActivity COMPLETED/NO_SHOW desta negociação).
+  describe("última atividade concluída (Fase 88)", () => {
+    async function atividade(
+      organizationId: string,
+      interesse: { id: string; personId: string; propertyId: string },
+      quando: string,
+      opcoes: {
+        tipo?: "VISIT" | "FOLLOW_UP";
+        status?: "SCHEDULED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+        assunto?: string;
+      } = {}
+    ) {
+      const tipo = opcoes.tipo ?? "VISIT";
+      const status = opcoes.status ?? "COMPLETED";
+      return prisma.scheduledActivity.create({
+        data: {
+          organizationId,
+          personId: interesse.personId,
+          propertyId: interesse.propertyId,
+          propertyInterestId: interesse.id,
+          type: tipo,
+          status,
+          subject: tipo === "FOLLOW_UP" ? (opcoes.assunto ?? "Cobrar documentos") : null,
+          scheduledAt: iso(quando),
+          ...(status === "COMPLETED" || status === "NO_SHOW" ? { completedAt: AGORA } : {}),
+          ...(status === "CANCELLED" ? { cancelledAt: AGORA } : {}),
+        },
+        select: { id: true },
+      });
+    }
+
+    test("follow-up concluído diferencia a negociação de uma nunca tocada — o achado central da fase", async () => {
+      const c = await novoCenario();
+      const comFollowUp = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      const semNada = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await atividade(c.organization.id, comFollowUp, "2026-09-01T10:00:00.000Z", {
+        tipo: "FOLLOW_UP",
+        status: "COMPLETED",
+        assunto: "Cobrar documentos",
+      });
+
+      const r = await central(c.organization.id, c.membro.id);
+      const porId = new Map(r.negociacoes.itens.map((n) => [n.id, n]));
+
+      // Antes desta fase, os dois eram idênticos nestes três campos.
+      expect(porId.get(comFollowUp.id)?.ultimoContatoISO).toBeNull();
+      expect(porId.get(semNada.id)?.ultimoContatoISO).toBeNull();
+      expect(porId.get(comFollowUp.id)?.atividadeAtrasada).toBeNull();
+      expect(porId.get(semNada.id)?.atividadeAtrasada).toBeNull();
+      expect(porId.get(comFollowUp.id)?.semProximoCompromisso).toBe(true);
+      expect(porId.get(semNada.id)?.semProximoCompromisso).toBe(true);
+
+      // A diferença real agora aparece aqui.
+      expect(porId.get(comFollowUp.id)?.ultimaAtividadeConcluida).toEqual({
+        tipo: "FOLLOW_UP",
+        assunto: "Cobrar documentos",
+        scheduledAtISO: "2026-09-01T10:00:00.000Z",
+      });
+      expect(porId.get(semNada.id)?.ultimaAtividadeConcluida).toBeNull();
+    });
+
+    test("visita concluída também conta (paridade com o que já gera Interaction)", async () => {
+      const c = await novoCenario();
+      const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await atividade(c.organization.id, n, "2026-09-02T10:00:00.000Z", {
+        tipo: "VISIT",
+        status: "COMPLETED",
+      });
+
+      const r = await central(c.organization.id, c.membro.id);
+      expect(r.negociacoes.itens[0].ultimaAtividadeConcluida).toEqual({
+        tipo: "VISIT",
+        assunto: null,
+        scheduledAtISO: "2026-09-02T10:00:00.000Z",
+      });
+    });
+
+    test("no-show conta — o corretor tentou, o cliente não apareceu, mas algo aconteceu", async () => {
+      const c = await novoCenario();
+      const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await atividade(c.organization.id, n, "2026-09-02T10:00:00.000Z", {
+        tipo: "VISIT",
+        status: "NO_SHOW",
+      });
+
+      const r = await central(c.organization.id, c.membro.id);
+      expect(r.negociacoes.itens[0].ultimaAtividadeConcluida?.tipo).toBe("VISIT");
+    });
+
+    test("cancelada NÃO conta — nada aconteceu, alguém só desmarcou (falso positivo)", async () => {
+      const c = await novoCenario();
+      const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await atividade(c.organization.id, n, "2026-09-02T10:00:00.000Z", {
+        tipo: "FOLLOW_UP",
+        status: "CANCELLED",
+      });
+
+      const r = await central(c.organization.id, c.membro.id);
+      expect(r.negociacoes.itens[0].ultimaAtividadeConcluida).toBeNull();
+    });
+
+    test("a mais recente concluída vence quando há mais de uma", async () => {
+      const c = await novoCenario();
+      const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await atividade(c.organization.id, n, "2026-08-20T10:00:00.000Z", { status: "COMPLETED" });
+      await atividade(c.organization.id, n, "2026-09-02T10:00:00.000Z", { status: "COMPLETED" });
+
+      const r = await central(c.organization.id, c.membro.id);
+      expect(r.negociacoes.itens[0].ultimaAtividadeConcluida?.scheduledAtISO).toBe(
+        "2026-09-02T10:00:00.000Z"
+      );
+    });
+
+    test("com próximo compromisso marcado, ultimaAtividadeConcluida continua no dado — a UI decide não mostrar, não a query", async () => {
+      const c = await novoCenario();
+      const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await atividade(c.organization.id, n, "2026-08-20T10:00:00.000Z", { status: "COMPLETED" });
+      await visita(c.organization.id, n, "2026-09-09T10:00:00.000Z"); // futura
+
+      const r = await central(c.organization.id, c.membro.id);
+      const item = r.negociacoes.itens[0];
+      expect(item.semProximoCompromisso).toBe(false);
+      expect(item.ultimaAtividadeConcluida).not.toBeNull();
+    });
+
+    test("atividade concluída de OUTRO membro não aparece na minha central", async () => {
+      const c = await novoCenario();
+      const bruno = await outroMembro(c.organization.id, "Bruno Concluida");
+      const n = await negociacao(c.organization.id, { responsavelId: bruno.id });
+      await atividade(c.organization.id, n, "2026-09-02T10:00:00.000Z", { status: "COMPLETED" });
+
+      const r = await central(c.organization.id, c.membro.id);
+      expect(r.negociacoes.total).toBe(0);
+    });
+
+    test("isolamento entre organizações: atividade concluída de B nunca aparece na central de A", async () => {
+      const a = await novoCenario();
+      const b = await novoCenario();
+      const nb = await negociacao(b.organization.id, { responsavelId: b.membro.id });
+      await atividade(b.organization.id, nb, "2026-09-02T10:00:00.000Z", { status: "COMPLETED" });
+      await negociacao(a.organization.id, { responsavelId: a.membro.id });
+
+      const r = await central(a.organization.id, a.membro.id);
+      expect(r.negociacoes.itens.every((n) => n.ultimaAtividadeConcluida === null)).toBe(true);
+    });
+  });
+
   test("último contato usa occurredAt, e a mais recente vence", async () => {
     const c = await novoCenario();
     const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });

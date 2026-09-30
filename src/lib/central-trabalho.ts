@@ -119,6 +119,23 @@ export type NegociacaoCentral = {
   // ainda não resolvida E um follow-up já marcado pra semana que vem) —
   // os dois fatos são mostrados, nunca fundidos um no outro.
   atividadeAtrasada: { tipo: ScheduledActivityType; assunto: string | null; scheduledAtISO: string } | null;
+  // Fase 88 — achado: uma visita CONCLUÍDA cria Interaction (Fase 37), mas
+  // um follow-up concluído não (Fase 19/85, "planejado ≠ realizado" —
+  // decisão deliberada, preservada aqui, nunca revertida). Consequência
+  // não percebida até agora: uma negociação cujo único trabalho foi um
+  // follow-up concluído ficava IDÊNTICA, nesta tela, a uma que nunca
+  // recebeu nenhuma atenção (mesmo ultimoContatoISO=null, mesmo
+  // semProximoCompromisso=true, mesmo atividadeAtrasada=null — nenhum
+  // teste cobria essa distinção). Este campo fecha essa lacuna com um
+  // FATO já existente (ScheduledActivity.status COMPLETED/NO_SHOW desta
+  // negociação, scoped por negociação — não por pessoa, diferente de
+  // ultimoContatoISO abaixo), nunca uma nova Interaction, nunca um
+  // score. CANCELLED não conta: nada aconteceu, alguém só desmarcou.
+  ultimaAtividadeConcluida: {
+    tipo: ScheduledActivityType;
+    assunto: string | null;
+    scheduledAtISO: string;
+  } | null;
   // Data da interação mais recente desta pessoa (Interaction.occurredAt,
   // quando o contato OCORREU — nunca createdAt). null = nenhuma
   // interação registrada, jamais "sem contato há muito tempo".
@@ -293,7 +310,7 @@ export async function buscarCentralTrabalho(
     // vieram na página (dependem de linhasNegociacoes).
     const idsPessoas = [...new Set(linhasNegociacoes.map((l) => l.person.id))];
     const idsNegociacoes = linhasNegociacoes.map((l) => l.id);
-    const [ultimosContatos, atividadesAtrasadas] = await Promise.all([
+    const [ultimosContatos, atividadesAtrasadas, atividadesConcluidas] = await Promise.all([
       idsPessoas.length
         ? prisma.interaction.groupBy({
             by: ["personId"],
@@ -317,6 +334,24 @@ export async function buscarCentralTrabalho(
             select: { propertyInterestId: true, type: true, subject: true, scheduledAt: true },
           })
         : Promise.resolve([]),
+      // Fase 88 — a mais recente atividade que de fato ACONTECEU nesta
+      // negociação (COMPLETED ou NO_SHOW — CANCELLED fica de fora, nada
+      // ocorreu). scheduledAt, não completedAt: mesmo campo que
+      // concluirAgendamentoVisita usa como occurredAt da Interaction
+      // (Fase 37) — "quando aconteceu", não "quando alguém clicou
+      // concluir". Ordenado descendente pra achar a mais recente por
+      // negociação (Map.set só na primeira ocorrência, abaixo).
+      idsNegociacoes.length
+        ? prisma.scheduledActivity.findMany({
+            where: {
+              organizationId,
+              status: { in: ["COMPLETED", "NO_SHOW"] },
+              propertyInterestId: { in: idsNegociacoes },
+            },
+            orderBy: { scheduledAt: "desc" },
+            select: { propertyInterestId: true, type: true, subject: true, scheduledAt: true },
+          })
+        : Promise.resolve([]),
     ]);
     const ultimoPorPessoa = new Map(
       ultimosContatos.map((linha) => [linha.personId, linha._max.occurredAt ?? null])
@@ -332,6 +367,19 @@ export async function buscarCentralTrabalho(
       const id = atividade.propertyInterestId!;
       if (atrasadaPorNegociacao.has(id)) continue; // já tem a mais antiga
       atrasadaPorNegociacao.set(id, {
+        tipo: atividade.type,
+        assunto: atividade.subject,
+        scheduledAtISO: atividade.scheduledAt.toISOString(),
+      });
+    }
+    const concluidaPorNegociacao = new Map<
+      string,
+      { tipo: ScheduledActivityType; assunto: string | null; scheduledAtISO: string }
+    >();
+    for (const atividade of atividadesConcluidas) {
+      const id = atividade.propertyInterestId!;
+      if (concluidaPorNegociacao.has(id)) continue; // já tem a mais recente
+      concluidaPorNegociacao.set(id, {
         tipo: atividade.type,
         assunto: atividade.subject,
         scheduledAtISO: atividade.scheduledAt.toISOString(),
@@ -372,6 +420,7 @@ export async function buscarCentralTrabalho(
               : null,
             ultimoContatoISO: ultimoPorPessoa.get(linha.person.id)?.toISOString() ?? null,
             atividadeAtrasada: atrasadaPorNegociacao.get(linha.id) ?? null,
+            ultimaAtividadeConcluida: concluidaPorNegociacao.get(linha.id) ?? null,
             proximaAcao: propertyConfiavel
               ? obterProximaAcaoComercial(linha.stage, propertyConfiavel.status)
               : null,

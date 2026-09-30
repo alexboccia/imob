@@ -322,6 +322,28 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
                               : "Sem próximo compromisso"}
                         </dd>
                       </div>
+
+                      {/* Fase 88 — só aparece quando não há próximo
+                          compromisso: é exatamente aí que "nunca foi
+                          trabalhada" e "já foi trabalhada, parou depois"
+                          eram indistinguíveis (visita concluída gera
+                          Interaction — Fase 37 — mas follow-up concluído
+                          não, decisão deliberada da Fase 19/85). Com
+                          próximo compromisso marcado a negociação já está
+                          claramente ativa, e repetir o fato aqui seria só
+                          ruído. */}
+                      {n.semProximoCompromisso && n.ultimaAtividadeConcluida && (
+                        <div className="min-w-0">
+                          <dt className="text-muted-foreground">Última atividade concluída</dt>
+                          <dd className="min-w-0 break-words">
+                            {TIPO_ATIVIDADE_LABEL[n.ultimaAtividadeConcluida.tipo]}
+                            {n.ultimaAtividadeConcluida.assunto &&
+                              ` — ${n.ultimaAtividadeConcluida.assunto}`}
+                            {" · "}
+                            {formatarDataHoraNoFuso(n.ultimaAtividadeConcluida.scheduledAtISO, fuso)}
+                          </dd>
+                        </div>
+                      )}
                     </dl>
                   </li>
                 ))}
