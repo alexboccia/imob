@@ -31,4 +31,10 @@ export type ResultadoBuscaGlobal = {
   termo: string;
   clientes: ClienteBuscaGlobal[];
   imoveis: ImovelBuscaGlobal[];
+  // Fase 87 — o atalho "Ver clientes" de um resultado de imóvel aponta
+  // pra uma seção que só existe na ficha quando o CRM está habilitado
+  // (mesmo portão de módulo que já filtra `clientes` acima). Já é
+  // calculado em buscarGlobal (hasModule) pra decidir se busca clientes
+  // — reaproveitado aqui, nenhuma consulta nova.
+  crmHabilitado: boolean;
 };

@@ -63,7 +63,11 @@ test.describe("Busca global — jornada real", () => {
     const dialogo = await abrirBusca(page);
     await dialogo.getByLabel("Termo de busca").fill(nome);
     await expect(dialogo.getByRole("heading", { name: "Clientes" })).toBeVisible();
-    const link = dialogo.getByRole("link", { name: new RegExp(nome) });
+    // exact: true — desde a Fase 87 o mesmo resultado tem um SEGUNDO
+    // link irmão ("Registrar interação com {nome}"), cujo nome acessível
+    // também contém `nome` como substring; só o link principal tem o
+    // nome acessível EXATAMENTE igual a `nome`.
+    const link = dialogo.getByRole("link", { name: nome, exact: true });
     await expect(link).toBeVisible();
 
     await link.click();
@@ -91,7 +95,11 @@ test.describe("Busca global — jornada real", () => {
     const dialogo = await abrirBusca(page);
     await dialogo.getByLabel("Termo de busca").fill(titulo);
     await expect(dialogo.getByRole("heading", { name: "Imóveis" })).toBeVisible();
-    const link = dialogo.getByRole("link", { name: new RegExp(titulo) });
+    // Ancorado no início (^): desde a Fase 87 o mesmo resultado tem um
+    // SEGUNDO link irmão ("Ver clientes compatíveis com {título}"), cujo
+    // nome acessível também contém `titulo` como substring — mas não no
+    // INÍCIO, que é só do link principal.
+    const link = dialogo.getByRole("link", { name: new RegExp(`^${titulo}`) });
     await expect(link).toBeVisible();
     // O código do imóvel aparece junto — é o que distingue títulos
     // homônimos, que /app/imoveis já permite buscar hoje.
@@ -99,6 +107,66 @@ test.describe("Busca global — jornada real", () => {
 
     await link.click();
     await page.waitForURL(new RegExp(`/app/imoveis/${idImovel}`));
+  });
+
+  test("'Registrar interação' no resultado do cliente pula direto pra seção, sem passar pelo topo da ficha", async ({
+    page,
+  }) => {
+    const nome = nomeUnico("Cliente Busca Atalho");
+    await page.goto("/app/clientes");
+    await page.getByRole("button", { name: "Novo cliente" }).click();
+    await page.getByPlaceholder("Nome", { exact: true }).fill(nome);
+    await page.getByRole("button", { name: "Cadastrar" }).click();
+    await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
+
+    await page.goto("/app/pipeline");
+    const dialogo = await abrirBusca(page);
+    await dialogo.getByLabel("Termo de busca").fill(nome);
+    const atalho = dialogo.getByRole("link", { name: `Registrar interação com ${nome}` });
+    await expect(atalho).toBeVisible();
+    // Dois links IRMÃOS no mesmo resultado, nunca um dentro do outro
+    // (nenhuma interação aninhada inválida — Tab alcança os dois).
+    await expect(dialogo.getByRole("link", { name: new RegExp(nome) })).toHaveCount(2);
+
+    await atalho.click();
+    await page.waitForURL(/\/app\/clientes\/[^/?]+#registrar-interacao$/);
+    // A seção certa está visivelmente na tela, sem precisar rolar mais —
+    // é o achado da fase: medição real mostrou ~2 telas até aqui.
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Registrar nova interação" })
+    ).toBeInViewport();
+  });
+
+  test("'Ver clientes' no resultado do imóvel pula direto pra Clientes compatíveis", async ({
+    page,
+  }) => {
+    const titulo = nomeUnico("Imovel Busca Atalho");
+    await page.goto("/app/imoveis/novo");
+    await page.locator("#titulo").fill(titulo);
+    await page.locator('input[name="bairro"]').fill("Bairro Busca Atalho");
+    await page.locator('input[name="cidade"]').fill("São Paulo");
+    await page.locator('select[name="estado"]').selectOption("SP");
+    await page.locator("#preco").fill(String(500_000 * 100));
+    await page.getByLabel("Status").click();
+    await page.getByRole("option", { name: "Disponível" }).click();
+    await page.getByRole("button", { name: "Salvar imóvel" }).click();
+    await page.waitForURL(/\/app\/imoveis\/[^/]+\?salvo=1/);
+
+    await page.goto("/app/pipeline");
+    const dialogo = await abrirBusca(page);
+    await dialogo.getByLabel("Termo de busca").fill(titulo);
+    const atalho = dialogo.getByRole("link", { name: `Ver clientes compatíveis com ${titulo}` });
+    await expect(atalho).toBeVisible();
+    await expect(dialogo.getByRole("link", { name: new RegExp(titulo) })).toHaveCount(2);
+
+    await atalho.click();
+    await page.waitForURL(/\/app\/imoveis\/[^/]+#clientes-compativeis$/);
+    // A seção real da fase da fixture está aqui — evidência de que o
+    // formulário inteiro de cadastro (5-9 telas em produção real) foi
+    // pulado, não só que a URL mudou.
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Clientes compatíveis" })
+    ).toBeInViewport();
   });
 
   test("sem resultado mostra estado vazio, nunca antes de buscar", async ({ page }) => {
@@ -138,7 +206,11 @@ test.describe("Busca global — segurança", () => {
     const dialogo = await abrirBusca(page);
 
     await dialogo.getByLabel("Termo de busca").fill("Cliente Exclusivo Da Ana");
-    await expect(dialogo.getByRole("link", { name: /Cliente Exclusivo Da Ana/ })).toBeVisible();
+    // exact: true — mesmo motivo do teste de jornada acima (Fase 87
+    // acrescentou um segundo link irmão "Registrar interação com...").
+    await expect(
+      dialogo.getByRole("link", { name: "Cliente Exclusivo Da Ana", exact: true })
+    ).toBeVisible();
 
     await dialogo.getByLabel("Termo de busca").fill("Cliente Exclusivo Do Bruno");
     await expect(dialogo.getByText("Nenhum resultado")).toBeVisible();
@@ -156,6 +228,10 @@ test.describe("Busca global — segurança", () => {
       dialogo.getByLabel("Termo de busca").fill("imovel"),
     ]);
     await expect(dialogo.getByRole("heading", { name: "Clientes" })).toHaveCount(0);
+    // Fase 87 — sem CRM a seção "Clientes compatíveis" nem existe na
+    // ficha do imóvel: o atalho "Ver clientes" não pode aparecer aqui,
+    // senão levaria a uma âncora que nada rola.
+    await expect(dialogo.getByRole("link", { name: /^Ver clientes compatíveis/ })).toHaveCount(0);
   });
 });
 

@@ -674,7 +674,14 @@ export default async function DetalheClientePage({
         </Card>
       </section>
 
-      <section className="mb-6 min-w-0 space-y-4">
+      {/* Fase 87 — id de âncora: a Busca global oferece um atalho
+          direto pra cá ("Registrar interação" no resultado de cliente),
+          porque medição real mostrou ~1,8-2,4 telas de rolagem até aqui
+          mesmo num cliente recém-criado sem nenhuma negociação. scroll-mt
+          dá um respiro visual no destino (não existe cabeçalho fixo
+          nesta página, mas encostar o heading na borda do viewport
+          continua desconfortável de ler). */}
+      <section id="registrar-interacao" className="mb-6 min-w-0 scroll-mt-6 space-y-4">
         <CabecalhoSecao icone={MessageSquarePlus} titulo="Registrar nova interação" />
         <Card className="min-w-0">
           <CardContent>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Search, Building2, User } from "lucide-react";
+import { Search, Building2, User, MessageSquarePlus, UserSearch } from "lucide-react";
 import {
   Dialog,
   DialogTrigger,
@@ -210,11 +210,11 @@ export function BuscaGlobal({
                   <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">Clientes</h3>
                   <ul className="space-y-1">
                     {resultado.clientes.map((cliente) => (
-                      <li key={cliente.id}>
+                      <li key={cliente.id} className="flex min-w-0 items-center gap-1">
                         <Link
                           href={`/app/clientes/${cliente.id}`}
                           onClick={fechar}
-                          className="flex min-w-0 items-center gap-2 rounded-lg p-2 text-sm hover:bg-muted"
+                          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-2 text-sm hover:bg-muted"
                         >
                           <User aria-hidden className="size-4 shrink-0 text-muted-foreground" />
                           <span className="min-w-0 flex-1">
@@ -225,6 +225,22 @@ export function BuscaGlobal({
                               </span>
                             )}
                           </span>
+                        </Link>
+                        {/* Fase 87 — atalho de navegação (âncora, nunca um
+                            formulário aqui dentro): medição real mostrou
+                            ~2 telas de rolagem até "Registrar nova
+                            interação" mesmo num cliente recém-criado. O
+                            link principal (nome) continua levando ao topo
+                            da ficha, como sempre — este é um SEGUNDO link
+                            irmão, nunca aninhado dentro do primeiro. */}
+                        <Link
+                          href={`/app/clientes/${cliente.id}#registrar-interacao`}
+                          onClick={fechar}
+                          aria-label={`Registrar interação com ${cliente.name}`}
+                          title="Registrar interação"
+                          className="flex shrink-0 items-center justify-center rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <MessageSquarePlus aria-hidden className="size-4" />
                         </Link>
                       </li>
                     ))}
@@ -237,11 +253,11 @@ export function BuscaGlobal({
                   <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">Imóveis</h3>
                   <ul className="space-y-1">
                     {resultado.imoveis.map((imovel) => (
-                      <li key={imovel.id}>
+                      <li key={imovel.id} className="flex min-w-0 items-center gap-1">
                         <Link
                           href={`/app/imoveis/${imovel.id}`}
                           onClick={fechar}
-                          className="flex min-w-0 items-center gap-2 rounded-lg p-2 text-sm hover:bg-muted"
+                          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-2 text-sm hover:bg-muted"
                         >
                           <Building2 aria-hidden className="size-4 shrink-0 text-muted-foreground" />
                           <span className="min-w-0 flex-1">
@@ -257,6 +273,25 @@ export function BuscaGlobal({
                             </span>
                           </span>
                         </Link>
+                        {/* Fase 87 — mesma ideia do lado do cliente:
+                            medição real mostrou 5,6-8,8 TELAS de rolagem
+                            até "Clientes compatíveis" num imóvel recém-
+                            criado (o formulário de cadastro inteiro vem
+                            antes). Segundo link IRMÃO, nunca aninhado.
+                            Só quando o CRM está habilitado: sem o módulo
+                            a seção nem existe na ficha, e o âncora não
+                            teria pra onde rolar. */}
+                        {resultado.crmHabilitado && (
+                          <Link
+                            href={`/app/imoveis/${imovel.id}#clientes-compativeis`}
+                            onClick={fechar}
+                            aria-label={`Ver clientes compatíveis com ${imovel.title}`}
+                            title="Ver clientes"
+                            className="flex shrink-0 items-center justify-center rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          >
+                            <UserSearch aria-hidden className="size-4" />
+                          </Link>
+                        )}
                       </li>
                     ))}
                   </ul>

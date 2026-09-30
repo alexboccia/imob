@@ -110,6 +110,21 @@ describe("clientes", () => {
     const r = await buscarGlobal(c.organization.id, "Sem Crm");
     expect(r.clientes).toHaveLength(0);
     expect(r.imoveis).toHaveLength(1);
+    // Fase 87 — crmHabilitado reflete o mesmo hasModule já usado para
+    // filtrar clientes: é o que o cliente usa para decidir se mostra o
+    // atalho "Ver clientes" (imóvel → #clientes-compativeis), que sem o
+    // módulo não existiria na ficha de destino.
+    expect(r.crmHabilitado).toBe(false);
+  });
+
+  test("crmHabilitado é true quando o módulo está ativo (Fase 87 — atalho 'Ver clientes')", async () => {
+    const c = await novoCenario();
+    const dono = await membro(c, "Dono");
+    autenticarComo(c, dono);
+    await criarImovel({ organizationId: c.organization.id, title: "Imovel Com Crm Busca" });
+
+    const r = await buscarGlobal(c.organization.id, "Com Crm Busca");
+    expect(r.crmHabilitado).toBe(true);
   });
 
   test("escopo comercial RESTRICTED: corretor não encontra cliente de outro corretor", async () => {

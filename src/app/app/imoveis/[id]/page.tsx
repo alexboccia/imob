@@ -310,7 +310,11 @@ export default async function EditarImovelPage({
           "Clientes compatíveis" (matching reverso) antes de "Clientes
           interessados" (as negociações reais). */}
       {crmHabilitado && (
-        <section className="min-w-0 space-y-4">
+        // Fase 87 — id de âncora: medição real mostrou 5,6-8,8 TELAS de
+        // rolagem até aqui num imóvel recém-criado (o formulário de
+        // cadastro inteiro vem antes) — a Busca global usa este id pra
+        // pular direto pra cá a partir de um resultado de imóvel.
+        <section id="clientes-compativeis" className="min-w-0 scroll-mt-6 space-y-4">
           <CabecalhoSecao
             icone={UserSearch}
             titulo="Clientes compatíveis"

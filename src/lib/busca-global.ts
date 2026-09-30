@@ -46,6 +46,7 @@ const RESULTADO_VAZIO = (termo: string): ResultadoBuscaGlobal => ({
   termo,
   clientes: [],
   imoveis: [],
+  crmHabilitado: false,
 });
 
 // Uma chamada por tecla (debounced no cliente) — duas queries pequenas e
@@ -108,6 +109,7 @@ export async function buscarGlobal(
         price: decimalParaValor(i.price),
         rentPrice: decimalParaValor(i.rentPrice),
       })),
+      crmHabilitado: temCrm,
     };
   });
 }
