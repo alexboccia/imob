@@ -834,3 +834,211 @@ describe("priorização operacional do top-5 (Fase 89)", () => {
     expect(r.negociacoes.itens).toHaveLength(LIMITE_CENTRAL);
   });
 });
+
+// =======================================================================
+// Continuidade comercial após o ÚLTIMO compromisso (Fase 90)
+// =======================================================================
+// Pergunta central: quando o último SCHEDULED de uma negociação some
+// (concluído, no-show ou cancelado) e nada novo é criado, a negociação
+// continua VISÍVEL operacionalmente na PRÓXIMA leitura da Central?
+//
+// A hipótese testada aqui é estrutural, não de opinião: `atrasada` e
+// `proxima` (src/lib/central-trabalho.ts) são recalculados do zero em
+// TODA leitura a partir de `scheduledActivities: {status:"SCHEDULED"}` —
+// não existe flag persistida de "sem próximo passo" que possa ficar
+// desatualizada. Uma vez que a ScheduledActivity sai de SCHEDULED (por
+// qualquer um dos três caminhos: concluirAgendamentoVisita,
+// cancelarAgendamentoVisita, concluirFollowUp/cancelarFollowUp — todos
+// em src/app/app/agendamentos/actions.ts), ela some da sub-consulta e a
+// negociação é recategorizada automaticamente — sem nenhuma escrita
+// adicional em PropertyInterest.updatedAt nos três casos.
+//
+// Os testes abaixo SIMULAM o efeito de cada action diretamente via
+// Prisma (mesmo padrão de `visita()`/`atividade()` acima) — a escrita em
+// si já é coberta pelos testes de agendamentos/actions; aqui o alvo é
+// exclusivamente o efeito da transição sobre a LEITURA da Central.
+describe("continuidade após o último compromisso (Fase 90)", () => {
+  async function followUp(
+    organizationId: string,
+    interesse: { id: string; personId: string; propertyId: string },
+    quando: string,
+    status: "SCHEDULED" | "COMPLETED" | "CANCELLED" = "SCHEDULED"
+  ) {
+    return prisma.scheduledActivity.create({
+      data: {
+        organizationId,
+        personId: interesse.personId,
+        propertyId: interesse.propertyId,
+        propertyInterestId: interesse.id,
+        type: "FOLLOW_UP",
+        subject: "Cobrar documentos",
+        status,
+        scheduledAt: iso(quando),
+        ...(status === "COMPLETED" ? { completedAt: AGORA } : {}),
+        ...(status === "CANCELLED" ? { cancelledAt: AGORA } : {}),
+      },
+      select: { id: true },
+    });
+  }
+
+  test("visita concluída (COMPLETED): a negociação sai de 'agendada' para 'sem próximo passo' na PRÓXIMA leitura, sem nenhuma escrita nova em PropertyInterest", async () => {
+    const c = await novoCenario();
+    const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    const v = await visita(c.organization.id, n, "2026-09-09T10:00:00.000Z");
+
+    const antes = await central(c.organization.id, c.membro.id);
+    expect(antes.negociacoes.itens[0].semProximoCompromisso).toBe(false);
+    expect(antes.negociacoes.itens[0].proximoCompromisso?.scheduledAtISO).toBe(
+      "2026-09-09T10:00:00.000Z"
+    );
+
+    // Simula exatamente o que concluirAgendamentoVisita grava no desfecho
+    // "compareceu": status COMPLETED + completedAt. PropertyInterest não
+    // é tocado nesta simulação de propósito — a Fase 90 quer provar que
+    // a reclassificação NÃO depende de updatedAt mudar.
+    await prisma.scheduledActivity.update({
+      where: { id: v.id, organizationId: c.organization.id },
+      data: { status: "COMPLETED", completedAt: AGORA, visitOutcome: "INTERESTED" },
+    });
+
+    const depois = await central(c.organization.id, c.membro.id);
+    const item = depois.negociacoes.itens[0];
+    expect(item.semProximoCompromisso).toBe(true);
+    expect(item.proximoCompromisso).toBeNull();
+    expect(item.atividadeAtrasada).toBeNull();
+    expect(item.ultimaAtividadeConcluida).toEqual({
+      tipo: "VISIT",
+      assunto: null,
+      scheduledAtISO: "2026-09-09T10:00:00.000Z",
+    });
+  });
+
+  test("visita NO_SHOW: mesma reclassificação para 'sem próximo passo', e ultimaAtividadeConcluida reconhece o não comparecimento", async () => {
+    const c = await novoCenario();
+    const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    const v = await visita(c.organization.id, n, "2026-09-09T10:00:00.000Z");
+
+    await prisma.scheduledActivity.update({
+      where: { id: v.id, organizationId: c.organization.id },
+      data: { status: "NO_SHOW", completedAt: AGORA, visitOutcome: null },
+    });
+
+    const r = await central(c.organization.id, c.membro.id);
+    const item = r.negociacoes.itens[0];
+    expect(item.semProximoCompromisso).toBe(true);
+    expect(item.ultimaAtividadeConcluida?.tipo).toBe("VISIT");
+  });
+
+  test("visita CANCELADA: a negociação também fica sem próximo passo, mas ultimaAtividadeConcluida continua null — cancelar não é um fato de trabalho realizado", async () => {
+    const c = await novoCenario();
+    const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    const v = await visita(c.organization.id, n, "2026-09-09T10:00:00.000Z");
+
+    await prisma.scheduledActivity.update({
+      where: { id: v.id, organizationId: c.organization.id },
+      data: { status: "CANCELLED", cancelledAt: AGORA },
+    });
+
+    const r = await central(c.organization.id, c.membro.id);
+    const item = r.negociacoes.itens[0];
+    expect(item.semProximoCompromisso).toBe(true);
+    expect(item.ultimaAtividadeConcluida).toBeNull();
+  });
+
+  test("follow-up concluído: mesma reclassificação, com FOLLOW_UP em ultimaAtividadeConcluida — nenhuma Interaction, nenhum status novo", async () => {
+    const c = await novoCenario();
+    const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    const f = await followUp(c.organization.id, n, "2026-09-09T10:00:00.000Z");
+
+    const antes = await central(c.organization.id, c.membro.id);
+    expect(antes.negociacoes.itens[0].semProximoCompromisso).toBe(false);
+
+    await prisma.scheduledActivity.update({
+      where: { id: f.id, organizationId: c.organization.id },
+      data: { status: "COMPLETED", completedAt: AGORA },
+    });
+
+    const depois = await central(c.organization.id, c.membro.id);
+    const item = depois.negociacoes.itens[0];
+    expect(item.semProximoCompromisso).toBe(true);
+    expect(item.ultimaAtividadeConcluida).toEqual({
+      tipo: "FOLLOW_UP",
+      assunto: "Cobrar documentos",
+      scheduledAtISO: "2026-09-09T10:00:00.000Z",
+    });
+
+    const interacoes = await prisma.interaction.count({
+      where: { organizationId: c.organization.id, personId: n.personId },
+    });
+    expect(interacoes).toBe(0);
+  });
+
+  test("§36+§48 — uma negociação que perde seu único compromisso agendado sobe de categoria e passa a aparecer no top-5 na PRÓXIMA leitura, mesmo com updatedAt inalterado e mais de LIMITE_CENTRAL negociações abertas", async () => {
+    const c = await novoCenario();
+    // 5 negociações "saudáveis": já têm próximo compromisso, mexidas há
+    // muito tempo (updatedAt antigo) — ganhariam o top-5 por antiguidade
+    // pura se a sexta continuasse na categoria 3.
+    for (let i = 0; i < LIMITE_CENTRAL; i++) {
+      const s = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+      await visita(c.organization.id, s, "2026-09-09T10:00:00.000Z");
+      await prisma.propertyInterest.update({
+        where: { id: s.id, organizationId: c.organization.id },
+        data: { updatedAt: iso(`2026-01-0${i + 1}T10:00:00.000Z`) },
+      });
+    }
+
+    // A 6ª: também agendada (categoria 3) hoje, mas mexida mais
+    // recentemente que as 5 — por isso NÃO entra no top-5 na primeira
+    // leitura (perde no desempate de updatedAt dentro da mesma
+    // categoria).
+    const sexta = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    const visitaSexta = await visita(c.organization.id, sexta, "2026-09-09T10:00:00.000Z");
+    await prisma.propertyInterest.update({
+      where: { id: sexta.id, organizationId: c.organization.id },
+      data: { updatedAt: iso("2026-09-06T10:00:00.000Z") },
+    });
+
+    const antes = await central(c.organization.id, c.membro.id);
+    expect(antes.negociacoes.total).toBe(LIMITE_CENTRAL + 1);
+    expect(antes.negociacoes.itens.map((n) => n.id)).not.toContain(sexta.id);
+
+    // TRANSIÇÃO: a visita da sexta é concluída — ela perde seu único
+    // compromisso agendado e não ganha nenhum novo. PropertyInterest.
+    // updatedAt NÃO é tocado por esta escrita (mesma simulação fiel ao
+    // que concluirAgendamentoVisita grava quando o stage não avança).
+    await prisma.scheduledActivity.update({
+      where: { id: visitaSexta.id, organizationId: c.organization.id },
+      data: { status: "COMPLETED", completedAt: AGORA, visitOutcome: "INTERESTED" },
+    });
+
+    const depois = await central(c.organization.id, c.membro.id);
+    const idsExibidos = depois.negociacoes.itens.map((n) => n.id);
+    // Categoria 2 (sem nenhum próximo passo) vem antes de categoria 3
+    // (já agendada) — a sexta agora lidera, mesmo sem updatedAt ter
+    // mudado e mesmo com 6 negociações abertas (> LIMITE_CENTRAL).
+    expect(idsExibidos[0]).toBe(sexta.id);
+    expect(depois.negociacoes.itens[0].semProximoCompromisso).toBe(true);
+  });
+
+  test("negociação fechada (WON) logo após perder seu único compromisso deixa de aparecer — não por perda de visibilidade, mas porque foi encerrada", async () => {
+    const c = await novoCenario();
+    const n = await negociacao(c.organization.id, { responsavelId: c.membro.id });
+    const v = await visita(c.organization.id, n, "2026-09-09T10:00:00.000Z");
+
+    const antes = await central(c.organization.id, c.membro.id);
+    expect(antes.negociacoes.total).toBe(1);
+
+    await prisma.scheduledActivity.update({
+      where: { id: v.id, organizationId: c.organization.id },
+      data: { status: "COMPLETED", completedAt: AGORA, visitOutcome: "INTERESTED" },
+    });
+    await prisma.propertyInterest.update({
+      where: { id: n.id, organizationId: c.organization.id },
+      data: { stage: "WON", closedAt: AGORA },
+    });
+
+    const depois = await central(c.organization.id, c.membro.id);
+    expect(depois.negociacoes.total).toBe(0);
+    expect(depois.negociacoes.itens).toHaveLength(0);
+  });
+});
