@@ -132,6 +132,9 @@ test.describe("jornada reversa: imóvel → cliente compatível → Relacionar",
       .filter({ hasText: nomeCliente });
     await expect(cardInteressado).toBeVisible();
     await expect(cardInteressado.getByText("Interessado")).toBeVisible();
+    // Fase 92 — mesma linha do lado do imóvel: InteresseImovelItem é
+    // compartilhado entre as duas fichas.
+    await expect(cardInteressado.getByText(/Criada em/)).toBeVisible();
 
     // Só UM PropertyInterest — nenhuma duplicidade visível na lista.
     await expect(

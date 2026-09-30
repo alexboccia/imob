@@ -149,6 +149,9 @@ test.describe("de recomendação a relacionamento", () => {
       .filter({ hasText: tituloImovel });
     await expect(cardRelacionado).toBeVisible();
     await expect(cardRelacionado.getByText("Interessado")).toBeVisible();
+    // Fase 92 — "Criada em" é a única pergunta de evolução da negociação
+    // que antes não tinha resposta em lugar nenhum da tela.
+    await expect(cardRelacionado.getByText(/Criada em/)).toBeVisible();
 
     // Só UM PropertyInterest — nenhuma duplicidade visível na lista.
     await expect(

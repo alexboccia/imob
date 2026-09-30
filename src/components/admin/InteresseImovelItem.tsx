@@ -83,6 +83,15 @@ export function InteresseImovelItem({
     lostReason: LostReason | null;
     favorited: boolean;
     notes: string | null;
+    // Fase 92 — quando a negociação nasceu. Sempre presente (não-nullable
+    // no schema): mesmo instante gravado como changedAt da entrada
+    // inicial de PropertyInterestStageHistory (previousStage: null,
+    // newStage: INTERESTED), mas lido direto do campo escalar — zero
+    // join novo, o dado já vinha incluso por `include` em ambas as
+    // fichas. Responde "quando foi criada?", a única pergunta do domínio
+    // de evolução da negociação que hoje não tinha resposta em lugar
+    // nenhum da tela (achado da Fase 92).
+    createdAtISO: string;
     // Igual a scheduledAt: string ISO ou null, nunca Date (Fase P.3) — só
     // preenchido depois de marcarInteresseComoGanho/Perdido.
     closedAtISO: string | null;
@@ -200,6 +209,17 @@ export function InteresseImovelItem({
             </form>
           </div>
         </div>
+
+        {/* Fase 92 — a única pergunta de evolução da negociação que não
+            tinha resposta em lugar nenhum da tela. Uma linha factual,
+            não uma timeline: o resto da evolução (visita agendada,
+            visita concluída, proposta, fechamento) já aparece nas
+            seções abaixo, cada uma com sua própria data — repetir tudo
+            aqui como uma segunda lista seria a mesma informação duas
+            vezes, nunca a mesma pergunta duas vezes. */}
+        <p className="text-xs text-muted-foreground">
+          Criada em {formatarDataVisita(interesse.createdAtISO, fuso)}
+        </p>
 
         <p className="text-xs text-muted-foreground">
           Próxima ação:{" "}

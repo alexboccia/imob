@@ -577,6 +577,7 @@ export default async function DetalheClientePage({
                     stage: interesse.stage,
                     favorited: interesse.favorited,
                     notes: interesse.notes,
+                    createdAtISO: interesse.createdAt.toISOString(),
                     closedAtISO: interesse.closedAt ? interesse.closedAt.toISOString() : null,
                     closedValue: decimalParaValor(interesse.closedValue),
                     lostReason: interesse.lostReason,
