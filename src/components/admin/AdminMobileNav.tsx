@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ICONES_NAV } from "@/components/admin/icones-nav";
 import { itemAtivo, type ItemNavAdmin } from "@/components/admin/AdminSidebarNav";
+import { BuscaGlobal } from "@/components/admin/BuscaGlobal";
 import {
   Sheet,
   SheetContent,
@@ -148,7 +149,11 @@ export function AdminMobileNav({
           </div>
         </SheetContent>
       </Sheet>
-      <span className="min-w-0 truncate font-semibold">{nomeAtual}</span>
+      <span className="min-w-0 flex-1 truncate font-semibold">{nomeAtual}</span>
+      {/* Busca global (Fase 86) — mesmo componente da sidebar desktop,
+          variante ícone: sem atalho de teclado aqui (capturaAtalho fica
+          só na instância desktop, ver comentário em BuscaGlobal.tsx). */}
+      {organizationIdAtual && <BuscaGlobal variant="mobile" />}
     </header>
   );
 }

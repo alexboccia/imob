@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 import { AdminSidebarNav } from "@/components/admin/AdminSidebarNav";
+import { BuscaGlobal } from "@/components/admin/BuscaGlobal";
 import type { ChaveIconeNav } from "@/components/admin/icones-nav";
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
 import { hasModule } from "@/lib/entitlements";
@@ -207,6 +208,14 @@ export default async function AdminLayout({
             <ExternalLink className="w-3.5 h-3.5" />
             Ver site
           </a>
+        )}
+        {/* Busca global (Fase 86) — só com tenant resolvido: sem
+            organizationId não há o que buscar, e a rota da busca exige o
+            mesmo requireOrganizationId() do resto do painel. */}
+        {organizationId && (
+          <div className="border-b px-4 py-2">
+            <BuscaGlobal capturaAtalho />
+          </div>
         )}
         <AdminSidebarNav itens={itensNav} />
         <div className="px-4 py-4 border-t text-sm">
