@@ -1214,4 +1214,37 @@ describe("Agenda do corretor — Fase H.3", () => {
     expect(trecho).not.toContain("await");
     expect(trecho).not.toContain("async");
   });
+
+  // Fase 91 — achado documentado (não bug): a Agenda nunca filtrou por
+  // PropertyInterestStage (só por status/scheduledAt da própria
+  // ScheduledActivity — auditado em buscarAgendaHoje/Proximas/Anteriores,
+  // nenhuma das três junta PropertyInterest.stage no where). Fechar uma
+  // negociação como WON/REJECTED não cancela seus compromissos SCHEDULED
+  // — decisão deliberada preservada desde a H.2 (cancelarAgendamentoVisita
+  // continua sendo a única saída de SCHEDULED, nunca um efeito colateral
+  // automático do fechamento). Central e Pipeline já excluem a
+  // negociação encerrada (ESTAGIOS_INTERESSE — provado nas Fases 89/90 e
+  // no describe "Q" de pipeline.test.ts); a Agenda é a única das três que
+  // continua mostrando o compromisso, porque ele é um FATO DE CALENDÁRIO
+  // independente do resultado comercial do negócio (pode haver, por
+  // exemplo, uma vistoria de entrega já marcada para depois do fechamento
+  // — cancelar por conta própria destruiria um compromisso real). Este
+  // teste só PROVA o comportamento atual; nenhuma automação foi criada.
+  test("AK) compromisso SCHEDULED de negociação já encerrada (WON/REJECTED) continua aparecendo na Agenda — fechar a negociação nunca cancela o compromisso por conta própria", async () => {
+    const ctxGanha = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: hojeAsHoras(2) });
+    cenario = ctxGanha.cenario;
+    await prisma.propertyInterest.update({
+      where: { id: ctxGanha.interesse.id, organizationId: ctxGanha.cenario.organization.id },
+      data: { stage: "WON", closedAt: new Date() },
+    });
+
+    const hoje = await buscarAgendaHoje(ctxGanha.cenario.organization.id, "UTC", {});
+    expect(hoje.map((i) => i.id)).toContain(ctxGanha.atividade.id);
+
+    const atividadeAindaScheduled = await prisma.scheduledActivity.findUnique({
+      where: { id: ctxGanha.atividade.id, organizationId: ctxGanha.cenario.organization.id },
+      select: { status: true },
+    });
+    expect(atividadeAindaScheduled?.status).toBe("SCHEDULED");
+  });
 });
