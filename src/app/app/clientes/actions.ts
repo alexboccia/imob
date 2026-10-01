@@ -1028,6 +1028,16 @@ export async function registrarAtendimentoDoContato(
 // Só o id da NEGOCIAÇÃO vem do cliente, e ele passa pelo escopo comercial
 // antes de qualquer escrita: pessoa, imóvel e organização são lidos do
 // registro validado, nunca do FormData.
+//
+// Mesmo racional de MAX_TENTATIVAS_FECHAMENTO (fecharInteresse, mais
+// abaixo): o stage lido antes da transação pode já estar obsoleto quando
+// ela roda (outra requisição pode ter fechado a negociação nesse meio
+// tempo). Por isso o stage é relido DENTRO da transação e a escrita usa
+// esse valor relido no WHERE do updateMany — se mudou, o count vem 0 e a
+// tentativa seguinte relê o valor mais recente, em vez de criar uma
+// proposta ou reabrir um negócio já encerrado por cima de um dado obsoleto.
+const MAX_TENTATIVAS_PROPOSTA = 3;
+
 export async function registrarProposta(
   interesseId: string,
   _prevState: ActionState,
@@ -1066,60 +1076,97 @@ export async function registrarProposta(
   return withOrganization(organizationId, async () => {
     const interesse = await prisma.propertyInterest.findFirst({
       where: whereNegociacaoAlvo(escopo, interesseId, organizationId),
-      select: { id: true, stage: true, personId: true, propertyId: true },
+      select: { id: true, personId: true, propertyId: true },
     });
     if (!interesse) return erroGenerico("Negociação não encontrada.");
-
-    // Negociação encerrada não recebe proposta nova — mesma regra que já
-    // impede agendar visita ou follow-up num negócio ganho ou perdido.
-    // Reabrir é outra operação, que o produto deliberadamente não tem.
-    if (estagioInteresseEncerrado(interesse.stage)) {
-      return erroGenerico("Esta negociação já foi encerrada.");
-    }
 
     const autorMemberId = await resolverAutorDoAtendimento(
       organizationId,
       session.user.organizationMemberId
     );
 
-    // A primeira proposta REAL leva a negociação para PROPOSTA — o stage
-    // deixa de ser um rótulo que alguém move à mão e passa a ser
-    // consequência de um fato. Já estando em PROPOSAL, a contraproposta
-    // NÃO gera histórico redundante: a etapa não mudou.
-    const moveStage = interesse.stage !== "PROPOSAL";
+    type ResultadoProposta = { tipo: "ok" } | { tipo: "encerrado" } | { tipo: "corrida_nao_resolvida" };
 
-    await prisma.$transaction(async (tx) => {
-      await tx.propertyInterestOffer.create({
-        data: {
-          organizationId,
-          propertyInterestId: interesse.id,
-          amount: valor.valor,
-          side: lado,
-          // AUTORIA: quem registrou no easymob. `side` acima é quem
-          // PROPÔS — o corretor registra a proposta do cliente.
-          createdByMemberId: autorMemberId,
-        },
-      });
+    const resultado = await prisma.$transaction(async (tx): Promise<ResultadoProposta> => {
+      for (let tentativa = 0; tentativa < MAX_TENTATIVAS_PROPOSTA; tentativa++) {
+        const atual = await tx.propertyInterest.findUnique({
+          where: { id: interesse.id, organizationId },
+          select: { stage: true },
+        });
+        if (!atual) return { tipo: "encerrado" };
 
-      if (moveStage) {
-        await tx.propertyInterest.update({
-          where: { id: interesse.id },
+        // Negociação encerrada não recebe proposta nova — mesma regra que já
+        // impede agendar visita ou follow-up num negócio ganho ou perdido.
+        // Reabrir é outra operação, que o produto deliberadamente não tem.
+        if (estagioInteresseEncerrado(atual.stage)) {
+          return { tipo: "encerrado" };
+        }
+
+        // Guard read-then-write (mesmo racional do comentário de
+        // MAX_TENTATIVAS_PROPOSTA acima): a escrita usa o stage ACABADO DE
+        // LER no WHERE, sempre — mesmo quando o valor não muda (já em
+        // PROPOSAL). É esse toque na linha, não a leitura isolada acima,
+        // que protege contra um fechamento concorrente colado entre a
+        // leitura e a gravação: se outra transação fechou o negócio nesse
+        // meio tempo, o WHERE não casa mais, count vem 0, e a tentativa
+        // seguinte relê o valor já fechado.
+        const atualizado = await tx.propertyInterest.updateMany({
+          where: { id: interesse.id, organizationId, stage: atual.stage },
           data: { stage: "PROPOSAL" },
         });
-        await tx.propertyInterestStageHistory.create({
+        if (atualizado.count === 0) continue;
+
+        // A primeira proposta REAL leva a negociação para PROPOSTA — o
+        // stage deixa de ser um rótulo que alguém move à mão e passa a ser
+        // consequência de um fato. Já estando em PROPOSAL, a contraproposta
+        // NÃO gera histórico redundante: a etapa não mudou.
+        if (atual.stage !== "PROPOSAL") {
+          await tx.propertyInterestStageHistory.create({
+            data: {
+              organizationId,
+              propertyInterestId: interesse.id,
+              previousStage: atual.stage,
+              newStage: "PROPOSAL",
+              changedByMemberId: await resolverAtorTransicao(
+                tx,
+                organizationId,
+                session.user.organizationMemberId
+              ),
+            },
+          });
+        }
+
+        await tx.propertyInterestOffer.create({
           data: {
             organizationId,
             propertyInterestId: interesse.id,
-            previousStage: interesse.stage,
-            newStage: "PROPOSAL",
-            changedByMemberId: await resolverAtorTransicao(
-              tx,
-              organizationId,
-              session.user.organizationMemberId
-            ),
+            amount: valor.valor,
+            side: lado,
+            // AUTORIA: quem registrou no easymob. `side` acima é quem
+            // PROPÔS — o corretor registra a proposta do cliente.
+            createdByMemberId: autorMemberId,
           },
         });
+
+        return { tipo: "ok" };
       }
+      return { tipo: "corrida_nao_resolvida" };
+    });
+
+    if (resultado.tipo === "encerrado") {
+      return erroGenerico("Esta negociação já foi encerrada.");
+    }
+    if (resultado.tipo === "corrida_nao_resolvida") {
+      return erroGenerico("Esta negociação mudou enquanto a proposta era registrada. Recarregue e tente de novo.");
+    }
+
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "PropertyInterest",
+      entityId: interesse.id,
+      action: "property_interest_offer_registered",
+      payload: { amount: valor.valor, side: lado },
     });
 
     revalidatePath(`/app/clientes/${interesse.personId}`);

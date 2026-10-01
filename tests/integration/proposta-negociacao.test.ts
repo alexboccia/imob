@@ -126,6 +126,30 @@ describe("registrarProposta", () => {
     expect(historico[0].changedByMemberId).toBe(cenario.membro.id);
   });
 
+  test("Fase 104 — registrar proposta grava ActivityLog, igual às outras mutações de PropertyInterest", async () => {
+    const cenario = await novoCenario();
+    autenticarComo(cenario);
+    const { interesse } = await negociacao(cenario, { stage: "VISITED" });
+
+    const estado = await registrarProposta(
+      interesse.id,
+      ESTADO_INICIAL_ACAO,
+      formulario("CLIENT", "480000")
+    );
+    expect(estado.success).toBe(true);
+
+    const log = await prisma.activityLog.findFirst({
+      where: {
+        organizationId: cenario.organization.id,
+        entity: "PropertyInterest",
+        entityId: interesse.id,
+      },
+    });
+    expect(log).not.toBeNull();
+    expect(log?.action).toBe("property_interest_offer_registered");
+    expect(log?.userId).toBe(cenario.usuario.id);
+  });
+
   test("contraproposta NÃO gera histórico de etapa redundante", async () => {
     const cenario = await novoCenario();
     autenticarComo(cenario);
@@ -331,5 +355,39 @@ describe("registrarProposta", () => {
     expect(
       await prisma.propertyInterestOffer.count({ where: { propertyInterestId: interesse.id } })
     ).toBe(2);
+  });
+
+  test("Fase 104 — corrida: fechar a negociação entre a leitura e a gravação da proposta não reabre o negócio", async () => {
+    const cenario = await novoCenario();
+    autenticarComo(cenario);
+    const { interesse } = await negociacao(cenario, { stage: "VISITED" });
+
+    // Simula outra requisição fechando a negociação (WON) EXATAMENTE no
+    // intervalo entre a leitura de stage que registrarProposta faz (fora
+    // de transação) e a transação que grava a proposta — a mesma janela
+    // de corrida que fecharInteresse e atualizarEstagioInteresse já
+    // tratam com CAS (ver MAX_TENTATIVAS_FECHAMENTO acima, neste arquivo).
+    const original = prisma.propertyInterest.findFirst.bind(prisma.propertyInterest);
+    const espiao = vi
+      .spyOn(prisma.propertyInterest, "findFirst")
+      .mockImplementationOnce((async (...args: Parameters<typeof original>) => {
+        const resultado = await original(...args);
+        await prisma.propertyInterest.update({
+          where: { id: interesse.id },
+          data: { stage: "WON", closedAt: new Date(), closedValue: 999999 },
+        });
+        return resultado;
+      }) as typeof original);
+
+    await registrarProposta(interesse.id, ESTADO_INICIAL_ACAO, formulario("CLIENT", "480000"));
+    espiao.mockRestore();
+
+    const atual = await prisma.propertyInterest.findFirstOrThrow({
+      where: { id: interesse.id, organizationId: cenario.organization.id },
+    });
+    // A negociação fechada concorrentemente não pode voltar a ficar aberta
+    // por causa de uma proposta que começou a ser lida antes do fechamento.
+    expect(atual.stage).toBe("WON");
+    expect(atual.closedAt).not.toBeNull();
   });
 });
