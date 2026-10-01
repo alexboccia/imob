@@ -132,6 +132,29 @@ test.describe("criação e edição do perfil", () => {
     await expect(page.getByRole("group", { name: "Faixa de preço (R$)" })).toBeVisible();
     await expect(page.getByRole("group", { name: "Área privativa (m²)" })).toBeVisible();
   });
+
+  test("Fase 101 — o rótulo da faixa de preço reage à finalidade selecionada, antes de salvar", async ({
+    page,
+  }) => {
+    const nome = nomeUnico("Cliente Legenda Preco");
+    await criarCliente(page, nome);
+    await page.getByRole("button", { name: "Adicionar preferências" }).click();
+
+    // Sem finalidade escolhida: rótulo neutro, igual ao teste acima.
+    await expect(page.getByRole("group", { name: "Faixa de preço (R$)" })).toBeVisible();
+
+    await page.getByRole("combobox", { name: "Finalidade" }).click();
+    await page.getByRole("option", { name: "Comprar" }).click();
+    await expect(page.getByRole("group", { name: "Faixa de preço de venda (R$)" })).toBeVisible();
+
+    // Troca pra "Alugar" sem recarregar — achado da Fase 101: o valor
+    // numérico sobrevive à troca (o servidor nunca apaga o que o
+    // corretor não pediu), então o rótulo é o único sinal de que o
+    // número deixou de significar preço de venda.
+    await page.getByRole("combobox", { name: "Finalidade" }).click();
+    await page.getByRole("option", { name: "Alugar" }).click();
+    await expect(page.getByRole("group", { name: "Faixa de aluguel mensal (R$)" })).toBeVisible();
+  });
 });
 
 test.describe("estado com perfil", () => {

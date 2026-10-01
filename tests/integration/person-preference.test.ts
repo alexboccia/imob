@@ -243,6 +243,86 @@ describe("salvarPreferenciaPessoa — preferências de imóvel (Fase C do CRM)",
     expect(linha?.propertyTypes).toEqual(["Apartamento", "Casa"]);
   });
 
+  // Fase 101 — achado: camposPreferencia() monta o MESMO objeto para
+  // create e update do upsert (src/lib/person-preference-schema.ts) —
+  // nenhum campo é condicional, então um array/escalar ausente no
+  // segundo envio REALMENTE limpa o valor anterior, nunca "preserva por
+  // omissão". Nenhum teste provava isso formalmente antes desta fase
+  // (só a persistência inicial, nunca a limpeza numa segunda gravação).
+  test("Fase 101 — editar a preferência com array vazio REALMENTE limpa o array anterior, nunca preserva por omissão", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+
+    await salvar(pessoa.id, { neighborhoods: ["Vila Mariana", "Moema"], cities: ["São Paulo"] });
+    const antes = await prisma.personPreference.findUnique({
+      where: { personId: pessoa.id, organizationId: cenario.organization.id },
+    });
+    expect(antes?.neighborhoods).toEqual(["Vila Mariana", "Moema"]);
+    expect(antes?.cities).toEqual(["São Paulo"]);
+
+    // Segundo envio sem nenhum neighborhood/city no FormData — o
+    // formulário real manda os arrays sempre (até vazios, via
+    // formData.getAll), mas o teste aqui simula exatamente esse "nenhum
+    // valor marcado", que é o caso real de remover todos os bairros/
+    // cidades antes de salvar de novo.
+    await salvar(pessoa.id, {});
+    const depois = await prisma.personPreference.findUnique({
+      where: { personId: pessoa.id, organizationId: cenario.organization.id },
+    });
+    expect(depois?.neighborhoods).toEqual([]);
+    expect(depois?.cities).toEqual([]);
+  });
+
+  test("Fase 101 — remover minPrice/maxPrice numa segunda gravação limpa os valores anteriores (volta a null, nunca mantém o antigo)", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+
+    await salvar(pessoa.id, { transactionType: "SALE", minPrice: "400000", maxPrice: "600000" });
+    const antes = await prisma.personPreference.findUnique({
+      where: { personId: pessoa.id, organizationId: cenario.organization.id },
+    });
+    expect(antes?.minPrice?.toString()).toBe("400000");
+    expect(antes?.maxPrice?.toString()).toBe("600000");
+
+    await salvar(pessoa.id, { transactionType: "SALE" });
+    const depois = await prisma.personPreference.findUnique({
+      where: { personId: pessoa.id, organizationId: cenario.organization.id },
+    });
+    expect(depois?.minPrice).toBeNull();
+    expect(depois?.maxPrice).toBeNull();
+  });
+
+  // Fase 101 — achado de UX documentado nesta fase: minPrice/maxPrice são
+  // UM campo só reaproveitado entre SALE e RENT (diferente de Property,
+  // que tem price/rentPrice separados), porque uma preferência representa
+  // só uma finalidade por vez. Trocar a finalidade NÃO limpa o valor
+  // antigo automaticamente — decisão deliberada (o servidor nunca apaga
+  // dado que o corretor não pediu para apagar) — então um valor digitado
+  // sob "Comprar" sobrevive, inalterado, a uma troca pra "Alugar". A
+  // correção desta fase foi só de APRESENTAÇÃO (o rótulo da faixa de
+  // preço no formulário passou a reagir à finalidade selecionada, ver
+  // PreferenciaImovelForm.tsx) — a persistência em si já era coerente e
+  // continua exatamente assim, provado abaixo.
+  test("Fase 101 — trocar a finalidade NÃO limpa minPrice/maxPrice automaticamente: o valor de venda sobrevive à troca para aluguel", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+
+    await salvar(pessoa.id, { transactionType: "SALE", minPrice: "400000", maxPrice: "600000" });
+
+    await salvar(pessoa.id, { transactionType: "RENT", minPrice: "400000", maxPrice: "600000" });
+    const linha = await prisma.personPreference.findUnique({
+      where: { personId: pessoa.id, organizationId: cenario.organization.id },
+    });
+    expect(linha?.transactionType).toBe("RENT");
+    // O NÚMERO sobrevive — é o corretor quem decide se ele ainda faz
+    // sentido para a nova finalidade; o servidor nunca adivinha.
+    expect(linha?.minPrice?.toString()).toBe("400000");
+    expect(linha?.maxPrice?.toString()).toBe("600000");
+  });
+
   test("K) notes da preferência não altera Person.notes", async () => {
     cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
     autenticarComo(cenario);

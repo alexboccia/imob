@@ -71,6 +71,27 @@ export function PreferenciaImovelForm({
   const [estado, formAction, pendente] = useActionState(acao, ESTADO_INICIAL_ACAO);
   const v = valoresIniciais;
 
+  // Fase 101 — achado: minPrice/maxPrice são UM campo só, reaproveitado
+  // para venda e aluguel (ao contrário de Property, que tem price e
+  // rentPrice separados) — porque uma preferência representa só UMA
+  // finalidade por vez (Comprar OU Alugar, nunca as duas). Trocar a
+  // finalidade NUNCA limpa o valor já digitado (decisão deliberada: o
+  // servidor não apaga dado que o corretor não pediu para apagar), mas
+  // sem isto o rótulo continuava dizendo só "Faixa de preço (R$)" dos
+  // dois lados — um corretor trocando de "Comprar" pra "Alugar" via um
+  // cliente existente via o número de venda (ex: 500000) parado ali,
+  // sem nenhum sinal de que aquele número já deixou de ser um preço de
+  // venda e passaria a ser lido como aluguel MENSAL se salvo assim.
+  // Nenhuma lógica de persistência muda: é só o texto reagindo à
+  // finalidade JÁ selecionada na tela, antes de salvar.
+  const [transactionType, setTransactionType] = useState(v?.transactionType ?? "");
+  const legendaFaixaPreco =
+    transactionType === "SALE"
+      ? "Faixa de preço de venda (R$)"
+      : transactionType === "RENT"
+        ? "Faixa de aluguel mensal (R$)"
+        : "Faixa de preço (R$)";
+
   if (!mostrarFormulario) {
     return (
       <EstadoVazio
@@ -100,7 +121,11 @@ export function PreferenciaImovelForm({
 
       <div className="space-y-1.5 max-w-xs">
         <Label htmlFor="transactionType">Finalidade</Label>
-        <Select name="transactionType" defaultValue={v?.transactionType ?? ""}>
+        <Select
+          name="transactionType"
+          value={transactionType}
+          onValueChange={(valor) => setTransactionType(String(valor ?? ""))}
+        >
           <SelectTrigger id="transactionType" className="w-full">
             <SelectValue placeholder="Qualquer" />
           </SelectTrigger>
@@ -146,7 +171,7 @@ export function PreferenciaImovelForm({
       </div>
 
       <fieldset className="border-0 p-0 m-0">
-        <legend className="text-sm font-medium mb-2">Faixa de preço (R$)</legend>
+        <legend className="text-sm font-medium mb-2">{legendaFaixaPreco}</legend>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="minPrice" className="text-xs text-muted-foreground">
