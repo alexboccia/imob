@@ -375,6 +375,11 @@ export async function atualizarImovel(
                     previousStatus: imovelAtual.status,
                     newStatus: dados.status,
                     organizationId,
+                    // Fase 108 — a via automática (fecharInteresse) já
+                    // registrava quem moveu o status; esta, a edição
+                    // manual pelo formulário, não registrava ninguém,
+                    // mesmo a sessão sabendo quem está editando.
+                    changedByMemberId: session.user.organizationMemberId ?? null,
                   },
                 },
               }
