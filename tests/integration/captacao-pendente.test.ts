@@ -266,6 +266,38 @@ describe("resolução de identidade", () => {
     expect(await contarCaptacoesPendentes(orgId)).toBe(0);
   });
 
+  test("resolver uma captação de 'quero anunciar' (role OWNER) adiciona OWNER ao cadastro escolhido", async () => {
+    const cenario = await novoCenario();
+    const orgId = cenario.organization.id;
+    // `a` nasce só LEAD (criarPessoa default) — exatamente o cadastro que
+    // o gestor escolhe para um contato que, pela própria mensagem, quer
+    // ANUNCIAR um imóvel.
+    const { a } = await pessoasEmConflito(orgId, "role-owner");
+    await enviarAnuncioProprietario(
+      cenario.organization.slug,
+      undefined,
+      formData({
+        nome: "Visitante",
+        email: "conflito-role-owner@email.com",
+        telefone: "(11) 90000-1111",
+        descricaoImovel: "Apartamento para anunciar.",
+      })
+    );
+    const captacao = await prisma.leadCapture.findFirstOrThrow({ where: { organizationId: orgId } });
+    expect(captacao.role).toBe("OWNER");
+
+    await autenticarComo(cenario);
+    const estado = await resolverCaptacaoPendente(
+      captacao.id,
+      ESTADO_INICIAL_ACAO,
+      formData({ personId: a.id })
+    );
+    expect(estado.success).toBe(true);
+
+    const depois = await prisma.person.findUniqueOrThrow({ where: { id: a.id, organizationId: orgId } });
+    expect(depois.roles).toContain("OWNER");
+  });
+
   test("resolver NÃO sobrescreve e-mail nem telefone do cadastro escolhido", async () => {
     const { cenario, orgId, b, captacao } = await comCaptacaoPendente("sem-sobrescrita");
     await autenticarComo(cenario);

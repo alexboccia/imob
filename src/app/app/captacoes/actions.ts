@@ -10,6 +10,7 @@ import { hasModule } from "@/lib/entitlements";
 import { logActivity } from "@/lib/activity-log";
 import { temPapel, PAPEIS_RESOLUCAO_IDENTIDADE } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
+import { adicionarRoleSeAusente } from "@/lib/person-dedup";
 import {
   erroAcessoNegado,
   erroGenerico,
@@ -81,6 +82,7 @@ export async function resolverCaptacaoPendente(
           id: true,
           message: true,
           origin: true,
+          role: true,
           propertyId: true,
           occurredAt: true,
           status: true,
@@ -110,6 +112,13 @@ export async function resolverCaptacaoPendente(
         },
       });
       if (marcada.count === 0) return { tipo: "ja_resolvida" as const };
+
+      // O fato comercial declarado na captação (quem procura imóvel,
+      // quem quer anunciar um) faz parte do que ela prova — mesmo
+      // acréscimo que a resolução automática já faz em
+      // resolverPessoaParaFormularioPublico, agora também no caminho
+      // manual. Nunca remove role existente, só soma a que faltava.
+      await adicionarRoleSeAusente(pessoa.id, organizationId, captacao.role, tx);
 
       const interacao = await tx.interaction.create({
         data: {

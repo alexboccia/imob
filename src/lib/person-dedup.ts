@@ -5,6 +5,11 @@ import { normalizarEmail } from "@/lib/rate-limit";
 import { normalizarTelefone } from "@/lib/telefone";
 import { logger } from "@/lib/logger";
 
+// Mesmo cliente de transação aceito por qualquer `tx` deste projeto
+// (ver ClienteTransacao em clientes/actions.ts) — aqui com nome próprio
+// porque este módulo não importa daquele arquivo de actions.
+type ClientePrisma = typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
 // Deduplicação de leads públicos (Fase B do CRM). Regra: dentro da MESMA
 // organizationId, mesmo e-mail normalizado OU mesmo telefone normalizado
 // reutiliza a Person existente; sem match cria uma nova; match
@@ -52,12 +57,21 @@ async function buscarCandidatos(
 // primeira commitar (lock de linha do Postgres) e nesse momento sua
 // própria condição WHERE já reavalia contra o dado atualizado, então não
 // casa nenhuma linha e vira no-op. Sem $queryRaw.
-async function adicionarRoleSeAusente(
+//
+// Exportado (Fase 116): resolverCaptacaoPendente também precisa dele —
+// uma captação de "quero anunciar" (role OWNER) resolvida manualmente
+// para uma Person que só era LEAD até então precisa do MESMO
+// acréscimo que a resolução automática já fazia, pelo mesmo motivo:
+// o fato comercial declarado faz parte do que a captação prova.
+// Aceita `tx` para participar da mesma transação do chamador quando
+// houver uma; o client default é o `prisma` de sempre.
+export async function adicionarRoleSeAusente(
   personId: string,
   organizationId: string,
-  role: PersonRole
+  role: PersonRole,
+  cliente: ClientePrisma = prisma
 ): Promise<void> {
-  await prisma.person.updateMany({
+  await cliente.person.updateMany({
     where: { id: personId, organizationId, NOT: { roles: { has: role } } },
     data: { roles: { push: role } },
   });
