@@ -44,7 +44,7 @@ function precoRelevante(imovel: NonNullable<NovoContato["imovel"]>): string | nu
   return valor ? formatarPreco(valor) : null;
 }
 
-function ItemContato({
+export function ItemContato({
   contato,
   meuMemberId,
   podeAtribuir,
@@ -210,12 +210,17 @@ export function NovosContatos({
   meuMemberId,
   podeAtribuir,
   membros,
+  // Fase 118 — para onde manda quem não coube no resumo. Opcional pelo
+  // mesmo motivo de CaptacoesPendentes.tsx: este componente só é usado
+  // aqui na Home, mas o tipo não deveria depender disso.
+  href,
 }: {
   dados: Dados;
   /** Membro da SESSÃO, resolvido no servidor — nunca lido do cliente. */
   meuMemberId: string | null;
   podeAtribuir: boolean;
   membros: OpcaoResponsavel[];
+  href?: string;
 }) {
   if (dados.itens.length === 0) return null;
 
@@ -265,11 +270,23 @@ export function NovosContatos({
             />
           ))}
         </ul>
-        {dados.total > dados.itens.length && (
-          <p className="mt-3 text-sm text-muted-foreground">
-            e mais {dados.total - dados.itens.length} aguardando atendimento.
-          </p>
-        )}
+        {dados.total > dados.itens.length &&
+          (href ? (
+            // Fase 118 — achado real: antes deste link, quem passava do
+            // resumo só aparecia nesta frase, sem nenhum caminho de volta
+            // até a pessoa. "Ver todos" é o mesmo padrão já usado por
+            // CaptacoesPendentes.tsx para o mesmo tipo de excedente.
+            <Link
+              href={href}
+              className="mt-3 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Ver todos — mais {dados.total - dados.itens.length} aguardando atendimento.
+            </Link>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">
+              e mais {dados.total - dados.itens.length} aguardando atendimento.
+            </p>
+          ))}
       </CardContent>
     </Card>
   );

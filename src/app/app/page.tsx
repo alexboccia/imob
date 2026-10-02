@@ -221,6 +221,7 @@ export default async function DashboardPage({
                 meuMemberId={membroId}
                 podeAtribuir={podeAtribuirContato}
                 membros={membrosParaAtribuir}
+                href="/app/novos-contatos"
               />
 
               {captacoes.length > 0 && (

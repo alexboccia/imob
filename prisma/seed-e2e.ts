@@ -2416,6 +2416,10 @@ async function main() {
   //   João   contato de CONTATO, 2 dias     -> aparece, NÃO elegível (sem imóvel)
   //   Carla  contato + atendimento posterior-> NÃO aparece (já trabalhada)
   //   Pedro  só interação registrada à mão  -> NÃO aparece (nunca foi captação)
+  //   Alice/Bento/Diana/Elton (Extra)        -> mais antigos que todos acima,
+  //          existem só para ultrapassar LIMITE_NOVOS_CONTATOS (Fase 118):
+  //          com eles o total passa de 5, e a Central precisa de um link
+  //          "Ver todos" para quem não cabe no resumo.
   const orgInbox = await garantirOrganizacaoComDono({
     slug: "e2e-org-inbox",
     timezone: "UTC",
@@ -2525,6 +2529,26 @@ async function main() {
       occurredAt: new Date(agoraInbox - 3 * 3600 * 1000),
     },
   });
+
+  // Fase 118 — quatro contatos extras, todos mais antigos que João (que já
+  // é o mais antigo dos dois originais), só para que o total aguardando
+  // passe de LIMITE_NOVOS_CONTATOS (5): Maria + João + estes quatro = 6.
+  // Nenhum atendimento depois: os quatro continuam aguardando.
+  const nomesExtra = ["Alice Extra Inbox", "Bento Extra Inbox", "Diana Extra Inbox", "Elton Extra Inbox"];
+  for (const [indice, nome] of nomesExtra.entries()) {
+    const pessoaExtra = await pessoaInbox(nome, `1193000000${indice}`);
+    await prisma.interaction.create({
+      data: {
+        organizationId: orgInbox.organization.id,
+        personId: pessoaExtra.id,
+        type: "MESSAGE",
+        notes: "Contato extra para testar o excedente da caixa de entrada.",
+        origin: "CONTATO",
+        memberId: null,
+        occurredAt: new Date(agoraInbox - (72 + indice * 24) * 3600 * 1000),
+      },
+    });
+  }
 
   // Negociação aberta para a fase de NEGOCIAÇÃO DE VALORES. As
   // propostas são apagadas a cada seed para a sequência afirmada pelo

@@ -225,6 +225,27 @@ test.describe("caixa de entrada comercial", () => {
     }
   });
 
+  test("Fase 118 — quem não cabe no resumo tem um link para ver todos", async ({ page }) => {
+    await abrirCentral(page);
+    const bloco = page.locator(BLOCO);
+
+    // 6 aguardando no fixture (Maria + João + 4 extras), e o resumo só
+    // mostra LIMITE_NOVOS_CONTATOS (5): sobra 1 fora da lista.
+    await expect(bloco.getByText(/^6\+?$/)).toBeVisible();
+    await expect(bloco.locator("li")).toHaveCount(5);
+
+    const verTodos = bloco.getByRole("link", { name: /Ver todos/ });
+    await expect(verTodos).toBeVisible();
+    await expect(verTodos).toHaveAttribute("href", "/app/novos-contatos");
+
+    await verTodos.click();
+    await page.waitForURL("/app/novos-contatos");
+    await expect(page.getByRole("heading", { level: 1, name: "Novos contatos" })).toBeVisible();
+    // A página própria mostra TODOS os 6, inclusive quem não coube no
+    // resumo da Home.
+    await expect(page.locator("main li")).toHaveCount(6);
+  });
+
   test("organização sem contatos aguardando não ganha bloco nenhum", async ({ page }) => {
     // Org A tem contatos do site, mas o bloco só aparece com fila real;
     // um card permanente de "nenhum contato" seria ruído diário.
