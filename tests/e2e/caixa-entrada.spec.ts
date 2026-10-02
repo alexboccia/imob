@@ -246,6 +246,40 @@ test.describe("caixa de entrada comercial", () => {
     await expect(page.locator("main li")).toHaveCount(6);
   });
 
+  // Fase 122 — nenhuma action da caixa de entrada (registrarAtendimento-
+  // DoContato, criarOportunidadeDoContato) chama revalidatePath("/app/
+  // novos-contatos"): a pergunta é se isso deixa a PRÓPRIA página com o
+  // item stale depois de agir nela mesma, sem reload. A Server Action
+  // atualiza a rota que a invocou automaticamente (mesmo mecanismo que já
+  // tira o item da Home sem revalidatePath("/app") explícito pra ESSA
+  // finalidade) — este teste prova que a página completa não é exceção.
+  test("Fase 122 — agir direto em /app/novos-contatos tira o item sem precisar recarregar", async ({
+    page,
+  }) => {
+    const MARCADOR = "E2E atendimento na pagina completa";
+    try {
+      await login(page, ORG_INBOX);
+      await page.goto("/app/novos-contatos");
+      const item = page.locator("main li").filter({ hasText: "Alice Extra Inbox" });
+      await expect(item).toHaveCount(1);
+
+      await item.getByRole("button", { name: "Registrar atendimento" }).click();
+      const dialogo = page.getByRole("dialog");
+      await dialogo.getByLabel("Como foi o contato").selectOption("CALL");
+      await dialogo.getByLabel("Observação (opcional)").fill(MARCADOR);
+      await dialogo.getByRole("button", { name: "Registrar", exact: true }).click();
+      await expect(page.getByText("Atendimento registrado.")).toBeVisible();
+
+      // SEM reload: a própria página que recebeu a submissão já precisa
+      // refletir o fato novo.
+      await expect(
+        page.locator("main li").filter({ hasText: "Alice Extra Inbox" })
+      ).toHaveCount(0);
+    } finally {
+      limparAtendimentosNoBanco(MARCADOR);
+    }
+  });
+
   test("organização sem contatos aguardando não ganha bloco nenhum", async ({ page }) => {
     // Org A tem contatos do site, mas o bloco só aparece com fila real;
     // um card permanente de "nenhum contato" seria ruído diário.
