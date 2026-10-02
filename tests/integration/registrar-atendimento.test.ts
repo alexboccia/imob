@@ -14,7 +14,7 @@ vi.mock("next/cache", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { criarCenario, criarPessoa, criarImovel } from "@/test/fixtures";
+import { criarCenario, criarPessoa, criarImovel, criarUsuario, criarMembro } from "@/test/fixtures";
 import { auth } from "@/lib/auth";
 import { registrarAtendimentoDoContato } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
@@ -284,7 +284,16 @@ describe("registrarAtendimentoDoContato", () => {
     expect(registrado?.memberId).toBeNull();
   });
 
-  test("escopo restrito: sem vínculo comercial, o contato não é atendível", async () => {
+  // Fase 119 — achado real: este teste afirmava o comportamento ERRADO
+  // como se fosse a regra. Uma pessoa SEM RESPONSÁVEL é, por construção,
+  // trabalho em aberto da organização (mesmo raciocínio de
+  // wherePessoaNaFilaDeEntrada e de assumirContato) — e é exatamente por
+  // isso que ela aparece na caixa de entrada de QUALQUER corretor em
+  // política restrita, com o botão "Registrar atendimento" visível. Até
+  // esta fase, clicar nele falhava: a action usava `wherePessoa`
+  // (vínculo comercial já existente), mais estreito que o alcance que a
+  // própria tela já concede. O CTA existia e não funcionava.
+  test("escopo restrito: sem responsável, o contato ainda é trabalho em aberto e é atendível", async () => {
     const cenario = await novoCenario();
     // Organização RESTRITA e sessão de BROKER sem nenhuma negociação.
     await prisma.organization.update({
@@ -297,6 +306,46 @@ describe("registrarAtendimentoDoContato", () => {
     const contato = await contatoDoSite({
       organizationId: cenario.organization.id,
       personId: pessoa.id,
+    });
+
+    const estado = await registrarAtendimentoDoContato(
+      contato.id,
+      ESTADO_INICIAL_ACAO,
+      formulario("CALL")
+    );
+    expect(estado.success).toBe(true);
+    expect(
+      await prisma.interaction.count({
+        where: { organizationId: cenario.organization.id, memberId: cenario.membro.id },
+      })
+    ).toBe(1);
+  });
+
+  // A outra metade da mesma regra: o alcance crescer até "sem
+  // responsável" não pode significar "qualquer pessoa". Quem JÁ tem
+  // responsável — um colega — continua fora de alcance.
+  test("escopo restrito: contato de um COLEGA continua fora de alcance", async () => {
+    const cenario = await novoCenario();
+    await prisma.organization.update({
+      where: { id: cenario.organization.id },
+      data: { commercialVisibility: "RESTRICTED" },
+    });
+    const usuarioColega = await criarUsuario();
+    const colega = await criarMembro({
+      organizationId: cenario.organization.id,
+      userId: usuarioColega.id,
+      role: "BROKER",
+    });
+    autenticarComo(cenario, { role: "BROKER" });
+
+    const pessoaDoColega = await criarPessoa({ organizationId: cenario.organization.id });
+    await prisma.person.update({
+      where: { id: pessoaDoColega.id, organizationId: cenario.organization.id },
+      data: { responsibleMemberId: colega.id, organizationId: cenario.organization.id },
+    });
+    const contato = await contatoDoSite({
+      organizationId: cenario.organization.id,
+      personId: pessoaDoColega.id,
     });
 
     const estado = await registrarAtendimentoDoContato(

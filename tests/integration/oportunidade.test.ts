@@ -15,7 +15,7 @@ vi.mock("next/cache", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { criarCenario, criarPessoa, criarImovel } from "@/test/fixtures";
+import { criarCenario, criarPessoa, criarImovel, criarUsuario, criarMembro } from "@/test/fixtures";
 import { auth } from "@/lib/auth";
 import {
   criarOportunidadeDoContato,
@@ -39,13 +39,14 @@ async function novoCenario(): Promise<Cenario> {
   return cenario;
 }
 
-function autenticarComo(cenario: Cenario) {
+function autenticarComo(cenario: Cenario, sobrescrever: Record<string, unknown> = {}) {
   vi.mocked(auth).mockResolvedValue({
     user: {
       id: cenario.usuario.id,
       organizationId: cenario.organization.id,
       organizationMemberId: cenario.membro.id,
       role: "OWNER",
+      ...sobrescrever,
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
@@ -248,6 +249,67 @@ describe("converter contato em oportunidade", () => {
     expect(r.success).toBe(false);
     expect(await interessesDe(orgA.organization.id)).toHaveLength(0);
     expect(await interessesDe(orgB.organization.id)).toHaveLength(0);
+  });
+
+  // Fase 119 — mesmo achado de registrar-atendimento.test.ts: o contato
+  // está na caixa de entrada do BROKER (wherePessoaNaFilaDeEntrada inclui
+  // quem não tem responsável), com "Criar oportunidade" visível quando
+  // elegível — mas a action usava `wherePessoa`, mais estreito, e
+  // recusava o próprio clique que o botão prometia.
+  test("escopo restrito: sem responsável, a oportunidade ainda pode ser criada", async () => {
+    const cenario = await novoCenario();
+    await prisma.organization.update({
+      where: { id: cenario.organization.id },
+      data: { commercialVisibility: "RESTRICTED" },
+    });
+    autenticarComo(cenario, { role: "BROKER" });
+    const organizationId = cenario.organization.id;
+
+    const pessoa = await criarPessoa({ organizationId });
+    const imovel = await criarImovel({ organizationId });
+    const contato = await criarContato({
+      organizationId,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      origin: "IMOVEL",
+    });
+
+    const r = await converter(contato.id);
+    expect(r.success).toBe(true);
+    expect(await interessesDe(organizationId)).toHaveLength(1);
+  });
+
+  test("escopo restrito: contato de um COLEGA continua fora de alcance para criar oportunidade", async () => {
+    const cenario = await novoCenario();
+    await prisma.organization.update({
+      where: { id: cenario.organization.id },
+      data: { commercialVisibility: "RESTRICTED" },
+    });
+    const usuarioColega = await criarUsuario();
+    const colega = await criarMembro({
+      organizationId: cenario.organization.id,
+      userId: usuarioColega.id,
+      role: "BROKER",
+    });
+    autenticarComo(cenario, { role: "BROKER" });
+    const organizationId = cenario.organization.id;
+
+    const pessoaDoColega = await criarPessoa({ organizationId });
+    await prisma.person.update({
+      where: { id: pessoaDoColega.id, organizationId },
+      data: { responsibleMemberId: colega.id, organizationId },
+    });
+    const imovel = await criarImovel({ organizationId });
+    const contato = await criarContato({
+      organizationId,
+      personId: pessoaDoColega.id,
+      propertyId: imovel.id,
+      origin: "IMOVEL",
+    });
+
+    const r = await converter(contato.id);
+    expect(r.success).toBe(false);
+    expect(await interessesDe(organizationId)).toHaveLength(0);
   });
 
   test("apagar a interação de origem não destrói a oportunidade (SET NULL)", async () => {

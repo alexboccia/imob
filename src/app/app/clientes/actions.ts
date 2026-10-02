@@ -37,7 +37,7 @@ import {
   whereNegociacaoAlvo,
   wherePessoaAlvo,
   whereNegociacao,
-  wherePessoa,
+  wherePessoaNaFilaDeEntrada,
   type EscopoComercial,
 } from "@/lib/escopo-comercial";
 import { formatarPreco } from "@/lib/format";
@@ -846,8 +846,18 @@ export async function criarOportunidadeDoContato(
     // criar uma oportunidade sobre ele — virando responsável e ganhando
     // acesso. Isso seria escalar privilégio por escrita, e o produto não
     // tem fluxo de "pegar para si".
+    //
+    // Fase 119 — achado real: este botão é o MESMO oferecido pela caixa
+    // de entrada (NovosContatos.tsx), cujo alcance já é
+    // wherePessoaNaFilaDeEntrada (inclui quem não tem responsável — é
+    // trabalho em aberto da organização, não a carteira de um colega).
+    // Usar o `wherePessoa` mais estreito aqui recusava exatamente o
+    // clique que o próprio botão prometia para um lead ainda não
+    // assumido. O alcance desta escrita passa a ser o mesmo da leitura
+    // que a exibe — nem mais largo (continua excluindo quem já tem
+    // responsável, ver o teste de colega), nem mais estreito.
     const interacao = await prisma.interaction.findFirst({
-      where: { id: interactionId, organizationId, person: { is: wherePessoa(escopo) } },
+      where: { id: interactionId, organizationId, person: { is: wherePessoaNaFilaDeEntrada(escopo) } },
       select: { id: true, personId: true, propertyId: true, origin: true },
     });
     if (!interacao) return erroGenerico("Contato não encontrado.");
@@ -1016,8 +1026,14 @@ export async function registrarAtendimentoDoContato(
     // quem registra: sem isso, um id copiado da tela de outra pessoa
     // viraria atendimento numa carteira alheia. Mensagem genérica de
     // propósito — não revela se o contato existe fora do escopo.
+    //
+    // Fase 119 — mesmo achado e mesmo motivo de criarOportunidadeDoContato
+    // acima: esta action atende o botão da caixa de entrada
+    // (NovosContatos.tsx), cujo alcance já é wherePessoaNaFilaDeEntrada.
+    // `wherePessoa` recusava o atendimento de um lead sem responsável que
+    // a própria tela já mostrava como acionável.
     const contato = await prisma.interaction.findFirst({
-      where: { id: interactionId, organizationId, person: { is: wherePessoa(escopo) } },
+      where: { id: interactionId, organizationId, person: { is: wherePessoaNaFilaDeEntrada(escopo) } },
       select: { id: true, personId: true, propertyId: true },
     });
     if (!contato) return erroGenerico("Contato não encontrado.");
