@@ -382,4 +382,164 @@ describe("atualizarPessoa — concorrência", () => {
     expect(falhas).toHaveLength(1);
     expect(falhas[0].message).toMatch(/já existe/i);
   });
+
+  test("duas edições concorrentes numa Person com negociação existente não duplicam nada", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+    const p = await criarPessoaFixture({ organizationId: c.organization.id, name: "Original" });
+    const imovel = await criarImovel({ organizationId: c.organization.id, purpose: "SALE", price: 100000 });
+    const interesse = await prisma.propertyInterest.create({
+      data: { organizationId: c.organization.id, personId: p.id, propertyId: imovel.id, stage: "INTERESTED" },
+    });
+
+    await Promise.all([
+      atualizarPessoa(p.id, { success: false }, form({ nome: "Nome Um" })),
+      atualizarPessoa(p.id, { success: false }, form({ nome: "Nome Dois" })),
+    ]);
+
+    // Last-write-wins em campo comum é aceitável (Fase 114/115) — o que
+    // precisa ser verdade é que continua existindo EXATAMENTE uma Person
+    // e EXATAMENTE a mesma PropertyInterest, nunca duplicadas.
+    expect(await prisma.person.count({ where: { id: p.id, organizationId: c.organization.id } })).toBe(1);
+    expect(
+      await prisma.propertyInterest.count({ where: { personId: p.id, organizationId: c.organization.id } })
+    ).toBe(1);
+    const interesseDepois = await prisma.propertyInterest.findUniqueOrThrow({
+      where: { id: interesse.id, organizationId: c.organization.id },
+    });
+    expect(interesseDepois.id).toBe(interesse.id);
+    expect(interesseDepois.stage).toBe("INTERESTED");
+  });
+});
+
+describe("atualizarPessoa — dedup público depois da edição", () => {
+  test("formulário público com o e-mail NOVO reutiliza a mesma Person, não cria outra", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+    const p = await criarPessoaFixture({ organizationId: c.organization.id, email: "antigo@email.com" });
+
+    await atualizarPessoa(p.id, { success: false }, form({ nome: "Xx", email: "novo@email.com" }));
+
+    const { resolverPessoaParaFormularioPublico } = await import("@/lib/person-dedup");
+    const resultado = await resolverPessoaParaFormularioPublico({
+      organizationId: c.organization.id,
+      nome: "Quem Preencheu o Site",
+      email: "novo@email.com",
+      telefone: null,
+      role: "LEAD",
+    });
+    expect(resultado).toEqual({ tipo: "reutilizada", personId: p.id });
+  });
+
+  test("formulário público com o e-mail ANTIGO (liberado) cria uma Person nova, não 'lembra' da antiga", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+    const p = await criarPessoaFixture({ organizationId: c.organization.id, email: "sera-liberado@email.com" });
+
+    await atualizarPessoa(p.id, { success: false }, form({ nome: "Xx", email: "email-atual@email.com" }));
+
+    const { resolverPessoaParaFormularioPublico } = await import("@/lib/person-dedup");
+    const resultado = await resolverPessoaParaFormularioPublico({
+      organizationId: c.organization.id,
+      nome: "Outra Pessoa Qualquer",
+      email: "sera-liberado@email.com",
+      telefone: null,
+      role: "LEAD",
+    });
+    expect(resultado.tipo).toBe("criada");
+    if (resultado.tipo === "criada") expect(resultado.personId).not.toBe(p.id);
+  });
+});
+
+describe("atualizarPessoa — edições sucessivas e legado", () => {
+  test("A → B → C: ID estável, cada identificador anterior é liberado, relações intactas", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+    const p = await criarPessoaFixture({ organizationId: c.organization.id, email: "a@email.com", phone: "11911111111" });
+    const imovel = await criarImovel({ organizationId: c.organization.id, purpose: "SALE", price: 100000 });
+    const interesse = await prisma.propertyInterest.create({
+      data: { organizationId: c.organization.id, personId: p.id, propertyId: imovel.id, stage: "INTERESTED" },
+    });
+
+    await atualizarPessoa(
+      p.id,
+      { success: false },
+      form({ nome: "João Silva", email: "b@email.com", telefone: "(11) 92222-2222" })
+    );
+    await atualizarPessoa(
+      p.id,
+      { success: false },
+      form({ nome: "João Souza", email: "c@email.com", telefone: "(11) 93333-3333" })
+    );
+
+    const atual = await prisma.person.findUniqueOrThrow({
+      where: { id: p.id, organizationId: c.organization.id },
+    });
+    expect(atual.id).toBe(p.id);
+    expect(atual.name).toBe("João Souza");
+    expect(atual.emailNormalized).toBe("c@email.com");
+    expect(atual.phoneNormalized).toBe("11933333333");
+
+    // a@email.com e b@email.com (e os telefones intermediários) estão
+    // livres — nenhum deles permanece preso à Person por engano.
+    const outraA = await prisma.person.create({
+      data: {
+        organizationId: c.organization.id,
+        name: "Reusa A",
+        email: "a@email.com",
+        emailNormalized: "a@email.com",
+        roles: ["LEAD"],
+      },
+    });
+    const outraB = await prisma.person.create({
+      data: {
+        organizationId: c.organization.id,
+        name: "Reusa B",
+        email: "b@email.com",
+        emailNormalized: "b@email.com",
+        roles: ["LEAD"],
+      },
+    });
+    expect(outraA.id).toBeTruthy();
+    expect(outraB.id).toBeTruthy();
+
+    const interesseDepois = await prisma.propertyInterest.findUniqueOrThrow({
+      where: { id: interesse.id, organizationId: c.organization.id },
+    });
+    expect(interesseDepois.personId).toBe(p.id);
+  });
+
+  test("Person legada (emailNormalized null, duplicata histórica) edita sem backfill/merge", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+    // Simula o estado legado documentado na Fase 95: email preenchido mas
+    // emailNormalized null (duplicata histórica preservada, fora da
+    // deduplicação automática).
+    const legado = await prisma.person.create({
+      data: {
+        organizationId: c.organization.id,
+        name: "Legado",
+        email: "legado@email.com",
+        emailNormalized: null,
+        roles: ["LEAD"],
+      },
+    });
+
+    const estado = await atualizarPessoa(
+      legado.id,
+      { success: false },
+      form({ nome: "Legado Corrigido", email: "legado-corrigido@email.com" })
+    );
+    expect(estado.success).toBe(true);
+
+    const atual = await prisma.person.findUniqueOrThrow({
+      where: { id: legado.id, organizationId: c.organization.id },
+    });
+    // A PRÓPRIA edição normaliza o estado atual desta linha — sem tocar
+    // em nenhuma outra Person da organização.
+    expect(atual.emailNormalized).toBe("legado-corrigido@email.com");
+    expect(
+      await prisma.person.count({ where: { organizationId: c.organization.id } })
+    ).toBe(1);
+  });
 });
