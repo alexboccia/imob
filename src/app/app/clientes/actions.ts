@@ -261,6 +261,111 @@ export async function criarPessoa(
   return { sucesso: true, clienteId: pessoa.id };
 }
 
+// =======================================================================
+// Fase 114 — editar os dados CADASTRAIS de um cliente já existente
+// =======================================================================
+// Até aqui, criarPessoa era a ÚNICA escrita desses quatro campos: uma vez
+// cadastrado, nome/e-mail/telefone/observações nunca podiam ser
+// corrigidos. Esta action fecha essa lacuna com o MESMO contrato de
+// identidade da criação — mesma normalização, mesma unique constraint,
+// nunca um segundo conjunto de regras.
+//
+// DELIBERADAMENTE FORA DESTE FORMULÁRIO (decisão de escopo, não esquecimento):
+//   - roles: acumula por captação pública (person-dedup.ts); remover uma
+//     role manualmente poderia apagar um fato histórico ("esta pessoa já
+//     foi LEAD") sem evidência de que isso é seguro;
+//   - source: origem histórica da aquisição, não um dado cadastral a
+//     corrigir;
+//   - pipelineStage: já tem a própria action (atualizarEstagioFunil);
+//   - responsibleMemberId/assignedMemberId: já têm as próprias jornadas
+//     (assumirContato/atribuirContato) e autoria, respectivamente —
+//     misturá-los aqui acoplaria "corrigir o telefone" a "trocar o dono";
+//   - taxId: campo morto (Fase 95), sem evidência nova para ressuscitar.
+const atualizarPessoaSchema = z.object({
+  nome: z.string().min(2, "Informe o nome."),
+  email: z.string().email("E-mail inválido.").optional().or(z.literal("")),
+  telefone: z
+    .string()
+    .refine((v) => telefoneValido(v), "Telefone inválido.")
+    .optional()
+    .or(z.literal("")),
+  observacoes: z.string().optional(),
+});
+
+export async function atualizarPessoa(
+  personId: string,
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+
+  const parsed = atualizarPessoaSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!parsed.success) return erroValidacao(parsed.error);
+  const dados = parsed.data;
+
+  const organizationId = await requireOrganizationId();
+  if (!(await hasModule(organizationId, "crm"))) {
+    return erroAcessoNegado("CRM não incluído no seu plano.");
+  }
+  const escopo = await escopoComercialDaSessao(organizationId);
+
+  return withOrganization(organizationId, async () => {
+    // updateMany (não update): o predicado de escopo é um OR, que
+    // `update` não aceita no WHERE — mesmo racional de
+    // atualizarEstagioFunil, logo abaixo. Fora do escopo (ou outro
+    // tenant, ou id inexistente), count:0, sem revelar qual dos três
+    // motivos foi.
+    //
+    // EXCLUSÃO DE SI MESMA DA COLISÃO: não é um filtro manual — a
+    // constraint @@unique([organizationId, emailNormalized]) só barra
+    // uma SEGUNDA linha com o mesmo valor. Regravar nesta própria linha o
+    // e-mail que ela já tinha nunca colide consigo mesma.
+    let atualizado;
+    try {
+      atualizado = await prisma.person.updateMany({
+        where: wherePessoaAlvo(escopo, personId, organizationId),
+        data: {
+          name: dados.nome,
+          email: dados.email || null,
+          phone: dados.telefone || null,
+          emailNormalized: dados.email ? normalizarEmail(dados.email) : null,
+          phoneNormalized: dados.telefone ? normalizarTelefone(dados.telefone) : null,
+          notes: dados.observacoes || null,
+        },
+      });
+    } catch (erro) {
+      // Já existe OUTRA Person com esse e-mail ou telefone nesta
+      // organização (unique de emailNormalized/phoneNormalized) — mesmo
+      // erro esperado e mesma mensagem genérica de criarPessoa. Nunca diz
+      // qual das duas colidiu nem revela a outra Person: a edição
+      // continua sendo desta Person, nunca "resolve" para outra.
+      if (erro instanceof Prisma.PrismaClientKnownRequestError && erro.code === "P2002") {
+        return erroGenerico("Já existe um cliente com esse e-mail ou telefone nesta organização.");
+      }
+      throw erro;
+    }
+    if (atualizado.count === 0) {
+      return erroAcessoNegado("Cliente não encontrado.");
+    }
+
+    // Mesmo padrão de atualizarImovel: ação técnica, sem payload (nome/
+    // e-mail/telefone são PII — o ActivityLog não precisa duplicá-los
+    // pra registrar QUE uma edição aconteceu).
+    await logActivity({
+      organizationId,
+      userId: session.user.id,
+      entity: "Person",
+      entityId: personId,
+      action: "updated",
+    });
+
+    revalidatePath(`/app/clientes/${personId}`);
+    revalidatePath("/app/clientes");
+    return sucesso("Dados do cliente atualizados.");
+  });
+}
+
 const estagioSchema = z.object({
   estagioFunil: z.enum([
     "NEW_LEAD",

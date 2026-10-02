@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { PreferenciaImovelForm } from "@/components/admin/PreferenciaImovelForm";
 import { InteresseImovelItem } from "@/components/admin/InteresseImovelItem";
+import { EditarClienteDialog } from "@/components/admin/EditarClienteDialog";
 import { RelacionarImovelForm } from "@/components/admin/RelacionarImovelForm";
 import { BotaoCriarOportunidade } from "@/components/admin/BotaoCriarOportunidade";
 import { oportunidadeElegivel } from "@/lib/oportunidade";
@@ -356,6 +357,17 @@ export default async function DetalheClientePage({
         <CabecalhoPagina
           titulo={pessoa.name}
           descricao={`${pessoa.phone ?? "sem telefone"} · ${pessoa.email ?? "sem e-mail"} · ${pessoa.roles.join(", ")}`}
+          acoes={
+            <EditarClienteDialog
+              personId={pessoa.id}
+              valoresIniciais={{
+                nome: pessoa.name,
+                email: pessoa.email,
+                telefone: pessoa.phone,
+                observacoes: pessoa.notes,
+              }}
+            />
+          }
         />
       </div>
 
