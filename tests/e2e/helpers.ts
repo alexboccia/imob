@@ -269,6 +269,17 @@ export const ORG_COMISSOES_BRUNO = {
   senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
 };
 
+// Fase 121 — organização dedicada ao callout de "visitas atrasadas" da
+// Visão geral: o único atraso dela é um FOLLOW_UP, nunca uma VISIT —
+// isolada porque ORG_CENTRAL já tem asserções de contagem exata que
+// qualquer atraso novo, de qualquer tipo, deslocaria (a própria Central
+// pessoal E "Atrasados da equipe", que é org-wide).
+export const ORG_ATRASADOS_MISTOS = {
+  slug: "e2e-org-atrasados-mistos",
+  email: "owner-atrasados-mistos@e2e.test",
+  senha: process.env.SEED_ADMIN_SENHA ?? "senha-e2e-teste-123",
+};
+
 export const IDS_E2E = {
   // Fase 30 — organização dedicada à CAIXA DE ENTRADA comercial
   // (Organização Q). Números absolutos de novos contatos, então

@@ -267,9 +267,16 @@ export default async function DashboardPage({
               </span>
               <p className="min-w-0 break-words text-sm">
                 <span className="font-medium">
+                  {/* Fase 121 — achado real: `contarAgenda` conta VISIT e
+                      FOLLOW_UP juntos (Fase 19, sem filtro de type — o
+                      mesmo motivo de Central/Agenda nunca discordarem
+                      sobre "atrasado"), mas o texto afirmava "visita(s)"
+                      mesmo quando o atraso fosse um follow-up. Mesmo
+                      vocabulário neutro já usado por CompromissosAtrasados
+                      ("compromisso(s) em aberto") — nenhuma redação nova. */}
                   {agenda.atrasadas === 1
-                    ? "1 visita atrasada"
-                    : `${agenda.atrasadas} visitas atrasadas`}
+                    ? "1 compromisso atrasado"
+                    : `${agenda.atrasadas} compromissos atrasados`}
                 </span>{" "}
                 <span className="text-muted-foreground">precisam de atenção.</span>
               </p>

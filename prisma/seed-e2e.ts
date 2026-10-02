@@ -3938,6 +3938,65 @@ async function main() {
     where: { organizationId: orgY, id: { notIn: Object.values(IDS_E2E).filter((v) => v.startsWith("e2e-imovel-navegacao")) } },
   });
 
+  // =====================================================================
+  // Fase 121 — Organização dedicada ao callout "N visitas atrasadas" da
+  // Visão geral (src/app/app/page.tsx), misto de propósito: UM atraso só,
+  // e ele é um FOLLOW_UP, nunca uma VISIT. O texto afirma "visita(s)
+  // atrasada(s)" a partir de `contarAgenda`, que não filtra por tipo
+  // (Fase 19, mesmo motivo de Central/Agenda nunca discordarem sobre o
+  // que é "atrasado") — então qualquer organização cujo único atraso seja
+  // um follow-up expõe a frase como falsa.
+  const orgAtrasadosMistos = await garantirOrganizacaoComDono({
+    slug: "e2e-org-atrasados-mistos",
+    timezone: "UTC",
+    name: "Organização E2E Atrasados Mistos",
+    planId: planoCompleto.id,
+    email: "owner-atrasados-mistos@e2e.test",
+    senha,
+    role: "OWNER",
+  });
+  const imovelAtrasadosMistos = await garantirImovel({
+    id: "e2e-imovel-atrasados-mistos",
+    organizationId: orgAtrasadosMistos.organization.id,
+    title: "Apartamento E2E Atrasados Mistos",
+  });
+  await prisma.scheduledActivity.deleteMany({
+    where: { organizationId: orgAtrasadosMistos.organization.id },
+  });
+  await prisma.person.deleteMany({
+    where: { organizationId: orgAtrasadosMistos.organization.id },
+  });
+  const pessoaAtrasadosMistos = await prisma.person.create({
+    data: {
+      organizationId: orgAtrasadosMistos.organization.id,
+      name: "Atrasados Mistos Pessoa",
+      roles: ["LEAD"],
+    },
+    select: { id: true },
+  });
+  const interesseAtrasadosMistos = await prisma.propertyInterest.create({
+    data: {
+      organizationId: orgAtrasadosMistos.organization.id,
+      personId: pessoaAtrasadosMistos.id,
+      propertyId: imovelAtrasadosMistos.id,
+      stage: "INTERESTED",
+      responsibleMemberId: orgAtrasadosMistos.membro.id,
+    },
+    select: { id: true },
+  });
+  await prisma.scheduledActivity.create({
+    data: {
+      organizationId: orgAtrasadosMistos.organization.id,
+      personId: pessoaAtrasadosMistos.id,
+      propertyId: imovelAtrasadosMistos.id,
+      propertyInterestId: interesseAtrasadosMistos.id,
+      type: "FOLLOW_UP",
+      subject: "Retomar contato",
+      status: "SCHEDULED",
+      scheduledAt: new Date(Date.now() - 2 * 24 * 3600 * 1000),
+    },
+  });
+
   console.log(`  Org A (plano completo, CRM habilitado): slug=${orgA.organization.slug} login=${emailA}`);
   console.log(`  Org B (plano básico, CRM desabilitado): slug=${orgB.organization.slug} login=owner-b@e2e.test`);
   console.log(

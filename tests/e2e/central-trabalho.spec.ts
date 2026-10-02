@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ORG_CENTRAL, ORG_CENTRAL_CORRETOR, ORG_B, login } from "./helpers";
+import { ORG_CENTRAL, ORG_CENTRAL_CORRETOR, ORG_B, ORG_ATRASADOS_MISTOS, login } from "./helpers";
 
 // Central de trabalho (Fase 17).
 //
@@ -79,6 +79,22 @@ test.describe("Central de trabalho", () => {
     await page.getByRole("link", { name: "Central Hoje" }).first().click();
     await page.waitForURL(/\/app\/clientes\/[^/]+$/);
     await expect(page.getByRole("heading", { name: "Central Hoje" })).toBeVisible();
+  });
+
+  // Fase 121 — achado real: o callout de "Visão geral" conta atrasados
+  // ORG-WIDE via contarAgenda, que não filtra por tipo (Fase 19, o mesmo
+  // motivo de Central/Agenda nunca discordarem sobre o que é "atrasado")
+  // — mas o texto afirmava "N visitas atrasadas" mesmo quando o fato
+  // atrasado é um FOLLOW_UP. ORG_ATRASADOS_MISTOS tem exatamente UM
+  // atraso, e ele não é visita nenhuma.
+  test("o callout de atrasados da Visão geral não afirma 'visita' quando o fato é follow-up", async ({
+    page,
+  }) => {
+    await login(page, ORG_ATRASADOS_MISTOS);
+    const texto = (await page.locator("main").innerText()).replace(/ /g, " ");
+    expect(texto).toContain("1 compromisso atrasado");
+    expect(texto).not.toContain("visita atrasada");
+    expect(texto).not.toContain("visitas atrasadas");
   });
 
   test("organização sem CRM não vê a Central, e a Home continua de pé", async ({ page }) => {
