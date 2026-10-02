@@ -20,6 +20,7 @@ import { registrarAtendimentoDoContato } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { buscarNovosContatos } from "@/lib/novos-contatos";
 import { buscarCentralTrabalho } from "@/lib/central-trabalho";
+import { wherePessoa } from "@/lib/escopo-comercial";
 
 // =======================================================================
 // Registrar atendimento a partir de um contato
@@ -319,6 +320,47 @@ describe("registrarAtendimentoDoContato", () => {
         where: { organizationId: cenario.organization.id, memberId: cenario.membro.id },
       })
     ).toBe(1);
+  });
+
+  // Fase 120 — achado real: a Fase 119 deixou o CLIQUE funcionar, mas não
+  // provou o DEPOIS. `Person.responsibleMemberId` continua null (atender
+  // não é assumir), e sem uma ponte de escopo o mesmo corretor que acabou
+  // de atender perdia o acesso à própria pessoa — a mesma query de
+  // `wherePessoa` que a ficha do cliente usa para decidir 404.
+  test("escopo restrito: atender um lead órfão sem assumir não tranca a própria ficha depois", async () => {
+    const cenario = await novoCenario();
+    await prisma.organization.update({
+      where: { id: cenario.organization.id },
+      data: { commercialVisibility: "RESTRICTED" },
+    });
+    autenticarComo(cenario, { role: "BROKER" });
+
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const contato = await contatoDoSite({
+      organizationId: cenario.organization.id,
+      personId: pessoa.id,
+    });
+
+    const estado = await registrarAtendimentoDoContato(
+      contato.id,
+      ESTADO_INICIAL_ACAO,
+      formulario("CALL")
+    );
+    expect(estado.success).toBe(true);
+
+    // Atender não é assumir: continua sem responsável formal.
+    const atual = await prisma.person.findUniqueOrThrow({
+      where: { id: pessoa.id, organizationId: cenario.organization.id },
+      select: { responsibleMemberId: true },
+    });
+    expect(atual.responsibleMemberId).toBeNull();
+
+    // A MESMA consulta que a ficha do cliente roda para decidir 404.
+    const escopo = { tipo: "MEMBRO" as const, memberId: cenario.membro.id };
+    const alcancavel = await prisma.person.count({
+      where: { id: pessoa.id, organizationId: cenario.organization.id, ...wherePessoa(escopo) },
+    });
+    expect(alcancavel).toBe(1);
   });
 
   // A outra metade da mesma regra: o alcance crescer até "sem

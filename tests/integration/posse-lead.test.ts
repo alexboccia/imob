@@ -514,6 +514,41 @@ describe("matriz de visibilidade (RESTRICTED)", () => {
     expect(await vePessoa(cenario, ana.id, pessoa.id)).toBe(0);
     expect(await posseDe(cenario, pessoa.id)).toBeNull();
   });
+
+  // Fase 120 — achado real: um lead órfão atendido (Fase 119 passou a
+  // permitir isso sem antes "Assumir") não grava responsável nenhum.
+  // Sem esta ponte, o PRÓPRIO corretor que acabou de atender perdia o
+  // acesso à ficha, à lista de clientes e à busca global da pessoa que
+  // ele próprio tinha acabado de trabalhar — um dead-end operacional
+  // comprovável. A ponte é a mesma classe da autoria (branch 3 acima):
+  // um fato que o próprio membro praticou, vale enquanto ninguém
+  // formalmente conduz a pessoa, e para de valer assim que alguém conduz
+  // — nunca disputa nem sobrescreve uma posse já estabelecida.
+  test("F: atendimento próprio em lead órfão mantém acesso — e fecha quando alguém assume", async () => {
+    const { cenario, ana, bruno } = await montar();
+    const pessoa = await lead(cenario, "Atendida Sem Assumir");
+    await prisma.interaction.create({
+      data: {
+        organizationId: cenario.organization.id,
+        personId: pessoa.id,
+        type: "CALL",
+        memberId: ana.id,
+      },
+    });
+
+    // Enquanto ninguém conduz, quem atendeu continua enxergando — e só
+    // quem atendeu, não qualquer colega.
+    expect(await vePessoa(cenario, ana.id, pessoa.id)).toBe(1);
+    expect(await vePessoa(cenario, bruno.id, pessoa.id)).toBe(0);
+
+    // Assim que alguém assume de verdade, a ponte de atendimento fecha —
+    // atender não virou posse, exatamente como a autoria não vira.
+    autenticarComo(cenario, bruno);
+    await assumir(pessoa.id);
+    expect(await posseDe(cenario, pessoa.id)).toBe(bruno.id);
+    expect(await vePessoa(cenario, ana.id, pessoa.id)).toBe(0);
+    expect(await vePessoa(cenario, bruno.id, pessoa.id)).toBe(1);
+  });
 });
 
 // -----------------------------------------------------------------------

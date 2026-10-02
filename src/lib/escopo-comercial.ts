@@ -55,10 +55,34 @@ import { atividadeDoMembro } from "@/lib/responsavel-atividade";
 // Ver a matriz completa em tests/integration/posse-lead.test.ts.
 //
 // Nunca são usados como posse: createdByMemberId (autor, Fases 14/17/19),
-// Interaction.memberId (autor, Fase 15), StageHistory.changedByMemberId
-// (ator, Fase 14) e Participant.memberId (beneficiário da comissão,
-// Fase 12). Autor não é dono, e beneficiário de comissão não é dono do
-// CRM.
+// StageHistory.changedByMemberId (ator, Fase 14) e Participant.memberId
+// (beneficiário da comissão, Fase 12). Autor não é dono, e beneficiário
+// de comissão não é dono do CRM. Interaction.memberId também não é posse
+// — mas, desde a Fase 120, é uma PONTE de escopo (ver ramo 4 abaixo),
+// pela mesma razão estrutural do ramo 3: um fato que o próprio membro
+// praticou.
+//
+// -----------------------------------------------------------------------
+// FASE 120 — A PONTE DE ATENDIMENTO (ramo 4)
+// -----------------------------------------------------------------------
+// A Fase 119 passou a permitir registrar atendimento (e criar
+// oportunidade) num lead órfão ANTES de alguém assumi-lo — de propósito,
+// para que o próprio clique não dependesse de um "Assumir" prévio. Isso
+// expôs uma lacuna que nenhuma fase anterior havia testado: atender não
+// grava `responsibleMemberId`, então sem este ramo o PRÓPRIO corretor que
+// acabou de atender um lead sem dono perdia o acesso à ficha dele, à
+// lista de clientes e à busca global — um dead-end no exato instante em
+// que ele terminava de fazer um trabalho legítimo.
+//
+// A ponte é estreita, pela mesma doutrina do ramo 3: vale enquanto
+// NINGUÉM formalmente conduz a pessoa (`responsibleMemberId: null`), e
+// fecha assim que alguém assume ou é atribuído — nunca disputa, nunca
+// sobrescreve, nunca é "posse" (ver tests/integration/posse-lead.test.ts,
+// caso F). Diferente do ramo 3, não olha para `propertyInterests`: a
+// pergunta aqui é "alguém já conduz esta PESSOA", não "existe alguma
+// negociação" — os dois corretores do caso C/E da matriz (dono vs.
+// negociação) continuam enxergando a pessoa por motivos independentes, e
+// esta ponte segue a mesma lógica.
 // =======================================================================
 
 export type EscopoComercial =
@@ -137,6 +161,8 @@ export function wherePessoa(escopo: EscopoComercial): Prisma.PersonWhereInput {
       { responsibleMemberId: escopo.memberId },
       // 3. eu criei o registro e ninguém conduz nada ainda (autoria)
       { assignedMemberId: escopo.memberId, propertyInterests: { none: {} } },
+      // 4. Fase 120 — eu atendi esta pessoa e ninguém a conduz ainda
+      { interactions: { some: { memberId: escopo.memberId } }, responsibleMemberId: null },
     ],
   };
 }

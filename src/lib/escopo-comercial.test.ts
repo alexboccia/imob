@@ -73,17 +73,37 @@ describe("RESTRICTED — membro operacional fica na própria carteira", () => {
     expect(w.responsibleMemberId).not.toBeNull();
   });
 
-  test("pessoa: negociação, POSSE DECLARADA e a ponte estreita de registro", () => {
+  test("pessoa: negociação, POSSE DECLARADA, a ponte estreita de registro e a ponte de atendimento", () => {
     // Fase 36 — a posse da pessoa passou a existir e entrou como ramo
     // próprio. Os outros dois ramos continuam idênticos: ninguém perdeu
     // visibilidade, e a ampliação é exatamente uma.
+    //
+    // Fase 120 — segunda ampliação, mesma disciplina: um quarto ramo, e
+    // só ele.
     expect(wherePessoa(escopo("RESTRICTED", "BROKER"))).toEqual({
       OR: [
         { propertyInterests: { some: { responsibleMemberId: EU } } },
         { responsibleMemberId: EU },
         { assignedMemberId: EU, propertyInterests: { none: {} } },
+        { interactions: { some: { memberId: EU } }, responsibleMemberId: null },
       ],
     });
+  });
+
+  // A ponte de atendimento (ramo 4) é mais larga que a de autoria (ramo
+  // 3) num eixo específico: não olha para propertyInterests. Ter
+  // registrado uma ligação para alguém que já tem negociação de OUTRO
+  // colega não deveria desaparecer — o atendente continua vendo a
+  // pessoa pela mesma razão que o dono da negociação vê (caso C/E da
+  // matriz em posse-lead.test.ts). O que fecha esta ponte é só
+  // `responsibleMemberId` deixar de ser null.
+  test("ponte de atendimento não exige ausência de negociação, só ausência de responsável", () => {
+    const w = wherePessoa(escopo("RESTRICTED", "BROKER")) as {
+      OR: { interactions?: unknown; propertyInterests?: unknown; responsibleMemberId?: string | null }[];
+    };
+    const atendimento = w.OR.find((c) => c.interactions !== undefined)!;
+    expect(atendimento.propertyInterests).toBeUndefined();
+    expect(atendimento.responsibleMemberId).toBeNull();
   });
 
   // A diferença entre os dois ramos de "pessoa sem negociação" é a
@@ -110,6 +130,7 @@ describe("RESTRICTED — membro operacional fica na própria carteira", () => {
         { propertyInterests: { some: { responsibleMemberId: EU } } },
         { responsibleMemberId: EU },
         { assignedMemberId: EU, propertyInterests: { none: {} } },
+        { interactions: { some: { memberId: EU } }, responsibleMemberId: null },
         { responsibleMemberId: null },
       ],
     });
