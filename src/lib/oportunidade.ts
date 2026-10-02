@@ -9,7 +9,7 @@ import { ORIGENS_CAPTACAO } from "@/lib/captacao";
 //
 // Só é elegível o contato de captação sobre um IMÓVEL ESPECÍFICO:
 //
-//   origin = IMOVEL  E  propertyId != null
+//   origin IN (IMOVEL, MATERIAIS)  E  propertyId != null
 //
 // Por que os outros ficam de fora, e por que isso NÃO é uma limitação
 // acidental:
@@ -26,13 +26,34 @@ import { ORIGENS_CAPTACAO } from "@/lib/captacao";
 //   null      interação registrada à mão pelo corretor, ou anterior à
 //             Fase 4. Não é captação e nunca teve origem de tráfego para
 //             preservar — o vínculo não acrescentaria informação nenhuma.
+//   VISITA    já chega com PropertyInterest própria (solicitarVisita cria
+//             a negociação na hora) — não precisa desta ponte, e
+//             idsImoveisComOportunidade já escondia o botão de qualquer
+//             forma por já existir a oportunidade.
+//
+// MATERIAIS entra (Fase 117 — achado real, não decisão original): pedir
+// o book/plantas de um imóvel sempre vem com o MESMO propertyId validado
+// que IMOVEL (captacao.ts já documentava isso), e é um sinal de interesse
+// pelo menos tão forte quanto o formulário lateral. Esta função nunca
+// tinha incluído esta origem — nem a regra, nem o teste, nem o
+// comentário a mencionavam — e nada na Fase 8 explica por quê: ficava de
+// fora por omissão, não por desenho.
 //
 // propertyId é exigido além do origin (e não assumido a partir dele)
 // porque um registro antigo ou adulterado poderia ter origin=IMOVEL sem
 // imóvel; sem propertyId não existe oportunidade possível.
+const ORIGENS_ELEGIVEIS: readonly string[] = [
+  ORIGENS_CAPTACAO.IMOVEL,
+  ORIGENS_CAPTACAO.MATERIAIS,
+];
+
 export function oportunidadeElegivel(interacao: {
   origin: string | null;
   propertyId: string | null;
 }): boolean {
-  return interacao.origin === ORIGENS_CAPTACAO.IMOVEL && interacao.propertyId !== null;
+  return (
+    interacao.origin !== null &&
+    ORIGENS_ELEGIVEIS.includes(interacao.origin) &&
+    interacao.propertyId !== null
+  );
 }

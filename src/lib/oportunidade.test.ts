@@ -31,6 +31,20 @@ describe("oportunidadeElegivel", () => {
     expect(oportunidadeElegivel({ origin: "IMOVEL", propertyId: null })).toBe(false);
   });
 
+  test("MATERIAIS com imóvel é elegível — tão sobre um imóvel específico quanto IMOVEL", () => {
+    // Fase 117 — achado: esta origem sempre vem com propertyId (mesma
+    // garantia de IMOVEL, documentada em captacao.ts), mas nunca tinha
+    // sido incluída na regra. Pedir o book/plantas de um imóvel é um
+    // sinal de interesse pelo menos tão forte quanto o formulário
+    // lateral — não há razão de produto para a ponte existir para um e
+    // não para o outro.
+    expect(oportunidadeElegivel({ origin: "MATERIAIS", propertyId: "imovel-1" })).toBe(true);
+  });
+
+  test("MATERIAIS sem propertyId não é elegível (mesma defesa de IMOVEL)", () => {
+    expect(oportunidadeElegivel({ origin: "MATERIAIS", propertyId: null })).toBe(false);
+  });
+
   test("origem fora do catálogo nunca é promovida a elegível", () => {
     for (const origem of ["VISIT", "PORTAL_FUTURO", "toString", "constructor", ""]) {
       expect(oportunidadeElegivel({ origin: origem, propertyId: "imovel-1" })).toBe(false);

@@ -124,6 +124,31 @@ describe("converter contato em oportunidade", () => {
     expect(historico).toEqual([{ previousStage: null, newStage: "INTERESTED" }]);
   });
 
+  test("Fase 117 — pedido de materiais (origem MATERIAIS) também vira oportunidade", async () => {
+    const cenario = await novoCenario();
+    autenticarComo(cenario);
+    const organizationId = cenario.organization.id;
+    const pessoa = await criarPessoa({ organizationId });
+    const imovel = await criarImovel({ organizationId });
+    const contato = await criarContato({
+      organizationId,
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      origin: "MATERIAIS",
+    });
+
+    const r = await converter(contato.id);
+    expect(r.success).toBe(true);
+
+    const [interesse] = await interessesDe(organizationId);
+    expect(interesse).toMatchObject({
+      personId: pessoa.id,
+      propertyId: imovel.id,
+      sourceInteractionId: contato.id,
+      stage: "INTERESTED",
+    });
+  });
+
   test("CONTATO e ANUNCIE são recusados — não são funil de comprador", async () => {
     const cenario = await novoCenario();
     autenticarComo(cenario);
