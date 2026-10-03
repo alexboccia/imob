@@ -277,6 +277,53 @@ describe("leitura de negociações", () => {
     expect(await veAgora(ana)).toBe(0);
     expect(await veAgora(bruno)).toBe(1);
   });
+
+  // Fase 123 — a pergunta mais importante da fase: transferir a
+  // NEGOCIAÇÃO (nunca a Person) é o suficiente para o novo responsável
+  // conseguir abrir a ficha de que precisa para trabalhá-la? `wherePessoa`
+  // não é um valor persistido — é uma consulta sempre avaliada contra o
+  // estado ATUAL de `propertyInterests`, então o ramo 1 ("conduzo uma
+  // negociação com ela", Fase 22) deveria conceder acesso no mesmo
+  // instante em que `transferirResponsavelNegociacao` grava o novo
+  // responsável, sem nenhum código extra. Prova pela ACTION real, não
+  // por um UPDATE direto no banco — é a action que o produto expõe.
+  test("RESTRICTED: transferir a negociação já basta para abrir a Person — sem tocar em Person.responsibleMemberId", async () => {
+    const cenario = await novoCenario();
+    const ana = await membro(cenario, "Ana");
+    const bruno = await membro(cenario, "Bruno");
+    const interesse = await negociacao(cenario, { responsavelId: ana.id });
+
+    const alcancaAPessoa = async (m: { id: string; userId: string }) => {
+      autenticarComo(cenario, m);
+      const escopo = await escopoComercialDaSessao(cenario.organization.id);
+      return prisma.person.count({
+        where: { id: interesse.personId, organizationId: cenario.organization.id, ...wherePessoa(escopo) },
+      });
+    };
+
+    expect(await alcancaAPessoa(ana)).toBe(1);
+    expect(await alcancaAPessoa(bruno)).toBe(0);
+
+    autenticarComo(cenario, ana);
+    const resultado = await transferirResponsavelNegociacao(
+      interesse.id,
+      { success: false },
+      fd({ responsavelId: bruno.id })
+    );
+    expect(resultado.success).toBe(true);
+
+    // A Person NUNCA foi tocada — Fase 123 confirma que a independência
+    // documentada em posse-lead.ts é exatamente o que torna isto possível
+    // sem sincronização nenhuma.
+    const pessoaDepois = await prisma.person.findUniqueOrThrow({
+      where: { id: interesse.personId, organizationId: cenario.organization.id },
+      select: { responsibleMemberId: true },
+    });
+    expect(pessoaDepois.responsibleMemberId).toBeNull();
+
+    expect(await alcancaAPessoa(bruno)).toBe(1);
+    expect(await alcancaAPessoa(ana)).toBe(0);
+  });
 });
 
 // -----------------------------------------------------------------------
