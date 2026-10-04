@@ -3,6 +3,7 @@
 // central de verificação é que `organizationId` está sempre presente e
 // nunca é sobrescrito por filtro/busca do usuário (isolamento de tenant).
 import type { Prisma, PersonRole } from "@/generated/prisma/client";
+import { normalizarTelefone } from "@/lib/telefone";
 
 export function construirWhereImoveis(params: {
   organizationId: string;
@@ -68,6 +69,16 @@ export function construirWhereClientes(params: {
 }): Prisma.PersonWhereInput {
   const { organizationId, busca, estagioFiltro, origemFiltro, papelFiltro, escopo } = params;
   const temEscopo = escopo && Object.keys(escopo).length > 0;
+  // Fase 129 — achado real: `phone` é gravado EXATAMENTE como o único
+  // campo de telefone do produto grava (CampoTelefone, mascarado ao
+  // vivo: "(11) 99999-8888"), nunca em dígitos crus. `contains` direto
+  // em `phone` não acha esse registro buscando só os dígitos — o jeito
+  // mais natural de colar um número de outro sistema/discador. A ponte
+  // é `phoneNormalized`, que já existe e já é mantido só para dedup
+  // (person-dedup.ts) — reaproveitado aqui, nenhuma coluna nova. Só
+  // entra quando a busca tem algum dígito; "ana" não ganha uma cláusula
+  // phoneNormalized vazia correspondendo a tudo.
+  const digitosBusca = normalizarTelefone(busca);
 
   return {
     ...(temEscopo ? { AND: [escopo] } : {}),
@@ -86,6 +97,7 @@ export function construirWhereClientes(params: {
             { name: { contains: busca, mode: "insensitive" } },
             { email: { contains: busca, mode: "insensitive" } },
             { phone: { contains: busca, mode: "insensitive" } },
+            ...(digitosBusca ? [{ phoneNormalized: { contains: digitosBusca } }] : []),
           ],
         }
       : {}),

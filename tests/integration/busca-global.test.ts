@@ -100,6 +100,33 @@ describe("clientes", () => {
     expect((await buscarGlobal(c.organization.id, "Nome Que Nunca Existe")).clientes).toHaveLength(0);
   });
 
+  // Fase 129 — achado real: o teste acima guarda o telefone já SEM
+  // máscara ("11999998888"), mas isso nunca é o que fica gravado por um
+  // cadastro feito pela UI de verdade. `CampoTelefone` (o único campo de
+  // telefone do produto) formata ao vivo com `formatarTelefone`, então
+  // `Person.phone` sai do formulário como "(11) 99999-8888" — nunca os
+  // dígitos crus. A busca (aqui e em /app/clientes, mesmo
+  // construirWhereClientes) faz `contains` direto em `phone`, nunca em
+  // `phoneNormalized` (que existe só para dedup, person-dedup.ts). Um
+  // corretor que cole o número de outro sistema/discador sem máscara
+  // não encontra o cliente que ele sabe que existe.
+  test("telefone armazenado COM máscara (como a UI real grava) não é encontrado buscando só os dígitos", async () => {
+    const c = await novoCenario();
+    const dono = await membro(c, "Dono");
+    autenticarComo(c, dono);
+    await criarPessoa({
+      organizationId: c.organization.id,
+      name: "Bruno Busca Mascara",
+      phone: "(11) 99999-8888",
+    });
+
+    // Com a máscara, busca normalmente.
+    expect((await buscarGlobal(c.organization.id, "(11) 99999-8888")).clientes).toHaveLength(1);
+    // Só dígitos — o mesmo número, a forma mais natural de colar de
+    // outro lugar — não encontra.
+    expect((await buscarGlobal(c.organization.id, "11999998888")).clientes).toHaveLength(1);
+  });
+
   test("módulo CRM desabilitado: clientes nunca aparecem, imóveis continuam", async () => {
     const c = await novoCenario({ modulosDesabilitados: ["crm"] });
     const dono = await membro(c, "Dono");
