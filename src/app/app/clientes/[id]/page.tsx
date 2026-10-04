@@ -369,6 +369,17 @@ export default async function DetalheClientePage({
             />
           }
         />
+        {/* Fase 125 — Person.createdAt já existia (vem na mesma query,
+            `include` nunca escondeu nenhum campo escalar) e nunca
+            aparecia em lugar nenhum: nem aqui, nem na listagem, nem no
+            drawer. Para um cliente recém-cadastrado, sem nenhuma
+            Interaction e sem nenhuma negociação ainda, a ficha inteira
+            não tinha NENHUMA data respondendo "desde quando ele é nosso
+            cliente" — a mesma pergunta que a Fase 92 já resolveu para a
+            negociação ("Criada em..."), nunca para a Person em si. */}
+        <p className="mt-1 text-xs text-muted-foreground">
+          Cliente desde {formatarDataHoraNoFuso(pessoa.createdAt, fuso)}
+        </p>
       </div>
 
       {/* Fase 36 — de quem é este cliente. Mesmo componente da caixa de

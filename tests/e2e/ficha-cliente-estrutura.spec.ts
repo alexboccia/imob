@@ -139,6 +139,28 @@ test.describe("estados vazios diferenciados", () => {
   });
 });
 
+// Fase 125 — achado real: Person.createdAt já existe, já vem carregado
+// na própria query da ficha (`include`, não `select`), e nunca aparecia
+// em lugar nenhum — nem na ficha, nem na listagem, nem no drawer. Para
+// um cliente cadastrado manualmente e ainda sem nenhuma Interaction ou
+// negociação (o caso mais comum logo após o cadastro), a ficha inteira
+// não tinha NENHUMA data visível respondendo "desde quando ele é nosso
+// cliente" — a mesma pergunta que a Fase 92 já havia respondido para a
+// negociação ("Criada em..."), mas nunca para a Person em si.
+test.describe("nascimento do cliente (Fase 125)", () => {
+  test("a ficha mostra desde quando o cliente existe, mesmo sem nenhuma interação ou negociação", async ({
+    page,
+  }) => {
+    const nome = nomeUnico("Cliente Recem Cadastrado");
+    await criarCliente(page, nome);
+
+    // Confirma o cenário mais exigente: zero interações, zero
+    // negociações — sem o fix, a página inteira não teria data nenhuma.
+    await expect(page.getByText("Nenhuma interação registrada")).toBeVisible();
+    await expect(page.getByText(/Cliente desde/)).toBeVisible();
+  });
+});
+
 test.describe("responsivo — ficha com todas as seções preenchidas", () => {
   for (const largura of [1920, 1440, 1366, 1024, 768, 390]) {
     test(`${largura}px: estágio alterado + observação + interação registrada, sem overflow`, async ({
