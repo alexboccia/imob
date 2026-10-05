@@ -165,6 +165,50 @@ test.describe("de recomendação a relacionamento", () => {
   });
 });
 
+// Fase 132 — achado real: "Remover" existia sem checar terminalidade,
+// diferente de toda outra escrita na negociação (troca de estágio,
+// responsável). Removida uma negociação GANHA, o cascade do schema
+// apagava StageHistory/Offers/Participants. A prova de backend já está
+// em tests/integration/property-interest.test.ts (S2/S3); esta é a
+// prova de que o botão em si some da tela depois de fechar, mesma forma
+// que "Trocar" (responsável) já provava em responsavel.spec.ts.
+test.describe("encerramento", () => {
+  test("negociação encerrada não oferece mais o botão Remover", async ({ page }) => {
+    const tituloImovel = `Imóvel Remover E2E ${Date.now()}`;
+    await criarImovelDisponivel(page, tituloImovel);
+
+    const nome = nomeUnico("Cliente Remover Encerrado");
+    const url = await criarCliente(page, nome);
+
+    await page.getByLabel("Imóvel").click();
+    await page.getByRole("option", { name: tituloImovel }).click();
+    await Promise.all([
+      page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/app/clientes/")),
+      page.getByRole("button", { name: "Relacionar imóvel" }).click(),
+    ]);
+    await page.reload();
+
+    const secaoRelacionados = page.locator("section", {
+      has: page.getByRole("heading", { level: 2, name: "Imóveis relacionados" }),
+    });
+    const card = secaoRelacionados.locator('[data-slot="card"]').filter({ hasText: tituloImovel });
+    await expect(card.getByRole("button", { name: "Remover" })).toBeVisible();
+
+    await card.getByRole("button", { name: "Marcar como ganho" }).click();
+    const dialogo = page.getByRole("dialog");
+    await dialogo.getByLabel("Valor de fechamento").fill("50000000");
+    await Promise.all([
+      page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/app/clientes/")),
+      dialogo.getByRole("button", { name: "Confirmar ganho" }).click(),
+    ]);
+    await page.goto(url);
+
+    const cardFechado = secaoRelacionados.locator('[data-slot="card"]').filter({ hasText: tituloImovel });
+    await expect(cardFechado.getByText("Ganho").first()).toBeVisible();
+    await expect(cardFechado.getByRole("button", { name: "Remover" })).toHaveCount(0);
+  });
+});
+
 test.describe("responsivo", () => {
   for (const largura of [1920, 1440, 1366, 1024, 768, 390]) {
     test(`${largura}px: Imóveis relacionados com uma negociação real, sem overflow`, async ({
