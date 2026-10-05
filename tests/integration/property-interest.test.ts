@@ -423,6 +423,77 @@ describe("PropertyInterest — relacionamento Person↔Property (Fase D do CRM)"
     expect(preferenciaAinda).not.toBeNull();
   });
 
+  // Fase 132 — achado real: `removerInteresse` nunca checou
+  // `estagioInteresseEncerrado`, diferente de toda outra action que
+  // escreve em PropertyInterest (atualizarEstagioInteresse,
+  // transferirResponsavelNegociacao, fecharInteresse — todas bloqueiam
+  // terminal). O DELETE é físico, e o schema cascateia
+  // PropertyInterestStageHistory, PropertyInterestOffer e
+  // PropertyInterestParticipant (que por sua vez cascateia
+  // PropertyInterestParticipantPayment) — ou seja, remover uma
+  // negociação GANHA apaga pra sempre o histórico de estágio, as
+  // propostas E todo o registro financeiro (participantes e
+  // pagamentos) de um negócio já fechado e possivelmente já pago.
+  test("S2) remoção é BLOQUEADA para negociação encerrada (WON) — preserva histórico/financeiro", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+    await marcarGanho(interesse!.id);
+
+    // Um participante com valor alocado — a prova de que há algo
+    // financeiro real em risco, não só um stage vazio.
+    await prisma.propertyInterestParticipant.create({
+      data: {
+        organizationId: cenario.organization.id,
+        propertyInterestId: interesse!.id,
+        memberId: cenario.membro.id,
+        allocationValue: 1000,
+      },
+    });
+
+    const resultado = await remover(interesse!.id);
+    expect(resultado.success).toBe(false);
+
+    const aindaExiste = await prisma.propertyInterest.findUnique({
+      where: { id: interesse!.id, organizationId: cenario.organization.id },
+    });
+    expect(aindaExiste).not.toBeNull();
+    expect(aindaExiste?.stage).toBe("WON");
+
+    const historico = await prisma.propertyInterestStageHistory.count({
+      where: { organizationId: cenario.organization.id, propertyInterestId: interesse!.id },
+    });
+    expect(historico).toBeGreaterThan(0);
+
+    const participantes = await prisma.propertyInterestParticipant.count({
+      where: { organizationId: cenario.organization.id, propertyInterestId: interesse!.id },
+    });
+    expect(participantes).toBe(1);
+  });
+
+  // Negociação aberta, sem fato financeiro nenhum, continua removível —
+  // a correção protege terminalidade, não transforma a action em
+  // somente-leitura.
+  test("S3) remoção continua permitida para negociação ABERTA, mesmo depois da correção", async () => {
+    cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
+    autenticarComo(cenario);
+    const pessoa = await criarPessoa({ organizationId: cenario.organization.id });
+    const imovel = await criarImovel({ organizationId: cenario.organization.id });
+    await relacionar(pessoa.id, { propertyId: imovel.id });
+    const interesse = await buscarInteresse(cenario.organization.id, pessoa.id, imovel.id);
+
+    const resultado = await remover(interesse!.id);
+    expect(resultado.success).toBe(true);
+
+    const aindaExiste = await prisma.propertyInterest.findUnique({
+      where: { id: interesse!.id, organizationId: cenario.organization.id },
+    });
+    expect(aindaExiste).toBeNull();
+  });
+
   test("T) delete Person → PropertyInterest removido por CASCADE", async () => {
     cenario = await criarCenario({ modulos: ["core", "properties", "crm"] });
     autenticarComo(cenario);

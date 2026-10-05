@@ -3042,9 +3042,20 @@ export async function removerInteresse(
   return withOrganization(organizationId, async () => {
     const atual = await prisma.propertyInterest.findFirst({
       where: whereNegociacaoAlvo(escopo, interesseId, organizationId),
-      select: { personId: true },
+      select: { personId: true, stage: true },
     });
     if (!atual) return erroAcessoNegado("Relacionamento não encontrado.");
+
+    // Fase 132 — mesma guarda de terminalidade de toda outra escrita em
+    // PropertyInterest (fecharInteresse, transferirResponsavelNegociacao,
+    // atualizarEstagioInteresse). Faltava aqui, e esta é a única das
+    // quatro que é um DELETE físico: sem a guarda, "Remover" num negócio
+    // já GANHO apagava por CASCADE o StageHistory, as Offers e os
+    // Participants/Payments — o registro financeiro de um negócio talvez
+    // já pago, sem confirmação alguma além do botão.
+    if (estagioInteresseEncerrado(atual.stage)) {
+      return erroGenerico("Não é possível remover uma negociação já encerrada.");
+    }
 
     await prisma.propertyInterest.delete({ where: { id: interesseId, organizationId } });
 

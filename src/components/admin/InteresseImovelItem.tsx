@@ -169,7 +169,7 @@ export function InteresseImovelItem({
   );
 
   const removerAcao = removerInteresse.bind(null, interesse.id);
-  const [, formActionRemover, pendenteRemover] = useActionState(
+  const [estadoRemover, formActionRemover, pendenteRemover] = useActionState(
     removerAcao,
     ESTADO_INICIAL_ACAO
   );
@@ -393,17 +393,33 @@ export function InteresseImovelItem({
               Ver imóvel
             </Link>
           )}
-          <form action={formActionRemover}>
-            <Button
-              type="submit"
-              variant="ghost"
-              size="sm"
-              className="text-destructive"
-              disabled={pendenteRemover}
-            >
-              Remover
-            </Button>
-          </form>
+          {/* Fase 132 — mesma regra das demais escritas nesta negociação
+              (Select de estágio acima, AgendamentoVisita, CriarFollowUp):
+              negociação encerrada (WON/REJECTED) não oferece mais o
+              botão. "Remover" é um DELETE físico — diferente daquelas,
+              que apenas param de oferecer uma ação — e sem esta guarda
+              apagava por CASCADE o histórico de estágio, as propostas e
+              o registro financeiro (participantes/pagamentos) de um
+              negócio já fechado, possivelmente já pago. O backend
+              (removerInteresse) é a defesa real; isto é só para não
+              oferecer um botão que o servidor vai recusar.
+          */}
+          {!estagioInteresseEncerrado(interesse.stage) && (
+            <form action={formActionRemover} className="flex flex-col items-end gap-1">
+              <Button
+                type="submit"
+                variant="ghost"
+                size="sm"
+                className="text-destructive"
+                disabled={pendenteRemover}
+              >
+                Remover
+              </Button>
+              {estadoRemover.message && !estadoRemover.success && (
+                <p className="text-xs text-destructive">{estadoRemover.message}</p>
+              )}
+            </form>
+          )}
         </div>
       </CardContent>
     </Card>
