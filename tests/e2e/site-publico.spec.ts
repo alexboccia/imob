@@ -9,11 +9,6 @@ import { IDS_E2E, ORG_A, login, restaurarPerfilDespublicado } from "./helpers";
 // aparece na listagem geral/busca). Ver prisma/seed-e2e.ts.
 const IMOVEL_COM_BADGES = "Apartamento com 2 quartos à venda, 58m² – Santo Amaro";
 
-// Nome público da organização A no seed (prisma/seed-e2e.ts) — o bloco
-// institucional monta o título a partir dele, então o teste confere que o
-// texto vem do TENANT e não de uma string fixa no componente.
-const NOME_ORG_A = process.env.ORG_NAME ?? "Organização E2E A";
-
 // OrganizationSettings é estado GLOBAL do tenant: o seed não o cria e
 // também não o apaga entre rodadas, então um teste que salva contato
 // contamina os seguintes se depender da ordem de execução. Todo teste que
@@ -641,12 +636,12 @@ test.describe("Configurações — altura do logotipo do rodapé", () => {
 });
 
 // ---------------------------------------------------------------------
-// Camada comercial da Home (Fase 1): faixa de confiança, captação de
-// proprietário e bloco institucional. O que estes testes protegem, além
-// de "renderizou": que NADA aqui inventa dado. O seed não cria
-// OrganizationSettings, então o estado padrão do site de teste é
-// justamente o pior caso — tenant sem telefone, sem WhatsApp, sem rede
-// social — e é nele que a degradação precisa ser elegante.
+// Camada comercial da Home (Fase 1): faixa de confiança e captação de
+// proprietário. O que estes testes protegem, além de "renderizou": que
+// NADA aqui inventa dado. O seed não cria OrganizationSettings, então o
+// estado padrão do site de teste é justamente o pior caso — tenant sem
+// telefone, sem WhatsApp, sem rede social — e é nele que a degradação
+// precisa ser elegante.
 // ---------------------------------------------------------------------
 
 test.describe("Site público — Home comercial (Fase 1)", () => {
@@ -701,22 +696,9 @@ test.describe("Site público — Home comercial (Fase 1)", () => {
     await expect(page.locator("form")).toBeVisible();
   });
 
-  test("bloco institucional usa o nome real do tenant e linka pro /contato real", async ({ page }) => {
-    await page.goto("/");
-    const bloco = page.locator("section").filter({ hasText: "Atendimento" }).last();
-    await expect(
-      bloco.getByRole("heading", { name: `Atendimento ${NOME_ORG_A}` })
-    ).toBeVisible();
-
-    const contato = bloco.getByRole("link", { name: "Entrar em contato" });
-    await expect(contato).toHaveAttribute("href", /\/contato$/);
-    await contato.click();
-    await page.waitForURL("**/contato");
-  });
-
   test("CTAs comerciais são links de verdade, não elementos com role=button", async ({ page }) => {
     await page.goto("/");
-    for (const nome of ["Anuncie seu imóvel", "Entrar em contato"]) {
+    for (const nome of ["Anuncie seu imóvel"]) {
       const link = page.locator("main").getByRole("link", { name: nome });
       await expect(link.first()).toBeVisible();
       await expect(link.first()).toHaveAttribute("href", /.+/);
@@ -738,23 +720,19 @@ test.describe("Site público — Home comercial (Fase 1)", () => {
 test.describe("Site público — Home comercial: dados reais do tenant", () => {
   // Configura contato pelo painel (não por escrita direta no banco) para
   // exercitar o caminho real: salvar → invalidar cache → site público.
-  test("com WhatsApp/telefone/e-mail salvos, a Home mostra os canais do PRÓPRIO tenant", async ({
-    page,
-  }) => {
+  //
+  // Telefone/e-mail não têm mais superfície própria na Home (bloco
+  // institucional removido) — continuam reais no painel e em /contato;
+  // aqui só o CTA de WhatsApp da seção de captação, que é o único canal
+  // de contato que a Home ainda expõe.
+  test("com WhatsApp salvo, a Home mostra o CTA do PRÓPRIO tenant", async ({ page }) => {
     const whatsapp = "+55 (11) 98888-7777";
-    const telefone = "+55 (11) 3333-4444";
-    const email = "atendimento@e2e.test";
 
     await login(page, ORG_A);
     try {
-      await definirContato(page, { whatsapp, telefone, email });
+      await definirContato(page, { whatsapp });
 
       await page.goto("/");
-      const bloco = page.locator("section").filter({ hasText: "Atendimento" }).last();
-      await expect(bloco.getByText(whatsapp)).toBeVisible();
-      await expect(bloco.getByText(telefone)).toBeVisible();
-      await expect(bloco.getByText(email)).toBeVisible();
-
       // Link montado com os dígitos do número do TENANT — nunca um número
       // fixo do produto.
       const wa = page.locator('main a[href*="wa.me"]').first();

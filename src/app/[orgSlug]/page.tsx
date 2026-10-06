@@ -6,7 +6,6 @@ import { PainelBuscaHome } from "@/components/PainelBuscaHome";
 import { SecaoImoveis } from "@/components/SecaoImoveis";
 import { FaixaConfianca } from "@/components/FaixaConfianca";
 import { SecaoCaptacao } from "@/components/SecaoCaptacao";
-import { BlocoInstitucional } from "@/components/BlocoInstitucional";
 import { paraImovelCard } from "@/lib/imovel-card";
 import { MAX_DESTAQUES_HOME } from "@/lib/vitrine-home";
 import { buscarDadosFiltros } from "@/lib/filtros-imoveis-data";
@@ -184,22 +183,6 @@ export default async function HomePage({
         basePath={basePath}
         nome={nomePublico}
         whatsapp={config.whatsapp}
-      />
-
-      <BlocoInstitucional
-        nome={nomePublico}
-        logo={config.logo}
-        logoAltura={config.logoAltura}
-        telefone={config.telefone}
-        email={config.email}
-        whatsapp={config.whatsapp}
-        redesSociais={{
-          instagram: config.instagram,
-          facebook: config.facebook,
-          youtube: config.youtube,
-          linkedin: config.linkedin,
-        }}
-        basePath={basePath}
       />
     </div>
   );
