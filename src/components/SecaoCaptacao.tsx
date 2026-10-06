@@ -48,7 +48,12 @@ export function SecaoCaptacao({
   );
 
   return (
-    <section className="bg-secondary/40 border-y">
+    // flex-1: esta é SEMPRE a última seção da Home (único call site, ver
+    // page.tsx), e o <main> público é flex-1 dentro do body.flex.flex-col
+    // do layout raiz (rodapé grudado mesmo em página curta). Sem isto, Home
+    // sem vitrine (poucos imóveis) deixa uma faixa branca entre esta seção
+    // e o rodapé em telas altas — o fundo tonalizado precisa ir até lá.
+    <section className="flex flex-1 flex-col justify-center bg-secondary/40 border-y">
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-14 lg:flex-row lg:items-center lg:gap-16">
         <div className="min-w-0 lg:flex-1">
           <h2 className={TITULO_SECAO}>Vai vender ou alugar?</h2>

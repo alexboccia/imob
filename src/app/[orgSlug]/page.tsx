@@ -137,7 +137,12 @@ export default async function HomePage({
   const imagemHero = config.heroImage ?? IMAGEM_HERO_PADRAO;
 
   return (
-    <div>
+    // flex h-full: deixa a última seção (SecaoCaptacao, flex-1) absorver o
+    // espaço sobrando quando o conteúdo é mais curto que a viewport — sem
+    // isto, o <main className="flex-1"> do layout cresce mas o conteúdo
+    // dentro dele fica preso ao topo, abrindo uma faixa branca antes do
+    // rodapé.
+    <div className="flex h-full flex-col">
       <HeroHome imagemUrl={imagemHero}>
         <PainelBuscaHome
           tipos={dadosFiltros.tipos}
