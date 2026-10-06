@@ -133,16 +133,6 @@ export function GerarAnuncioImovel({
   const [copiado, setCopiado] = useState(false);
   const [erroCopiar, setErroCopiar] = useState<string | null>(null);
 
-  // Trocar a finalidade muda o preço embutido no texto — qualquer edição
-  // já feita passaria a descrever um valor que não é mais o escolhido,
-  // então o rascunho por canal é descartado aqui (comportamento simples
-  // e documentado, seção 24), nunca silenciosamente misturado.
-  function escolherFinalidade(opcao: FinalidadeAnuncio) {
-    setFinalidade(opcao);
-    setTextosPorCanal({});
-    setCopiado(false);
-  }
-
   function limparPreview() {
     if (imagemUrl) URL.revokeObjectURL(imagemUrl);
     setImagemUrl(null);
@@ -153,6 +143,41 @@ export function GerarAnuncioImovel({
     slides?.forEach((s) => URL.revokeObjectURL(s.url));
     setSlides(null);
     setIndiceSlide(0);
+  }
+
+  // MKT-004 — achado real de integração: trocar foto/formato/finalidade
+  // DEPOIS de já ter gerado uma prévia não limpava o blob antigo. O
+  // botão "Baixar" continuava habilitado e a prévia continuava na tela,
+  // mostrando uma imagem que já não corresponde à seleção atual — um
+  // corretor podia baixar uma peça com a foto/preço/finalidade ERRADOS
+  // sem perceber. Cada entrada que afeta o PIXEL final precisa invalidar
+  // o resultado já renderizado (seção 22/23 do pedido).
+  //
+  // finalidade é a única entrada COMPARTILHADA entre os três modos —
+  // muda o preço embutido tanto na imagem/carrossel quanto na legenda,
+  // então invalida os três resultados de uma vez. foto e formato são
+  // exclusivos do modo "imagem", então só precisam invalidar a prévia
+  // dele (o carrossel já invalida sozinho em alternarSelecao/mover).
+  function escolherFinalidade(opcao: FinalidadeAnuncio) {
+    setFinalidade(opcao);
+    limparPreview();
+    limparSlides();
+    setErro(null);
+    setErroCarrossel(null);
+    setTextosPorCanal({});
+    setCopiado(false);
+  }
+
+  function escolherFoto(id: string) {
+    setFotoId(id);
+    limparPreview();
+    setErro(null);
+  }
+
+  function escolherFormato(id: FormatoAnuncioId) {
+    setFormatoId(id);
+    limparPreview();
+    setErro(null);
   }
 
   // Revoga os object URLs ao desmontar — sem isto o blob fica retido na
@@ -381,15 +406,21 @@ export function GerarAnuncioImovel({
 
   return (
     <Dialog open={aberto} onOpenChange={fecharDialogo}>
+      {/* MKT-004 — "Criar anúncio" (nome da MKT-001) não cobria mais o
+          escopo real desta tela: carrossel e legenda não são "um
+          anúncio", são outras peças do mesmo kit de divulgação. A
+          própria descrição abaixo já usava "divulgação" desde a
+          MKT-001 — o nome só estava desatualizado em relação ao que a
+          tela já fazia. */}
       <DialogTrigger render={<Button type="button" variant="outline" size="sm" />}>
-        Criar anúncio
+        Criar divulgação
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Criar anúncio</DialogTitle>
+          <DialogTitle>Criar divulgação</DialogTitle>
           <DialogDescription>
-            Gere uma imagem de divulgação deste imóvel a partir de fotos reais e dos
-            dados já cadastrados.
+            Gere imagens e legendas de divulgação deste imóvel a partir de fotos reais e
+            dos dados já cadastrados.
           </DialogDescription>
         </DialogHeader>
 
@@ -454,7 +485,7 @@ export function GerarAnuncioImovel({
                     type="button"
                     aria-pressed={fotoId === foto.id}
                     aria-label={`Foto ${indice + 1}`}
-                    onClick={() => setFotoId(foto.id)}
+                    onClick={() => escolherFoto(foto.id)}
                     className={`overflow-hidden rounded-lg border-2 transition-colors ${
                       fotoId === foto.id ? "border-primary" : "border-transparent"
                     }`}
@@ -648,7 +679,7 @@ export function GerarAnuncioImovel({
                     variant={formatoId === formato.id ? "default" : "outline"}
                     size="sm"
                     aria-pressed={formatoId === formato.id}
-                    onClick={() => setFormatoId(formato.id)}
+                    onClick={() => escolherFormato(formato.id)}
                   >
                     {formato.rotulo}
                   </Button>
@@ -685,9 +716,13 @@ export function GerarAnuncioImovel({
             </div>
           )}
 
-          {(!semFotos || modo === "legenda") && (
+          {/* Modo "legenda" não mostra este resumo: a textarea logo
+              abaixo já é o texto completo (preço, localização, itens),
+              então o mesmo resumo aqui seria uma repetição visual sem
+              função — achado da inspeção manual (seção 40). */}
+          {!semFotos && modo !== "legenda" && (
             <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-              <p className="font-medium">O que vai aparecer no anúncio</p>
+              <p className="font-medium">O que vai aparecer na divulgação</p>
               <ul className="mt-1.5 space-y-0.5 text-muted-foreground">
                 <li>
                   {finalidade
@@ -714,50 +749,56 @@ export function GerarAnuncioImovel({
           )}
 
           {modo === "imagem" && imagemUrl && (
-            <div className="flex justify-center rounded-lg border bg-muted/20 p-3">
-              {/* eslint-disable-next-line @next/next/no-img-element -- blob: URL gerado no cliente, fora do domínio que next/image otimiza */}
-              <img
-                src={imagemUrl}
-                alt={`Prévia do anúncio de ${titulo}`}
-                className="max-h-[50vh] w-auto max-w-full rounded"
-              />
+            <div className="space-y-1.5">
+              <span className="text-sm font-medium">Prévia</span>
+              <div className="flex justify-center rounded-lg border bg-muted/20 p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element -- blob: URL gerado no cliente, fora do domínio que next/image otimiza */}
+                <img
+                  src={imagemUrl}
+                  alt={`Prévia do anúncio de ${titulo}`}
+                  className="max-h-[50vh] w-auto max-w-full rounded"
+                />
+              </div>
             </div>
           )}
 
           {modo === "carrossel" && slides && slides.length > 0 && (
-            <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
-              <div className="flex items-center justify-between">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Slide anterior"
-                  disabled={indiceSlide === 0}
-                  onClick={() => setIndiceSlide((i) => i - 1)}
-                >
-                  Anterior
-                </Button>
-                <span className="text-sm text-muted-foreground" aria-live="polite">
-                  {indiceSlide + 1}/{slides.length}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Próximo slide"
-                  disabled={indiceSlide === slides.length - 1}
-                  onClick={() => setIndiceSlide((i) => i + 1)}
-                >
-                  Próximo
-                </Button>
-              </div>
-              <div className="flex justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element -- blob: URL gerado no cliente */}
-                <img
-                  src={slides[indiceSlide].url}
-                  alt={`Prévia do slide ${indiceSlide + 1} de ${slides.length} do carrossel de ${titulo}`}
-                  className="max-h-[50vh] w-auto max-w-full rounded"
-                />
+            <div className="space-y-1.5">
+              <span className="text-sm font-medium">Prévia</span>
+              <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                <div className="flex items-center justify-between">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Slide anterior"
+                    disabled={indiceSlide === 0}
+                    onClick={() => setIndiceSlide((i) => i - 1)}
+                  >
+                    Anterior
+                  </Button>
+                  <span className="text-sm text-muted-foreground" aria-live="polite">
+                    {indiceSlide + 1}/{slides.length}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Próximo slide"
+                    disabled={indiceSlide === slides.length - 1}
+                    onClick={() => setIndiceSlide((i) => i + 1)}
+                  >
+                    Próximo
+                  </Button>
+                </div>
+                <div className="flex justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- blob: URL gerado no cliente */}
+                  <img
+                    src={slides[indiceSlide].url}
+                    alt={`Prévia do slide ${indiceSlide + 1} de ${slides.length} do carrossel de ${titulo}`}
+                    className="max-h-[50vh] w-auto max-w-full rounded"
+                  />
+                </div>
               </div>
             </div>
           )}

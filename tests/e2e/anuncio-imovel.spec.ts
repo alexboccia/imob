@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { ORG_RECURSOS, ORG_A, IDS_E2E, login } from "./helpers";
 
 // =======================================================================
-// Gerador de criativos de marketing — "Criar anúncio" (MKT-001)
+// Gerador de criativos de marketing — "Criar divulgação" (MKT-001)
 // =======================================================================
 // Fixtures reaproveitadas do seed (nenhuma nova): imovelGaleria2 (Org
 // Recursos) tem 2 fotos REAIS em data: URL — únicas fotos do seed que
@@ -13,17 +13,17 @@ import { ORG_RECURSOS, ORG_A, IDS_E2E, login } from "./helpers";
 // prova ausência de preço. imovelComBadgesOrgA (Org A) não tem foto
 // nenhuma — prova o estado vazio.
 
-test.describe("Criar anúncio — jornada completa", () => {
+test.describe("Criar divulgação — jornada completa", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, ORG_RECURSOS);
   });
 
   test("escolhe foto, troca de foto, escolhe formato, gera prévia e baixa", async ({ page }) => {
     await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria2}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
 
     const dialogo = page.getByRole("dialog");
-    await expect(dialogo.getByText("Criar anúncio")).toBeVisible();
+    await expect(dialogo.getByText("Criar divulgação")).toBeVisible();
 
     // Duas fotos reais — a primeira (capa) já vem selecionada.
     const fotos = dialogo.getByRole("button", { name: /^Foto \d$/ });
@@ -66,7 +66,7 @@ test.describe("imóvel sem fotos", () => {
   test("mostra estado vazio, sem quebrar a tela", async ({ page }) => {
     await login(page, ORG_A);
     await page.goto(`/app/imoveis/${IDS_E2E.imovelComBadgesOrgA}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
 
     const dialogo = page.getByRole("dialog");
     await expect(dialogo.getByText(/ainda não tem fotos cadastradas/)).toBeVisible();
@@ -78,7 +78,7 @@ test.describe("SALE_AND_RENT nunca decide a finalidade sozinho", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, ORG_RECURSOS);
     await page.goto(`/app/imoveis/${IDS_E2E.imovelDobraAmbos}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
   });
 
   test("o seletor de finalidade aparece e 'Gerar prévia' fica bloqueado até uma escolha explícita", async ({
@@ -104,7 +104,7 @@ test.describe("ausência de preço nunca vira zero", () => {
   test("imóvel sem preço mostra aviso explícito, nunca 'R$ 0'", async ({ page }) => {
     await login(page, ORG_RECURSOS);
     await page.goto(`/app/imoveis/${IDS_E2E.imovelDobraSemPreco}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
 
     const dialogo = page.getByRole("dialog");
     await expect(dialogo.getByText("sem preço informado")).toBeVisible();
@@ -139,7 +139,7 @@ test.describe("Carrossel (MKT-002) — jornada completa", () => {
 
   test("seleciona fotos, reordena, gera, navega entre slides e baixa um deles", async ({ page }) => {
     await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria5}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
 
     const dialogo = page.getByRole("dialog");
     await dialogo.getByRole("button", { name: "Carrossel" }).click();
@@ -201,7 +201,7 @@ test.describe("Carrossel (MKT-002) — jornada completa", () => {
 
   test("imóvel com apenas uma foto não oferece a opção Carrossel", async ({ page }) => {
     await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria1}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
 
     const dialogo = page.getByRole("dialog");
     await expect(dialogo.getByRole("button", { name: "Carrossel" })).toBeDisabled();
@@ -214,7 +214,7 @@ test.describe("Carrossel — SALE_AND_RENT nunca decide sozinho", () => {
   }) => {
     await login(page, ORG_RECURSOS);
     await page.goto(`/app/imoveis/${IDS_E2E.imovelCarrosselAmbos}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
 
     const dialogo = page.getByRole("dialog");
     await dialogo.getByRole("button", { name: "Carrossel" }).click();
@@ -248,7 +248,7 @@ test.describe("Carrossel — responsivo", () => {
     await login(page, ORG_RECURSOS);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria3}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
 
     const dialogo = page.getByRole("dialog");
     await dialogo.getByRole("button", { name: "Carrossel" }).click();
@@ -280,7 +280,7 @@ test.describe("Legenda (MKT-003) — jornada completa", () => {
     page,
   }) => {
     await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria1}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
 
     const dialogo = page.getByRole("dialog");
     await dialogo.getByRole("button", { name: "Legenda" }).click();
@@ -321,7 +321,7 @@ test.describe("Legenda (MKT-003) — jornada completa", () => {
 
   test("'Restaurar sugestão' descarta a edição e volta ao texto determinístico", async ({ page }) => {
     await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria1}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
     const dialogo = page.getByRole("dialog");
     await dialogo.getByRole("button", { name: "Legenda" }).click();
 
@@ -338,7 +338,7 @@ test.describe("Legenda — imóvel sem fotos", () => {
   test("funciona mesmo sem nenhuma foto cadastrada", async ({ page }) => {
     await login(page, ORG_A);
     await page.goto(`/app/imoveis/${IDS_E2E.imovelComBadgesOrgA}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
     const dialogo = page.getByRole("dialog");
 
     await dialogo.getByRole("button", { name: "Legenda" }).click();
@@ -350,7 +350,7 @@ test.describe("Legenda — SALE_AND_RENT nunca decide sozinho", () => {
   test("a legenda só aparece depois da escolha explícita de finalidade", async ({ page }) => {
     await login(page, ORG_RECURSOS);
     await page.goto(`/app/imoveis/${IDS_E2E.imovelCarrosselAmbos}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
     const dialogo = page.getByRole("dialog");
     await dialogo.getByRole("button", { name: "Legenda" }).click();
 
@@ -371,7 +371,7 @@ test.describe("Legenda — responsivo", () => {
     await login(page, ORG_RECURSOS);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria1}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
     const dialogo = page.getByRole("dialog");
     await dialogo.getByRole("button", { name: "Legenda" }).click();
 
@@ -390,7 +390,7 @@ test.describe("responsivo", () => {
     await login(page, ORG_RECURSOS);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria2}`);
-    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
 
     const dialogo = page.getByRole("dialog");
     await expect(dialogo).toBeVisible();
@@ -400,5 +400,116 @@ test.describe("responsivo", () => {
       () => document.documentElement.scrollWidth <= window.innerWidth + 1
     );
     expect(semOverflow).toBe(true);
+  });
+});
+
+// =======================================================================
+// Kit de divulgação (MKT-004) — invalidação de resultado obsoleto
+// =======================================================================
+// Achado real da leitura do código (seção 22/23 do pedido): trocar foto,
+// formato ou finalidade DEPOIS de já ter gerado uma prévia não limpava o
+// blob antigo — o botão "Baixar" continuava habilitado, deixando baixar
+// uma imagem com a foto/preço/finalidade ERRADOS em relação ao que a
+// tela mostrava estar selecionado no momento do clique. As três provas
+// abaixo cobrem exatamente essa lacuna (seção 36.D/36.E).
+test.describe("Kit de divulgação — invalidação de prévia obsoleta", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_RECURSOS);
+  });
+
+  test("trocar de foto depois de gerar a prévia invalida o resultado antigo", async ({ page }) => {
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria2}`);
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
+    const dialogo = page.getByRole("dialog");
+
+    const fotos = dialogo.getByRole("button", { name: /^Foto \d$/ });
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/anuncio?")),
+      dialogo.getByRole("button", { name: "Gerar prévia" }).click(),
+    ]);
+    await expect(dialogo.getByRole("img", { name: /Prévia do anúncio/ })).toBeVisible();
+    await expect(dialogo.getByRole("button", { name: "Baixar" })).toBeEnabled();
+
+    await fotos.nth(1).click();
+
+    // A prévia da foto ANTERIOR não pode continuar parecendo válida.
+    await expect(dialogo.getByRole("img", { name: /Prévia do anúncio/ })).toHaveCount(0);
+    await expect(dialogo.getByRole("button", { name: "Baixar" })).toBeDisabled();
+  });
+
+  test("trocar de formato depois de gerar a prévia invalida o resultado antigo", async ({ page }) => {
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria2}`);
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
+    const dialogo = page.getByRole("dialog");
+
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/anuncio?")),
+      dialogo.getByRole("button", { name: "Gerar prévia" }).click(),
+    ]);
+    await expect(dialogo.getByRole("img", { name: /Prévia do anúncio/ })).toBeVisible();
+
+    await dialogo.getByRole("button", { name: "Instagram Story" }).click();
+
+    await expect(dialogo.getByRole("img", { name: /Prévia do anúncio/ })).toHaveCount(0);
+    await expect(dialogo.getByRole("button", { name: "Baixar" })).toBeDisabled();
+  });
+
+  test("trocar de finalidade (SALE_AND_RENT) invalida a prévia visual E o carrossel já gerados", async ({
+    page,
+  }) => {
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelCarrosselAmbos}`);
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
+    const dialogo = page.getByRole("dialog");
+
+    await dialogo.getByRole("button", { name: "À venda" }).click();
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/anuncio?")),
+      dialogo.getByRole("button", { name: "Gerar prévia" }).click(),
+    ]);
+    await expect(dialogo.getByRole("img", { name: /Prévia do anúncio/ })).toBeVisible();
+
+    await dialogo.getByRole("button", { name: "Carrossel" }).click();
+    const fotosCarrossel = dialogo.getByRole("button", { name: /^Foto \d(,|$)/ });
+    await fotosCarrossel.nth(0).click();
+    await fotosCarrossel.nth(1).click();
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/anuncio?")),
+      dialogo.getByRole("button", { name: "Gerar carrossel" }).click(),
+    ]);
+    await expect(dialogo.getByText("1/2")).toBeVisible();
+
+    // Finalidade é estado COMPARTILHADO entre imagem/carrossel/legenda —
+    // mudar aqui precisa invalidar os dois resultados visuais já gerados,
+    // não só o rascunho de legenda (que já era limpo antes da MKT-004).
+    await dialogo.getByRole("button", { name: "Para alugar" }).click();
+
+    await expect(dialogo.getByText("1/2")).toHaveCount(0);
+    await expect(dialogo.getByRole("button", { name: "Baixar este slide" })).toBeDisabled();
+
+    await dialogo.getByRole("button", { name: "Imagem única" }).click();
+    await expect(dialogo.getByRole("img", { name: /Prévia do anúncio/ })).toHaveCount(0);
+    await expect(dialogo.getByRole("button", { name: "Baixar" })).toBeDisabled();
+  });
+});
+
+test.describe("Kit de divulgação — consistência entre material visual e legenda", () => {
+  test("a mesma finalidade escolhida aparece igual no material visual e na legenda", async ({ page }) => {
+    await login(page, ORG_RECURSOS);
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelCarrosselAmbos}`);
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
+    const dialogo = page.getByRole("dialog");
+
+    await dialogo.getByRole("button", { name: "Para alugar" }).click();
+    await expect(dialogo.getByText(/R\$\s*4\.200/)).toBeVisible();
+
+    await dialogo.getByRole("button", { name: "Legenda" }).click();
+    // Mesma finalidade, sem perguntar de novo — e o preço de ALUGUEL
+    // (nunca o de venda) aparece no texto, coerente com o que o material
+    // visual já estava mostrando.
+    await expect(dialogo.getByRole("button", { name: "Para alugar" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    await expect(dialogo.locator("#legenda-texto")).toHaveValue(/R\$\s*4\.200\/mês/);
   });
 });
