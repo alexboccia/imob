@@ -29,6 +29,7 @@ import { paraParticipantes } from "@/lib/participacao-comissao";
 import { paraPagamentos } from "@/lib/pagamento-comissao";
 import { paraAtorTransicao } from "@/lib/ator-transicao";
 import { precosDoImovel } from "@/lib/imovel-precos";
+import { GerarAnuncioImovel } from "@/components/admin/GerarAnuncioImovel";
 
 const MEDIA_TYPE_PARA_TIPO_MIDIA = {
   PHOTO: "FOTO",
@@ -214,6 +215,7 @@ export default async function EditarImovelPage({
   if (!imovel) notFound();
 
   const atualizarComId = atualizarImovel.bind(null, imovel.id);
+  const precosAnuncio = precosDoImovel(imovel);
 
   return (
     <div className="space-y-5">
@@ -223,6 +225,28 @@ export default async function EditarImovelPage({
       <CabecalhoPagina
         titulo="Editar imóvel"
         descricao="Dados, fotos e materiais que o site publica sobre este imóvel."
+        acoes={
+          <GerarAnuncioImovel
+            propertyId={imovel.id}
+            titulo={imovel.title}
+            cidade={imovel.city}
+            purpose={imovel.purpose}
+            price={precosAnuncio.price}
+            rentPrice={precosAnuncio.rentPrice}
+            neighborhood={imovel.neighborhood}
+            city={imovel.city}
+            state={imovel.state}
+            totalArea={imovel.totalArea}
+            privateArea={imovel.privateArea}
+            bedrooms={imovel.bedrooms}
+            suites={imovel.suites}
+            bathrooms={imovel.bathrooms}
+            parkingSpots={imovel.parkingSpots}
+            fotos={imovel.media
+              .filter((m) => m.type === "PHOTO")
+              .map((m) => ({ id: m.id, url: m.url }))}
+          />
+        }
       />
       <ImovelForm
         action={atualizarComId}
