@@ -365,6 +365,8 @@ export const IDS_E2E = {
   imovelGaleria4: "e2e-imovel-galeria-4",
   imovelGaleria5: "e2e-imovel-galeria-5",
   imovelGaleria7: "e2e-imovel-galeria-7",
+  // MKT-002 — SALE_AND_RENT com fotos reais (ver prisma/seed-e2e.ts).
+  imovelCarrosselAmbos: "e2e-imovel-carrossel-ambos",
   // Fase 45 — conteúdo editorial da galeria (título, subtítulo, selo de
   // entrega e legendas), um imóvel por combinação.
   imovelEditorialTitulo: "e2e-imovel-editorial-titulo",

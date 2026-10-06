@@ -132,6 +132,144 @@ test.describe("isolamento de tenant", () => {
   });
 });
 
+test.describe("Carrossel (MKT-002) — jornada completa", () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, ORG_RECURSOS);
+  });
+
+  test("seleciona fotos, reordena, gera, navega entre slides e baixa um deles", async ({ page }) => {
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria5}`);
+    await page.getByRole("button", { name: "Criar anúncio" }).click();
+
+    const dialogo = page.getByRole("dialog");
+    await dialogo.getByRole("button", { name: "Carrossel" }).click();
+
+    // Seleciona 3 das 5 fotos reais, na ordem 1, 2, 3.
+    const fotos = dialogo.getByRole("button", { name: /^Foto \d(,|$)/ });
+    await expect(fotos).toHaveCount(5);
+    await fotos.nth(0).click();
+    await fotos.nth(1).click();
+    await fotos.nth(2).click();
+
+    const ordem = dialogo.locator("ol > li");
+    await expect(ordem).toHaveCount(3);
+    await expect(ordem.nth(0)).toContainText("Capa");
+    await expect(ordem.nth(2)).toContainText("CTA final");
+
+    // A 3ª foto escolhida (índice 2 na grade) começa na posição 3.
+    await expect(
+      dialogo.getByRole("button", { name: "Foto 3, selecionada, posição 3" })
+    ).toBeVisible();
+
+    // Sobe a 3ª foto pro topo: duas trocas, posição 3 -> 2 -> 1.
+    await ordem.nth(2).getByRole("button", { name: /Subir foto 3/ }).click();
+    await ordem.nth(1).getByRole("button", { name: /Subir foto 2/ }).click();
+
+    // A mesma foto (índice 2 na grade) agora está na posição 1 — prova
+    // que a troca moveu a IDENTIDADE da foto, não só o texto da lista.
+    await expect(
+      dialogo.getByRole("button", { name: "Foto 3, selecionada, posição 1" })
+    ).toBeVisible();
+    const ordemDepois = dialogo.locator("ol > li");
+    await expect(ordemDepois.nth(0)).toContainText("Capa");
+
+    const [resposta] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/anuncio?") && r.request().method() === "GET"),
+      dialogo.getByRole("button", { name: "Gerar carrossel" }).click(),
+    ]);
+    expect(resposta.status()).toBe(200);
+
+    await expect(dialogo.getByText("1/3")).toBeVisible();
+    await expect(dialogo.getByRole("img", { name: /slide 1 de 3/ })).toBeVisible();
+
+    await dialogo.getByRole("button", { name: "Próximo slide" }).click();
+    await expect(dialogo.getByText("2/3")).toBeVisible();
+    await expect(dialogo.getByRole("button", { name: "Slide anterior" })).toBeEnabled();
+
+    await dialogo.getByRole("button", { name: "Próximo slide" }).click();
+    await expect(dialogo.getByText("3/3")).toBeVisible();
+    await expect(dialogo.getByRole("button", { name: "Próximo slide" })).toBeDisabled();
+
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      dialogo.getByRole("button", { name: "Baixar este slide" }).click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(
+      /^imovel-galeria-5-e2e-sao-paulo-carrossel-03\.png$/i
+    );
+  });
+
+  test("imóvel com apenas uma foto não oferece a opção Carrossel", async ({ page }) => {
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria1}`);
+    await page.getByRole("button", { name: "Criar anúncio" }).click();
+
+    const dialogo = page.getByRole("dialog");
+    await expect(dialogo.getByRole("button", { name: "Carrossel" })).toBeDisabled();
+  });
+});
+
+test.describe("Carrossel — SALE_AND_RENT nunca decide sozinho", () => {
+  test("'Gerar carrossel' fica bloqueado até a finalidade ser escolhida explicitamente", async ({
+    page,
+  }) => {
+    await login(page, ORG_RECURSOS);
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelCarrosselAmbos}`);
+    await page.getByRole("button", { name: "Criar anúncio" }).click();
+
+    const dialogo = page.getByRole("dialog");
+    await dialogo.getByRole("button", { name: "Carrossel" }).click();
+
+    const fotos = dialogo.getByRole("button", { name: /^Foto \d(,|$)/ });
+    await fotos.nth(0).click();
+    await fotos.nth(1).click();
+
+    await expect(dialogo.getByText(/aceita venda e aluguel/)).toBeVisible();
+    await expect(dialogo.getByRole("button", { name: "Gerar carrossel" })).toBeDisabled();
+
+    await dialogo.getByRole("button", { name: "À venda" }).click();
+    await expect(dialogo.getByRole("button", { name: "Gerar carrossel" })).toBeEnabled();
+  });
+});
+
+test.describe("Carrossel — falha parcial e isolamento de tenant", () => {
+  test("a API recusa um mediaId de outro imóvel mesmo dentro do fluxo de carrossel", async ({
+    page,
+  }) => {
+    await login(page, ORG_RECURSOS);
+    const resposta = await page.request.get(
+      `/api/admin/imoveis/${IDS_E2E.imovelGaleria5}/anuncio?mediaId=${IDS_E2E.imovelOrgB}&formato=feed&papel=foto`
+    );
+    expect(resposta.status()).toBe(400);
+  });
+});
+
+test.describe("Carrossel — responsivo", () => {
+  test("390px: seleção, ordem e navegação entre slides cabem na tela", async ({ page }) => {
+    await login(page, ORG_RECURSOS);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria3}`);
+    await page.getByRole("button", { name: "Criar anúncio" }).click();
+
+    const dialogo = page.getByRole("dialog");
+    await dialogo.getByRole("button", { name: "Carrossel" }).click();
+
+    const fotos = dialogo.getByRole("button", { name: /^Foto \d(,|$)/ });
+    await fotos.nth(0).click();
+    await fotos.nth(1).click();
+
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/anuncio?")),
+      dialogo.getByRole("button", { name: "Gerar carrossel" }).click(),
+    ]);
+    await expect(dialogo.getByText("1/2")).toBeVisible();
+
+    const semOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1
+    );
+    expect(semOverflow).toBe(true);
+  });
+});
+
 test.describe("responsivo", () => {
   test("390px: o diálogo cabe na tela e o botão continua alcançável", async ({ page }) => {
     await login(page, ORG_RECURSOS);

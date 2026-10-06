@@ -8,6 +8,12 @@ import {
   precoParaFinalidadeAnuncio,
   midiaPertenceAoImovel,
   nomeArquivoAnuncio,
+  resolverPapelSlide,
+  quantidadeDeSlidesValida,
+  mediaIdsSemDuplicatas,
+  papelPorPosicao,
+  nomeArquivoCarrossel,
+  LIMITE_SLIDES_CARROSSEL,
 } from "@/lib/anuncio-imovel";
 
 describe("FORMATOS_ANUNCIO", () => {
@@ -106,5 +112,96 @@ describe("nome do arquivo — previsível, seguro, sem dado sensível", () => {
   test("títulos vazios/só símbolos ainda produzem um nome de arquivo válido", () => {
     const nome = nomeArquivoAnuncio({ titulo: "!!!", cidade: "", formatoId: "story" });
     expect(nome).toBe("story.png");
+  });
+});
+
+describe("carrossel (MKT-002) — papel do slide", () => {
+  test("papel desconhecido/adulterado na query string cai no padrão 'capa' (mesmo comportamento de hoje)", () => {
+    expect(resolverPapelSlide(null)).toBe("capa");
+    expect(resolverPapelSlide("")).toBe("capa");
+    expect(resolverPapelSlide("qualquer-coisa")).toBe("capa");
+  });
+
+  test("papel explícito válido é respeitado", () => {
+    expect(resolverPapelSlide("foto")).toBe("foto");
+    expect(resolverPapelSlide("cta")).toBe("cta");
+    expect(resolverPapelSlide("capa")).toBe("capa");
+  });
+});
+
+describe("carrossel — quantidade de slides (D, E)", () => {
+  test(`D) abaixo do mínimo (${LIMITE_SLIDES_CARROSSEL.min}) é recusado`, () => {
+    expect(quantidadeDeSlidesValida(LIMITE_SLIDES_CARROSSEL.min - 1)).toBe(false);
+    expect(quantidadeDeSlidesValida(1)).toBe(false);
+    expect(quantidadeDeSlidesValida(0)).toBe(false);
+  });
+
+  test(`E) acima do máximo (${LIMITE_SLIDES_CARROSSEL.max}) é recusado`, () => {
+    expect(quantidadeDeSlidesValida(LIMITE_SLIDES_CARROSSEL.max + 1)).toBe(false);
+    expect(quantidadeDeSlidesValida(99)).toBe(false);
+  });
+
+  test("dentro da faixa (incluindo as bordas) é aceito", () => {
+    expect(quantidadeDeSlidesValida(LIMITE_SLIDES_CARROSSEL.min)).toBe(true);
+    expect(quantidadeDeSlidesValida(LIMITE_SLIDES_CARROSSEL.max)).toBe(true);
+    expect(quantidadeDeSlidesValida(5)).toBe(true);
+  });
+
+  test("não-inteiro nunca é uma quantidade válida", () => {
+    expect(quantidadeDeSlidesValida(2.5)).toBe(false);
+  });
+});
+
+describe("carrossel — ordem sem duplicata (N)", () => {
+  test("N) mediaId repetido na ordem é recusado — não é uma sequência coerente", () => {
+    expect(mediaIdsSemDuplicatas(["a", "b", "a"])).toBe(false);
+  });
+
+  test("ordem sem repetição é aceita, em qualquer tamanho", () => {
+    expect(mediaIdsSemDuplicatas(["a", "b", "c"])).toBe(true);
+    expect(mediaIdsSemDuplicatas([])).toBe(true);
+  });
+});
+
+describe("carrossel — papel por posição", () => {
+  test("primeira posição é sempre capa, última é sempre cta", () => {
+    expect(papelPorPosicao(0, 5)).toBe("capa");
+    expect(papelPorPosicao(4, 5)).toBe("cta");
+  });
+
+  test("posições do meio são 'foto'", () => {
+    expect(papelPorPosicao(1, 5)).toBe("foto");
+    expect(papelPorPosicao(2, 5)).toBe("foto");
+    expect(papelPorPosicao(3, 5)).toBe("foto");
+  });
+
+  test("com o mínimo de 2 slides não existe posição 'foto' — só capa e cta", () => {
+    expect(papelPorPosicao(0, 2)).toBe("capa");
+    expect(papelPorPosicao(1, 2)).toBe("cta");
+  });
+});
+
+describe("carrossel — nome de arquivo numerado (seção 19)", () => {
+  test("K) numeração com dois dígitos, em ordem, terminando em -carrossel-NN", () => {
+    const base = { titulo: "Apartamento em Pinheiros", cidade: "São Paulo" };
+    expect(nomeArquivoCarrossel({ ...base, indice: 0, total: 3 })).toBe(
+      "apartamento-em-pinheiros-sao-paulo-carrossel-01.png"
+    );
+    expect(nomeArquivoCarrossel({ ...base, indice: 1, total: 3 })).toBe(
+      "apartamento-em-pinheiros-sao-paulo-carrossel-02.png"
+    );
+    expect(nomeArquivoCarrossel({ ...base, indice: 9, total: 10 })).toBe(
+      "apartamento-em-pinheiros-sao-paulo-carrossel-10.png"
+    );
+  });
+
+  test("nunca inclui e-mail, telefone ou id interno — só o que o próprio anúncio já expõe", () => {
+    const nome = nomeArquivoCarrossel({
+      titulo: "Casa",
+      cidade: "Campinas",
+      indice: 0,
+      total: 2,
+    });
+    expect(nome).not.toMatch(/@|\d{4,}/);
   });
 });

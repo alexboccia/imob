@@ -123,3 +123,77 @@ export function nomeArquivoAnuncio(dados: {
     .filter(Boolean);
   return `${partes.join("-") || "anuncio"}.png`;
 }
+
+// =======================================================================
+// Carrossel (MKT-002)
+// =======================================================================
+// NÃO é uma engine nova: é o mesmo render de uma imagem (sharp + SVG de
+// anuncio-imovel-render.ts), chamado uma vez por slide com um PAPEL
+// diferente (seção 7 do pedido — "uma linguagem visual, múltiplas
+// composições"). O papel decide só QUANTO do overlay aparece; os dados
+// (preço, localização, itens, branding) continuam vindo das MESMAS
+// funções puras usadas pelo anúncio de imagem única.
+export type PapelSlideCarrossel = "capa" | "foto" | "cta";
+
+function papelSlideValido(valor: string | null): valor is PapelSlideCarrossel {
+  return valor === "capa" || valor === "foto" || valor === "cta";
+}
+
+export function resolverPapelSlide(valor: string | null): PapelSlideCarrossel {
+  // "capa" é o padrão — EXATAMENTE o comportamento de hoje do anúncio de
+  // imagem única (seção 12.K: o Route Handler existente evolui com um
+  // parâmetro novo opcional, nunca comportamento diferente quando ausente).
+  return papelSlideValido(valor) ? valor : "capa";
+}
+
+// Seção 9 do pedido: nem "ilimitado" nem um número cego. 2 é o mínimo
+// que ainda é um CARROSSEL (abaixo disso é a imagem única da MKT-001,
+// que já existe e continua simples). 8 é o teto: cobre o caso comum
+// (capa + até 6 fotos + CTA) sem virar uma apresentação de slides —
+// cada slide além do necessário é mais uma chamada de render (custo de
+// sharp/fetch) e mais um download manual depois. Instagram aceita até
+// 10 por post; 8 fica abaixo disso de propósito, como margem.
+export const LIMITE_SLIDES_CARROSSEL = { min: 2, max: 8 } as const;
+
+export function quantidadeDeSlidesValida(quantidade: number): boolean {
+  return (
+    Number.isInteger(quantidade) &&
+    quantidade >= LIMITE_SLIDES_CARROSSEL.min &&
+    quantidade <= LIMITE_SLIDES_CARROSSEL.max
+  );
+}
+
+// Seção 29.N: ordem adulterada/duplicada. Um mediaId repetido na lista
+// não é "duas fotos diferentes" — é o mesmo slide contado duas vezes,
+// o que juridicamente nem é uma sequência coerente de carrossel.
+export function mediaIdsSemDuplicatas(mediaIds: string[]): boolean {
+  return new Set(mediaIds).size === mediaIds.length;
+}
+
+// Papel de cada posição na sequência final: a primeira é sempre a capa
+// (preço, finalidade, localização — a peça "âncora" do carrossel) e a
+// última é sempre o CTA (contato, sem repetir o preço). Com exatamente 2
+// slides não existe posição "foto" intermediária — vira capa + CTA, que
+// já é uma peça completa sozinha.
+export function papelPorPosicao(indice: number, total: number): PapelSlideCarrossel {
+  if (indice === 0) return "capa";
+  if (indice === total - 1) return "cta";
+  return "foto";
+}
+
+// Nome de arquivo numerado (seção 19) — "01", "02"... cabe até 99 slides
+// no padding (o teto real é 8, então nunca precisa de 3 dígitos; 2
+// dígitos simplesmente não fica feio nem no caso de 2 slides).
+export function nomeArquivoCarrossel(dados: {
+  titulo: string;
+  cidade: string;
+  indice: number; // 0-based
+  total: number;
+}): string {
+  const partes = [dados.titulo, dados.cidade]
+    .map(paraSlug)
+    .filter(Boolean);
+  const numero = String(dados.indice + 1).padStart(2, "0");
+  const base = partes.join("-") || "anuncio";
+  return `${base}-carrossel-${numero}.png`;
+}

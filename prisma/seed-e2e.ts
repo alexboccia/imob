@@ -112,6 +112,8 @@ export const IDS_E2E = {
   imovelGaleria4: "e2e-imovel-galeria-4",
   imovelGaleria5: "e2e-imovel-galeria-5",
   imovelGaleria7: "e2e-imovel-galeria-7",
+  // MKT-002 — SALE_AND_RENT com fotos reais (ver uso logo abaixo).
+  imovelCarrosselAmbos: "e2e-imovel-carrossel-ambos",
   // Fase 45 — conteúdo editorial da galeria (título, subtítulo, selo de
   // entrega e legendas), um imóvel por combinação.
   imovelEditorialTitulo: "e2e-imovel-editorial-titulo",
@@ -3737,6 +3739,34 @@ async function main() {
   await imovelDaGaleria(IDS_E2E.imovelGaleria4, 4);
   await imovelDaGaleria(IDS_E2E.imovelGaleria5, 5);
   await imovelDaGaleria(IDS_E2E.imovelGaleria7, 7);
+
+  // MKT-002 — carrossel: único fixture SALE_AND_RENT (os dois preços
+  // preenchidos) com fotos REAIS (data: URL, iguais às de
+  // imovelDaGaleria) — imovelDobraAmbos já cobre a ambiguidade de
+  // finalidade, mas sua única foto é o URL de R2 fixo que não existe de
+  // verdade (não serve pra gerar um carrossel de verdade, só pra provar
+  // DOM). Mesma organização (Org Recursos), nenhum fixture existente
+  // tocado.
+  const imovelCarrossel = await garantirImovel({
+    id: IDS_E2E.imovelCarrosselAmbos,
+    organizationId: orgRecursos.organization.id,
+    title: "Imovel Carrossel Venda e Locacao E2E",
+    purpose: "SALE_AND_RENT",
+    price: 850000,
+    rentPrice: 4200,
+  });
+  for (let n = 2; n >= 1; n--) {
+    await prisma.media.create({
+      data: {
+        organizationId: orgRecursos.organization.id,
+        propertyId: imovelCarrossel.id,
+        type: "PHOTO",
+        url: fotoDaGaleria(n),
+        isCover: n === 1,
+        order: n - 1,
+      },
+    });
+  }
 
   // =====================================================================
   // Fase 45 — CONTEÚDO EDITORIAL DA GALERIA (Organização W)

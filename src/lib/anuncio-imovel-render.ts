@@ -56,9 +56,21 @@ export type DadosAnuncio = {
   itens: string[];
   finalidadeLabel: string;
   precoFormatado: string | null; // null = não mostra a linha de preço
-  localizacao: string;
+  // null = não mostra a linha de localização. Ausente é ausente (mesma
+  // regra do preço) — nunca usado pela MKT-001 (sempre uma string), só
+  // pelos slides "foto" do carrossel (MKT-002), que deliberadamente
+  // omitem a localização pra ficar discretos.
+  localizacao: string | null;
   nomeOrganizacao: string;
   whatsapp: string | null; // já validado (temWhatsApp) por quem chama
+  // MKT-002 — opcional, default true: o selo de finalidade (badge
+  // branco "À VENDA"/"PARA ALUGAR") é o elemento mais "pesado" do
+  // overlay. Slides intermediários do carrossel (papel "foto") o
+  // omitem de propósito (seção 8: "identidade visual discreta, não
+  // repetir um painel pesado em todas as imagens"). Ausente aqui
+  // sempre significa true — a MKT-001 nunca passa este campo, e seu
+  // comportamento continua idêntico ao de antes desta mudança.
+  mostrarSelo?: boolean;
 };
 
 export type FontesAnuncio = {
@@ -91,12 +103,18 @@ function montarSvgOverlay(formato: FormatoAnuncio, dados: DadosAnuncio): string 
   let cursor = 0;
   const elementos: string[] = [];
 
-  const alturaSelo = Math.round(fonteSelo * 1.9);
-  elementos.push(
-    `<rect x="${padding - Math.round(padding * 0.3)}" y="${cursor}" width="${Math.round(w * 0.42)}" height="${alturaSelo}" rx="${Math.round(fonteSelo)}" fill="#ffffff" />`,
-    `<text x="${padding}" y="${cursor + Math.round(alturaSelo * 0.68)}" font-family="Arial, sans-serif" font-size="${fonteSelo}" font-weight="700" fill="#111111">${escaparSvg(dados.finalidadeLabel.toUpperCase())}</text>`
-  );
-  cursor += alturaSelo + gap * 1.5;
+  // MKT-002 — opcional: ausente (undefined) sempre se comporta como
+  // true, então a MKT-001 (que nunca passa este campo) nunca muda de
+  // aparência por causa desta extensão.
+  const mostrarSelo = dados.mostrarSelo ?? true;
+  if (mostrarSelo) {
+    const alturaSelo = Math.round(fonteSelo * 1.9);
+    elementos.push(
+      `<rect x="${padding - Math.round(padding * 0.3)}" y="${cursor}" width="${Math.round(w * 0.42)}" height="${alturaSelo}" rx="${Math.round(fonteSelo)}" fill="#ffffff" />`,
+      `<text x="${padding}" y="${cursor + Math.round(alturaSelo * 0.68)}" font-family="Arial, sans-serif" font-size="${fonteSelo}" font-weight="700" fill="#111111">${escaparSvg(dados.finalidadeLabel.toUpperCase())}</text>`
+    );
+    cursor += alturaSelo + gap * 1.5;
+  }
 
   if (dados.precoFormatado) {
     cursor += fontePreco; // baseline fica no PÉ da linha, não no topo
@@ -106,11 +124,13 @@ function montarSvgOverlay(formato: FormatoAnuncio, dados: DadosAnuncio): string 
     cursor += gap;
   }
 
-  cursor += fonteCorpo;
-  elementos.push(
-    `<text x="${padding}" y="${Math.round(cursor)}" font-family="Arial, sans-serif" font-size="${fonteCorpo}" fill="#f2f2f2">${escaparSvg(dados.localizacao)}</text>`
-  );
-  cursor += gap;
+  if (dados.localizacao) {
+    cursor += fonteCorpo;
+    elementos.push(
+      `<text x="${padding}" y="${Math.round(cursor)}" font-family="Arial, sans-serif" font-size="${fonteCorpo}" fill="#f2f2f2">${escaparSvg(dados.localizacao)}</text>`
+    );
+    cursor += gap;
+  }
 
   if (dados.itens.length > 0) {
     cursor += fonteCorpo;

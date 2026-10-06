@@ -16,6 +16,7 @@ import {
   opcoesFinalidadeAnuncio,
   precoParaFinalidadeAnuncio,
   midiaPertenceAoImovel,
+  resolverPapelSlide,
   FINALIDADE_ANUNCIO_LABEL,
   type FinalidadeAnuncio,
 } from "@/lib/anuncio-imovel";
@@ -40,6 +41,12 @@ export async function GET(
   const mediaId = searchParams.get("mediaId");
   const formatoId = searchParams.get("formato");
   const finalidadeParam = searchParams.get("finalidade");
+  // MKT-002 — opcional, ausente = "capa" = comportamento idêntico ao de
+  // antes desta mudança (seção 12.K: evoluir a rota existente, nunca uma
+  // rota nova). Cada slide do carrossel é uma chamada A MAIS a este
+  // MESMO endpoint, uma por foto escolhida, nunca um payload com várias
+  // mídias de uma vez (seção 21 — sem URL/payload excessivo).
+  const papel = resolverPapelSlide(searchParams.get("papel"));
 
   const formato = formatoId ? formatoAnuncioPorId(formatoId) : null;
   if (!formato) {
@@ -140,16 +147,33 @@ export async function GET(
 
   const nomeOrganizacao = branding.displayName ?? organization.name;
   const whatsapp = temWhatsApp(config.whatsapp) ? config.whatsapp : null;
+  const localizacao = formatarLocalizacaoImovel(imovel.neighborhood, imovel.city, imovel.state);
+
+  // MKT-002 — seção 8: a capa concentra a informação de venda (selo,
+  // preço, localização, itens); os slides intermediários ("foto") ficam
+  // discretos (só a marca, no rodapé); o CTA final reforça localização e
+  // contato sem repetir o preço (já mostrado na capa). Nenhuma lógica
+  // nova de preço/itens/localização — só QUANTO deste mesmo dado aparece
+  // em cada papel.
+  const dadosSlide =
+    papel === "capa"
+      ? {
+          itens,
+          precoFormatado: preco !== null ? formatarPreco(preco) : null,
+          localizacao,
+          whatsapp,
+        }
+      : papel === "cta"
+        ? { itens: [], precoFormatado: null, localizacao, whatsapp }
+        : { itens: [], precoFormatado: null, localizacao: null, whatsapp: null };
 
   const resultado = await renderizarAnuncio(
     formato,
     {
-      itens,
+      ...dadosSlide,
       finalidadeLabel: FINALIDADE_ANUNCIO_LABEL[finalidade],
-      precoFormatado: preco !== null ? formatarPreco(preco) : null,
-      localizacao: formatarLocalizacaoImovel(imovel.neighborhood, imovel.city, imovel.state),
       nomeOrganizacao,
-      whatsapp,
+      mostrarSelo: papel === "capa",
     },
     {
       fotoUrl: midiaSelecionada!.url,
