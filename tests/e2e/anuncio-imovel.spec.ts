@@ -270,6 +270,121 @@ test.describe("Carrossel — responsivo", () => {
   });
 });
 
+test.describe("Legenda (MKT-003) — jornada completa", () => {
+  test.beforeEach(async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await login(page, ORG_RECURSOS);
+  });
+
+  test("escolhe canal, lê o texto, copia, troca de canal, edita e copia o texto editado", async ({
+    page,
+  }) => {
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria1}`);
+    await page.getByRole("button", { name: "Criar anúncio" }).click();
+
+    const dialogo = page.getByRole("dialog");
+    await dialogo.getByRole("button", { name: "Legenda" }).click();
+
+    // SALE sem ambiguidade: a legenda já aparece sem precisar escolher finalidade.
+    await expect(dialogo.getByRole("button", { name: "Instagram" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    const textarea = dialogo.locator("#legenda-texto");
+    await expect(textarea).toBeVisible();
+    const textoInstagram = await textarea.inputValue();
+    expect(textoInstagram).toMatch(/R\$\s*700\.000/);
+    expect(textoInstagram).toMatch(/#\w+/); // Instagram tem hashtags
+
+    await dialogo.getByRole("button", { name: "Copiar legenda" }).click();
+    await expect(dialogo.getByText("Legenda copiada")).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(textoInstagram);
+
+    // Troca pra Facebook: texto recalculado a partir dos MESMOS fatos — sem hashtags.
+    await dialogo.getByRole("button", { name: "Facebook" }).click();
+    const textoFacebook = await textarea.inputValue();
+    expect(textoFacebook).not.toMatch(/#\w+/);
+    expect(textoFacebook).toMatch(/R\$\s*700\.000/);
+
+    // Edita manualmente e troca pra WhatsApp e volta — o rascunho do Facebook sobrevive.
+    await textarea.fill("Texto editado à mão para o Facebook.");
+    await dialogo.getByRole("button", { name: "WhatsApp" }).click();
+    await expect(textarea).toHaveValue(/\*R\$\s*700\.000\*/);
+    await dialogo.getByRole("button", { name: "Facebook" }).click();
+    await expect(textarea).toHaveValue("Texto editado à mão para o Facebook.");
+
+    await dialogo.getByRole("button", { name: "Copiar legenda" }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+      "Texto editado à mão para o Facebook."
+    );
+  });
+
+  test("'Restaurar sugestão' descarta a edição e volta ao texto determinístico", async ({ page }) => {
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria1}`);
+    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    const dialogo = page.getByRole("dialog");
+    await dialogo.getByRole("button", { name: "Legenda" }).click();
+
+    const textarea = dialogo.locator("#legenda-texto");
+    const sugestao = await textarea.inputValue();
+    await textarea.fill("Qualquer outra coisa");
+    await dialogo.getByRole("button", { name: "Restaurar sugestão" }).click();
+    await expect(textarea).toHaveValue(sugestao);
+  });
+
+});
+
+test.describe("Legenda — imóvel sem fotos", () => {
+  test("funciona mesmo sem nenhuma foto cadastrada", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelComBadgesOrgA}`);
+    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    const dialogo = page.getByRole("dialog");
+
+    await dialogo.getByRole("button", { name: "Legenda" }).click();
+    await expect(dialogo.locator("#legenda-texto")).toBeVisible();
+  });
+});
+
+test.describe("Legenda — SALE_AND_RENT nunca decide sozinho", () => {
+  test("a legenda só aparece depois da escolha explícita de finalidade", async ({ page }) => {
+    await login(page, ORG_RECURSOS);
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelCarrosselAmbos}`);
+    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    const dialogo = page.getByRole("dialog");
+    await dialogo.getByRole("button", { name: "Legenda" }).click();
+
+    await expect(dialogo.getByText("Escolha a finalidade abaixo para gerar a legenda.")).toBeVisible();
+    await expect(dialogo.locator("#legenda-texto")).toHaveCount(0);
+    await expect(dialogo.getByRole("button", { name: "Copiar legenda" })).toBeDisabled();
+
+    await dialogo.getByRole("button", { name: "Para alugar" }).click();
+    const textarea = dialogo.locator("#legenda-texto");
+    await expect(textarea).toBeVisible();
+    await expect(textarea).toHaveValue(/R\$\s*4\.200\/mês/);
+    await expect(dialogo.getByRole("button", { name: "Copiar legenda" })).toBeEnabled();
+  });
+});
+
+test.describe("Legenda — responsivo", () => {
+  test("390px: canal, textarea e botão de copiar cabem na tela, sem overflow", async ({ page }) => {
+    await login(page, ORG_RECURSOS);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria1}`);
+    await page.getByRole("button", { name: "Criar anúncio" }).click();
+    const dialogo = page.getByRole("dialog");
+    await dialogo.getByRole("button", { name: "Legenda" }).click();
+
+    await expect(dialogo.locator("#legenda-texto")).toBeVisible();
+    await expect(dialogo.getByRole("button", { name: "Copiar legenda" })).toBeVisible();
+
+    const semOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1
+    );
+    expect(semOverflow).toBe(true);
+  });
+});
+
 test.describe("responsivo", () => {
   test("390px: o diálogo cabe na tela e o botão continua alcançável", async ({ page }) => {
     await login(page, ORG_RECURSOS);

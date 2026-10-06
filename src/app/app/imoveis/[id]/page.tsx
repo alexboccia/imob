@@ -30,6 +30,9 @@ import { paraPagamentos } from "@/lib/pagamento-comissao";
 import { paraAtorTransicao } from "@/lib/ator-transicao";
 import { precosDoImovel } from "@/lib/imovel-precos";
 import { GerarAnuncioImovel } from "@/components/admin/GerarAnuncioImovel";
+import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
+import { buscarBranding } from "@/lib/branding";
+import { temWhatsApp } from "@/lib/whatsapp";
 
 const MEDIA_TYPE_PARA_TIPO_MIDIA = {
   PHOTO: "FOTO",
@@ -65,6 +68,9 @@ export default async function EditarImovelPage({
     clientesCompativeis,
     crmHabilitado,
     membrosAtribuiveis,
+    config,
+    branding,
+    organization,
   ] = await Promise.all([
     withOrganization(organizationId, () =>
       Promise.all([
@@ -210,12 +216,22 @@ export default async function EditarImovelPage({
     // 11 na ficha do cliente: alimenta o seletor de responsável de cada
     // InteresseImovelItem, nunca uma consulta por card.
     buscarMembrosAtribuiveis(organizationId),
+    // MKT-003 — mesma fonte que o Route Handler de anúncio já usa
+    // (route.ts) para nome/logo/WhatsApp da organização. A legenda é
+    // gerada 100% client-side (função pura, sem request novo) porque
+    // esta página já está autorizada a ver esses dados — trazê-los aqui
+    // evita uma chamada de rede só pra montar um texto.
+    buscarConfiguracaoContato(organizationId),
+    buscarBranding(organizationId),
+    prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
   ]);
 
   if (!imovel) notFound();
 
   const atualizarComId = atualizarImovel.bind(null, imovel.id);
   const precosAnuncio = precosDoImovel(imovel);
+  const nomeOrganizacaoAnuncio = branding.displayName ?? organization?.name ?? "";
+  const whatsappAnuncio = temWhatsApp(config.whatsapp) ? config.whatsapp : null;
 
   return (
     <div className="space-y-5">
@@ -229,10 +245,13 @@ export default async function EditarImovelPage({
           <GerarAnuncioImovel
             propertyId={imovel.id}
             titulo={imovel.title}
+            tipo={imovel.type}
             cidade={imovel.city}
             purpose={imovel.purpose}
             price={precosAnuncio.price}
             rentPrice={precosAnuncio.rentPrice}
+            condoFee={decimalParaValor(imovel.condoFee)}
+            propertyTax={decimalParaValor(imovel.propertyTax)}
             neighborhood={imovel.neighborhood}
             city={imovel.city}
             state={imovel.state}
@@ -242,6 +261,8 @@ export default async function EditarImovelPage({
             suites={imovel.suites}
             bathrooms={imovel.bathrooms}
             parkingSpots={imovel.parkingSpots}
+            nomeOrganizacao={nomeOrganizacaoAnuncio}
+            whatsapp={whatsappAnuncio}
             fotos={imovel.media
               .filter((m) => m.type === "PHOTO")
               .map((m) => ({ id: m.id, url: m.url }))}

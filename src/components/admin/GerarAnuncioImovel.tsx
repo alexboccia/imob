@@ -28,6 +28,12 @@ import {
   type FinalidadeAnuncio,
   type FormatoAnuncioId,
 } from "@/lib/anuncio-imovel";
+import {
+  CANAIS_LEGENDA,
+  montarFatosLegenda,
+  formatarLegenda,
+  type CanalLegenda,
+} from "@/lib/legenda-imovel";
 
 type Foto = { id: string; url: string };
 
@@ -50,10 +56,13 @@ type Foto = { id: string; url: string };
 export function GerarAnuncioImovel({
   propertyId,
   titulo,
+  tipo,
   cidade,
   purpose,
   price,
   rentPrice,
+  condoFee,
+  propertyTax,
   neighborhood,
   city,
   state,
@@ -63,14 +72,19 @@ export function GerarAnuncioImovel({
   suites,
   bathrooms,
   parkingSpots,
+  nomeOrganizacao,
+  whatsapp,
   fotos,
 }: {
   propertyId: string;
   titulo: string;
+  tipo: string;
   cidade: string;
   purpose: string;
   price: number | null;
   rentPrice: number | null;
+  condoFee: number | null;
+  propertyTax: number | null;
   neighborhood: string;
   city: string;
   state: string;
@@ -80,13 +94,15 @@ export function GerarAnuncioImovel({
   suites: number | null;
   bathrooms: number | null;
   parkingSpots: number | null;
+  nomeOrganizacao: string;
+  whatsapp: string | null;
   fotos: Foto[];
 }) {
   const [aberto, setAberto] = useState(false);
   // "imagem" é o padrão: quem só quer o fluxo de sempre não ganha
   // nenhum passo extra (seção 33) — o seletor de modo é visível, mas a
   // primeira opção já é o comportamento de antes desta mudança.
-  const [modo, setModo] = useState<"imagem" | "carrossel">("imagem");
+  const [modo, setModo] = useState<"imagem" | "carrossel" | "legenda">("imagem");
 
   const [fotoId, setFotoId] = useState(fotos[0]?.id ?? null);
   const [formatoId, setFormatoId] = useState<FormatoAnuncioId>("feed");
@@ -107,6 +123,25 @@ export function GerarAnuncioImovel({
   const [erroCarrossel, setErroCarrossel] = useState<string | null>(null);
   const [slides, setSlides] = useState<{ blob: Blob; url: string }[] | null>(null);
   const [indiceSlide, setIndiceSlide] = useState(0);
+
+  // Legenda (MKT-003) — texto por canal, editado localmente. Nunca
+  // persistido (seção 22/27): some ao fechar o diálogo, como tudo nesta
+  // tela. Cada canal guarda a SUA edição independente — trocar de canal
+  // nunca apaga o que foi editado no outro (seção 24).
+  const [canalLegenda, setCanalLegenda] = useState<CanalLegenda>("instagram");
+  const [textosPorCanal, setTextosPorCanal] = useState<Partial<Record<CanalLegenda, string>>>({});
+  const [copiado, setCopiado] = useState(false);
+  const [erroCopiar, setErroCopiar] = useState<string | null>(null);
+
+  // Trocar a finalidade muda o preço embutido no texto — qualquer edição
+  // já feita passaria a descrever um valor que não é mais o escolhido,
+  // então o rascunho por canal é descartado aqui (comportamento simples
+  // e documentado, seção 24), nunca silenciosamente misturado.
+  function escolherFinalidade(opcao: FinalidadeAnuncio) {
+    setFinalidade(opcao);
+    setTextosPorCanal({});
+    setCopiado(false);
+  }
 
   function limparPreview() {
     if (imagemUrl) URL.revokeObjectURL(imagemUrl);
@@ -146,6 +181,54 @@ export function GerarAnuncioImovel({
   const precoResolvido = finalidade
     ? precoParaFinalidadeAnuncio(finalidade, { price, rentPrice })
     : null;
+
+  // Fatos da legenda só existem quando a finalidade já foi resolvida —
+  // mesma regra de SALE_AND_RENT do material visual: nunca escolher
+  // sozinho (seção 16).
+  const fatosLegenda = finalidade
+    ? montarFatosLegenda({
+        type: tipo,
+        finalidade,
+        precos: { price, rentPrice },
+        condoFee,
+        propertyTax,
+        neighborhood,
+        city,
+        state,
+        totalArea,
+        privateArea,
+        bedrooms,
+        suites,
+        bathrooms,
+        parkingSpots,
+        nomeOrganizacao,
+        whatsapp,
+      })
+    : null;
+  const legendaSugerida = fatosLegenda
+    ? formatarLegenda(canalLegenda, fatosLegenda, { bairro: neighborhood || null, cidade: city })
+    : "";
+  const legendaAtual = textosPorCanal[canalLegenda] ?? legendaSugerida;
+
+  async function copiarLegenda() {
+    setErroCopiar(null);
+    try {
+      await navigator.clipboard.writeText(legendaAtual);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      setErroCopiar("Não foi possível copiar automaticamente — selecione o texto e copie manualmente.");
+    }
+  }
+
+  function restaurarSugestaoLegenda() {
+    setTextosPorCanal((atual) => {
+      const copia = { ...atual };
+      delete copia[canalLegenda];
+      return copia;
+    });
+    setCopiado(false);
+  }
 
   function baixarBlob(blob: Blob, nomeArquivo: string) {
     const url = URL.createObjectURL(blob);
@@ -285,6 +368,11 @@ export function GerarAnuncioImovel({
       limparSlides();
       setErro(null);
       setErroCarrossel(null);
+      // Legenda nunca é persistida (seção 22/27) — some ao fechar, como
+      // o resto desta tela.
+      setTextosPorCanal({});
+      setCopiado(false);
+      setErroCopiar(null);
     }
   }
 
@@ -306,40 +394,52 @@ export function GerarAnuncioImovel({
         </DialogHeader>
 
         <div className="space-y-5 py-2">
-          {!semFotos && (
-            <div className="space-y-1.5">
-              <span className="text-sm font-medium">Tipo de material</span>
-              <div className="flex flex-wrap gap-2" role="group" aria-label="Tipo de material">
-                <Button
-                  type="button"
-                  variant={modo === "imagem" ? "default" : "outline"}
-                  size="sm"
-                  aria-pressed={modo === "imagem"}
-                  onClick={() => setModo("imagem")}
-                >
-                  Imagem única
-                </Button>
-                <Button
-                  type="button"
-                  variant={modo === "carrossel" ? "default" : "outline"}
-                  size="sm"
-                  aria-pressed={modo === "carrossel"}
-                  onClick={() => setModo("carrossel")}
-                  disabled={fotos.length < 2}
-                >
-                  Carrossel
-                </Button>
-              </div>
-              {modo === "carrossel" && fotos.length < 2 && (
-                <p className="text-xs text-muted-foreground">
-                  É preciso pelo menos {LIMITE_SLIDES_CARROSSEL.min} fotos cadastradas para um
-                  carrossel.
-                </p>
-              )}
+          <div className="space-y-1.5">
+            <span className="text-sm font-medium">Tipo de material</span>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Tipo de material">
+              <Button
+                type="button"
+                variant={modo === "imagem" ? "default" : "outline"}
+                size="sm"
+                aria-pressed={modo === "imagem"}
+                onClick={() => setModo("imagem")}
+                disabled={semFotos}
+              >
+                Imagem única
+              </Button>
+              <Button
+                type="button"
+                variant={modo === "carrossel" ? "default" : "outline"}
+                size="sm"
+                aria-pressed={modo === "carrossel"}
+                onClick={() => setModo("carrossel")}
+                disabled={fotos.length < 2}
+              >
+                Carrossel
+              </Button>
+              {/* Legenda não depende de foto nenhuma — é texto derivado
+                  dos mesmos dados cadastrais, por isso nunca fica
+                  desabilitada por causa de fotos (diferente dos dois
+                  modos visuais acima). */}
+              <Button
+                type="button"
+                variant={modo === "legenda" ? "default" : "outline"}
+                size="sm"
+                aria-pressed={modo === "legenda"}
+                onClick={() => setModo("legenda")}
+              >
+                Legenda
+              </Button>
             </div>
-          )}
+            {modo === "carrossel" && fotos.length < 2 && (
+              <p className="text-xs text-muted-foreground">
+                É preciso pelo menos {LIMITE_SLIDES_CARROSSEL.min} fotos cadastradas para um
+                carrossel.
+              </p>
+            )}
+          </div>
 
-          {semFotos ? (
+          {semFotos && modo !== "legenda" ? (
             <p className="text-sm text-muted-foreground">
               Este imóvel ainda não tem fotos cadastradas. Adicione uma foto para gerar
               um anúncio.
@@ -371,7 +471,7 @@ export function GerarAnuncioImovel({
                 ))}
               </div>
             </div>
-          ) : (
+          ) : modo === "carrossel" ? (
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <span className="text-sm font-medium">
@@ -475,6 +575,66 @@ export function GerarAnuncioImovel({
                 </div>
               )}
             </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <span className="text-sm font-medium">Canal</span>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Escolher canal da legenda">
+                  {CANAIS_LEGENDA.map((canal) => (
+                    <Button
+                      key={canal.id}
+                      type="button"
+                      variant={canalLegenda === canal.id ? "default" : "outline"}
+                      size="sm"
+                      aria-pressed={canalLegenda === canal.id}
+                      onClick={() => {
+                        setCanalLegenda(canal.id);
+                        setCopiado(false);
+                      }}
+                    >
+                      {canal.rotulo}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {!fatosLegenda ? (
+                <p className="text-sm text-muted-foreground">
+                  Escolha a finalidade abaixo para gerar a legenda.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  <label htmlFor="legenda-texto" className="text-sm font-medium">
+                    Legenda ({CANAIS_LEGENDA.find((c) => c.id === canalLegenda)?.rotulo})
+                  </label>
+                  <textarea
+                    id="legenda-texto"
+                    value={legendaAtual}
+                    onChange={(e) => {
+                      setTextosPorCanal((atual) => ({ ...atual, [canalLegenda]: e.target.value }));
+                      setCopiado(false);
+                    }}
+                    rows={8}
+                    className="w-full resize-y rounded-lg border bg-background p-3 text-sm"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={restaurarSugestaoLegenda}>
+                      Restaurar sugestão
+                    </Button>
+                    {copiado && (
+                      <span role="status" className="text-xs text-muted-foreground">
+                        Legenda copiada
+                      </span>
+                    )}
+                  </div>
+                  {erroCopiar && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {erroCopiar}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {modo === "imagem" && !semFotos && (
@@ -503,7 +663,7 @@ export function GerarAnuncioImovel({
             </p>
           )}
 
-          {ambigua && !semFotos && (
+          {ambigua && (!semFotos || modo === "legenda") && (
             <div className="space-y-1.5">
               <span className="text-sm font-medium">
                 Este imóvel aceita venda e aluguel — anunciar como
@@ -516,7 +676,7 @@ export function GerarAnuncioImovel({
                     variant={finalidade === opcao ? "default" : "outline"}
                     size="sm"
                     aria-pressed={finalidade === opcao}
-                    onClick={() => setFinalidade(opcao)}
+                    onClick={() => escolherFinalidade(opcao)}
                   >
                     {FINALIDADE_ANUNCIO_LABEL[opcao]}
                   </Button>
@@ -525,7 +685,7 @@ export function GerarAnuncioImovel({
             </div>
           )}
 
-          {!semFotos && (
+          {(!semFotos || modo === "legenda") && (
             <div className="rounded-lg border bg-muted/30 p-3 text-sm">
               <p className="font-medium">O que vai aparecer no anúncio</p>
               <ul className="mt-1.5 space-y-0.5 text-muted-foreground">
@@ -617,7 +777,7 @@ export function GerarAnuncioImovel({
                 Baixar
               </Button>
             </>
-          ) : (
+          ) : modo === "carrossel" ? (
             <>
               <Button
                 type="button"
@@ -645,6 +805,10 @@ export function GerarAnuncioImovel({
                 Baixar todos
               </Button>
             </>
+          ) : (
+            <Button type="button" onClick={copiarLegenda} disabled={!fatosLegenda}>
+              Copiar legenda
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>
