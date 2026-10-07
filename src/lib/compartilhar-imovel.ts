@@ -29,6 +29,31 @@ export function urlCanonicaDoImovel(opcoes: {
     : getSiteUrl(`${opcoes.basePath}${caminho}`);
 }
 
+/**
+ * URL pública da foto de capa, PRONTA para og:image/twitter:image
+ * (MKT-005) — nunca a URL bruta de Media.url.
+ *
+ * Por quê: Media.url é o que o broker enviou, em qualquer um dos três
+ * formatos aceitos no upload (jpg/png/webp — ver upload-validation.ts).
+ * `.webp` é publicamente acessível e renderiza bem em qualquer navegador
+ * (inclusive via next/image aqui no produto), mas o crawler de preview
+ * do WhatsApp — o consumidor real desta fase — historicamente falha em
+ * montar o card para imagens webp. Em vez de mudar o pipeline de upload
+ * (afetaria toda foto do produto, não só preview social) ou gerar um
+ * criativo da MKT-001 (teria texto/overlay, não é "a foto real"), esta
+ * URL aponta para uma rota própria que baixa a MESMA foto de capa e
+ * devolve um JPEG — a conversão só acontece quando um crawler de fato
+ * pede a imagem, nunca dentro de generateMetadata (ver seção 33 do
+ * pedido: metadata não processa imagem).
+ */
+export function urlOgImagemDoImovel(opcoes: {
+  origin: string;
+  organizationId: string;
+  imovelId: string;
+}): string {
+  return `${opcoes.origin}/api/og-image/${encodeURIComponent(opcoes.organizationId)}/${encodeURIComponent(opcoes.imovelId)}`;
+}
+
 export function textoDeCompartilhamento(titulo: string): string {
   return `Veja este imóvel: ${titulo.trim()}`;
 }

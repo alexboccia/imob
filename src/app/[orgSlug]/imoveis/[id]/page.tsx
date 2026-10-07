@@ -31,7 +31,7 @@ import { withOrganization } from "@/lib/tenant-context";
 import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 import { GaleriaFotos } from "@/components/GaleriaFotos";
 import { AcoesImovel } from "@/components/imovel/AcoesImovel";
-import { urlCanonicaDoImovel } from "@/lib/compartilhar-imovel";
+import { urlCanonicaDoImovel, urlOgImagemDoImovel } from "@/lib/compartilhar-imovel";
 import { EvolucaoObra } from "@/components/EvolucaoObra";
 import { RecursosImovel } from "@/components/RecursosImovel";
 import { FraseDestaque } from "@/components/FraseDestaque";
@@ -209,6 +209,19 @@ export async function generateMetadata({
     imovelId: id,
   });
 
+  // MKT-005 — nunca a URL bruta de Media.url (pode ser webp, formato que
+  // o crawler de preview do WhatsApp historicamente não renderiza): a
+  // rota própria converte a MESMA foto de capa pra JPEG sob demanda,
+  // só quando um crawler de fato pede a imagem — nada é processado
+  // aqui dentro de generateMetadata (seção 33 do pedido).
+  const ogImagem = capa
+    ? urlOgImagemDoImovel({
+        origin: new URL(canonical).origin,
+        organizationId,
+        imovelId: id,
+      })
+    : undefined;
+
   return {
     title: imovel.title,
     description: descricao,
@@ -220,13 +233,19 @@ export async function generateMetadata({
       // Fase 47 — a URL que o botão Compartilhar envia é esta mesma.
       url: canonical,
       siteName: organization.name,
-      images: capa ? [{ url: capa, width: 1200, height: 900 }] : undefined,
+      // Sem width/height: a rota de og:image redimensiona a foto real
+      // (largura máxima 1200px, altura varia com a proporção original),
+      // então um valor fixo aqui seria inventado (seção 20 do pedido —
+      // "não inventar dimensões"; omitir é o comportamento explicitamente
+      // aceito quando descobrir a dimensão real exigiria processar a
+      // imagem dentro da própria metadata, o que a seção 33 proíbe).
+      images: ogImagem ? [{ url: ogImagem }] : undefined,
     },
     twitter: {
       card: "summary_large_image",
       title: imovel.title,
       description: descricao,
-      images: capa ? [capa] : undefined,
+      images: ogImagem ? [ogImagem] : undefined,
     },
   };
 }
