@@ -118,18 +118,26 @@ function montarSvgOverlay(formato: FormatoAnuncio, dados: DadosAnuncio): string 
   // aparência por causa desta extensão.
   const mostrarSelo = dados.mostrarSelo ?? true;
   if (mostrarSelo) {
-    const alturaSelo = Math.round(fonteSelo * 1.9);
+    // 1.9 -> 1.45 e 0.85 -> 0.5: a primeira tentativa de hug ainda sobrava
+    // respiro visível demais (feedback real sobre o render já com a
+    // correção anterior) — valores recalibrados pra um selo/chip justo,
+    // não mais um painel com texto dentro.
+    const alturaSelo = Math.round(fonteSelo * 1.45);
     const textoSelo = dados.finalidadeLabel.toUpperCase();
     // Selo do tamanho do TEXTO (mais um respiro interno), não mais uma
     // fração fixa da largura do canvas — era o que deixava sobrando
     // espaço em branco num texto curto como "À VENDA" (achado real,
     // visível em "PARA ALUGAR" x"À VENDA" lado a lado).
-    const seloPadX = Math.round(fonteSelo * 0.85);
+    const seloPadX = Math.round(fonteSelo * 0.5);
     const larguraSelo = estimarLarguraTexto(textoSelo, fonteSelo, 0.62) + seloPadX * 2;
     const seloX = padding - seloPadX;
     elementos.push(
-      `<rect x="${seloX}" y="${cursor}" width="${larguraSelo}" height="${alturaSelo}" rx="${Math.round(fonteSelo)}" fill="#ffffff" />`,
-      `<text x="${padding}" y="${cursor + Math.round(alturaSelo * 0.68)}" font-family="Arial, sans-serif" font-size="${fonteSelo}" font-weight="700" fill="#111111">${escaparSvg(textoSelo)}</text>`
+      `<rect x="${seloX}" y="${cursor}" width="${larguraSelo}" height="${alturaSelo}" rx="${Math.round(alturaSelo / 2)}" fill="#ffffff" />`,
+      // 0.75: baseline recalibrada pro novo alturaSelo mais baixo — centro
+      // vertical de um texto caixa-alta (sem descendentes) fica mais perto
+      // do pé do selo que do topo, porque a altura visível da letra
+      // (cap-height) é menor que a altura da fonte usada pro cálculo.
+      `<text x="${padding}" y="${cursor + Math.round(alturaSelo * 0.75)}" font-family="Arial, sans-serif" font-size="${fonteSelo}" font-weight="700" fill="#111111">${escaparSvg(textoSelo)}</text>`
     );
     cursor += alturaSelo + gap * 1.5;
   }
@@ -247,10 +255,10 @@ export async function renderizarAnuncio(
     const bytesLogo = await buscarBytesSeguro(fontes.logoUrl);
     if (bytesLogo) {
       try {
-        // 0.09 → 0.12: logo pequena demais no criativo final (feedback
-        // real do usuário) — mantém a mesma margem/posição, só ganha
-        // ~33% de altura.
-        const alturaLogo = Math.round(formato.largura * 0.12);
+        // 0.09 → 0.12 não foi suficiente (feedback real sobre o render já
+        // com essa primeira correção) → 0.17: quase o dobro do valor
+        // original, mantendo a mesma margem/posição.
+        const alturaLogo = Math.round(formato.largura * 0.17);
         const logoBuffer = await sharp(bytesLogo, { limitInputPixels: LIMITE_PIXELS_ENTRADA })
           .resize({ height: alturaLogo, withoutEnlargement: true })
           .png()
