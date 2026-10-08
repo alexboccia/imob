@@ -33,6 +33,9 @@ import { GerarAnuncioImovel } from "@/components/admin/GerarAnuncioImovel";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
 import { buscarBranding } from "@/lib/branding";
 import { temWhatsApp } from "@/lib/whatsapp";
+import { urlCanonicaDoImovel } from "@/lib/compartilhar-imovel";
+import { resolverBasePath } from "@/lib/site-url";
+import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 
 const MEDIA_TYPE_PARA_TIPO_MIDIA = {
   PHOTO: "FOTO",
@@ -223,7 +226,7 @@ export default async function EditarImovelPage({
     // evita uma chamada de rede só pra montar um texto.
     buscarConfiguracaoContato(organizationId),
     buscarBranding(organizationId),
-    prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
+    prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true, slug: true } }),
   ]);
 
   if (!imovel) notFound();
@@ -232,6 +235,18 @@ export default async function EditarImovelPage({
   const precosAnuncio = precosDoImovel(imovel);
   const nomeOrganizacaoAnuncio = branding.displayName ?? organization?.name ?? "";
   const whatsappAnuncio = temWhatsApp(config.whatsapp) ? config.whatsapp : null;
+  // MKT-006 — mesma URL canônica da ficha pública (MKT-005): base do
+  // link rastreável do Kit de Divulgação. null só quando a organização
+  // não pôde ser resolvida (mesma guarda de nomeOrganizacaoAnuncio
+  // acima) — sem slug não há basePath para montar a URL com segurança.
+  const hostnameCustomAnuncio = await buscarHostnameCustomAtivo(organizationId);
+  const urlAnuncio = organization
+    ? urlCanonicaDoImovel({
+        hostnameCustom: hostnameCustomAnuncio,
+        basePath: resolverBasePath(organization.slug),
+        imovelId: imovel.id,
+      })
+    : null;
 
   return (
     <div className="space-y-5">
@@ -266,6 +281,7 @@ export default async function EditarImovelPage({
             fotos={imovel.media
               .filter((m) => m.type === "PHOTO")
               .map((m) => ({ id: m.id, url: m.url }))}
+            urlAnuncio={urlAnuncio}
           />
         }
       />

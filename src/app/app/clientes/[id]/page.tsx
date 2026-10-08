@@ -14,6 +14,7 @@ import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
 import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
 import { buscarSugestoesLocalizacao } from "@/lib/sugestoes-localizacao";
 import { rotuloOrigemCaptacao } from "@/lib/captacao";
+import { rotuloOrigemDivulgacao } from "@/lib/atribuicao";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -759,6 +760,17 @@ export default async function DetalheClientePage({
                       {rotuloOrigemCaptacao(interacao.origin) && (
                         <Badge variant="outline">
                           {rotuloOrigemCaptacao(interacao.origin)}
+                        </Badge>
+                      )}
+                      {/* MKT-006 — canal de divulgação (Instagram/
+                          Facebook/WhatsApp), lido do utm_source/
+                          referrerHost desta MESMA interação. Omitido
+                          quando "Não identificado": mesmo idioma do
+                          badge de origem acima (rótulo vazio nunca
+                          aparece como badge nesta lista). */}
+                      {rotuloOrigemDivulgacao(interacao) !== "Não identificado" && (
+                        <Badge variant="outline">
+                          {rotuloOrigemDivulgacao(interacao)}
                         </Badge>
                       )}
                       {formatarDataHoraNoFuso(interacao.occurredAt, fuso)}

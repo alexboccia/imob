@@ -272,3 +272,37 @@ export function classificarCanal(atribuicao: Atribuicao | null | undefined): Can
 export function rotuloCanal(canal: Canal): string {
   return LABEL_CANAL[canal] ?? LABEL_CANAL.SEM_ATRIBUICAO;
 }
+
+// -----------------------------------------------------------------------
+// Rótulo de ORIGEM DE DIVULGAÇÃO (MKT-006) — leitura POR REGISTRO, não a
+// mesma coisa que classificarCanal/LABEL_CANAL acima.
+// -----------------------------------------------------------------------
+// classificarCanal agrupa para TENDÊNCIA de aquisição (seis baldes,
+// "redes sociais" junta Instagram+Facebook+LinkedIn+...). Esta função
+// responde uma pergunta mais estreita e mais concreta: "de qual dos
+// canais do Kit de Divulgação (Instagram/Facebook/WhatsApp) ESTE
+// contato específico veio" — o mesmo catálogo de 3 canais que
+// urlRastreavelDoImovel usa para gerar o link, lido de volta.
+export type RotuloOrigemDivulgacao = "Instagram" | "Facebook" | "WhatsApp" | "Não identificado";
+
+// "Acesso direto" deliberadamente NUNCA é retornado por esta função.
+// Para afirmar isso com segurança seria preciso ter OBSERVADO, no
+// momento da visita, que não havia UTM nem referrer (classificarChegada
+// já calcula esse sinal como "DIRETO") — mas esse sinal não é persistido
+// hoje; só o resultado (campos utm_*/referrerHost, todos nulos nesse
+// caso) chega até aqui. Um registro antigo de antes desta atribuição
+// existir produz exatamente os MESMOS campos nulos, e não há como
+// distinguir os dois casos a partir do que foi gravado. Apresentar
+// "Acesso direto" sem poder distinguir seria inventar uma certeza que o
+// dado não sustenta — por isso os dois casos caem em "Não identificado".
+export function rotuloOrigemDivulgacao(
+  atribuicao: Atribuicao | null | undefined
+): RotuloOrigemDivulgacao {
+  const pista = atribuicao?.utmSource || atribuicao?.referrerHost || null;
+  if (pista) {
+    if (pista.includes("instagram")) return "Instagram";
+    if (pista.includes("facebook")) return "Facebook";
+    if (pista.includes("whatsapp")) return "WhatsApp";
+  }
+  return "Não identificado";
+}

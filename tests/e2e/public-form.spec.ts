@@ -70,6 +70,57 @@ test.describe("Captação — contexto do lead no CRM", () => {
     await expect(historico.getByText(/Imóvel:/)).toBeVisible();
   });
 
+  // MKT-006 — jornada completa do link rastreável: o mesmo utm_source
+  // que urlRastreavelDoImovel grava num link do Kit de Divulgação,
+  // capturado pela atribuição (Fase 7) quando o visitante abre esse
+  // link, sobrevivendo até o histórico do cliente no CRM.
+  test("contato que chega por um link rastreável mostra o canal de divulgação no histórico", async ({
+    page,
+  }) => {
+    const marcador = Date.now();
+    const nome = `Lead Divulgacao ${marcador}`;
+
+    await page.goto(
+      `/imoveis/${IDS_E2E.imovelComBadgesOrgA}?utm_source=instagram&utm_medium=divulgacao`
+    );
+    await esperarJanelaAntiSpam(page);
+    await page.locator("#aside-nome").fill(nome);
+    await page.locator("#aside-telefone").fill("11933330099");
+    await page.locator("#aside-email").fill(`divulgacao${marcador}@e2e.test`);
+    await page.locator("#aside-mensagem").fill("Cheguei pelo link da divulgação, quero saber mais.");
+    await page.getByRole("button", { name: "Enviar mensagem" }).click();
+    await expect(page.getByText(/Mensagem enviada com sucesso/)).toBeVisible();
+
+    await login(page, ORG_A);
+    const historico = await abrirHistoricoDoCliente(page, nome);
+    await expect(historico.getByText("Página do imóvel")).toBeVisible();
+    await expect(historico.getByText("Instagram", { exact: true })).toBeVisible();
+  });
+
+  // Visita sem UTM/referrer: nenhum badge de canal — "Não identificado"
+  // nunca vira rótulo visível nesta lista (mesmo idioma do badge de
+  // origem, que também some quando não há dado).
+  test("contato sem UTM não ganha nenhum rótulo de canal inventado", async ({ page }) => {
+    const marcador = Date.now();
+    const nome = `Lead SemCanal ${marcador}`;
+
+    await page.goto(`/imoveis/${IDS_E2E.imovelComBadgesOrgA}`);
+    await esperarJanelaAntiSpam(page);
+    await page.locator("#aside-nome").fill(nome);
+    await page.locator("#aside-telefone").fill("11933330098");
+    await page.locator("#aside-email").fill(`semcanal${marcador}@e2e.test`);
+    await page.locator("#aside-mensagem").fill("Contato sem campanha.");
+    await page.getByRole("button", { name: "Enviar mensagem" }).click();
+    await expect(page.getByText(/Mensagem enviada com sucesso/)).toBeVisible();
+
+    await login(page, ORG_A);
+    const historico = await abrirHistoricoDoCliente(page, nome);
+    await expect(historico.getByText("Página do imóvel")).toBeVisible();
+    for (const rotulo of ["Instagram", "Facebook", "WhatsApp", "Não identificado"]) {
+      await expect(historico.getByText(rotulo, { exact: true })).toHaveCount(0);
+    }
+  });
+
   test("contato da página /contato chega como contato geral, sem imóvel", async ({
     page,
   }) => {

@@ -34,6 +34,7 @@ import {
   formatarLegenda,
   type CanalLegenda,
 } from "@/lib/legenda-imovel";
+import { urlRastreavelDoImovel } from "@/lib/compartilhar-imovel";
 
 type Foto = { id: string; url: string };
 
@@ -75,6 +76,7 @@ export function GerarAnuncioImovel({
   nomeOrganizacao,
   whatsapp,
   fotos,
+  urlAnuncio,
 }: {
   propertyId: string;
   titulo: string;
@@ -97,6 +99,15 @@ export function GerarAnuncioImovel({
   nomeOrganizacao: string;
   whatsapp: string | null;
   fotos: Foto[];
+  /**
+   * URL canônica da ficha pública (MKT-005, a mesma de og:image/
+   * <link rel="canonical">) — base do link rastreável (MKT-006). null
+   * quando o servidor não conseguiu resolvê-la (ex.: organização
+   * ausente numa janela de corrida); nesse caso o bloco de link
+   * simplesmente não aparece, como qualquer outra seção condicionada a
+   * dado real nesta tela.
+   */
+  urlAnuncio: string | null;
 }) {
   const [aberto, setAberto] = useState(false);
   // "imagem" é o padrão: quem só quer o fluxo de sempre não ganha
@@ -132,6 +143,11 @@ export function GerarAnuncioImovel({
   const [textosPorCanal, setTextosPorCanal] = useState<Partial<Record<CanalLegenda, string>>>({});
   const [copiado, setCopiado] = useState(false);
   const [erroCopiar, setErroCopiar] = useState<string | null>(null);
+
+  // Link rastreável (MKT-006) — feedback de cópia PRÓPRIO, independente
+  // do da legenda: são duas ações de copiar distintas na mesma tela.
+  const [copiadoLink, setCopiadoLink] = useState(false);
+  const [erroCopiarLink, setErroCopiarLink] = useState<string | null>(null);
 
   function limparPreview() {
     if (imagemUrl) URL.revokeObjectURL(imagemUrl);
@@ -234,6 +250,26 @@ export function GerarAnuncioImovel({
     ? formatarLegenda(canalLegenda, fatosLegenda, { bairro: neighborhood || null, cidade: city })
     : "";
   const legendaAtual = textosPorCanal[canalLegenda] ?? legendaSugerida;
+
+  // MKT-006 — a mesma URL canônica (MKT-005) com utm_source/utm_medium
+  // do canal selecionado. Puramente derivado, sem request novo — só
+  // recalcula ao trocar de canal (o link não depende de finalidade,
+  // preço ou foto: divulga o IMÓVEL, não uma peça específica).
+  const linkRastreavel = urlAnuncio
+    ? urlRastreavelDoImovel({ url: urlAnuncio, canal: canalLegenda })
+    : null;
+
+  async function copiarLink() {
+    if (!linkRastreavel) return;
+    setErroCopiarLink(null);
+    try {
+      await navigator.clipboard.writeText(linkRastreavel);
+      setCopiadoLink(true);
+      setTimeout(() => setCopiadoLink(false), 2000);
+    } catch {
+      setErroCopiarLink("Não foi possível copiar automaticamente — selecione o texto e copie manualmente.");
+    }
+  }
 
   async function copiarLegenda() {
     setErroCopiar(null);
@@ -621,6 +657,7 @@ export function GerarAnuncioImovel({
                       onClick={() => {
                         setCanalLegenda(canal.id);
                         setCopiado(false);
+                        setCopiadoLink(false);
                       }}
                     >
                       {canal.rotulo}
@@ -628,6 +665,41 @@ export function GerarAnuncioImovel({
                   ))}
                 </div>
               </div>
+
+              {/* MKT-006 — não depende de finalidade/foto: divulga o
+                  IMÓVEL, disponível assim que o canal é escolhido. Some
+                  por inteiro quando urlAnuncio é null (organização não
+                  resolvida) em vez de mostrar um link quebrado. */}
+              {linkRastreavel && (
+                <div className="space-y-1.5">
+                  <label htmlFor="link-rastreavel" className="text-sm font-medium">
+                    Link rastreável ({CANAIS_LEGENDA.find((c) => c.id === canalLegenda)?.rotulo})
+                  </label>
+                  <input
+                    id="link-rastreavel"
+                    type="text"
+                    readOnly
+                    value={linkRastreavel}
+                    onFocus={(e) => e.target.select()}
+                    className="w-full rounded-lg border bg-background p-2 text-sm text-muted-foreground"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={copiarLink}>
+                      Copiar link
+                    </Button>
+                    {copiadoLink && (
+                      <span role="status" className="text-xs text-muted-foreground">
+                        Link copiado
+                      </span>
+                    )}
+                  </div>
+                  {erroCopiarLink && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {erroCopiarLink}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {!fatosLegenda ? (
                 <p className="text-sm text-muted-foreground">

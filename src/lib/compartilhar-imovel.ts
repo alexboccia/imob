@@ -1,4 +1,5 @@
 import { getSiteUrl } from "@/lib/site-url";
+import type { CanalLegenda } from "@/lib/legenda-imovel";
 
 // =======================================================================
 // Compartilhamento da ficha (Fase 47)
@@ -52,6 +53,39 @@ export function urlOgImagemDoImovel(opcoes: {
   imovelId: string;
 }): string {
   return `${opcoes.origin}/api/og-image/${encodeURIComponent(opcoes.organizationId)}/${encodeURIComponent(opcoes.imovelId)}`;
+}
+
+/**
+ * URL rastreável do Kit de Divulgação (MKT-006) — a MESMA URL canônica
+ * da ficha (nunca uma rota nova, nunca um encurtador), com utm_source/
+ * utm_medium acrescentados para o canal escolhido. É só o que o
+ * corretor copia e cola no Instagram/Facebook/WhatsApp: nada aqui cria
+ * registro, clique ou evento — a captura do parâmetro acontece depois,
+ * do lado de quem já existe (src/lib/atribuicao.ts, Fase 7), quando o
+ * visitante efetivamente abrir o link.
+ *
+ * Reaproveita o MESMO catálogo de 3 canais da legenda (CanalLegenda) —
+ * nenhuma enumeração nova de "de onde pode vir um link".
+ *
+ * utm_source=<canal> declara que ESTE link foi marcado como aquele
+ * canal — não confirma que o clique realmente veio de lá (mesma
+ * ressalva de qualquer UTM: é o que o remetente escreveu na URL, não o
+ * que a plataforma de origem atestou).
+ *
+ * `URLSearchParams.set` (nunca `append`) substitui o parâmetro em vez
+ * de duplicá-lo — importante porque a mesma URL base pode, em teoria,
+ * já carregar um utm_source de uma campanha anterior (ex.: um link
+ * colado de volta no gerador).
+ *
+ * Nunca mexe em `og:image`/canonical: a URL de entrada já É o
+ * canonical (MKT-005), e o que esta função monta é um objeto NOVO —
+ * `new URL()` nunca modifica a string recebida.
+ */
+export function urlRastreavelDoImovel(opcoes: { url: string; canal: CanalLegenda }): string {
+  const rastreavel = new URL(opcoes.url);
+  rastreavel.searchParams.set("utm_source", opcoes.canal);
+  rastreavel.searchParams.set("utm_medium", "divulgacao");
+  return rastreavel.toString();
 }
 
 export function textoDeCompartilhamento(titulo: string): string {

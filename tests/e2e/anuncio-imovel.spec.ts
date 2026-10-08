@@ -332,6 +332,36 @@ test.describe("Legenda (MKT-003) — jornada completa", () => {
     await expect(textarea).toHaveValue(sugestao);
   });
 
+  // MKT-006 — link rastreável: a MESMA URL canônica da ficha pública
+  // (MKT-005), com utm_source do canal escolhido. Não depende de
+  // finalidade/foto — só do canal, então aparece mesmo antes da legenda
+  // em si existir para este imóvel.
+  test("gera um link rastreável por canal e copia o link", async ({ page }) => {
+    await page.goto(`/app/imoveis/${IDS_E2E.imovelGaleria1}`);
+    await page.getByRole("button", { name: "Criar divulgação" }).click();
+    const dialogo = page.getByRole("dialog");
+    await dialogo.getByRole("button", { name: "Legenda" }).click();
+
+    // Instagram é o canal padrão.
+    const campoLink = dialogo.locator("#link-rastreavel");
+    await expect(campoLink).toBeVisible();
+    const linkInstagram = await campoLink.inputValue();
+    const urlInstagram = new URL(linkInstagram);
+    expect(urlInstagram.pathname).toBe(`/e2e-org-recursos/imoveis/${IDS_E2E.imovelGaleria1}`);
+    expect(urlInstagram.searchParams.get("utm_source")).toBe("instagram");
+    expect(urlInstagram.searchParams.get("utm_medium")).toBe("divulgacao");
+
+    // Troca de canal: o link muda de utm_source, o caminho continua o mesmo.
+    await dialogo.getByRole("button", { name: "WhatsApp" }).click();
+    const linkWhatsapp = await campoLink.inputValue();
+    const urlWhatsapp = new URL(linkWhatsapp);
+    expect(urlWhatsapp.pathname).toBe(urlInstagram.pathname);
+    expect(urlWhatsapp.searchParams.get("utm_source")).toBe("whatsapp");
+
+    await dialogo.getByRole("button", { name: "Copiar link" }).click();
+    await expect(dialogo.getByText("Link copiado")).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(linkWhatsapp);
+  });
 });
 
 test.describe("Legenda — imóvel sem fotos", () => {
