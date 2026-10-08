@@ -255,12 +255,23 @@ export async function renderizarAnuncio(
     const bytesLogo = await buscarBytesSeguro(fontes.logoUrl);
     if (bytesLogo) {
       try {
-        // 0.09 → 0.12 não foi suficiente (feedback real sobre o render já
-        // com essa primeira correção) → 0.17: quase o dobro do valor
-        // original, mantendo a mesma margem/posição.
-        const alturaLogo = Math.round(formato.largura * 0.17);
+        // 0.09 → 0.12 → 0.17 não foram suficientes (feedback real sobre o
+        // render já com cada correção anterior) → 0.24: medido direto no
+        // screenshot real do usuário (linhas de referência marcando a
+        // largura desejada) — da borda do logo até a linha direita é
+        // ~1.42x a largura atual, aplicado ao mesmo fator de altura
+        // (escala uniforme, mantendo a proporção do logo).
+        //
+        // withoutEnlargement removido: ele limitava o logo à resolução
+        // nativa do arquivo enviado pela organização — se esse arquivo for
+        // pequeno, aumentar este fator não tinha efeito nenhum acima desse
+        // teto, o que explicaria por que os aumentos anteriores (0.12,
+        // 0.17) continuaram "pouco". Pra um material de marketing, upscale
+        // com leve perda de nitidez é preferível a ignorar silenciosamente
+        // o tamanho pedido.
+        const alturaLogo = Math.round(formato.largura * 0.24);
         const logoBuffer = await sharp(bytesLogo, { limitInputPixels: LIMITE_PIXELS_ENTRADA })
-          .resize({ height: alturaLogo, withoutEnlargement: true })
+          .resize({ height: alturaLogo })
           .png()
           .toBuffer();
         const margem = Math.round(formato.largura * 0.06);
