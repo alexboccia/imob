@@ -681,6 +681,10 @@ export default async function DetalheImovelPage({
           basePath={basePath}
           mensagemFormulario={mensagemContato}
           idFormulario={idFormulario}
+          // MKT-007 — mesmo href institucional da barra fixa/galeria:
+          // um único texto/número por tenant, nunca uma segunda
+          // mensagem inventada só para este botão.
+          whatsappHref={whatsappHref}
           // Fase 55 — só imóvel disponível aceita visita: é a mesma
           // regra do agendamento interno, e um botão que sempre falha
           // seria pior que botão nenhum.

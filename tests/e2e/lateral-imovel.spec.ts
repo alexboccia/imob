@@ -109,6 +109,35 @@ test.describe("composição da lateral", () => {
     }
   });
 
+  // MKT-007 — achado real: quando não há corretor com perfil público, o
+  // card lateral perdia o ÚNICO canal de WhatsApp (a Fase 54 removeu o
+  // CTA institucional daqui assumindo que o card do corretor sempre
+  // supriria isso — falso sempre que o responsável não publicou perfil,
+  // que é o padrão de todo imóvel no seed). Resultado real, sem este
+  // achado corrigido: em desktop (barra fixa é só mobile), o único canal
+  // era o formulário — o visitante que prefere WhatsApp não tinha como.
+  test("sem corretor, mas com WhatsApp institucional: o card lateral oferece o canal (desktop)", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    // Org Tracking: WhatsApp institucional configurado, nenhum membro
+    // com perfil público (nunca publicado no seed desta organização).
+    await page.goto("/e2e-org-tracking/imoveis/e2e-imovel-tracking-top");
+    await expect(corretor(page)).toHaveCount(0);
+
+    const whatsappLateral = lateral(page).locator('a[href*="wa.me"]');
+    await expect(whatsappLateral).toHaveCount(1);
+    await expect(whatsappLateral).toBeVisible();
+
+    // Continua antes do formulário — a ordem comercial declarada
+    // (preço → canal de contato → formulário) não pode inverter.
+    const yWhatsapp = (await caixa(whatsappLateral)).y;
+    const yFormulario = (
+      await caixa(lateral(page).getByRole("heading", { name: "Receba mais informações" }))
+    ).y;
+    expect(yWhatsapp).toBeLessThan(yFormulario);
+  });
+
   test("corretor completo: foto, nome, CRECI, bio, perfil e os três contatos publicados", async ({
     page,
   }) => {

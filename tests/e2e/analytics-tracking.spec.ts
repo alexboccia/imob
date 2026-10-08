@@ -126,10 +126,14 @@ test.describe("Tracking — visualização", () => {
 });
 
 test.describe("Tracking — intenção via WhatsApp", () => {
-  // Fase 54 — o CTA institucional do card lateral saiu da ficha (o do
-  // cabeçalho já tinha saído na 52). A superfície de WhatsApp do TENANT
-  // que restou é a barra fixa do celular; o WhatsApp do corretor é outro
-  // número e tem placement próprio.
+  // Fase 54 tirou o CTA institucional do card lateral (o do cabeçalho já
+  // tinha saído na 52), assumindo que o card do corretor sempre
+  // supriria o canal no desktop — falso sem corretor público (o caso
+  // desta fixture, e o caso padrão de qualquer imóvel sem opt-in). A
+  // MKT-007 devolveu o botão ao card lateral, só quando não há corretor
+  // (placement SIDEBAR, retomando o significado original do valor no
+  // catálogo). O WhatsApp do corretor continua sendo outro número, com
+  // placement próprio (BROKER_CARD) — ver perfil-corretor.spec.ts.
   test("clique no CTA dispara WHATSAPP_CLICK com placement e NÃO altera o link", async ({
     page,
   }) => {
@@ -164,12 +168,10 @@ test.describe("Tracking — intenção via WhatsApp", () => {
     expect(clique.placement).toBe("MOBILE_BAR");
   });
 
-  // Fase 52 tirou o CTA do cabeçalho (HEADER); a Fase 54 tirou o do card
-  // comercial (SIDEBAR). No desktop a ficha não tem mais CTA de WhatsApp
-  // do tenant — o canal ali é o formulário do card (e o WhatsApp do
-  // corretor, que é outro número). Os dois placements seguem definidos
-  // para não invalidar o histórico já gravado, mas nada os emite.
-  test("no desktop, nenhum CTA comercial de WhatsApp e nenhum evento HEADER ou SIDEBAR", async ({
+  // Cabeçalho (HEADER) continua sem CTA desde a Fase 52 — isso não
+  // mudou. O card lateral (SIDEBAR), sem corretor público nesta
+  // fixture, agora tem o canal institucional de volta (MKT-007).
+  test("no desktop sem corretor público, o CTA institucional do card lateral registra placement SIDEBAR", async ({
     page,
   }) => {
     const eventos: CorpoEvento[] = [];
@@ -186,18 +188,24 @@ test.describe("Tracking — intenção via WhatsApp", () => {
     await expect(cabecalho.getByRole("link", { name: "Tenho interesse" })).toHaveCount(0);
     await expect(cabecalho.locator("[data-preco]")).toHaveCount(0);
 
-    // O card comercial mostra o valor e nenhum CTA de WhatsApp.
+    // O card comercial mostra o valor e, sem corretor público, o canal
+    // institucional de WhatsApp — exatamente um, nunca duplicado.
     const comercial = page.locator("[data-card-contato]");
     await expect(comercial.locator("[data-preco]").first()).toBeVisible();
-    await expect(comercial.getByRole("link", { name: "Falar no WhatsApp" })).toHaveCount(0);
-    await expect(comercial.locator('a[href*="wa.me"]')).toHaveCount(0);
-    // E a barra fixa não aparece no desktop.
+    const cta = comercial.getByRole("link", { name: "Falar no WhatsApp" });
+    await expect(cta).toHaveCount(1);
+    // E a barra fixa não aparece no desktop — o canal do card é o único.
     await expect(page.locator("[data-cta-imovel]")).toBeHidden();
 
-    // A visualização é registrada; clique de WhatsApp, nenhum.
+    await page.route("https://wa.me/**", (rota) => rota.abort());
+    await cta.click();
+
     await expect.poll(() => eventos.filter((e) => e.type === "PROPERTY_VIEW").length).toBeGreaterThan(0);
-    expect(eventos.filter((e) => e.type === "WHATSAPP_CLICK")).toEqual([]);
-    expect(eventos.some((e) => e.placement === "HEADER" || e.placement === "SIDEBAR")).toBe(false);
+    await expect.poll(() => eventos.filter((e) => e.type === "WHATSAPP_CLICK").length).toBe(1);
+    const clique = eventos.find((e) => e.type === "WHATSAPP_CLICK")!;
+    expect(clique.placement).toBe("SIDEBAR");
+    // HEADER continua morto: nada emite esse placement hoje.
+    expect(eventos.some((e) => e.placement === "HEADER")).toBe(false);
   });
 
   test("no mobile, o CTA da barra fixa registra o placement próprio", async ({ page }) => {

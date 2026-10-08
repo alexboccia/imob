@@ -2,16 +2,19 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
 import { IDS_E2E, ORG_A, login } from "./helpers";
 
 // =======================================================================
-// Observação sobre o valor + saída do CTA comercial (Fase 54)
+// Observação sobre o valor + CTA comercial (Fase 54 / MKT-007)
 // =======================================================================
 // Abaixo do preço, no card comercial, fica a observação que o anunciante
 // escreveu — quando ele escreveu. O CTA grande "Falar no WhatsApp" que
-// morava ali saiu: o canal continua na toolbar do corretor, no formulário
-// do próprio card e na barra fixa do celular.
+// morava ali saiu na Fase 54 assumindo que o corretor sempre supriria o
+// canal — falso sem corretor público (o caso padrão, e o da fixture
+// usada aqui). A MKT-007 devolveu o botão institucional pra este card,
+// só quando não há corretor (nunca duplica o dele).
 //
 // Organização W (recursos): os imóveis da dobra, incluindo o par com e
 // sem observação. Organização de tracking: a que tem WhatsApp
-// configurado, onde a ausência do CTA comercial é observável.
+// configurado e nenhum corretor público — onde o CTA comercial volta a
+// aparecer.
 
 const BASE_W = "/e2e-org-recursos";
 const fichaW = (id: string) => `${BASE_W}/imoveis/${id}`;
@@ -105,40 +108,33 @@ test.describe("observação na ficha", () => {
 });
 
 // -----------------------------------------------------------------------
-// O CTA comercial saiu
+// O CTA comercial (MKT-007 — de volta, sem corretor público)
 // -----------------------------------------------------------------------
 test.describe("CTA comercial", () => {
-  test("o card comercial não tem mais o botão grande de WhatsApp", async ({ page }) => {
+  test("sem corretor público, o card comercial tem o botão institucional de WhatsApp logo após o valor", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     await page.goto(FICHA_COM_WHATSAPP);
 
     const comercial = card(page);
     await expect(comercial.locator("[data-preco]").first()).toBeVisible();
-    // Nem o botão, nem um link wa.me escondido, nem wrapper de rastreio.
-    await expect(comercial.getByRole("link", { name: "Falar no WhatsApp" })).toHaveCount(0);
-    await expect(comercial.locator('a[href*="wa.me"]')).toHaveCount(0);
+    const cta = comercial.getByRole("link", { name: "Falar no WhatsApp" });
+    await expect(cta).toHaveCount(1);
+    await expect(comercial.locator('a[href*="wa.me"]')).toHaveCount(1);
 
-    // E o preço encosta no que vem depois: nada de vão fantasma onde o
-    // botão estava. Desde a Fase 55, quem vem logo depois do valor é o
-    // "Agendar uma visita".
+    // Logo após o valor, sem vão fantasma — antes de "Agendar visita".
     const p = await caixa(comercial.locator("[data-preco]").first());
-    const seguinte = await caixa(
-      comercial.locator("[data-agendar-visita], [data-card-corretor], #contato-imovel").first()
-    );
-    expect(seguinte.y - (p.y + p.height)).toBeLessThan(48);
+    const botaoCta = await caixa(cta);
+    expect(botaoCta.y - (p.y + p.height)).toBeLessThan(48);
+    const agendar = await caixa(comercial.locator("[data-agendar-visita]").first());
+    expect(agendar.y).toBeGreaterThan(botaoCta.y);
   });
 
-  test("nenhum evento de WhatsApp é emitido pelo card comercial", async ({ page }) => {
-    const eventos: { type?: string; placement?: string }[] = [];
-    await page.route("**/api/analytics/evento", async (rota) => {
-      eventos.push(JSON.parse(rota.request().postData() ?? "{}"));
-      await rota.fulfill({ status: 202, body: JSON.stringify({ ok: true }) });
-    });
-    await page.setViewportSize({ width: 1280, height: 1000 });
-    await page.goto(FICHA_COM_WHATSAPP);
-    await expect(card(page).locator("[data-preco]").first()).toBeVisible();
-    expect(eventos.some((e) => e.placement === "SIDEBAR")).toBe(false);
-  });
+  // O disparo do evento (placement SIDEBAR) já é provado em
+  // analytics-tracking.spec.ts — este arquivo stuba sendBeacon no
+  // beforeEach (não é sobre tracking), então a asserção de payload vive
+  // onde o stub não existe.
 
   test("a barra fixa do celular continua com preço e contato", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });

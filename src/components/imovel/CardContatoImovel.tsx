@@ -1,6 +1,9 @@
 import { FormularioContato } from "@/components/FormularioContato";
 import { Card, CardContent } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import { ValoresDoImovel, type ValoresImovel } from "@/components/imovel/ValoresDoImovel";
+import { IconeWhatsApp } from "@/components/icons";
+import { RastreioCliqueWhatsApp } from "@/components/analytics/RastreioCliqueWhatsApp";
 import { TITULO_BLOCO } from "@/lib/site-typography";
 
 // Card lateral de conversão do detalhe do imóvel. A hierarquia é
@@ -26,7 +29,16 @@ import { TITULO_BLOCO } from "@/lib/site-typography";
 // abaixo do valor é a observação do anunciante sobre ele, quando
 // houver. O canal continua existindo: WhatsApp do corretor logo abaixo,
 // formulário no fim do card e barra fixa no celular.
-
+//
+// MKT-007 — achado real: a frase acima pressupõe que SEMPRE existe um
+// corretor com perfil público pra herdar o canal. Todo imóvel sem
+// responsável com opt-in (o padrão — é publicação explícita do
+// profissional, não automática) ficava SEM NENHUM WhatsApp visível
+// neste card; a barra fixa citada é `lg:hidden` (só mobile), então em
+// desktop o único canal restante era o formulário. O botão institucional
+// abaixo cobre exatamente essa lacuna — e SÓ ela: com corretor presente,
+// o WhatsApp dele já está logo abaixo (placement BROKER_CARD) e este
+// bloco não duplica o convite.
 export function CardContatoImovel({
   imovel,
   imovelId,
@@ -36,6 +48,7 @@ export function CardContatoImovel({
   idFormulario,
   corretor,
   agendarVisita,
+  whatsappHref,
 }: {
   imovel: ValoresImovel;
   imovelId: string;
@@ -47,11 +60,35 @@ export function CardContatoImovel({
   corretor?: React.ReactNode;
   /** Fase 55 — o agendamento de visita, quando o imóvel aceita visita. */
   agendarVisita?: React.ReactNode;
+  /**
+   * WhatsApp institucional (o mesmo href da barra fixa/galeria — nunca
+   * um número ou mensagem próprios). null quando o tenant não configurou
+   * WhatsApp algum.
+   */
+  whatsappHref: string | null;
 }) {
   return (
     <Card data-card-contato className="h-fit lg:sticky lg:top-[calc(var(--site-header-height,88px)+1rem)]">
       <CardContent className="space-y-4">
         <ValoresDoImovel imovel={imovel} />
+
+        {!corretor && whatsappHref && (
+          <RastreioCliqueWhatsApp orgSlug={orgSlug} imovelId={imovelId} placement="SIDEBAR">
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({
+                size: "lg",
+                className:
+                  "w-full gap-2 bg-whatsapp-brand text-white hover:bg-whatsapp-brand-hover active:bg-whatsapp-brand-active",
+              })}
+            >
+              <IconeWhatsApp className="size-5" aria-hidden="true" />
+              Falar no WhatsApp
+            </a>
+          </RastreioCliqueWhatsApp>
+        )}
 
         {agendarVisita}
 

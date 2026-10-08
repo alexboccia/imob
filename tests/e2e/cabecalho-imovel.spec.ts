@@ -170,9 +170,12 @@ test.describe("card lateral (Fase 51) intacto", () => {
     const card = lateral(page);
     await expect(card.locator("[data-valores-imovel]")).toHaveCount(1);
     await expect(card.locator("[data-preco]").first()).toBeVisible();
-    // Fase 54 — o CTA grande de WhatsApp saiu do card comercial; o que
-    // fica abaixo do valor é a observação do anunciante, quando houver.
-    await expect(card.getByRole("link", { name: "Falar no WhatsApp" })).toHaveCount(0);
+    // Fase 54 removeu o CTA grande de WhatsApp daqui assumindo que o
+    // card do corretor sempre supriria o canal — falso sem corretor
+    // público (o caso desta própria fixture). MKT-007 devolveu o botão
+    // institucional só para este caso (sem duplicar quando há corretor:
+    // ver cabecalhoSemComercial/lateral-imovel.spec.ts).
+    await expect(card.getByRole("link", { name: "Falar no WhatsApp" })).toHaveCount(1);
     await expect(card.getByRole("heading", { name: "Receba mais informações" })).toBeVisible();
     await expect(card.getByRole("button", { name: "Enviar mensagem" })).toBeVisible();
     await expect(card.getByRole("link", { name: "Política de Privacidade" })).toBeVisible();
