@@ -129,7 +129,12 @@ function montarSvgOverlay(formato: FormatoAnuncio, dados: DadosAnuncio): string 
     // espaço em branco num texto curto como "À VENDA" (achado real,
     // visível em "PARA ALUGAR" x"À VENDA" lado a lado).
     const seloPadX = Math.round(fonteSelo * 0.5);
-    const larguraSelo = estimarLarguraTexto(textoSelo, fonteSelo, 0.62) + seloPadX * 2;
+    // 0.62 → 0.72: medido no screenshot real ("PARA ALUGAR" em Arial Bold
+    // 700) — o fator anterior subestimava a largura real do texto, então
+    // o selo ficava estreito demais e a própria palavra "ALUGAR" vazava
+    // pra fora do chip branco (achado real: texto com borda preta visível
+    // fora do selo, não um respiro sobrando como nas rodadas anteriores).
+    const larguraSelo = estimarLarguraTexto(textoSelo, fonteSelo, 0.72) + seloPadX * 2;
     const seloX = padding - seloPadX;
     elementos.push(
       `<rect x="${seloX}" y="${cursor}" width="${larguraSelo}" height="${alturaSelo}" rx="${Math.round(alturaSelo / 2)}" fill="#ffffff" />`,
@@ -255,12 +260,9 @@ export async function renderizarAnuncio(
     const bytesLogo = await buscarBytesSeguro(fontes.logoUrl);
     if (bytesLogo) {
       try {
-        // 0.09 → 0.12 → 0.17 não foram suficientes (feedback real sobre o
-        // render já com cada correção anterior) → 0.24: medido direto no
-        // screenshot real do usuário (linhas de referência marcando a
-        // largura desejada) — da borda do logo até a linha direita é
-        // ~1.42x a largura atual, aplicado ao mesmo fator de altura
-        // (escala uniforme, mantendo a proporção do logo).
+        // 0.09 → 0.12 → 0.17 → 0.24 → 0.168: a rodada 0.24 (calibrada por
+        // medição direta no screenshot real) passou do tamanho desejado —
+        // feedback real pedindo -30%, aplicado sobre 0.24 (0.24*0.7).
         //
         // withoutEnlargement removido: ele limitava o logo à resolução
         // nativa do arquivo enviado pela organização — se esse arquivo for
@@ -269,7 +271,7 @@ export async function renderizarAnuncio(
         // 0.17) continuaram "pouco". Pra um material de marketing, upscale
         // com leve perda de nitidez é preferível a ignorar silenciosamente
         // o tamanho pedido.
-        const alturaLogo = Math.round(formato.largura * 0.24);
+        const alturaLogo = Math.round(formato.largura * 0.168);
         const logoBuffer = await sharp(bytesLogo, { limitInputPixels: LIMITE_PIXELS_ENTRADA })
           .resize({ height: alturaLogo })
           .png()
