@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { buscarConfiguracaoContato } from "@/lib/configuracao-contato";
-import { buscarBranding } from "@/lib/branding";
 import { temWhatsApp } from "@/lib/whatsapp";
 import { precosDoImovel } from "@/lib/imovel-precos";
 import { formatarPreco, formatarLocalizacaoImovel } from "@/lib/format";
@@ -58,7 +57,7 @@ export async function GET(
 
   const organizationId = await requireOrganizationId();
 
-  const [imovel, config, branding, organization] = await withOrganization(
+  const [imovel, config, organization] = await withOrganization(
     organizationId,
     () =>
       Promise.all([
@@ -88,8 +87,11 @@ export async function GET(
           },
         }),
         buscarConfiguracaoContato(organizationId),
-        buscarBranding(organizationId),
-        prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
+        // Só pra confirmar que a organização existe (404 abaixo) — o
+        // rodapé do criativo não mostra mais nome de organização/corretor
+        // (feedback do usuário), então nenhum campo além da existência é
+        // necessário aqui.
+        prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true } }),
       ])
   );
 
@@ -145,7 +147,6 @@ export async function GET(
     .filter((item) => item.icone !== "catalogo")
     .map((item) => item.texto);
 
-  const nomeOrganizacao = branding.displayName ?? organization.name;
   const whatsapp = temWhatsApp(config.whatsapp) ? config.whatsapp : null;
   const localizacao = formatarLocalizacaoImovel(imovel.neighborhood, imovel.city, imovel.state);
 
@@ -172,7 +173,6 @@ export async function GET(
     {
       ...dadosSlide,
       finalidadeLabel: FINALIDADE_ANUNCIO_LABEL[finalidade],
-      nomeOrganizacao,
       mostrarSelo: papel === "capa",
     },
     {

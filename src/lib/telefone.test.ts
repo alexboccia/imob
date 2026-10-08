@@ -1,5 +1,10 @@
 import { describe, test, expect } from "vitest";
-import { formatarTelefone, telefoneValido, normalizarTelefone } from "@/lib/telefone";
+import {
+  formatarTelefone,
+  formatarTelefoneExibicao,
+  telefoneValido,
+  normalizarTelefone,
+} from "@/lib/telefone";
 
 describe("formatarTelefone", () => {
   test("formata celular com 11 dígitos", () => {
@@ -26,6 +31,24 @@ describe("formatarTelefone", () => {
 
   test("trunca dígitos além do limite de 11", () => {
     expect(formatarTelefone("119999988887777")).toBe("(11) 99999-8888");
+  });
+});
+
+describe("formatarTelefoneExibicao", () => {
+  test("descarta o DDI (55) antes de aplicar a máscara — não confunde DDI com DDD", () => {
+    expect(formatarTelefoneExibicao("5511976069213")).toBe("(11) 97606-9213");
+  });
+
+  test("número já sem DDI (11 dígitos) formata normalmente", () => {
+    expect(formatarTelefoneExibicao("11976069213")).toBe("(11) 97606-9213");
+  });
+
+  test("fixo sem DDI (10 dígitos) continua formatando", () => {
+    expect(formatarTelefoneExibicao("1133334444")).toBe("(11) 3333-4444");
+  });
+
+  test("ignora máscara/pontuação já presentes na entrada", () => {
+    expect(formatarTelefoneExibicao("+55 (11) 97606-9213")).toBe("(11) 97606-9213");
   });
 });
 

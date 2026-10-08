@@ -6,6 +6,7 @@
 // consulta banco — só desenha o que mandarem desenhar.
 import sharp from "sharp";
 import type { FormatoAnuncio } from "@/lib/anuncio-imovel";
+import { formatarTelefoneExibicao } from "@/lib/telefone";
 
 // Mesmo teto de LIMITE_TAMANHO_BYTES.imagem (upload-validation.ts): a
 // foto/logo já está armazenada no R2 por um upload que passou por essa
@@ -38,6 +39,16 @@ async function buscarBytesSeguro(url: string): Promise<Buffer | null> {
   }
 }
 
+// Estimativa de largura de texto em Arial — sharp/resvg não expõe
+// métricas reais de fonte pro Node (precisaria de um motor de layout de
+// texto completo só pra isto), então o selo de finalidade usa uma
+// largura FIXA estimada por caractere em vez da largura real. `fatorPeso`
+// diferencia negrito (mais largo) de regular — calibrado visualmente
+// contra o render real, não um valor de catálogo de fonte.
+function estimarLarguraTexto(texto: string, fontSize: number, fatorPeso: number): number {
+  return Math.round(texto.length * fontSize * fatorPeso);
+}
+
 // Escapa texto livre (título do imóvel, bairro, nome da organização) antes
 // de entrar no SVG — nenhum desses campos é controlado pelo produto, e um
 // "&"/"<" cru quebraria o XML (e, sem isto, seria injeção de SVG).
@@ -61,8 +72,7 @@ export type DadosAnuncio = {
   // pelos slides "foto" do carrossel (MKT-002), que deliberadamente
   // omitem a localização pra ficar discretos.
   localizacao: string | null;
-  nomeOrganizacao: string;
-  whatsapp: string | null; // já validado (temWhatsApp) por quem chama
+  whatsapp: string | null; // já validado (temWhatsApp) por quem chama — único contato exibido no rodapé
   // MKT-002 — opcional, default true: o selo de finalidade (badge
   // branco "À VENDA"/"PARA ALUGAR") é o elemento mais "pesado" do
   // overlay. Slides intermediários do carrossel (papel "foto") o
@@ -109,9 +119,17 @@ function montarSvgOverlay(formato: FormatoAnuncio, dados: DadosAnuncio): string 
   const mostrarSelo = dados.mostrarSelo ?? true;
   if (mostrarSelo) {
     const alturaSelo = Math.round(fonteSelo * 1.9);
+    const textoSelo = dados.finalidadeLabel.toUpperCase();
+    // Selo do tamanho do TEXTO (mais um respiro interno), não mais uma
+    // fração fixa da largura do canvas — era o que deixava sobrando
+    // espaço em branco num texto curto como "À VENDA" (achado real,
+    // visível em "PARA ALUGAR" x"À VENDA" lado a lado).
+    const seloPadX = Math.round(fonteSelo * 0.85);
+    const larguraSelo = estimarLarguraTexto(textoSelo, fonteSelo, 0.62) + seloPadX * 2;
+    const seloX = padding - seloPadX;
     elementos.push(
-      `<rect x="${padding - Math.round(padding * 0.3)}" y="${cursor}" width="${Math.round(w * 0.42)}" height="${alturaSelo}" rx="${Math.round(fonteSelo)}" fill="#ffffff" />`,
-      `<text x="${padding}" y="${cursor + Math.round(alturaSelo * 0.68)}" font-family="Arial, sans-serif" font-size="${fonteSelo}" font-weight="700" fill="#111111">${escaparSvg(dados.finalidadeLabel.toUpperCase())}</text>`
+      `<rect x="${seloX}" y="${cursor}" width="${larguraSelo}" height="${alturaSelo}" rx="${Math.round(fonteSelo)}" fill="#ffffff" />`,
+      `<text x="${padding}" y="${cursor + Math.round(alturaSelo * 0.68)}" font-family="Arial, sans-serif" font-size="${fonteSelo}" font-weight="700" fill="#111111">${escaparSvg(textoSelo)}</text>`
     );
     cursor += alturaSelo + gap * 1.5;
   }
@@ -156,14 +174,30 @@ function montarSvgOverlay(formato: FormatoAnuncio, dados: DadosAnuncio): string 
     el.replace(/y="(-?[\d.]+)"/g, (_match, valor: string) => `y="${Number(valor) + deslocamento}"`)
   );
 
+  // Achado real (feedback do usuário sobre o criativo): o rodapé não
+  // precisa repetir o nome da organização/corretor — só o canal de
+  // contato importa no material final. O WhatsApp ganha o ícone da
+  // marca (mesmo glifo de IconeWhatsApp em src/components/icons.tsx,
+  // desenhado aqui como path cru porque o overlay inteiro é SVG
+  // montado à mão, não JSX) e a máscara visual de sempre
+  // ((00) 00000-0000) em vez do número cru.
   const rodapeY = h - Math.round(padding * 0.5);
   const fonteRodape = Math.round(fonteCorpo * 0.85);
-  const rodape: string[] = [
-    `<text x="${padding}" y="${rodapeY}" font-family="Arial, sans-serif" font-size="${fonteRodape}" fill="#dddddd">${escaparSvg(dados.nomeOrganizacao)}</text>`,
-  ];
+  const rodape: string[] = [];
   if (dados.whatsapp) {
+    const telefoneExibicao = formatarTelefoneExibicao(dados.whatsapp);
+    const iconeTamanho = Math.round(fonteRodape * 1.1);
+    const gapIconeTexto = Math.round(fonteRodape * 0.4);
+    // "(00) 00000-0000" tem comprimento fixo — a mesma estimativa de
+    // largura do selo, só que calibrada pra texto regular (não negrito).
+    const larguraTexto = estimarLarguraTexto(telefoneExibicao, fonteRodape, 0.56);
+    const textoX = w - padding;
+    const iconeX = textoX - larguraTexto - gapIconeTexto - iconeTamanho;
+    const iconeY = rodapeY - iconeTamanho + Math.round(iconeTamanho * 0.12);
+    const escalaIcone = iconeTamanho / 24; // viewBox do glifo é 24x24
     rodape.push(
-      `<text x="${w - padding}" y="${rodapeY}" text-anchor="end" font-family="Arial, sans-serif" font-size="${fonteRodape}" fill="#dddddd">${escaparSvg(dados.whatsapp)}</text>`
+      `<g transform="translate(${iconeX}, ${iconeY}) scale(${escalaIcone})" fill="#25D366"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.9-4.45 9.9-9.91C21.96 6.45 17.5 2 12.04 2Zm5.8 14.03c-.24.68-1.4 1.3-1.93 1.38-.49.08-1.1.11-1.78-.11-.41-.13-.93-.3-1.6-.59-2.83-1.22-4.68-4.06-4.82-4.25-.14-.19-1.15-1.53-1.15-2.92s.72-2.07.98-2.35c.24-.27.53-.34.71-.34.18 0 .36 0 .51.01.17.01.39-.06.6.47.24.6.83 2.06.9 2.21.07.15.11.32.02.51-.09.19-.14.31-.27.48-.14.17-.29.37-.41.5-.14.14-.28.29-.12.57.16.28.72 1.2 1.55 1.94 1.07.95 1.96 1.25 2.24 1.39.28.14.44.12.61-.07.17-.2.71-.83.9-1.11.19-.28.37-.23.62-.14.25.09 1.6.76 1.87.9.27.14.45.2.52.32.07.11.07.65-.17 1.32Z" /></g>`,
+      `<text x="${textoX}" y="${rodapeY}" text-anchor="end" font-family="Arial, sans-serif" font-size="${fonteRodape}" fill="#dddddd">${escaparSvg(telefoneExibicao)}</text>`
     );
   }
 
@@ -213,7 +247,10 @@ export async function renderizarAnuncio(
     const bytesLogo = await buscarBytesSeguro(fontes.logoUrl);
     if (bytesLogo) {
       try {
-        const alturaLogo = Math.round(formato.largura * 0.09);
+        // 0.09 → 0.12: logo pequena demais no criativo final (feedback
+        // real do usuário) — mantém a mesma margem/posição, só ganha
+        // ~33% de altura.
+        const alturaLogo = Math.round(formato.largura * 0.12);
         const logoBuffer = await sharp(bytesLogo, { limitInputPixels: LIMITE_PIXELS_ENTRADA })
           .resize({ height: alturaLogo, withoutEnlargement: true })
           .png()

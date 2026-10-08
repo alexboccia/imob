@@ -8,6 +8,19 @@ export function formatarTelefone(valor: string): string {
   return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 7)}-${digitos.slice(7)}`;
 }
 
+// Mesma máscara de formatarTelefone, mas primeiro descarta um DDI (ex.:
+// "55" do Brasil) quando o valor tiver mais dígitos do que um número
+// local comporta. Nunca corta pela frente (um DDI concatenado na frente
+// viraria DDD por engano, ex.: "5511976069213" sem isto formataria como
+// DDD "55"); pega sempre os ÚLTIMOS 11 dígitos, que é o máximo que um
+// número local brasileiro tem. Números já sem DDI (10-11 dígitos)
+// continuam formatando normalmente — slice(-11) num valor mais curto
+// devolve o próprio valor.
+export function formatarTelefoneExibicao(valor: string): string {
+  const digitos = valor.replace(/\D/g, "").slice(-11);
+  return formatarTelefone(digitos);
+}
+
 export function telefoneValido(valor: string): boolean {
   const digitos = valor.replace(/\D/g, "");
   return digitos.length === 10 || digitos.length === 11;
