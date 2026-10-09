@@ -451,6 +451,20 @@ describe("idempotência do envio público", () => {
     expect(
       await prisma.interaction.count({ where: { organizationId: c.organization.id } })
     ).toBe(1);
+
+    // MKT-010 — a mesma corrida que serializa ScheduledActivity/
+    // Interaction (lock FOR UPDATE na negociação) precisa também deixar
+    // o vínculo de origem íntegro: exatamente uma Interaction, e é ELA
+    // quem a negociação aponta — nunca null (nenhuma das duas tentativas
+    // gravou) nem um id de uma Interaction que não existe (duas
+    // tentativas gravando por cima uma da outra).
+    const interesseConcorrente = await prisma.propertyInterest.findFirstOrThrow({
+      where: { organizationId: c.organization.id },
+    });
+    const interacaoConcorrente = await prisma.interaction.findFirstOrThrow({
+      where: { organizationId: c.organization.id },
+    });
+    expect(interesseConcorrente.sourceInteractionId).toBe(interacaoConcorrente.id);
   });
 
   // MKT-009 — a negociação criada pelo pedido público de visita nunca
