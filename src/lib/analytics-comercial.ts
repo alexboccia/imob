@@ -711,8 +711,9 @@ export function agruparPorCanal(
         totalVisualizacoes === 0 ? 0 : (dados.visualizacoes / totalVisualizacoes) * 100,
     };
   })
-    // Some as linhas totalmente vazias: mostrar seis canais em zero num
-    // tenant novo é ruído, não diagnóstico. (Diferente da decomposição
+    // Some as linhas totalmente vazias: mostrar todo canal do catálogo
+    // em zero num tenant novo é ruído, não diagnóstico. (Diferente da
+    // decomposição
     // por origem comercial, onde as 3 categorias são fixas e conhecidas.)
     .filter(
       (linha) =>

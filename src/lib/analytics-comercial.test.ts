@@ -492,6 +492,22 @@ describe("resultado comercial — canais (Fase 8)", () => {
     expect(anuncios.fechamentos).toBe(1);
   });
 
+  // MKT-008 — achado real: o link rastreável da MKT-006 gera
+  // utm_source=whatsapp de verdade, e sem um balde próprio esse
+  // contato caía em REFERENCIA ("Outros sites"), junto com qualquer
+  // referrer externo desconhecido — tornando impossível responder
+  // "quantos contatos vieram do meu link de WhatsApp".
+  test("contato vindo do link rastreável de WhatsApp (MKT-006) entra no canal WHATSAPP, nunca em Outros sites", () => {
+    const canais = agruparPorCanal(
+      [view({ utmSource: "whatsapp", utmMedium: "divulgacao" })],
+      [atrib({ utmSource: "whatsapp", utmMedium: "divulgacao" })],
+      []
+    );
+    expect(canais.map((c) => c.canal)).toEqual(["WHATSAPP"]);
+    expect(canais.find((c) => c.canal === "REFERENCIA")).toBeUndefined();
+    expect(canais[0]).toMatchObject({ visualizacoes: 1, contatos: 1 });
+  });
+
   test("oportunidade MANUAL (sem origem) cai em Sem atribuição, nunca num canal", () => {
     const canais = agruparPorCanal([], [], [{ atribuicao: null, fechada: false }]);
     const sem = canais.find((c) => c.canal === "SEM_ATRIBUICAO")!;

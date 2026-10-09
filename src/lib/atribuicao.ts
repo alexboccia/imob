@@ -201,6 +201,14 @@ export const CANAIS = {
   ANUNCIOS: "ANUNCIOS",
   BUSCA: "BUSCA",
   SOCIAL: "SOCIAL",
+  // MKT-008 — canal próprio, não um balde de "Redes sociais": desde a
+  // MKT-006 o próprio Kit de Divulgação gera links com
+  // utm_source=whatsapp, e sem este balde esse tráfego caía em
+  // REFERENCIA ("Outros sites"), indistinguível de um referrer externo
+  // qualquer — a pergunta "quais canais geram mais contatos" (MKT-008,
+  // seção 3) ficava sem resposta confiável para o canal que a própria
+  // MKT-006 passou a produzir de verdade.
+  WHATSAPP: "WHATSAPP",
   REFERENCIA: "REFERENCIA",
   DIRETO: "DIRETO",
   SEM_ATRIBUICAO: "SEM_ATRIBUICAO",
@@ -212,6 +220,7 @@ export const LABEL_CANAL: Record<Canal, string> = {
   ANUNCIOS: "Anúncios pagos",
   BUSCA: "Busca orgânica",
   SOCIAL: "Redes sociais",
+  WHATSAPP: "WhatsApp",
   REFERENCIA: "Outros sites",
   DIRETO: "Direto",
   SEM_ATRIBUICAO: "Sem atribuição",
@@ -223,6 +232,7 @@ export const ORDEM_CANAIS: readonly Canal[] = [
   CANAIS.ANUNCIOS,
   CANAIS.BUSCA,
   CANAIS.SOCIAL,
+  CANAIS.WHATSAPP,
   CANAIS.REFERENCIA,
   CANAIS.DIRETO,
   CANAIS.SEM_ATRIBUICAO,
@@ -240,6 +250,11 @@ const MARCAS_SOCIAL = [
   "twitter",
   "pinterest",
 ];
+// Mensageria, não "rede social": WhatsApp não tem feed nem alcance
+// orgânico comparável — é o visitante reencaminhando um link numa
+// conversa, ou o próprio corretor compartilhando o link rastreável
+// (MKT-006) que ele mesmo gerou.
+const MARCAS_MENSAGERIA = ["whatsapp"];
 const MEDIUMS_PAGOS = ["cpc", "ppc", "paid", "paid_social", "cpm", "display", "ads"];
 
 function contemMarca(valor: string, marcas: readonly string[]): boolean {
@@ -249,7 +264,9 @@ function contemMarca(valor: string, marcas: readonly string[]): boolean {
 // Ordem importa: mídia paga vence a plataforma. Um clique com
 // utm_source=instagram&utm_medium=cpc é ANÚNCIO, não alcance orgânico de
 // rede social — confundir os dois faria o corretor achar que o perfil
-// dele está performando quando na verdade ele está pagando.
+// dele está performando quando na verdade ele está pagando. Mesma regra
+// vale para WhatsApp: um anúncio pago que por acaso usa utm_source=
+// whatsapp ainda é ANÚNCIOS, nunca o canal orgânico.
 export function classificarCanal(atribuicao: Atribuicao | null | undefined): Canal {
   if (!atribuicao || !temAtribuicao(atribuicao)) return CANAIS.SEM_ATRIBUICAO;
 
@@ -259,6 +276,7 @@ export function classificarCanal(atribuicao: Atribuicao | null | undefined): Can
 
   const pista = utmSource ?? referrerHost;
   if (pista) {
+    if (contemMarca(pista, MARCAS_MENSAGERIA)) return CANAIS.WHATSAPP;
     if (contemMarca(pista, MARCAS_SOCIAL)) return CANAIS.SOCIAL;
     if (contemMarca(pista, MARCAS_BUSCA)) return CANAIS.BUSCA;
   }
