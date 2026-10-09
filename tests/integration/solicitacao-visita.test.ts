@@ -417,6 +417,14 @@ describe("idempotência do envio público", () => {
     expect(
       await prisma.scheduledActivity.count({ where: { organizationId: c.organization.id } })
     ).toBe(1);
+    // MKT-009 — achado real: o reenvio deduplicava o COMPROMISSO
+    // (ScheduledActivity), mas o CONTATO (Interaction, origin=VISITA)
+    // era criado de novo a cada chamada, sem a mesma guarda de replay —
+    // o mesmo pedido inflava "contatos" no CRM/analytics a cada clique
+    // duplo ou retry do navegador.
+    expect(
+      await prisma.interaction.count({ where: { organizationId: c.organization.id } })
+    ).toBe(1);
   });
 
   test("envios simultâneos idênticos não viram duas solicitações", async () => {
@@ -439,6 +447,48 @@ describe("idempotência do envio público", () => {
     expect(
       await prisma.scheduledActivity.count({ where: { organizationId: c.organization.id } })
     ).toBe(1);
+    // MKT-009 — mesma corrida, mesma guarda: o contato também é UM só.
+    expect(
+      await prisma.interaction.count({ where: { organizationId: c.organization.id } })
+    ).toBe(1);
+  });
+
+  // MKT-009 — a negociação criada pelo pedido público de visita nunca
+  // recebia sourceInteractionId, mesmo com a Interaction nascendo no
+  // MESMO request: a oportunidade e qualquer fechamento futuro caíam em
+  // "Sem atribuição" no Analytics mesmo quando a origem (UTM/canal) era
+  // perfeitamente conhecida — ver src/lib/analytics-comercial.ts, que só
+  // atribui canal a uma oportunidade com sourceInteractionId preenchido.
+  test("a negociação criada pelo pedido de visita recebe sourceInteractionId do contato que a originou", async () => {
+    const c = await novoCenario();
+    const imovel = await criarImovel({ organizationId: c.organization.id, status: "AVAILABLE" });
+
+    await pedir(c.organization.slug, formVisita(imovel.id));
+
+    const interesse = await prisma.propertyInterest.findFirstOrThrow({
+      where: { organizationId: c.organization.id },
+    });
+    const interacao = await prisma.interaction.findFirstOrThrow({
+      where: { organizationId: c.organization.id },
+    });
+    expect(interesse.sourceInteractionId).toBe(interacao.id);
+  });
+
+  test("um segundo pedido (horário diferente) NUNCA sobrescreve o sourceInteractionId original", async () => {
+    const c = await novoCenario();
+    const imovel = await criarImovel({ organizationId: c.organization.id, status: "AVAILABLE" });
+
+    await pedir(c.organization.slug, formVisita(imovel.id));
+    const primeira = await prisma.interaction.findFirstOrThrow({
+      where: { organizationId: c.organization.id },
+    });
+
+    await pedir(c.organization.slug, formVisita(imovel.id, { hora: "17:00" }));
+
+    const interesse = await prisma.propertyInterest.findFirstOrThrow({
+      where: { organizationId: c.organization.id },
+    });
+    expect(interesse.sourceInteractionId).toBe(primeira.id);
   });
 
   test("outro horário é um pedido NOVO — a proteção não prende a pessoa", async () => {

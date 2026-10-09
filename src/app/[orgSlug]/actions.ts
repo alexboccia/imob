@@ -780,32 +780,55 @@ export async function solicitarVisita(
             responsibleMemberId: responsavelId,
           },
         });
+
+        // O STAGE NÃO É TOCADO AQUI (mudança da Fase 56). Até a Fase 55
+        // este bloco avançava INTERESTED -> VISIT_SCHEDULED no envio do
+        // formulário, o que afirmava "esta negociação tem visita marcada"
+        // com base apenas no desejo de um desconhecido. O avanço passou
+        // para `confirmarSolicitacaoVisita`, onde a afirmação é verdade.
+        //
+        // Sem backfill e sem regressão: negociações que já avançaram
+        // continuam exatamente onde estão.
+
+        // O CONTATO em si — o que faz o pedido aparecer na caixa de
+        // entrada comercial junto dos outros contatos do site (ela lista
+        // Interaction do site sem autor). A visita é o compromisso; esta
+        // é a comunicação que o originou, e as duas coisas são
+        // diferentes.
+        //
+        // MKT-009 — achado real: isto vivia FORA do `if (!pedidoIdentico)`
+        // acima, então um duplo clique/retry do navegador (a mesma corrida
+        // que o guard de ScheduledActivity já resolvia) ainda criava uma
+        // Interaction nova a cada chamada — o mesmo pedido inflava
+        // "contatos" no CRM/analytics. Agora nasce na MESMA condição: só
+        // quando o pedido é de fato novo.
+        const interacaoCriada = await tx.interaction.create({
+          data: {
+            organizationId,
+            personId,
+            propertyId: imovel.id,
+            type: "MESSAGE",
+            notes: mensagemDaVisita(quando, fuso, observacao),
+            origin: ORIGENS_CAPTACAO.VISITA,
+            ...atribuicaoDoFormulario(formData),
+          },
+        });
+
+        // MKT-009 — achado real: a negociação criada por
+        // garantirNegociacaoDoVisitante nunca recebia sourceInteractionId,
+        // mesmo com a Interaction nascendo no MESMO request — oportunidade
+        // e qualquer fechamento futuro caíam em "Sem atribuição" no
+        // Analytics mesmo quando a origem (UTM/canal) era conhecida (ver
+        // analytics-comercial.ts, que só atribui canal com
+        // sourceInteractionId preenchido). `sourceInteractionId: null` no
+        // WHERE garante que isto só preenche a PRIMEIRA vez: um segundo
+        // pedido (outro horário, dias depois) nunca reescreve QUAL contato
+        // originou a negociação.
+        await tx.propertyInterest.updateMany({
+          where: { id: interesseId, organizationId, sourceInteractionId: null },
+          data: { sourceInteractionId: interacaoCriada.id },
+        });
       }
-
-      // O STAGE NÃO É TOCADO AQUI (mudança da Fase 56). Até a Fase 55
-      // este bloco avançava INTERESTED -> VISIT_SCHEDULED no envio do
-      // formulário, o que afirmava "esta negociação tem visita marcada"
-      // com base apenas no desejo de um desconhecido. O avanço passou
-      // para `confirmarSolicitacaoVisita`, onde a afirmação é verdade.
-      //
-      // Sem backfill e sem regressão: negociações que já avançaram
-      // continuam exatamente onde estão.
-
-      // O CONTATO em si — o que faz o pedido aparecer na caixa de
-      // entrada comercial junto dos outros contatos do site (ela lista
-      // Interaction do site sem autor). A visita é o compromisso; esta é
-      // a comunicação que o originou, e as duas coisas são diferentes.
-      await tx.interaction.create({
-        data: {
-          organizationId,
-          personId,
-          propertyId: imovel.id,
-          type: "MESSAGE",
-          notes: mensagemDaVisita(quando, fuso, observacao),
-          origin: ORIGENS_CAPTACAO.VISITA,
-          ...atribuicaoDoFormulario(formData),
-        },
-      });
     });
 
     return { tipo: "solicitada" as const, imovel };
