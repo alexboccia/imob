@@ -9,6 +9,7 @@ import {
   type DataCalendario,
 } from "@/lib/fuso-horario";
 import type { Prisma, ScheduledActivityType, VisitOutcome } from "@/generated/prisma/client";
+import { nomeResponsavelEfetivoDaAtividade } from "@/lib/responsavel-atividade";
 
 // Agenda do corretor (Fase H.3, evoluída na H.4 e generalizada na Fase
 // 19) — projeção operacional de ScheduledActivity, nunca uma segunda
@@ -47,6 +48,14 @@ export type ItemAgenda = {
   // (fallback discreto), nunca falha.
   person: { id: string; name: string; phone: string | null } | null;
   property: { id: string; title: string; neighborhood: string } | null;
+  // Fase 102 — achado real: nenhuma tela da Agenda dizia de quem é cada
+  // compromisso. Na política padrão da organização (COLLABORATIVE), a
+  // Agenda já lista os compromissos de TODOS os corretores sem distinção
+  // nenhuma (ver whereAtividade em escopo-comercial.ts). Mesma regra de
+  // posse de responsavel-atividade.ts (negociação tem precedência),
+  // nunca uma segunda fonte de verdade. null quando ninguém é
+  // responsável — comportamento real, não um rótulo inventado.
+  responsavel: { id: string; nome: string } | null;
 };
 
 export type ContadoresAgenda = {
@@ -85,6 +94,23 @@ const SELECT_ITEM_AGENDA = {
   // abaixo — nunca exposto no tipo de retorno ItemAgenda.
   person: { select: { id: true, name: true, phone: true, organizationId: true } },
   property: { select: { id: true, title: true, neighborhood: true, organizationId: true } },
+  // Fase 102 — os DOIS lados da precedência de posse (responsavel-
+  // atividade.ts), na MESMA query: sem isto, decidir "de quem é" exigiria
+  // uma consulta por item. organizationId no membro, mesmo padrão
+  // defensivo de central-equipe.ts, pela mesma razão: reconfirmar antes
+  // de expor um nome que uma FK solta poderia, em tese, apontar cross-tenant.
+  responsibleMemberId: true,
+  responsibleMember: {
+    select: { id: true, organizationId: true, user: { select: { name: true } } },
+  },
+  propertyInterest: {
+    select: {
+      responsibleMemberId: true,
+      responsibleMember: {
+        select: { id: true, organizationId: true, user: { select: { name: true } } },
+      },
+    },
+  },
 } as const;
 
 type LinhaBruta = {
@@ -100,6 +126,12 @@ type LinhaBruta = {
   createdAt: Date;
   person: { id: string; name: string; phone: string | null; organizationId: string };
   property: { id: string; title: string; neighborhood: string; organizationId: string } | null;
+  responsibleMemberId: string | null;
+  responsibleMember: { id: string; organizationId: string; user: { name: string } } | null;
+  propertyInterest: {
+    responsibleMemberId: string | null;
+    responsibleMember: { id: string; organizationId: string; user: { name: string } } | null;
+  } | null;
 };
 
 // Estratégia pra relação cross-tenant anômala (seção 9 da H.3): a FK simples
@@ -113,7 +145,28 @@ type LinhaBruta = {
 // de outro tenant). A ScheduledActivity em si continua aparecendo — ela é
 // legitimamente dessa organização, só o dado relacionado anômalo é
 // redigido.
+// organizationId reconfirmado por relação (mesma defesa de person/property
+// acima): um membro redigido vira null, nunca um nome de outro tenant.
+function paraResponsavel(
+  membro: { id: string; organizationId: string; user: { name: string } } | null,
+  organizationId: string
+): { id: string; nome: string } | null {
+  if (!membro || membro.organizationId !== organizationId) return null;
+  return { id: membro.id, nome: membro.user.name };
+}
+
 function paraItemAgenda(linha: LinhaBruta, organizationId: string): ItemAgenda {
+  const responsavel = nomeResponsavelEfetivoDaAtividade({
+    propertyInterestId: linha.propertyInterestId,
+    responsibleMemberId: linha.responsibleMemberId,
+    responsibleMember: paraResponsavel(linha.responsibleMember, organizationId),
+    propertyInterest: linha.propertyInterest
+      ? {
+          responsibleMemberId: linha.propertyInterest.responsibleMemberId,
+          responsibleMember: paraResponsavel(linha.propertyInterest.responsibleMember, organizationId),
+        }
+      : null,
+  });
   return {
     id: linha.id,
     type: linha.type,
@@ -133,6 +186,7 @@ function paraItemAgenda(linha: LinhaBruta, organizationId: string): ItemAgenda {
       linha.property && linha.property.organizationId === organizationId
         ? { id: linha.property.id, title: linha.property.title, neighborhood: linha.property.neighborhood }
         : null,
+    responsavel,
   };
 }
 

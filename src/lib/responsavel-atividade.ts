@@ -65,3 +65,29 @@ export function responsavelEfetivoDaAtividade(atividade: {
   }
   return atividade.responsibleMemberId;
 }
+
+/**
+ * Fase 102 — a MESMA regra acima (negociação tem precedência sobre a
+ * coluna da própria atividade), só que devolvendo {id, nome} em vez do
+ * id sozinho — para telas que precisam EXIBIR de quem é o compromisso
+ * (a Agenda, que hoje não mostra isso em nenhum lugar — achado real da
+ * Fase 102). Não reimplementa a precedência: é o mesmo `if
+ * (propertyInterestId)` de responsavelEfetivoDaAtividade, lendo o campo
+ * de nome em vez do de id. Duplicar a condição em vez de derivar de um
+ * resultado só de id evita uma segunda consulta — o nome de QUALQUER um
+ * dos dois lados já chega junto na mesma query que traz os ids.
+ */
+export function nomeResponsavelEfetivoDaAtividade(atividade: {
+  propertyInterestId: string | null;
+  responsibleMemberId: string | null;
+  responsibleMember?: { id: string; nome: string } | null;
+  propertyInterest?: {
+    responsibleMemberId: string | null;
+    responsibleMember?: { id: string; nome: string } | null;
+  } | null;
+}): { id: string; nome: string } | null {
+  if (atividade.propertyInterestId) {
+    return atividade.propertyInterest?.responsibleMember ?? null;
+  }
+  return atividade.responsibleMember ?? null;
+}

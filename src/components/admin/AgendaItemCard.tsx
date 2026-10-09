@@ -101,6 +101,17 @@ export function AgendaItemCard({
 
           <div className="border-t pt-2">
             <p className="truncate font-medium">{item.person ? item.person.name : "Cliente indisponível"}</p>
+            {/* Fase 102 — achado real: a política padrão da organização
+                (COLLABORATIVE) já lista aqui os compromissos de TODOS os
+                corretores, sem nenhuma forma de saber de quem é cada um.
+                Só aparece quando há responsável (negociação legada/
+                atividade histórica sem dono continuam sem este rótulo —
+                nunca inventado). */}
+            {item.responsavel && (
+              <p className="truncate text-xs text-muted-foreground">
+                Responsável: {item.responsavel.nome}
+              </p>
+            )}
             {item.property ? (
               <>
                 <p className="truncate text-xs text-muted-foreground">{item.property.title}</p>

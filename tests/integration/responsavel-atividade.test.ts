@@ -3,7 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { criarCenario, criarImovel, criarMembro, criarPessoa, criarUsuario } from "@/test/fixtures";
 import { buscarCentralTrabalho } from "@/lib/central-trabalho";
 import { whereAtividade } from "@/lib/escopo-comercial";
-import { responsavelEfetivoDaAtividade } from "@/lib/responsavel-atividade";
+import {
+  responsavelEfetivoDaAtividade,
+  nomeResponsavelEfetivoDaAtividade,
+} from "@/lib/responsavel-atividade";
 
 // =======================================================================
 // De quem é um compromisso
@@ -248,6 +251,50 @@ describe("responsavelEfetivoDaAtividade", () => {
 
     expect(
       responsavelEfetivoDaAtividade({ propertyInterestId: null, responsibleMemberId: null })
+    ).toBeNull();
+  });
+});
+
+// Fase 102 — achado real: a Agenda não mostrava de quem é cada
+// compromisso. Na política padrão da organização (COLLABORATIVE), a
+// Agenda já lista os compromissos de TODOS os corretores (whereAtividade
+// devolve `{}` nesse modo — ver "escopo comercial restrito" acima) sem
+// nenhuma forma de distinguir de quem é cada um.
+describe("nomeResponsavelEfetivoDaAtividade", () => {
+  test("com negociação: o nome vem do responsável da NEGOCIAÇÃO, mesmo se a atividade citar outro nome", () => {
+    expect(
+      nomeResponsavelEfetivoDaAtividade({
+        propertyInterestId: "neg-1",
+        responsibleMemberId: "membro-b",
+        responsibleMember: { id: "membro-b", nome: "Bruna" },
+        propertyInterest: {
+          responsibleMemberId: "membro-a",
+          responsibleMember: { id: "membro-a", nome: "Ana" },
+        },
+      })
+    ).toEqual({ id: "membro-a", nome: "Ana" });
+  });
+
+  test("sem negociação: o nome vem do responsável da própria atividade", () => {
+    expect(
+      nomeResponsavelEfetivoDaAtividade({
+        propertyInterestId: null,
+        responsibleMemberId: "membro-b",
+        responsibleMember: { id: "membro-b", nome: "Bruna" },
+      })
+    ).toEqual({ id: "membro-b", nome: "Bruna" });
+  });
+
+  test("sem nenhum responsável: null, nunca um nome inventado", () => {
+    expect(
+      nomeResponsavelEfetivoDaAtividade({ propertyInterestId: null, responsibleMemberId: null })
+    ).toBeNull();
+    expect(
+      nomeResponsavelEfetivoDaAtividade({
+        propertyInterestId: "neg-1",
+        responsibleMemberId: null,
+        propertyInterest: { responsibleMemberId: null },
+      })
     ).toBeNull();
   });
 });

@@ -70,6 +70,14 @@ export function SolicitacaoVisitaCard({
           <p className="truncate font-medium">
             {item.person ? item.person.name : "Cliente indisponível"}
           </p>
+          {/* Fase 102 — mesmo achado das outras abas: solicitarVisita já
+              grava o responsável pelo imóvel nesta atividade (Fase 56),
+              mas nada aqui mostrava. */}
+          {item.responsavel && (
+            <p className="truncate text-xs text-muted-foreground">
+              Responsável: {item.responsavel.nome}
+            </p>
+          )}
           {item.person?.phone && (
             <p className="truncate text-xs text-muted-foreground">{item.person.phone}</p>
           )}

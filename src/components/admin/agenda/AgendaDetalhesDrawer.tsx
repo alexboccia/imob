@@ -108,6 +108,16 @@ export function AgendaDetalhesDrawer({
             <p className="text-sm font-medium text-primary">{ACAO_OPERACIONAL_LABEL[acaoOperacional]}</p>
           )}
 
+          {/* Fase 102 — mesmo achado do card: na política padrão
+              (COLLABORATIVE) a Agenda lista compromissos de toda a
+              organização, sem dizer de quem é cada um. */}
+          {item.responsavel && (
+            <div>
+              <h3 className="mb-1.5 text-sm font-medium">Responsável</h3>
+              <p className="text-sm text-muted-foreground">{item.responsavel.nome}</p>
+            </div>
+          )}
+
           <div>
             <h3 className="mb-1.5 text-sm font-medium">Cliente</h3>
             {item.person ? (

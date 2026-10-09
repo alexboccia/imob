@@ -1,7 +1,7 @@
 import { describe, test, expect, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { prisma } from "@/lib/prisma";
-import { criarCenario, criarPessoa, criarImovel } from "@/test/fixtures";
+import { criarCenario, criarPessoa, criarImovel, criarMembro, criarUsuario } from "@/test/fixtures";
 import {
   buscarAgendaHoje,
   buscarAgendaProximas,
@@ -1246,5 +1246,114 @@ describe("Agenda do corretor — Fase H.3", () => {
       select: { status: true },
     });
     expect(atividadeAindaScheduled?.status).toBe("SCHEDULED");
+  });
+
+  // -------------------------------------------------------------------
+  // Fase 102 — achado real: a política padrão da organização
+  // (COLLABORATIVE) já lista aqui os compromissos de TODOS os corretores
+  // (whereAtividade devolve `{}` nesse modo), sem nenhuma forma de saber
+  // de quem é cada um. Estes testes provam, contra o Postgres real, que
+  // o campo `responsavel` segue a MESMA precedência de posse já
+  // estabelecida (negociação > atividade), nunca uma segunda fonte.
+  describe("AL) responsável do compromisso", () => {
+    test("com negociação: o nome vem de quem CONDUZ a negociação", async () => {
+      const ctx = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: hojeAsHoras(2) });
+      cenario = ctx.cenario;
+      const corretora = await criarMembro({
+        organizationId: ctx.cenario.organization.id,
+        userId: (await criarUsuario({ name: "Ana Corretora" })).id,
+        role: "BROKER",
+      });
+      await prisma.propertyInterest.update({
+        where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+        data: { responsibleMemberId: corretora.id },
+      });
+
+      const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {});
+      const item = hoje.find((i) => i.id === ctx.atividade.id);
+      expect(item?.responsavel).toEqual({ id: corretora.id, nome: "Ana Corretora" });
+    });
+
+    test("sem negociação: o nome vem do responsável da própria atividade (Fase 32/56 — solicitação de visita)", async () => {
+      const cenarioLocal = await criarCenario({ modulos: ["core", "properties", "crm"] });
+      cenario = cenarioLocal;
+      const pessoa = await criarPessoa({ organizationId: cenarioLocal.organization.id });
+      const corretor = await criarMembro({
+        organizationId: cenarioLocal.organization.id,
+        userId: (await criarUsuario({ name: "Bruno Corretor" })).id,
+        role: "BROKER",
+      });
+      const atividade = await prisma.scheduledActivity.create({
+        data: {
+          organizationId: cenarioLocal.organization.id,
+          personId: pessoa.id,
+          responsibleMemberId: corretor.id,
+          type: "FOLLOW_UP",
+          subject: "Ligar de volta",
+          status: "SCHEDULED",
+          scheduledAt: hojeAsHoras(2),
+        },
+      });
+
+      const hoje = await buscarAgendaHoje(cenarioLocal.organization.id, "UTC", {});
+      const item = hoje.find((i) => i.id === atividade.id);
+      expect(item?.responsavel).toEqual({ id: corretor.id, nome: "Bruno Corretor" });
+    });
+
+    test("sem responsável algum: null, nunca um nome inventado", async () => {
+      const ctx = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: hojeAsHoras(2) });
+      cenario = ctx.cenario;
+
+      const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {});
+      const item = hoje.find((i) => i.id === ctx.atividade.id);
+      expect(item?.responsavel).toBeNull();
+    });
+
+    test("a negociação VENCE: responsibleMemberId da própria atividade não sequestra o rótulo", async () => {
+      const ctx = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: hojeAsHoras(2) });
+      cenario = ctx.cenario;
+      const donoDaNegociacao = await criarMembro({
+        organizationId: ctx.cenario.organization.id,
+        userId: (await criarUsuario({ name: "Dona Da Negociação" })).id,
+        role: "BROKER",
+      });
+      const outroNaAtividade = await criarMembro({
+        organizationId: ctx.cenario.organization.id,
+        userId: (await criarUsuario({ name: "Outro Na Atividade" })).id,
+        role: "BROKER",
+      });
+      await prisma.propertyInterest.update({
+        where: { id: ctx.interesse.id, organizationId: ctx.cenario.organization.id },
+        data: { responsibleMemberId: donoDaNegociacao.id },
+      });
+      await prisma.scheduledActivity.update({
+        where: { id: ctx.atividade.id, organizationId: ctx.cenario.organization.id },
+        data: { responsibleMemberId: outroNaAtividade.id },
+      });
+
+      const hoje = await buscarAgendaHoje(ctx.cenario.organization.id, "UTC", {});
+      const item = hoje.find((i) => i.id === ctx.atividade.id);
+      expect(item?.responsavel).toEqual({ id: donoDaNegociacao.id, nome: "Dona Da Negociação" });
+    });
+
+    test("tenant: responsável de outra organização nunca vaza, mesmo numa relação anômala", async () => {
+      const ctxA = await cenarioComVisita({ status: "SCHEDULED", scheduledAt: hojeAsHoras(2) });
+      cenario = ctxA.cenario;
+      const ctxB = await criarCenario({ modulos: ["core", "properties", "crm"] });
+      cenarioB = ctxB;
+
+      // Relação anômala: responsibleMemberId aponta pra um membro de
+      // OUTRA organização — nunca deveria acontecer pelas actions reais
+      // (que sempre validam o tenant do membro antes de atribuir), mas a
+      // defesa de leitura precisa segurar mesmo assim.
+      await prisma.scheduledActivity.update({
+        where: { id: ctxA.atividade.id, organizationId: ctxA.cenario.organization.id },
+        data: { responsibleMemberId: ctxB.membro.id },
+      });
+
+      const hoje = await buscarAgendaHoje(ctxA.cenario.organization.id, "UTC", {});
+      const item = hoje.find((i) => i.id === ctxA.atividade.id);
+      expect(item?.responsavel).toBeNull();
+    });
   });
 });
