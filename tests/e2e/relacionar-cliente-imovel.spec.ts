@@ -131,7 +131,10 @@ test.describe("jornada reversa: imóvel → cliente compatível → Relacionar",
       .locator('[data-slot="card"]')
       .filter({ hasText: nomeCliente });
     await expect(cardInteressado).toBeVisible();
-    await expect(cardInteressado.getByText("Interessado")).toBeVisible();
+    // Fase 105 — escopado ao badge: o Select de estágio (mesmo
+    // InteresseImovelItem) também mostra "Interessado" desde a correção
+    // desta fase, e getByText sozinho virou ambíguo entre os dois.
+    await expect(cardInteressado.locator('[data-slot="badge"]', { hasText: "Interessado" })).toBeVisible();
     // Fase 92 — mesma linha do lado do imóvel: InteresseImovelItem é
     // compartilhado entre as duas fichas.
     await expect(cardInteressado.getByText(/Criada em/)).toBeVisible();

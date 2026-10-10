@@ -120,6 +120,26 @@ test.describe("Estágio no funil — distinção do estágio de negociação", (
     await expect(secao.getByRole("combobox")).toBeVisible();
     await expect(secao.getByRole("button", { name: "Atualizar" })).toBeVisible();
   });
+
+  // Fase 105 — achado real, só visível numa captura de tela: o gatilho
+  // do Select mostrava o valor CRU do enum ("NEW_LEAD"), não o rótulo
+  // ("Novo lead") — mesmo bug já documentado e corrigido em
+  // src/lib/select-rotulo.ts para dois seletores públicos (Home/Tipo,
+  // /imoveis/Ordenar), que não cobriam este Select. Cliente recém-criado
+  // nasce NEW_LEAD (default do schema) — é exatamente o estado em que o
+  // bug era visível.
+  test("o gatilho do Select mostra o RÓTULO do estágio ('Novo lead'), nunca o valor cru do enum", async ({
+    page,
+  }) => {
+    const nome = nomeUnico("Cliente Rotulo Estagio");
+    await criarCliente(page, nome);
+
+    const secao = page.locator("section", {
+      has: page.getByRole("heading", { level: 2, name: "Estágio no funil" }),
+    });
+    await expect(secao.getByRole("combobox")).toContainText("Novo lead");
+    await expect(secao.getByRole("combobox")).not.toContainText("NEW_LEAD");
+  });
 });
 
 test.describe("estados vazios diferenciados", () => {

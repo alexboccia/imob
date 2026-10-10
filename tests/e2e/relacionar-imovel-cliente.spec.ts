@@ -148,10 +148,22 @@ test.describe("de recomendação a relacionamento", () => {
       .locator('[data-slot="card"]')
       .filter({ hasText: tituloImovel });
     await expect(cardRelacionado).toBeVisible();
-    await expect(cardRelacionado.getByText("Interessado")).toBeVisible();
+    // Fase 105 — escopado ao badge (não mais só getByText): o Select de
+    // estágio logo abaixo também passou a mostrar "Interessado" (era o
+    // bug desta mesma fase, corrigido aqui), e getByText sozinho virou
+    // ambíguo entre os dois.
+    await expect(cardRelacionado.locator('[data-slot="badge"]', { hasText: "Interessado" })).toBeVisible();
     // Fase 92 — "Criada em" é a única pergunta de evolução da negociação
     // que antes não tinha resposta em lugar nenhum da tela.
     await expect(cardRelacionado.getByText(/Criada em/)).toBeVisible();
+
+    // Fase 105 — achado real, só visível numa captura de tela: o
+    // gatilho do Select de estágio (abaixo do badge estático acima)
+    // mostrava o valor CRU do enum ("INTERESTED"), não o rótulo
+    // ("Interessado") — mesmo bug de src/lib/select-rotulo.ts, agora
+    // também corrigido aqui.
+    await expect(cardRelacionado.getByRole("combobox")).toContainText("Interessado");
+    await expect(cardRelacionado.getByRole("combobox")).not.toContainText("INTERESTED");
 
     // Só UM PropertyInterest — nenhuma duplicidade visível na lista.
     await expect(

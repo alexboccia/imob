@@ -65,6 +65,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ESTAGIO_LABEL, ESTAGIOS_PIPELINE, TIPO_INTERACAO_LABEL } from "@/lib/crm-labels";
+import { rotuloSelecionado } from "@/lib/select-rotulo";
 import { formatarDataHoraNoFuso } from "@/lib/fuso-horario";
 
 // Redesenho da tela de Clientes — ESTAGIO_LABEL/TIPO_INTERACAO_LABEL
@@ -415,7 +416,21 @@ export default async function DetalheClientePage({
             <form action={atualizarEstagioComId} className="flex gap-2">
               <Select name="estagioFunil" defaultValue={pessoa.pipelineStage}>
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  {/* Fase 105 — mesmo achado visual de InteresseImovelItem:
+                      sem children, o trigger mostrava o valor cru
+                      ("NEW_LEAD") em vez do rótulo. Mesma correção
+                      (src/lib/select-rotulo.ts), já usada em dois
+                      seletores públicos — mas AQUI como string pronta,
+                      nunca como função: esta página é Server Component,
+                      e uma função como children de um Client Component
+                      não atravessa a fronteira (erro real reproduzido:
+                      "Functions cannot be passed directly to Client
+                      Components"). O valor já é conhecido no servidor,
+                      então a string resolvida é tudo que a travessia
+                      precisa. */}
+                  <SelectValue>
+                    {rotuloSelecionado(pessoa.pipelineStage, ESTAGIO_LABEL, "Estágio")}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {ESTAGIOS.map((estagio) => (

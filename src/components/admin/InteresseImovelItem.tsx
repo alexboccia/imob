@@ -24,6 +24,7 @@ import type {
   VisitOutcome,
 } from "@/generated/prisma/client";
 import { rotuloResultadoRegistrado } from "@/lib/resultado-visita";
+import { rotuloSelecionado } from "@/lib/select-rotulo";
 import { formatarDataHoraNoFuso as formatarDataVisita } from "@/lib/fuso-horario";
 import type { ParticipanteExibicao } from "@/lib/participacao-comissao";
 import type { PagamentoExibicao } from "@/lib/pagamento-comissao";
@@ -265,7 +266,18 @@ export function InteresseImovelItem({
                 perceber, mesmo sem tocar no dropdown. */}
             <Select key={interesse.stage} name="stage" defaultValue={interesse.stage}>
               <SelectTrigger id={stageId} className="w-[180px]">
-                <SelectValue />
+                {/* Fase 105 — achado real (só visível numa captura de
+                    tela, nenhum teste de DOM pegou): `Select.Value` sem
+                    `children` mostra o VALOR CRU da opção ("INTERESTED"),
+                    não o rótulo do SelectItem correspondente — mesmo bug
+                    já documentado e corrigido em src/lib/select-rotulo.ts
+                    para dois seletores públicos (Home/Tipo,
+                    /imoveis/Ordenar), que não cobriu este Select
+                    descontrolado (defaultValue, não value+onValueChange) —
+                    a mesma correção se aplica aqui. */}
+                <SelectValue>
+                  {(valor) => rotuloSelecionado(valor, ESTAGIO_INTERESSE_LABEL, "Estágio")}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {ESTAGIOS_INTERESSE.map((valor) => (
