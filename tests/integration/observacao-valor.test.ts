@@ -192,11 +192,18 @@ describe("tenant", () => {
     const b = await novoCenario();
     autenticarComo(b);
     // A consulta da action nasce escopada na organização de quem está
-    // logado: o imóvel da A simplesmente não existe para a B, e a action
-    // rejeita antes de qualquer escrita.
-    await expect(
-      atualizarImovel(imovelDeA.id, { success: false }, formImovel("Texto de outra imobiliária"))
-    ).rejects.toThrow();
+    // logado: o imóvel da A simplesmente não existe para a B. Fase 106 —
+    // antes, essa rejeição lançava uma exceção não tratada (derrubava a
+    // tela, sem error.tsx na árvore); agora devolve um ActionState
+    // amigável, mas a proteção de tenant é a mesma: nenhuma escrita
+    // acontece.
+    const resultado = await atualizarImovel(
+      imovelDeA.id,
+      { success: false },
+      formImovel("Texto de outra imobiliária")
+    );
+    expect(resultado.success).toBe(false);
+    expect(resultado.message).toMatch(/não encontrado/i);
     expect(
       await prisma.property.findFirstOrThrow({
         where: { id: imovelDeA.id, organizationId: a.organization.id },

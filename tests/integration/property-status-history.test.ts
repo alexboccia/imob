@@ -110,3 +110,50 @@ describe("PropertyStatusHistory — edição manual do imóvel", () => {
     expect(historico.changedByMemberId).toBe(c.membro.id);
   });
 });
+
+// =======================================================================
+// Fase 106 — editar um imóvel inexistente/de outro tenant nunca derruba
+// a tela
+// =======================================================================
+// Antes desta fase, o findUniqueOrThrow em atualizarImovel não tinha
+// catch para P2025: um id obsoleto (link antigo) ou de outra organização
+// (adulteração de formulário) lançava uma exceção não tratada, que subia
+// até global-error.tsx por falta de qualquer error.tsx na árvore —
+// trocando a tela inteira por "Algo deu errado". Agora vira um
+// ActionState amigável, igual ao padrão já usado em agendamentos/actions.ts
+// para "não encontrado" (nunca revela se o id existe em outra org).
+describe("atualizarImovel — registro inexistente ou de outro tenant", () => {
+  test("id que não existe em nenhuma organização retorna erro amigável, não lança", async () => {
+    const c = await novoCenario();
+    autenticarComo(c);
+
+    const resultado = await executar(() =>
+      atualizarImovel("cm00000000000000000000000", { success: false }, formImovel())
+    );
+
+    expect(resultado).not.toBe("salvou");
+    expect((resultado as ActionState).success).toBe(false);
+    expect((resultado as { message?: string }).message).toMatch(/não encontrado/i);
+  });
+
+  test("id de um imóvel real de OUTRA organização retorna o mesmo erro amigável, não lança", async () => {
+    const c = await novoCenario();
+    const outra = await novoCenario();
+
+    autenticarComo(outra);
+    await executar(() => criarImovel({ success: false }, formImovel()));
+    const imovelDaOutraOrg = await prisma.property.findFirstOrThrow({
+      where: { organizationId: outra.organization.id },
+      select: { id: true },
+    });
+
+    autenticarComo(c);
+    const resultado = await executar(() =>
+      atualizarImovel(imovelDaOutraOrg.id, { success: false }, formImovel())
+    );
+
+    expect(resultado).not.toBe("salvou");
+    expect((resultado as ActionState).success).toBe(false);
+    expect((resultado as { message?: string }).message).toMatch(/não encontrado/i);
+  });
+});

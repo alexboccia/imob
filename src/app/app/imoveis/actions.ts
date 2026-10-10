@@ -241,6 +241,20 @@ function ehColisaoDeDestaque(erro: unknown): boolean {
   );
 }
 
+// P2025 do findUniqueOrThrow em atualizarImovel: o id não bate com nenhum
+// imóvel desta organização — veio de um link/form obsoleto, ou de um id
+// de outro tenant. Mesma mensagem genérica nos dois casos (não revela se
+// o imóvel existe em outra organização), seguindo o padrão já usado em
+// agendamentos/actions.ts para "não encontrado".
+function ehRegistroInexistente(erro: unknown): boolean {
+  return (
+    typeof erro === "object" &&
+    erro !== null &&
+    "code" in erro &&
+    (erro as { code?: string }).code === "P2025"
+  );
+}
+
 export async function atualizarImovel(
   imovelId: string,
   _prevState: ActionState,
@@ -393,6 +407,9 @@ export async function atualizarImovel(
       return erroGenerico(
         "Outra pessoa acabou de usar essa posição na página inicial. Recarregue e escolha outra."
       );
+    }
+    if (ehRegistroInexistente(erro)) {
+      return erroGenerico("Imóvel não encontrado. Ele pode ter sido removido ou o link está desatualizado.");
     }
     throw erro;
   }

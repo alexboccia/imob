@@ -386,11 +386,18 @@ describe("tenant e autorização", () => {
     const orgB = await novoCenario();
     const imovelDeB = await imovelDisponivel(orgB, "Imóvel de B");
 
-    // Sessão da organização A tentando editar um imóvel de B.
+    // Sessão da organização A tentando editar um imóvel de B. Fase 106 —
+    // antes, o findUniqueOrThrow sem catch de P2025 derrubava a tela
+    // inteira (sem error.tsx na árvore); agora a mesma proteção de
+    // tenant continua de pé, só que devolve um ActionState amigável em
+    // vez de lançar.
     await autenticarComo(orgA, "OWNER");
-    await expect(
-      editar(imovelDeB.id, formularioImovel(imovelDeB, { posicaoDestaqueHome: "1" }))
-    ).rejects.toThrow();
+    const resultado = await editar(
+      imovelDeB.id,
+      formularioImovel(imovelDeB, { posicaoDestaqueHome: "1" })
+    );
+    expect(resultado.success).toBe(false);
+    expect(resultado.message).toMatch(/não encontrado/i);
 
     // Nada mudou em B.
     const depois = await prisma.property.findFirstOrThrow({
