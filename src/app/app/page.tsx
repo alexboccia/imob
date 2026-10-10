@@ -142,7 +142,7 @@ export default async function DashboardPage({
   // Fase 26 — primeiros passos. Derivado de fatos, some quando não há
   // pendência: para uma organização já operando, isto é uma consulta
   // barata que não renderiza nada.
-  const onboarding = await buscarOnboarding(organizationId);
+  const onboarding = await buscarOnboarding(organizationId, await papelAtual());
 
   const [metricas, agenda] = await Promise.all([
     buscarMetricasDashboard(organizationId, fuso),

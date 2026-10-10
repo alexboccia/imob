@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { withOrganization } from "@/lib/tenant-context";
 import { getLimit, FEATURE_USERS } from "@/lib/entitlements";
+import { temPapel, PAPEIS_GESTAO_CONFIGURACOES, PAPEIS_GESTAO_USUARIOS } from "@/lib/authorization";
 
 // =======================================================================
 // Primeiros passos (Fase 26)
@@ -31,7 +32,10 @@ export type Onboarding = {
   pendentes: number;
 };
 
-export async function buscarOnboarding(organizationId: string): Promise<Onboarding> {
+export async function buscarOnboarding(
+  organizationId: string,
+  papel: string | undefined
+): Promise<Onboarding> {
   return withOrganization(organizationId, async () => {
     const [configuracoes, totalImoveis, membrosAtivos, convitesPendentes, limiteUsuarios] =
       await Promise.all([
@@ -92,6 +96,23 @@ export async function buscarOnboarding(organizationId: string): Promise<Onboardi
       });
     }
 
-    return { passos, pendentes: passos.filter((passo) => !passo.concluido).length };
+    // Oferecer uma porta e negá-la na entrada é pior que não mostrar a
+    // porta — mesma doutrina já aplicada ao menu lateral (Fase 25). Sem
+    // isto, um BROKER via "Complete os dados da imobiliária"/"Personalize
+    // seu site" (ambos levam a /app/configuracoes) caía direto na tela de
+    // acesso negado, e "Convide sua equipe" (/app/usuarios) chegava numa
+    // página sem o botão de convite correspondente ao passo.
+    const podeVerPassosDeConfiguracao = temPapel(papel, PAPEIS_GESTAO_CONFIGURACOES);
+    const podeVerPassoDeEquipe = temPapel(papel, PAPEIS_GESTAO_USUARIOS);
+    const passosVisiveis = passos.filter((passo) => {
+      if (passo.href === "/app/configuracoes") return podeVerPassosDeConfiguracao;
+      if (passo.href === "/app/usuarios") return podeVerPassoDeEquipe;
+      return true;
+    });
+
+    return {
+      passos: passosVisiveis,
+      pendentes: passosVisiveis.filter((passo) => !passo.concluido).length,
+    };
   });
 }
