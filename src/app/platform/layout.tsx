@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { href: "/platform/organizations", label: "Organizations" },
   { href: "/platform/plans", label: "Plans" },
   { href: "/platform/operators", label: "Operators" },
+  { href: "/platform/configuracoes", label: "Configurações" },
   { href: "/platform/audit", label: "Audit" },
 ];
 

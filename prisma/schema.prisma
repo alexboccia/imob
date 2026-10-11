@@ -2441,9 +2441,38 @@ model PlatformOperator {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  auditLogs PlatformAuditLog[]
+  auditLogs           PlatformAuditLog[]
+  platformSettingsLog PlatformSettings[]
 
   @@map("platform_operators")
+}
+
+// Configuração global do SaaS (Fase 112) — SINGLETON: sempre a mesma
+// linha, id fixo "global", nunca uma segunda é criada (upsert por esse
+// id, nunca create solto). É o contato de SUPORTE DO PRODUTO — nunca
+// confundir com OrganizationSettings.phone/whatsapp, que é o contato
+// comercial de CADA imobiliária (tenant). Deliberadamente FORA de
+// TENANT_SCOPED_MODELS (src/lib/prisma.ts): não tem organizationId, é
+// por natureza cross-tenant, só o Super Admin da plataforma a edita.
+model PlatformSettings {
+  id        String  @id @default("global")
+  // Só dígitos, sempre com DDI (ex: "5511976069213") — nunca formatado
+  // aqui; formatação/link de WhatsApp são derivados em runtime
+  // (src/lib/plataforma-suporte.ts), nunca persistidos por extenso.
+  supportPhone String?
+  // Texto livre curto (ex: "Segunda a sexta, 9h às 18h") — V1
+  // deliberadamente não modela um horário estruturado (dias da semana +
+  // intervalos), que seria complexidade desnecessária para o requisito
+  // atual (seção 5 do pedido da Fase 112: "editar o horário, SE a
+  // arquitetura permitir implementar isso com segurança e sem
+  // complexidade desnecessária").
+  supportHours String?
+
+  updatedAt           DateTime          @updatedAt
+  updatedByOperatorId String?
+  updatedByOperator   PlatformOperator? @relation(fields: [updatedByOperatorId], references: [id])
+
+  @@map("platform_settings")
 }
 
 // Auditoria de ações administrativas da PLATAFORMA (não de uma organização)
