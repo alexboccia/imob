@@ -107,7 +107,48 @@ Depois do incidente resolvido, registrar (formato livre, mas cobrindo):
 - Ação de prevenção (novo teste, novo alerta, mudança de processo) — com
   responsável e prazo, não só "vamos melhorar isso".
 
-## 9. Referências rápidas
+## 9. Canal de suporte do piloto comercial (proposta — decisão pendente, Fase 111)
+
+A seção 1 já apontava "Canal de suporte (a definir — fora do escopo
+técnico deste runbook)" como a origem mais comum de detecção de um
+incidente (relato do usuário). Esta seção não decide o canal — isso é
+uma decisão de produto/operação, não de código — mas organiza as
+alternativas e os campos que a decisão precisa cobrir, para que quem
+tiver autoridade preencha em vez de inventar.
+
+### Alternativas para avaliação (nenhuma pré-aprovada)
+
+- **E-mail dedicado** (ex: suporte@dominio, ou reaproveitar um e-mail já
+  monitorado pela equipe).
+- **WhatsApp de suporte** (número dedicado, distinto do WhatsApp
+  comercial da imobiliária piloto usado nos criativos/MKT-001).
+- **Ferramenta de tickets já existente** — não encontrada nenhuma no
+  repositório ou documentação deste projeto (busca por Linear/Jira/
+  Zendesk/Freshdesk/Intercom não retornou nada além de uma menção
+  genérica à palavra "ticket" em `deployment-runbook.md`). Se a equipe já
+  usa alguma externamente, essa é a terceira alternativa — não deve ser
+  configurada por este runbook sem autorização explícita.
+
+### Campos que a decisão precisa preencher
+
+| Campo | Valor |
+|---|---|
+| Canal escolhido | **A DEFINIR** |
+| Responsável pelo atendimento | **A DEFINIR** |
+| Horário de atendimento (não presumir 24h) | **A DEFINIR** |
+| Procedimento para incidentes críticos (SEV1/SEV2, ver seção 2) | **A DEFINIR** |
+| Procedimento de escalonamento | **A DEFINIR** |
+| Responsável pela decisão de interromper o piloto | **A DEFINIR** |
+| Forma de registrar feedback e incidentes não urgentes | **A DEFINIR** |
+| Data da aprovação | **A DEFINIR** |
+| Aprovado por | **A DEFINIR** |
+
+Esta seção só deve ser considerada resolvida quando a tabela acima
+estiver preenchida por quem tem autoridade de produto/operação para essa
+decisão, e a linha da seção 1 ("Canal de suporte — a definir") atualizada
+para refletir a escolha.
+
+## 10. Referências rápidas
 
 | Cenário | Runbook |
 |---|---|

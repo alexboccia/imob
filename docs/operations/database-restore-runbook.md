@@ -12,14 +12,25 @@ inventa** o plano/retenção porque isso não pode ser verificado por aqui —
 precisa ser confirmado direto no painel da Neon por quem tem acesso.
 
 Preencher esta tabela após confirmar no painel (Neon Console → Project →
-Settings → Billing / Backup & restore):
+Settings → Billing / Backup & restore). Nenhum campo abaixo foi
+preenchido por suposição — esta sessão não tem acesso ao painel da Neon
+nem a uma `NEON_API_KEY`/`neonctl` configurados (confirmado por busca no
+ambiente, Fase 111), então todos os campos de valor permanecem
+**A CONFIRMAR** até que o responsável pela conta os preencha:
 
-| Campo | Valor | Confirmado por | Data |
-|---|---|---|---|
-| Plano Neon (Free / Launch / Scale / …) | **A CONFIRMAR** | | |
-| Janela de PITR (point-in-time recovery) — plano Free da Neon costuma ter uma janela curta (na ordem de horas); planos pagos oferecem janelas maiores (dias) — **o valor exato depende do plano contratado, confirmar no painel** | **A CONFIRMAR** | | |
-| Branches automáticas de backup habilitadas? | **A CONFIRMAR** | | |
-| Responsável pela conta Neon (quem tem acesso pra fazer restore de produção) | **A CONFIRMAR** | | |
+| Campo | Valor | Responsável técnico | Data da verificação | Referência da evidência |
+|---|---|---|---|---|
+| Projeto/ambiente verificado (nome do projeto Neon, região) | **A CONFIRMAR** | | | |
+| Plano Neon (Free / Launch / Scale / …) | **A CONFIRMAR** | | | |
+| PITR (point-in-time recovery) disponível neste plano? | **A CONFIRMAR** | | | |
+| Janela de PITR — plano Free da Neon costuma ter uma janela curta (na ordem de horas); planos pagos oferecem janelas maiores (dias) — **o valor exato depende do plano contratado, confirmar no painel** | **A CONFIRMAR** | | | |
+| Branches automáticas de backup habilitadas? | **A CONFIRMAR** | | | |
+| Responsável pela conta Neon (quem tem acesso pra fazer restore de produção) | **A CONFIRMAR** | | | |
+| Restrições identificadas (ex: limite de branches simultâneas, custo de retenção estendida, etc.) | **A CONFIRMAR** | | | |
+
+Captura de tela ou export do painel (Settings → Billing / Backup &
+restore) serve como referência de evidência — anexar ou linkar na última
+coluna, nunca colar credencial/connection string neste arquivo.
 
 **Enquanto esta tabela não estiver preenchida, trate a janela de restore
 como desconhecida** — ou seja, aja como se um incidente só pudesse ser
