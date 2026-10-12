@@ -38,8 +38,8 @@ export function telefoneSuporteE164(digitos: string): string {
 // O link nunca aceita uma URL vinda do usuário — é sempre CONSTRUÍDO a
 // partir dos dígitos já validados e persistidos, pelo mesmo helper
 // genérico usado para o WhatsApp de cada organização.
-export function linkWhatsAppSuporte(digitos: string | null): string | null {
-  return linkWhatsApp(digitos);
+export function linkWhatsAppSuporte(digitos: string | null, mensagem?: string): string | null {
+  return linkWhatsApp(digitos, mensagem);
 }
 
 export function temTelefoneSuporte(digitos: string | null): boolean {
