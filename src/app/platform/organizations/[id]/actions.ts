@@ -300,6 +300,13 @@ export async function atualizarOverrides(
 
   const precoOverrideRaw = String(formData.get("precoOverrideRaw") ?? "").trim();
   const precoOverride = precoOverrideRaw === "" ? null : centavosDeReais(precoOverrideRaw);
+  // Fase 114 — PRC-002: "justificativa administrativa, quando apropriado"
+  // (texto livre, nunca obrigatório). Não é um campo novo no banco — vai
+  // só no metadata do PlatformAuditLog já gravado abaixo, mesmo
+  // mecanismo de histórico que já existe pra preço/limites, sem duplicar
+  // infraestrutura de auditoria.
+  const justificativaRaw = String(formData.get("justificativaRaw") ?? "").trim();
+  const justificativa = justificativaRaw === "" ? null : justificativaRaw;
   if (precoOverrideRaw !== "" && precoOverride === null) {
     return erroGenerico("Preço override inválido.");
   }
@@ -368,6 +375,7 @@ export async function atualizarOverrides(
     metadata: {
       priceMonthlyCentsOverrideAntes: antes.priceMonthlyCentsOverride,
       priceMonthlyCentsOverrideDepois: precoOverride,
+      justificativa,
     },
   });
 

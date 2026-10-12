@@ -58,6 +58,7 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 import { auth } from "@/lib/platform/auth";
 import { redirect } from "next/navigation";
 import { atualizarPlano } from "@/app/platform/plans/[id]/actions";
+import { criarPlano as criarPlanoAction } from "@/app/platform/plans/nova/actions";
 import {
   alterarPlano,
   estenderTrial,
@@ -107,6 +108,8 @@ describe("Fase P.9 — atualizarPlano (editar Plan)", () => {
       plano.id,
       ESTADO_INICIAL_ACAO,
       formData({
+        name: "Plano Atualizado",
+        descriptionRaw: "",
         priceMonthlyCentsRaw: "129,90",
         isTrial: "false",
         trialDaysRaw: "",
@@ -144,6 +147,8 @@ describe("Fase P.9 — atualizarPlano (editar Plan)", () => {
       plano.id,
       ESTADO_INICIAL_ACAO,
       formData({
+        name: "Plano Atualizado",
+        descriptionRaw: "",
         priceMonthlyCentsRaw: "99,00",
         isTrial: "false",
         trialDaysRaw: "",
@@ -193,6 +198,202 @@ describe("Fase P.9 — atualizarPlano (editar Plan)", () => {
     const inalterado = await prisma.plan.findUniqueOrThrow({ where: { id: plano.id } });
     expect(inalterado.priceMonthlyCents).toBe(5000);
   });
+
+  test("W) atualizarPlano também edita name e description, gravando audit log com before/after", async () => {
+    const operador = await autenticarComoOperador();
+    operadorId = operador.id;
+    const plano = await criarPlano({ priceMonthlyCents: 5000 });
+    planoId = plano.id;
+    await prisma.plan.update({ where: { id: plano.id }, data: { name: "Nome Antigo" } });
+
+    await atualizarPlano(
+      plano.id,
+      ESTADO_INICIAL_ACAO,
+      formData({
+        name: "Nome Novo",
+        descriptionRaw: "Descrição nova",
+        priceMonthlyCentsRaw: "50,00",
+        isTrial: "false",
+        trialDaysRaw: "",
+        active: "true",
+        PROPERTIES: "",
+        PHOTOS_PER_PROPERTY: "",
+        USERS: "",
+        CRM_CLIENTS: "",
+      })
+    );
+
+    const atualizado = await prisma.plan.findUniqueOrThrow({ where: { id: plano.id } });
+    expect(atualizado.name).toBe("Nome Novo");
+    expect(atualizado.description).toBe("Descrição nova");
+
+    const log = await prisma.platformAuditLog.findFirstOrThrow({
+      where: { action: "PLAN_UPDATED", entityId: plano.id },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(log.metadata).toMatchObject({ nameAntes: "Nome Antigo", nameDepois: "Nome Novo" });
+  });
+
+  test("name vazio é rejeitado pela action (não só pelo schema)", async () => {
+    const operador = await autenticarComoOperador();
+    operadorId = operador.id;
+    const plano = await criarPlano({ priceMonthlyCents: 5000 });
+    planoId = plano.id;
+
+    const resultado = await atualizarPlano(
+      plano.id,
+      ESTADO_INICIAL_ACAO,
+      formData({
+        name: "",
+        descriptionRaw: "",
+        priceMonthlyCentsRaw: "50,00",
+        isTrial: "false",
+        trialDaysRaw: "",
+        active: "true",
+        PROPERTIES: "",
+        PHOTOS_PER_PROPERTY: "",
+        USERS: "",
+        CRM_CLIENTS: "",
+      })
+    );
+    expect(resultado.success).toBe(false);
+  });
+});
+
+describe("Fase 114 — criarPlano (PLN-001, antes desta fase não existia)", () => {
+  let operadorId: string | undefined;
+  let planoId: string | undefined;
+
+  afterEach(async () => {
+    vi.mocked(auth).mockReset();
+    if (planoId) {
+      await prisma.planLimit.deleteMany({ where: { planId: planoId } });
+      await prisma.plan.delete({ where: { id: planoId } }).catch(() => {});
+    }
+    if (operadorId) await destruirPlatformOperator(operadorId);
+    operadorId = undefined;
+    planoId = undefined;
+  });
+
+  test("X) SUPER_ADMIN cria um plano novo, com limites e descrição, sempre ativo", async () => {
+    const operador = await autenticarComoOperador();
+    operadorId = operador.id;
+
+    const codigoUnico = `ENTERPRISE_${Date.now()}`;
+    const resultado = await criarPlanoAction(
+      ESTADO_INICIAL_ACAO,
+      formData({
+        code: codigoUnico,
+        name: "Enterprise",
+        descriptionRaw: "Para redes grandes",
+        priceMonthlyCentsRaw: "999,00",
+        isTrial: "false",
+        trialDaysRaw: "",
+        PROPERTIES: "",
+        PHOTOS_PER_PROPERTY: "",
+        USERS: "50",
+        CRM_CLIENTS: "",
+      })
+    );
+    expect(resultado.success).toBe(true);
+
+    const criado = await prisma.plan.findUniqueOrThrow({
+      where: { code: codigoUnico },
+      include: { planLimits: true },
+    });
+    planoId = criado.id;
+    expect(criado.name).toBe("Enterprise");
+    expect(criado.description).toBe("Para redes grandes");
+    expect(criado.priceMonthlyCents).toBe(99900);
+    expect(criado.active).toBe(true);
+    expect(criado.planLimits.find((l) => l.feature === "USERS")?.limit).toBe(50);
+    expect(criado.planLimits.find((l) => l.feature === "PROPERTIES")?.limit).toBeNull();
+
+    const log = await prisma.platformAuditLog.findFirstOrThrow({
+      where: { action: "PLAN_CREATED", entityId: criado.id },
+    });
+    expect(log.metadata).toMatchObject({ code: codigoUnico, name: "Enterprise" });
+  });
+
+  test("código duplicado é rejeitado, nenhum segundo plano é criado", async () => {
+    const operador = await autenticarComoOperador();
+    operadorId = operador.id;
+    const existente = await criarPlano({ priceMonthlyCents: 100 });
+    planoId = existente.id;
+    const codigoExistente = (await prisma.plan.findUniqueOrThrow({ where: { id: existente.id } })).code;
+
+    const resultado = await criarPlanoAction(
+      ESTADO_INICIAL_ACAO,
+      formData({
+        code: codigoExistente,
+        name: "Duplicado",
+        descriptionRaw: "",
+        priceMonthlyCentsRaw: "10,00",
+        isTrial: "false",
+        trialDaysRaw: "",
+        PROPERTIES: "",
+        PHOTOS_PER_PROPERTY: "",
+        USERS: "",
+        CRM_CLIENTS: "",
+      })
+    );
+    expect(resultado.success).toBe(false);
+
+    const total = await prisma.plan.count({ where: { code: codigoExistente } });
+    expect(total).toBe(1);
+  });
+
+  test("code em formato inválido (minúsculo/espaço) é rejeitado", async () => {
+    const operador = await autenticarComoOperador();
+    operadorId = operador.id;
+
+    const resultado = await criarPlanoAction(
+      ESTADO_INICIAL_ACAO,
+      formData({
+        code: "minusculo invalido",
+        name: "Teste",
+        descriptionRaw: "",
+        priceMonthlyCentsRaw: "",
+        isTrial: "false",
+        trialDaysRaw: "",
+        PROPERTIES: "",
+        PHOTOS_PER_PROPERTY: "",
+        USERS: "",
+        CRM_CLIENTS: "",
+      })
+    );
+    expect(resultado.success).toBe(false);
+  });
+
+  test("sem sessão de platform operator, criação é recusada e nenhum plano é criado", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(auth).mockResolvedValue(null as any);
+    const codigoUnico = `SEMSESSAO_${Date.now()}`;
+
+    try {
+      await criarPlanoAction(
+        ESTADO_INICIAL_ACAO,
+        formData({
+          code: codigoUnico,
+          name: "Teste",
+          descriptionRaw: "",
+          priceMonthlyCentsRaw: "",
+          isTrial: "false",
+          trialDaysRaw: "",
+          PROPERTIES: "",
+          PHOTOS_PER_PROPERTY: "",
+          USERS: "",
+          CRM_CLIENTS: "",
+        })
+      );
+    } catch {
+      // esperado: redirect() mockado não interrompe o fluxo como o real faria.
+    }
+
+    expect(redirect).toHaveBeenCalledWith("/platform/login");
+    const total = await prisma.plan.count({ where: { code: codigoUnico } });
+    expect(total).toBe(0);
+  });
 });
 
 describe("Fase P.9 — atualizarOverrides", () => {
@@ -236,6 +437,55 @@ describe("Fase P.9 — atualizarOverrides", () => {
       where: { action: "PLAN_OVERRIDE_UPDATED", entityId: cenario.organization.id },
     });
     expect(log).not.toBeNull();
+  });
+
+  test("Fase 114 — justificativa administrativa opcional é gravada no audit log, nunca em coluna nova", async () => {
+    const operador = await autenticarComoOperador();
+    operadorId = operador.id;
+    cenario = await criarCenario({ priceMonthlyCents: 9900 });
+
+    await atualizarOverrides(
+      cenario.organization.id,
+      ESTADO_INICIAL_ACAO,
+      formData({
+        precoOverrideRaw: "79,00",
+        justificativaRaw: "Desconto negociado no piloto",
+        PROPERTIES_modo: "PADRAO",
+        PHOTOS_PER_PROPERTY_modo: "PADRAO",
+        USERS_modo: "PADRAO",
+        CRM_CLIENTS_modo: "PADRAO",
+      })
+    );
+
+    const log = await prisma.platformAuditLog.findFirstOrThrow({
+      where: { action: "PLAN_OVERRIDE_UPDATED", entityId: cenario.organization.id },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(log.metadata).toMatchObject({ justificativa: "Desconto negociado no piloto" });
+  });
+
+  test("justificativa vazia é gravada como null (nunca string vazia)", async () => {
+    const operador = await autenticarComoOperador();
+    operadorId = operador.id;
+    cenario = await criarCenario({ priceMonthlyCents: 9900 });
+
+    await atualizarOverrides(
+      cenario.organization.id,
+      ESTADO_INICIAL_ACAO,
+      formData({
+        precoOverrideRaw: "79,00",
+        PROPERTIES_modo: "PADRAO",
+        PHOTOS_PER_PROPERTY_modo: "PADRAO",
+        USERS_modo: "PADRAO",
+        CRM_CLIENTS_modo: "PADRAO",
+      })
+    );
+
+    const log = await prisma.platformAuditLog.findFirstOrThrow({
+      where: { action: "PLAN_OVERRIDE_UPDATED", entityId: cenario.organization.id },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(log.metadata).toMatchObject({ justificativa: null });
   });
 
   test("X) modo ILIMITADO grava override explícito com limit=null", async () => {
@@ -786,6 +1036,8 @@ describe("Fase P.9 — atualizarPlano isTrial false→true guard (correção pó
       plano.id,
       ESTADO_INICIAL_ACAO,
       formData({
+        name: "Plano Atualizado",
+        descriptionRaw: "",
         priceMonthlyCentsRaw: "0",
         isTrial: "true",
         trialDaysRaw: "14",
@@ -812,6 +1064,8 @@ describe("Fase P.9 — atualizarPlano isTrial false→true guard (correção pó
       plano.id,
       ESTADO_INICIAL_ACAO,
       formData({
+        name: "Plano Atualizado",
+        descriptionRaw: "",
         priceMonthlyCentsRaw: "0",
         isTrial: "true",
         trialDaysRaw: "14",
@@ -847,6 +1101,8 @@ describe("Fase P.9 — atualizarPlano isTrial false→true guard (correção pó
       plano.id,
       ESTADO_INICIAL_ACAO,
       formData({
+        name: "Plano Atualizado",
+        descriptionRaw: "",
         priceMonthlyCentsRaw: "0",
         isTrial: "true",
         trialDaysRaw: "30",

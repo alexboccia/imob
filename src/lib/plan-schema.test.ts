@@ -1,5 +1,12 @@
 import { describe, test, expect } from "vitest";
-import { centavosDeReais, reaisDeCentavos, parseLimiteForm, editarPlanoSchema } from "@/lib/plan-schema";
+import {
+  centavosDeReais,
+  reaisDeCentavos,
+  parseLimiteForm,
+  editarPlanoSchema,
+  criarPlanoSchema,
+  codigoPlanoSchema,
+} from "@/lib/plan-schema";
 
 describe("centavosDeReais", () => {
   test("A) valor inteiro sem vírgula", () => {
@@ -84,6 +91,8 @@ describe("parseLimiteForm", () => {
 
 describe("editarPlanoSchema", () => {
   const base = {
+    name: "Plano de Teste",
+    descriptionRaw: "",
     priceMonthlyCentsRaw: "99,00",
     isTrial: "false" as const,
     trialDaysRaw: "",
@@ -99,6 +108,8 @@ describe("editarPlanoSchema", () => {
     expect(resultado.success).toBe(true);
     if (resultado.success) {
       expect(resultado.data).toEqual({
+        name: "Plano de Teste",
+        description: null,
         priceMonthlyCents: 9900,
         isTrial: false,
         trialDays: null,
@@ -106,6 +117,21 @@ describe("editarPlanoSchema", () => {
         limites: { PROPERTIES: 50, PHOTOS_PER_PROPERTY: 10, USERS: 1, CRM_CLIENTS: 500 },
       });
     }
+  });
+
+  test("name vazio é rejeitado", () => {
+    const resultado = editarPlanoSchema.safeParse({ ...base, name: "" });
+    expect(resultado.success).toBe(false);
+  });
+
+  test("description preenchida é preservada; vazia vira null", () => {
+    const comDescricao = editarPlanoSchema.safeParse({ ...base, descriptionRaw: "  Para equipes pequenas  " });
+    expect(comDescricao.success).toBe(true);
+    if (comDescricao.success) expect(comDescricao.data.description).toBe("Para equipes pequenas");
+
+    const semDescricao = editarPlanoSchema.safeParse({ ...base, descriptionRaw: "   " });
+    expect(semDescricao.success).toBe(true);
+    if (semDescricao.success) expect(semDescricao.data.description).toBeNull();
   });
 
   test("Q) isTrial=true exige trialDaysRaw > 0", () => {
@@ -139,5 +165,64 @@ describe("editarPlanoSchema", () => {
   test("limite negativo é rejeitado", () => {
     const resultado = editarPlanoSchema.safeParse({ ...base, PROPERTIES: "-1" });
     expect(resultado.success).toBe(false);
+  });
+});
+
+describe("codigoPlanoSchema", () => {
+  test("aceita letras maiúsculas e underscore", () => {
+    expect(codigoPlanoSchema.safeParse("ENTERPRISE").success).toBe(true);
+    expect(codigoPlanoSchema.safeParse("PLANO_X_2").success).toBe(true);
+  });
+
+  test("rejeita minúscula, espaço, acento ou vazio", () => {
+    expect(codigoPlanoSchema.safeParse("enterprise").success).toBe(false);
+    expect(codigoPlanoSchema.safeParse("PLANO X").success).toBe(false);
+    expect(codigoPlanoSchema.safeParse("PLANÃO").success).toBe(false);
+    expect(codigoPlanoSchema.safeParse("").success).toBe(false);
+    expect(codigoPlanoSchema.safeParse("1PLANO").success).toBe(false);
+  });
+});
+
+describe("criarPlanoSchema", () => {
+  const base = {
+    code: "ENTERPRISE",
+    name: "Enterprise",
+    descriptionRaw: "Para redes grandes",
+    priceMonthlyCentsRaw: "999,00",
+    isTrial: "false" as const,
+    trialDaysRaw: "",
+    PROPERTIES: "",
+    PHOTOS_PER_PROPERTY: "",
+    USERS: "50",
+    CRM_CLIENTS: "",
+  };
+
+  test("dados válidos -> parseado corretamente, sem campo active (sempre true na criação)", () => {
+    const resultado = criarPlanoSchema.safeParse(base);
+    expect(resultado.success).toBe(true);
+    if (resultado.success) {
+      expect(resultado.data).toEqual({
+        code: "ENTERPRISE",
+        name: "Enterprise",
+        description: "Para redes grandes",
+        priceMonthlyCents: 99900,
+        isTrial: false,
+        trialDays: null,
+        limites: { PROPERTIES: null, PHOTOS_PER_PROPERTY: null, USERS: 50, CRM_CLIENTS: null },
+      });
+    }
+  });
+
+  test("code inválido é rejeitado", () => {
+    const resultado = criarPlanoSchema.safeParse({ ...base, code: "minusculo" });
+    expect(resultado.success).toBe(false);
+  });
+
+  test("mesma validação de preço/trial/limites de editarPlanoSchema também vale aqui", () => {
+    expect(criarPlanoSchema.safeParse({ ...base, priceMonthlyCentsRaw: "abc" }).success).toBe(false);
+    expect(criarPlanoSchema.safeParse({ ...base, USERS: "-1" }).success).toBe(false);
+    expect(
+      criarPlanoSchema.safeParse({ ...base, isTrial: "true", trialDaysRaw: "0" }).success
+    ).toBe(false);
   });
 });

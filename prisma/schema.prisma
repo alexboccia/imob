@@ -2198,6 +2198,10 @@ model Plan {
   id                String  @id @default(cuid())
   code              String  @unique // "STARTER" | "BASICO" | "PRO" | "PREMIUM"
   name              String
+  // Fase 114 — texto comercial curto exibido ao lado do nome no catálogo
+  // (ex: "Para equipes pequenas começando a organizar a operação").
+  // Nullable: planos criados antes desta fase simplesmente não têm.
+  description       String?
   priceMonthlyCents Int?
   active            Boolean @default(true)
   isTrial           Boolean @default(false)

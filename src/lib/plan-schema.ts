@@ -42,63 +42,117 @@ export function parseLimiteForm(valorDigitado: string): { ok: true; valor: numbe
 
 export const FEATURES_EDITAVEIS_PLANO = ["PROPERTIES", "PHOTOS_PER_PROPERTY", "USERS", "CRM_CLIENTS"] as const;
 
+// Código técnico do plano (Plan.code) — mesma convenção dos 4 planos que
+// já existem (STARTER/BASICO/PRO/PREMIUM): letras maiúsculas e
+// underscore, nunca espaço/acento/minúscula. Só é pedido na CRIAÇÃO —
+// na edição, code é intocável por design (ver actions.ts).
+export const codigoPlanoSchema = z
+  .string()
+  .trim()
+  .min(2, "Informe um código.")
+  .max(30, "Código muito longo.")
+  .regex(/^[A-Z][A-Z0-9_]*$/, "Use apenas letras maiúsculas, números e underscore (ex: ENTERPRISE).");
+
+const CAMPOS_COMUNS = {
+  name: z.string().trim().min(2, "Informe o nome do plano."),
+  descriptionRaw: z.string().optional().default(""),
+  priceMonthlyCentsRaw: z.string(),
+  isTrial: z.enum(["true", "false"]),
+  trialDaysRaw: z.string().optional().default(""),
+  PROPERTIES: z.string(),
+  PHOTOS_PER_PROPERTY: z.string(),
+  USERS: z.string(),
+  CRM_CLIENTS: z.string(),
+};
+
+type CamposComuns = {
+  name: string;
+  descriptionRaw: string;
+  priceMonthlyCentsRaw: string;
+  isTrial: "true" | "false";
+  trialDaysRaw: string;
+  PROPERTIES: string;
+  PHOTOS_PER_PROPERTY: string;
+  USERS: string;
+  CRM_CLIENTS: string;
+};
+
+// Núcleo compartilhado por criarPlanoSchema e editarPlanoSchema: preço,
+// trial e os 4 limites têm exatamente a mesma validação nos dois
+// formulários — só o que envolve `code`/`active` (criação vs. edição)
+// diverge, e cada schema trata isso por conta própria.
+function validarNucleoPlano(dados: CamposComuns, ctx: z.RefinementCtx) {
+  const priceMonthlyCents = centavosDeReais(dados.priceMonthlyCentsRaw);
+  if (dados.priceMonthlyCentsRaw.trim() !== "" && priceMonthlyCents === null) {
+    ctx.addIssue({ code: "custom", path: ["priceMonthlyCentsRaw"], message: "Preço inválido." });
+    return null;
+  }
+  if (priceMonthlyCents !== null && priceMonthlyCents < 0) {
+    ctx.addIssue({ code: "custom", path: ["priceMonthlyCentsRaw"], message: "Preço não pode ser negativo." });
+    return null;
+  }
+
+  const isTrial = dados.isTrial === "true";
+  let trialDays: number | null = null;
+  if (isTrial) {
+    const parsedTrial = parseLimiteForm(dados.trialDaysRaw);
+    if (!parsedTrial.ok || parsedTrial.valor === null || parsedTrial.valor <= 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["trialDaysRaw"],
+        message: "Informe um número de dias de trial maior que zero.",
+      });
+      return null;
+    }
+    trialDays = parsedTrial.valor;
+  }
+
+  const limites: Record<(typeof FEATURES_EDITAVEIS_PLANO)[number], number | null> = {
+    PROPERTIES: 0,
+    PHOTOS_PER_PROPERTY: 0,
+    USERS: 0,
+    CRM_CLIENTS: 0,
+  };
+  for (const feature of FEATURES_EDITAVEIS_PLANO) {
+    const parsed = parseLimiteForm(dados[feature]);
+    if (!parsed.ok) {
+      ctx.addIssue({
+        code: "custom",
+        path: [feature],
+        message: "Informe um número inteiro >= 0, ou deixe vazio para ilimitado.",
+      });
+      return null;
+    }
+    limites[feature] = parsed.valor;
+  }
+
+  const description = dados.descriptionRaw.trim();
+
+  return {
+    name: dados.name,
+    description: description === "" ? null : description,
+    priceMonthlyCents,
+    isTrial,
+    trialDays,
+    limites,
+  };
+}
+
 export const editarPlanoSchema = z
-  .object({
-    priceMonthlyCentsRaw: z.string(),
-    isTrial: z.enum(["true", "false"]),
-    trialDaysRaw: z.string().optional().default(""),
-    active: z.enum(["true", "false"]),
-    PROPERTIES: z.string(),
-    PHOTOS_PER_PROPERTY: z.string(),
-    USERS: z.string(),
-    CRM_CLIENTS: z.string(),
-  })
+  .object({ ...CAMPOS_COMUNS, active: z.enum(["true", "false"]) })
   .transform((dados, ctx) => {
-    const priceMonthlyCents = centavosDeReais(dados.priceMonthlyCentsRaw);
-    if (dados.priceMonthlyCentsRaw.trim() !== "" && priceMonthlyCents === null) {
-      ctx.addIssue({ code: "custom", path: ["priceMonthlyCentsRaw"], message: "Preço inválido." });
-      return z.NEVER;
-    }
-    if (priceMonthlyCents !== null && priceMonthlyCents < 0) {
-      ctx.addIssue({ code: "custom", path: ["priceMonthlyCentsRaw"], message: "Preço não pode ser negativo." });
-      return z.NEVER;
-    }
+    const nucleo = validarNucleoPlano(dados, ctx);
+    if (!nucleo) return z.NEVER;
+    return { ...nucleo, active: dados.active === "true" };
+  });
 
-    const isTrial = dados.isTrial === "true";
-    let trialDays: number | null = null;
-    if (isTrial) {
-      const parsedTrial = parseLimiteForm(dados.trialDaysRaw);
-      if (!parsedTrial.ok || parsedTrial.valor === null || parsedTrial.valor <= 0) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["trialDaysRaw"],
-          message: "Informe um número de dias de trial maior que zero.",
-        });
-        return z.NEVER;
-      }
-      trialDays = parsedTrial.valor;
-    }
-
-    const limites: Record<(typeof FEATURES_EDITAVEIS_PLANO)[number], number | null> = {
-      PROPERTIES: 0,
-      PHOTOS_PER_PROPERTY: 0,
-      USERS: 0,
-      CRM_CLIENTS: 0,
-    };
-    for (const feature of FEATURES_EDITAVEIS_PLANO) {
-      const parsed = parseLimiteForm(dados[feature]);
-      if (!parsed.ok) {
-        ctx.addIssue({ code: "custom", path: [feature], message: "Informe um número inteiro >= 0, ou deixe vazio para ilimitado." });
-        return z.NEVER;
-      }
-      limites[feature] = parsed.valor;
-    }
-
-    return {
-      priceMonthlyCents,
-      isTrial,
-      trialDays,
-      active: dados.active === "true",
-      limites,
-    };
+// Criação — mesmo núcleo de editarPlanoSchema, mais o code (intocável
+// depois de criado). active sempre começa true: um plano recém-criado
+// sem organização nenhuma não tem nada a proteger ao ficar ativo.
+export const criarPlanoSchema = z
+  .object({ ...CAMPOS_COMUNS, code: codigoPlanoSchema })
+  .transform((dados, ctx) => {
+    const nucleo = validarNucleoPlano(dados, ctx);
+    if (!nucleo) return z.NEVER;
+    return { ...nucleo, code: dados.code };
   });

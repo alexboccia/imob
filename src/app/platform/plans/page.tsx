@@ -39,7 +39,12 @@ export default async function PlatformPlansPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-6">Plans</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold">Plans</h1>
+        <Link href="/platform/plans/nova" className={cn(buttonVariants({ size: "sm" }))}>
+          Criar plano
+        </Link>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {planos.map((plano) => (
           <Card key={plano.id} className="hover:border-slate-400 transition-colors">
@@ -50,6 +55,9 @@ export default async function PlatformPlansPage() {
                 </Link>
                 {!plano.active && <Badge variant="secondary">Inativo</Badge>}
               </div>
+              {plano.description && (
+                <p className="text-xs text-muted-foreground">{plano.description}</p>
+              )}
               <p className="text-sm text-muted-foreground">
                 {plano.priceMonthlyCents != null
                   ? `R$ ${(plano.priceMonthlyCents / 100).toLocaleString("pt-BR")}/mês`

@@ -27,6 +27,8 @@ export default async function EditarPlanoPage({ params }: { params: Promise<{ id
       </div>
       <EditarPlanoForm
         planId={plano.id}
+        nameAtual={plano.name}
+        descriptionAtual={plano.description ?? ""}
         precoAtualReais={reaisDeCentavos(plano.priceMonthlyCents)}
         isTrialAtual={plano.isTrial}
         trialDaysAtual={plano.trialDays}

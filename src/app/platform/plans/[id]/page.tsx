@@ -30,6 +30,9 @@ export default async function PlatformPlanDetailsPage({
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">{plano.name}</h1>
+          {plano.description && (
+            <p className="text-sm text-muted-foreground mt-1">{plano.description}</p>
+          )}
           <p className="text-sm text-muted-foreground mt-1">
             {plano.code} ·{" "}
             {plano.priceMonthlyCents != null
@@ -41,9 +44,17 @@ export default async function PlatformPlanDetailsPage({
             {!plano.active && " · inativo"}
           </p>
         </div>
-        <Link href={`/platform/plans/${plano.id}/editar`} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
-          Editar plano
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/platform/audit?search=${plano.id}`}
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+          >
+            Ver histórico
+          </Link>
+          <Link href={`/platform/plans/${plano.id}/editar`} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+            Editar plano
+          </Link>
+        </div>
       </div>
 
       <Card>

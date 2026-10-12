@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePlatformOperator } from "@/lib/platform/auth";
 import { prisma } from "@/lib/prisma";
+import { cn } from "@/lib/utils";
 import {
   FEATURE_PROPERTIES,
   FEATURE_USERS,
@@ -11,7 +13,7 @@ import {
 } from "@/lib/entitlements";
 import { reaisDeCentavos } from "@/lib/plan-schema";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardHeader,
@@ -290,8 +292,14 @@ export default async function OrganizationDetailsPage({
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-base">Overrides comerciais</CardTitle>
+          <Link
+            href={`/platform/audit?search=${organization.id}`}
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+          >
+            Ver histórico
+          </Link>
         </CardHeader>
         <CardContent>
           <OverridesForm

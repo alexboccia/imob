@@ -8,13 +8,15 @@ import { logPlatformActivity } from "@/lib/platform/audit";
 import { editarPlanoSchema, FEATURES_EDITAVEIS_PLANO } from "@/lib/plan-schema";
 import { type ActionState, erroAcessoNegado, erroGenerico, erroValidacao, sucesso } from "@/lib/action-result";
 
-// Fase P.9: única mutação de Plan/PlanLimit em todo o Platform Admin.
-// `code`/`id`/`createdAt` nunca aparecem no formData, portanto nunca são
-// alterados aqui. Alterar preço/limites/trial de um plano afeta
-// IMEDIATAMENTE toda organização vinculada a ele que não tenha override
-// próprio (ver AVISO explícito na UI de edição) — decisão V1 deliberada
-// (seção 59 do pedido), não é cobrança retroativa nem versionamento
-// histórico de preço.
+// Fase P.9: mutação de EDIÇÃO de Plan/PlanLimit (Fase 114 — a de CRIAÇÃO
+// é criarPlano, em nova/actions.ts). `code`/`id`/`createdAt` nunca
+// aparecem no formData de EDIÇÃO — code é intocável depois de criado
+// (identificador técnico, referenciado em outros lugares do código, ex:
+// ORDEM_PLANOS em plans/page.tsx). Alterar preço/limites/trial de um
+// plano afeta IMEDIATAMENTE toda organização vinculada a ele que não
+// tenha override próprio (ver AVISO explícito na UI de edição) — decisão
+// V1 deliberada (seção 59 do pedido original), não é cobrança retroativa
+// nem versionamento histórico de preço.
 export async function atualizarPlano(
   planId: string,
   _prevState: ActionState,
@@ -26,6 +28,8 @@ export async function atualizarPlano(
   }
 
   const parsed = editarPlanoSchema.safeParse({
+    name: formData.get("name") ?? "",
+    descriptionRaw: formData.get("descriptionRaw") ?? "",
     priceMonthlyCentsRaw: formData.get("priceMonthlyCentsRaw") ?? "",
     isTrial: formData.get("isTrial") ?? "false",
     trialDaysRaw: formData.get("trialDaysRaw") ?? "",
@@ -41,6 +45,8 @@ export async function atualizarPlano(
   const planoAntes = await prisma.plan.findUnique({
     where: { id: planId },
     select: {
+      name: true,
+      description: true,
       priceMonthlyCents: true,
       isTrial: true,
       trialDays: true,
@@ -69,6 +75,8 @@ export async function atualizarPlano(
     await tx.plan.update({
       where: { id: planId },
       data: {
+        name: dados.name,
+        description: dados.description,
         priceMonthlyCents: dados.priceMonthlyCents,
         isTrial: dados.isTrial,
         trialDays: dados.trialDays,
@@ -91,6 +99,8 @@ export async function atualizarPlano(
     entity: "Plan",
     entityId: planId,
     metadata: {
+      nameAntes: planoAntes.name,
+      nameDepois: dados.name,
       priceMonthlyCentsAntes: planoAntes.priceMonthlyCents,
       priceMonthlyCentsDepois: dados.priceMonthlyCents,
       isTrialAntes: planoAntes.isTrial,

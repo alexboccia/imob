@@ -6,6 +6,7 @@ import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 function CampoLimite({
   feature,
@@ -29,6 +30,8 @@ function CampoLimite({
 
 export function EditarPlanoForm({
   planId,
+  nameAtual,
+  descriptionAtual,
   precoAtualReais,
   isTrialAtual,
   trialDaysAtual,
@@ -37,6 +40,8 @@ export function EditarPlanoForm({
   quantidadeOrganizacoes,
 }: {
   planId: string;
+  nameAtual: string;
+  descriptionAtual: string;
   precoAtualReais: string;
   isTrialAtual: boolean;
   trialDaysAtual: number | null;
@@ -57,6 +62,25 @@ export function EditarPlanoForm({
           override próprio.
         </p>
       )}
+
+      <div className="space-y-1">
+        <Label htmlFor="name">Nome do plano</Label>
+        <Input id="name" name="name" defaultValue={nameAtual} />
+        {estado.fieldErrors?.name && (
+          <p className="text-xs text-destructive">{estado.fieldErrors.name[0]}</p>
+        )}
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="descriptionRaw">Descrição comercial (opcional)</Label>
+        <Textarea
+          id="descriptionRaw"
+          name="descriptionRaw"
+          defaultValue={descriptionAtual}
+          placeholder="Ex: Para equipes pequenas começando a organizar a operação"
+          rows={2}
+        />
+      </div>
 
       <div className="space-y-1">
         <Label htmlFor="priceMonthlyCentsRaw">Preço mensal (R$)</Label>

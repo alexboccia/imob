@@ -6,6 +6,7 @@ import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 type ModoOverride = "PADRAO" | "ILIMITADO" | "PERSONALIZADO";
 type Feature = "PROPERTIES" | "PHOTOS_PER_PROPERTY" | "USERS" | "CRM_CLIENTS";
@@ -100,6 +101,16 @@ export function OverridesForm({
           defaultValue={precoOverrideAtualReais}
           placeholder="Ex: 129,00"
           className="w-40"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="justificativaRaw">Justificativa administrativa (opcional)</Label>
+        <Textarea
+          id="justificativaRaw"
+          name="justificativaRaw"
+          placeholder="Ex: desconto negociado na assinatura do piloto, válido enquanto durar o contrato"
+          rows={2}
         />
       </div>
 

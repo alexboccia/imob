@@ -64,6 +64,7 @@ export default async function PlatformAuditPage({
     entity: log.entity,
     entityId: log.entityId,
     organizationId: log.organizationId,
+    metadata: log.metadata as Record<string, unknown> | null,
   }));
 
   return (
