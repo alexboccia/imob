@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, beforeEach, vi } from "vitest";
 import {
   LIMITE_LEGENDA_FOTO,
   LIMITE_SUBTITULO_DESTAQUE,
@@ -47,27 +47,57 @@ describe("normalizarLegenda", () => {
 });
 
 describe("parseMidias — legenda", () => {
+  const R2_PUBLIC_URL_TESTE = "https://pub-test123.r2.dev";
+  const ORG_ID = "org-a";
+  const urlFoto = (uuid: string) => `${R2_PUBLIC_URL_TESTE}/${ORG_ID}/imoveis/${uuid}.jpg`;
+
+  beforeEach(() => {
+    vi.stubEnv("R2_PUBLIC_URL", R2_PUBLIC_URL_TESTE);
+  });
+
   test("a legenda viaja com a foto, na ordem da lista", () => {
     const midias = parseMidias(
       JSON.stringify([
-        { tipo: "FOTO", url: "https://x/b.jpg", ehCapa: false, legenda: "Academia" },
-        { tipo: "FOTO", url: "https://x/c.jpg", ehCapa: false },
-        { tipo: "FOTO", url: "https://x/a.jpg", ehCapa: true, legenda: " Fachada " },
-      ])
+        {
+          tipo: "FOTO",
+          url: urlFoto("11111111-1111-1111-1111-111111111111"),
+          ehCapa: false,
+          legenda: "Academia",
+        },
+        { tipo: "FOTO", url: urlFoto("22222222-2222-2222-2222-222222222222"), ehCapa: false },
+        {
+          tipo: "FOTO",
+          url: urlFoto("33333333-3333-3333-3333-333333333333"),
+          ehCapa: true,
+          legenda: " Fachada ",
+        },
+      ]),
+      ORG_ID
     );
     expect(midias.map((m) => [m.url, m.caption, m.order, m.isCover])).toEqual([
-      ["https://x/b.jpg", "Academia", 0, false],
-      ["https://x/c.jpg", null, 1, false],
-      ["https://x/a.jpg", "Fachada", 2, true],
+      [urlFoto("11111111-1111-1111-1111-111111111111"), "Academia", 0, false],
+      [urlFoto("22222222-2222-2222-2222-222222222222"), null, 1, false],
+      [urlFoto("33333333-3333-3333-3333-333333333333"), "Fachada", 2, true],
     ]);
   });
 
   test("vazio e só espaços viram null", () => {
     const midias = parseMidias(
       JSON.stringify([
-        { tipo: "FOTO", url: "https://x/1.jpg", ehCapa: true, legenda: "" },
-        { tipo: "FOTO", url: "https://x/2.jpg", ehCapa: false, legenda: "   " },
-      ])
+        {
+          tipo: "FOTO",
+          url: urlFoto("11111111-1111-1111-1111-111111111111"),
+          ehCapa: true,
+          legenda: "",
+        },
+        {
+          tipo: "FOTO",
+          url: urlFoto("22222222-2222-2222-2222-222222222222"),
+          ehCapa: false,
+          legenda: "   ",
+        },
+      ]),
+      ORG_ID
     );
     expect(midias.map((m) => m.caption)).toEqual([null, null]);
   });
@@ -75,9 +105,15 @@ describe("parseMidias — legenda", () => {
   test("legenda só existe em foto", () => {
     const midias = parseMidias(
       JSON.stringify([
-        { tipo: "PLANTA", url: "https://x/p.jpg", ehCapa: false, legenda: "Planta tipo" },
+        {
+          tipo: "PLANTA",
+          url: urlFoto("11111111-1111-1111-1111-111111111111"),
+          ehCapa: false,
+          legenda: "Planta tipo",
+        },
         { tipo: "VIDEO", url: "https://x/v", ehCapa: false, legenda: "Tour" },
-      ])
+      ]),
+      ORG_ID
     );
     expect(midias.map((m) => m.caption)).toEqual([null, null]);
   });
@@ -87,7 +123,7 @@ describe("parseMidias — legenda", () => {
       JSON.stringify([
         {
           tipo: "FOTO",
-          url: "https://x/1.jpg",
+          url: urlFoto("11111111-1111-1111-1111-111111111111"),
           ehCapa: true,
           legenda: "Fachada",
           id: "media-de-outro-imovel",
@@ -95,7 +131,8 @@ describe("parseMidias — legenda", () => {
           propertyId: "imovel-alheio",
           caption: "forjada",
         },
-      ])
+      ]),
+      ORG_ID
     );
     expect(Object.keys(midia).sort()).toEqual(["caption", "isCover", "order", "type", "url"]);
     expect(midia.caption).toBe("Fachada");

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { erroValidacao, type ActionState } from "@/lib/action-result";
 import { urlTourSegura } from "@/lib/recursos-imovel";
+import { validarUrlMidiaOrganizacao } from "@/lib/branding/favicon-url";
 
 const numeroOpcional = z.preprocess(
   (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
@@ -316,7 +317,20 @@ export type MidiaParaCriar = {
   caption: string | null;
 };
 
-export function parseMidias(json: string | undefined): MidiaParaCriar[] {
+// Fase 120-A — FOTO e PLANTA são SEMPRE upload próprio (pasta "imoveis"
+// do R2, ver src/app/api/admin/upload/route.ts); ao contrário de VIDEO e
+// TOUR, que são link externo por design (ver recursos-imovel.ts), uma
+// URL de FOTO/PLANTA fora do prefixo {organizationId}/imoveis/ do
+// próprio bucket nunca é legítima. Até esta fase, nenhuma validação de
+// origem existia para esses dois tipos — único ponto de mídia do
+// produto sem essa defesa em profundidade (materiais, hero, logo e
+// perfil já validam há mais tempo via validarUrlMidiaOrganizacao).
+// Mesma função reaproveitada aqui, mesmo critério (origin da URL +
+// prefixo da organização + nome de arquivo no formato esperado) — nunca
+// um `startsWith` ingênuo sobre string crua.
+const TIPOS_QUE_EXIGEM_ORIGEM_R2 = new Set(["FOTO", "PLANTA"] as const);
+
+export function parseMidias(json: string | undefined, organizationId: string): MidiaParaCriar[] {
   if (!json) return [];
   try {
     const midias = JSON.parse(json) as {
@@ -331,6 +345,27 @@ export function parseMidias(json: string | undefined): MidiaParaCriar[] {
       // link aceita javascript:, e nenhuma das duas pontas deve confiar
       // na outra.
       .filter((m) => m.tipo !== "TOUR" || urlTourSegura(m.url) !== null)
+      // Fase 120-A — FOTO/PLANTA com URL fora do bucket/prefixo da
+      // própria organização é DESCARTADA na escrita, mesmo padrão do
+      // TOUR acima: dado inválido nunca chega a virar linha Media.
+      //
+      // `data:` é aceita sem a checagem de prefixo de propósito: é uma
+      // URI autocontida (o próprio conteúdo embutido, nunca uma
+      // referência a um objeto de storage de ninguém) — categoricamente
+      // diferente do que a validação de origem existe para impedir
+      // (apontar pra uma chave R2 de outra organização ou pra um host
+      // externo arbitrário). Mesmo tratamento que a própria ficha
+      // pública já dá a fotos de teste em `data:` (prisma/seed-e2e.ts,
+      // comentário da Fase 44: "data: não passa pelo otimizador do
+      // next/image e a CSP já permite img-src data:") — sem esta
+      // exceção, reabrir/resalvar um imóvel com essas fotos de fixture
+      // apagaria todas elas da lista, silenciosamente.
+      .filter(
+        (m) =>
+          !TIPOS_QUE_EXIGEM_ORIGEM_R2.has(m.tipo as "FOTO" | "PLANTA") ||
+          m.url.startsWith("data:") ||
+          validarUrlMidiaOrganizacao(m.url, organizationId, "imoveis")
+      )
       // Só os campos listados aqui chegam ao banco: um `id`,
       // `organizationId` ou `propertyId` injetado no JSON é ignorado.
       .map((m, i) => ({

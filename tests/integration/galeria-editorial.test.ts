@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, vi } from "vitest";
+import { describe, test, expect, afterEach, beforeAll, vi } from "vitest";
 
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
 vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
@@ -28,6 +28,27 @@ import type { ActionState } from "@/lib/action-result";
 // O que se protege aqui é a IDENTIDADE do conteúdo: a legenda acompanha a
 // foto (nunca a posição), o título/subtítulo acompanham o imóvel (nunca a
 // capa), e nada disso atravessa imóvel ou organização.
+
+// Fase 120-A — desde que parseMidias valida a origem de FOTO
+// (validarUrlMidiaOrganizacao), toda URL usada neste arquivo precisa
+// pertencer de verdade ao prefixo {organizationId}/imoveis/ do bucket
+// configurado — por isso A/B/C deixam de ser strings fixas e passam a
+// ser geradas por organização (urlFoto), mantendo cada teste usando a
+// mesma identidade de foto que usava antes, só com uma URL válida.
+const BASE_R2 = "https://midia-teste-mock.example/pub";
+
+beforeAll(() => {
+  process.env.R2_PUBLIC_URL = BASE_R2;
+});
+
+function urlFoto(organizationId: string, sufixo: "a" | "b" | "c"): string {
+  const uuidPorSufixo = {
+    a: "11111111-1111-4111-8111-111111111111",
+    b: "22222222-2222-4222-8222-222222222222",
+    c: "33333333-3333-4333-8333-333333333333",
+  } as const;
+  return `${BASE_R2}/${organizationId}/imoveis/${uuidPorSufixo[sufixo]}.webp`;
+}
 
 type Cenario = Awaited<ReturnType<typeof criarCenario>>;
 const cenarios: Cenario[] = [];
@@ -112,9 +133,6 @@ async function hero(organizationId: string, id: string) {
   });
 }
 
-const A = "https://cdn.exemplo/a-fachada.jpg";
-const B = "https://cdn.exemplo/b-academia.jpg";
-const C = "https://cdn.exemplo/c-sem-legenda.jpg";
 const TITULO = "Um novo jeito de viver em Santana";
 const SUBTITULO = "Conforto, modernidade e localização privilegiada.";
 
@@ -122,6 +140,8 @@ describe("criação", () => {
   test("o imóvel nasce com título, subtítulo e legendas", async () => {
     const c = await novoCenario();
     autenticarComo(c);
+    const A = urlFoto(c.organization.id, "a");
+    const B = urlFoto(c.organization.id, "b");
     const r = await executar(() =>
       criarImovel(
         { success: false },
@@ -153,6 +173,9 @@ describe("edição — identidade do conteúdo", () => {
   test("reordenar B, C, A mantém cada legenda na sua foto (salvar e reabrir)", async () => {
     const c = await novoCenario();
     autenticarComo(c);
+    const A = urlFoto(c.organization.id, "a");
+    const B = urlFoto(c.organization.id, "b");
+    const C = urlFoto(c.organization.id, "c");
     const imovel = await criarImovelDireto({ organizationId: c.organization.id });
 
     expect(
@@ -186,6 +209,8 @@ describe("edição — identidade do conteúdo", () => {
   test("trocar a capa não move legenda nem título/subtítulo", async () => {
     const c = await novoCenario();
     autenticarComo(c);
+    const A = urlFoto(c.organization.id, "a");
+    const B = urlFoto(c.organization.id, "b");
     const imovel = await criarImovelDireto({ organizationId: c.organization.id });
     const antes = {
       titulo: TITULO,
@@ -220,6 +245,7 @@ describe("edição — identidade do conteúdo", () => {
   test("limpar: vazio e só espaços viram null (título, subtítulo e legenda)", async () => {
     const c = await novoCenario();
     autenticarComo(c);
+    const A = urlFoto(c.organization.id, "a");
     const imovel = await criarImovelDireto({ organizationId: c.organization.id });
     await salvar(imovel.id, {
       titulo: TITULO,
@@ -241,6 +267,8 @@ describe("edição — identidade do conteúdo", () => {
   test("acentos, caracteres especiais e texto parecido com HTML são gravados como texto", async () => {
     const c = await novoCenario();
     autenticarComo(c);
+    const A = urlFoto(c.organization.id, "a");
+    const B = urlFoto(c.organization.id, "b");
     const imovel = await criarImovelDireto({ organizationId: c.organization.id });
     expect(
       await salvar(imovel.id, {
@@ -258,28 +286,43 @@ describe("edição — identidade do conteúdo", () => {
     ]);
   });
 
-  test.each([
-    ["legenda", { fotos: [{ url: A, capa: true, legenda: "x".repeat(81) }] }, "midiasJson"],
-    ["título", { titulo: "x".repeat(81), fotos: [{ url: A, capa: true }] }, "tituloDestaque"],
-    ["subtítulo", { subtitulo: "x".repeat(161), fotos: [{ url: A, capa: true }] }, "subtituloDestaque"],
-  ])("%s acima do limite recusa o salvamento e não altera nada", async (_nome, opcoes, campo) => {
-    const c = await novoCenario();
-    autenticarComo(c);
-    const imovel = await criarImovelDireto({ organizationId: c.organization.id });
-    await salvar(imovel.id, { titulo: TITULO, fotos: [{ url: A, capa: true, legenda: "Fachada" }] });
+  test.each(["legenda", "título", "subtítulo"] as const)(
+    "%s acima do limite recusa o salvamento e não altera nada",
+    async (nome) => {
+      const c = await novoCenario();
+      autenticarComo(c);
+      const A = urlFoto(c.organization.id, "a");
+      const imovel = await criarImovelDireto({ organizationId: c.organization.id });
+      const opcoesPorCaso: Record<
+        typeof nome,
+        { titulo?: string; subtitulo?: string; fotos: Foto[]; campo: string }
+      > = {
+        legenda: { fotos: [{ url: A, capa: true, legenda: "x".repeat(81) }], campo: "midiasJson" },
+        título: { titulo: "x".repeat(81), fotos: [{ url: A, capa: true }], campo: "tituloDestaque" },
+        subtítulo: {
+          subtitulo: "x".repeat(161),
+          fotos: [{ url: A, capa: true }],
+          campo: "subtituloDestaque",
+        },
+      };
+      const { campo, ...opcoes } = opcoesPorCaso[nome];
+      await salvar(imovel.id, { titulo: TITULO, fotos: [{ url: A, capa: true, legenda: "Fachada" }] });
 
-    const r = await salvar(imovel.id, opcoes as Parameters<typeof formImovel>[0]);
-    expect(r).not.toBe("salvou");
-    expect((r as ActionState).fieldErrors?.[campo]).toHaveLength(1);
-    expect((await hero(c.organization.id, imovel.id)).heroTitle).toBe(TITULO);
-    expect((await fotosGravadas(c.organization.id, imovel.id)).map((f) => f.caption)).toEqual(["Fachada"]);
-  });
+      const r = await salvar(imovel.id, opcoes as Parameters<typeof formImovel>[0]);
+      expect(r).not.toBe("salvou");
+      expect((r as ActionState).fieldErrors?.[campo]).toHaveLength(1);
+      expect((await hero(c.organization.id, imovel.id)).heroTitle).toBe(TITULO);
+      expect((await fotosGravadas(c.organization.id, imovel.id)).map((f) => f.caption)).toEqual(["Fachada"]);
+    }
+  );
 });
 
 describe("tenant e mass assignment", () => {
   test("id/organizationId/propertyId injetados no item não alcançam mídia de outro imóvel ou organização", async () => {
     const a = await novoCenario();
     const b = await novoCenario();
+    const A = urlFoto(a.organization.id, "a");
+    const B = urlFoto(b.organization.id, "b");
     const imovelA = await criarImovelDireto({ organizationId: a.organization.id });
     const imovelB = await criarImovelDireto({ organizationId: b.organization.id });
 
@@ -323,6 +366,8 @@ describe("tenant e mass assignment", () => {
   test("imóvel de outra organização: título, subtítulo e legendas intactos", async () => {
     const a = await novoCenario();
     const b = await novoCenario();
+    const A = urlFoto(a.organization.id, "a");
+    const B = urlFoto(b.organization.id, "b");
     const imovelB = await criarImovelDireto({ organizationId: b.organization.id });
     autenticarComo(b);
     await salvar(imovelB.id, {

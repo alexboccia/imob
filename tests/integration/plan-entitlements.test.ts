@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, vi } from "vitest";
+import { describe, test, expect, afterEach, beforeAll, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
 import {
   criarCenario,
@@ -59,17 +59,30 @@ function formData(campos: Record<string, string>) {
 // — dois estados iniciais distintos, nunca reaproveitados um pelo outro.
 const ESTADO_INICIAL_PESSOA = { sucesso: false } as const;
 
-function midiasJson(quantidade: number): string {
+// Fase 120-A — desde que parseMidias valida a origem de FOTO/PLANTA
+// (validarUrlMidiaOrganizacao), a URL precisa pertencer de verdade ao
+// prefixo {organizationId}/imoveis/ do bucket configurado — uma URL
+// fora desse padrão é descartada e nunca conta pro limite de plano.
+const BASE_R2 = "https://midia-teste-mock.example/pub";
+
+beforeAll(() => {
+  process.env.R2_PUBLIC_URL = BASE_R2;
+});
+
+function midiasJson(quantidade: number, organizationId: string): string {
   return JSON.stringify(
-    Array.from({ length: quantidade }, (_, i) => ({
-      tipo: "FOTO" as const,
-      url: `https://exemplo.test/foto-${i}.jpg`,
-      ehCapa: i === 0,
-    }))
+    Array.from({ length: quantidade }, (_, i) => {
+      const n = String(i).padStart(12, "0");
+      return {
+        tipo: "FOTO" as const,
+        url: `${BASE_R2}/${organizationId}/imoveis/11111111-2222-4333-8444-${n}.webp`,
+        ehCapa: i === 0,
+      };
+    })
   );
 }
 
-function dadosImovelBase(overrides: Record<string, string> = {}) {
+function dadosImovelBase(organizationId: string, overrides: Record<string, string> = {}) {
   return formData({
     titulo: "Apartamento de teste",
     tipo: "Apartamento",
@@ -78,7 +91,7 @@ function dadosImovelBase(overrides: Record<string, string> = {}) {
     bairro: "Centro",
     cidade: "São Paulo",
     estado: "SP",
-    midiasJson: midiasJson(0),
+    midiasJson: midiasJson(0, organizationId),
     ...overrides,
   });
 }
@@ -219,7 +232,7 @@ describe("Fase P.9 — enforcement de fotos (PHOTOS_PER_PROPERTY, via criarImove
   test("Z) quantidade abaixo do limite é aceita", async () => {
     cenario = await criarCenario({ modulos: ["core", "properties"], limites: { PHOTOS_PER_PROPERTY: 5 } });
     autenticarComo(cenario);
-    const resultado = await criarImovel(ESTADO_INICIAL_ACAO, dadosImovelBase({ midiasJson: midiasJson(3) }));
+    const resultado = await criarImovel(ESTADO_INICIAL_ACAO, dadosImovelBase(cenario!.organization.id, { midiasJson: midiasJson(3, cenario!.organization.id) }));
     // criarImovel faz redirect() em caso de sucesso — mockado como no-op,
     // então "sucesso" aqui é simplesmente NÃO ter retornado um ActionState
     // de erro (redirect mockado não lança).
@@ -229,14 +242,14 @@ describe("Fase P.9 — enforcement de fotos (PHOTOS_PER_PROPERTY, via criarImove
   test("AA) quantidade EXATAMENTE no limite é aceita (nunca >=, sempre >)", async () => {
     cenario = await criarCenario({ modulos: ["core", "properties"], limites: { PHOTOS_PER_PROPERTY: 5 } });
     autenticarComo(cenario);
-    const resultado = await criarImovel(ESTADO_INICIAL_ACAO, dadosImovelBase({ midiasJson: midiasJson(5) }));
+    const resultado = await criarImovel(ESTADO_INICIAL_ACAO, dadosImovelBase(cenario!.organization.id, { midiasJson: midiasJson(5, cenario!.organization.id) }));
     expect(resultado?.success).not.toBe(false);
   });
 
   test("AB) quantidade acima do limite é rejeitada com mensagem funcional", async () => {
     cenario = await criarCenario({ modulos: ["core", "properties"], limites: { PHOTOS_PER_PROPERTY: 5 } });
     autenticarComo(cenario);
-    const resultado = await criarImovel(ESTADO_INICIAL_ACAO, dadosImovelBase({ midiasJson: midiasJson(6) }));
+    const resultado = await criarImovel(ESTADO_INICIAL_ACAO, dadosImovelBase(cenario!.organization.id, { midiasJson: midiasJson(6, cenario!.organization.id) }));
     expect(resultado.success).toBe(false);
     expect(resultado.message).toContain("5 fotos");
 
@@ -247,23 +260,23 @@ describe("Fase P.9 — enforcement de fotos (PHOTOS_PER_PROPERTY, via criarImove
   test("AC) limite null (ilimitado) nunca bloqueia", async () => {
     cenario = await criarCenario({ modulos: ["core", "properties"], limites: {} });
     autenticarComo(cenario);
-    const resultado = await criarImovel(ESTADO_INICIAL_ACAO, dadosImovelBase({ midiasJson: midiasJson(50) }));
+    const resultado = await criarImovel(ESTADO_INICIAL_ACAO, dadosImovelBase(cenario!.organization.id, { midiasJson: midiasJson(50, cenario!.organization.id) }));
     expect(resultado?.success).not.toBe(false);
   });
 
   test("AD) atualizarImovel também aplica o limite (replace de mídias)", async () => {
     cenario = await criarCenario({ modulos: ["core", "properties"], limites: { PHOTOS_PER_PROPERTY: 2 } });
     autenticarComo(cenario);
-    await criarImovel(ESTADO_INICIAL_ACAO, dadosImovelBase({ midiasJson: midiasJson(1) }));
+    await criarImovel(ESTADO_INICIAL_ACAO, dadosImovelBase(cenario!.organization.id, { midiasJson: midiasJson(1, cenario!.organization.id) }));
     const imovel = await prisma.property.findFirstOrThrow({ where: { organizationId: cenario.organization.id } });
 
-    const resultadoOk = await atualizarImovel(imovel.id, ESTADO_INICIAL_ACAO, dadosImovelBase({ midiasJson: midiasJson(2) }));
+    const resultadoOk = await atualizarImovel(imovel.id, ESTADO_INICIAL_ACAO, dadosImovelBase(cenario!.organization.id, { midiasJson: midiasJson(2, cenario!.organization.id) }));
     expect(resultadoOk?.success).not.toBe(false);
 
     const resultadoExcede = await atualizarImovel(
       imovel.id,
       ESTADO_INICIAL_ACAO,
-      dadosImovelBase({ midiasJson: midiasJson(3) })
+      dadosImovelBase(cenario!.organization.id, { midiasJson: midiasJson(3, cenario!.organization.id) })
     );
     expect(resultadoExcede.success).toBe(false);
 

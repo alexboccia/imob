@@ -12,8 +12,11 @@ import {
   sanitizarNomeLogico,
   imovelValidoParaOrganizacao,
   PASTAS_PERMITIDAS,
+  TIPOS_PERMITIDOS,
 } from "@/lib/upload-validation";
 import { processarImagemHero } from "@/lib/hero-image-processar";
+import { processarImagemImovel } from "@/lib/property-image-processar";
+import { compressaoDeImovelHabilitada } from "@/lib/property-image-limits";
 import { obterKvStore } from "@/lib/kv-store";
 import { verificarLimiteUpload } from "@/lib/rate-limit";
 import { cabecalhosLimiteExcedido } from "@/lib/rate-limit-response";
@@ -139,6 +142,11 @@ export async function POST(request: Request) {
   let bytes: Buffer = Buffer.from(await arquivo.arrayBuffer());
   let extensao = validacao.extensao;
   let mime = validacao.mime;
+  // Categoria do arquivo ORIGINAL (antes de qualquer reprocessamento) —
+  // decide o ContentDisposition abaixo; `pasta` por si só já restringe
+  // quem aceita o quê (PASTAS_PERMITIDAS), isto só nomeia a categoria já
+  // validada em validarArquivo() pra reaproveitar aqui.
+  const categoria = TIPOS_PERMITIDOS[arquivo.type]?.categoria;
 
   // Hero da Home: reprocessa sempre (nunca guarda o arquivo como veio) —
   // corrige orientação EXIF, valida dimensões mínimas e recodifica pra
@@ -154,10 +162,56 @@ export async function POST(request: Request) {
     mime = "image/webp";
   }
 
+  // Fase 120-B — fotos/plantas de imóvel também são reprocessadas
+  // (nunca guardam o arquivo como veio): mesma técnica do Hero (sharp +
+  // WebP), parâmetros próprios (Perfil B — ver
+  // docs/tecnico/imagens/fase-120/02-ARQUITETURA-COMPRESSAO.md). Resolve,
+  // como efeito colateral do reencode, o achado de privacidade de
+  // EXIF/GPS da Fase 119/120 — não é uma etapa separada.
+  //
+  // DESLIGADO por padrão em produção (compressaoDeImovelHabilitada() —
+  // ver property-image-limits.ts) até a validação visual com fotos
+  // reais de imóvel ser feita, critério bloqueante da auditoria de
+  // publicação que nenhum teste automatizado substitui. Enquanto
+  // desligado, o upload segue exatamente como antes da Fase 120-B
+  // (arquivo original, sem reencode) — nenhuma regressão de
+  // comportamento, só a nova remoção de EXIF/GPS/redução de tamanho
+  // ainda não entra em vigor.
+  if (pasta === "imoveis" && compressaoDeImovelHabilitada()) {
+    const tamanhoOriginal = bytes.length;
+    const inicioProcessamento = Date.now();
+    const processado = await processarImagemImovel(bytes);
+    if (!processado.ok) {
+      logger.warn("Falha ao processar foto de imóvel (Sharp)", {
+        organizationId,
+        route: "/api/admin/upload",
+        modulo: "property-image-processar",
+      });
+      return erro(processado.erro, processado.status);
+    }
+    bytes = processado.bytes;
+    extensao = processado.extensao;
+    mime = processado.mime;
+
+    // Fase 120-E — observabilidade mínima: tamanho antes/depois,
+    // percentual de redução e tempo de processamento. Nunca loga a
+    // chave/URL do arquivo (sem dado identificável nesse ponto ainda).
+    const tamanhoProcessado = bytes.length;
+    logger.info("Foto de imóvel processada", {
+      organizationId,
+      route: "/api/admin/upload",
+      modulo: "property-image-processar",
+      tamanhoOriginalBytes: tamanhoOriginal,
+      tamanhoProcessadoBytes: tamanhoProcessado,
+      reducaoPercentual: Math.round((1 - tamanhoProcessado / tamanhoOriginal) * 100),
+      tempoProcessamentoMs: Date.now() - inicioProcessamento,
+    });
+  }
+
   // organizationId sempre vem da sessão (requireOrganizationId), nunca do
   // cliente; uuid gerado no servidor; extensão derivada do MIME já
-  // validado (ou, pro Hero, do formato final após reprocessamento) — o
-  // nome original do arquivo nunca entra na chave.
+  // validado (ou, pro Hero/imóvel, do formato final após
+  // reprocessamento) — o nome original do arquivo nunca entra na chave.
   const chave = `${organizationId}/${pasta}/${crypto.randomUUID()}.${extensao}`;
   const nomeOriginalSanitizado = sanitizarNomeLogico(arquivo.name);
 
@@ -169,6 +223,18 @@ export async function POST(request: Request) {
         Key: chave,
         Body: bytes,
         ContentType: mime,
+        // Fase 120-A — cache longo e imutável: cada upload gera uma
+        // chave UUID NOVA (nunca reaproveitada, ver geração da `chave`
+        // acima), então o objeto naquela URL nunca muda depois de
+        // criado — cache agressivo não corre risco de servir conteúdo
+        // desatualizado, e nunca precisa de invalidação.
+        CacheControl: "public, max-age=31536000, immutable",
+        // Documentos (materiais de apresentação) forçam download — um
+        // PDF com JavaScript embutido não é aberto inline pelo
+        // visualizador do navegador do visitante; imagem/demais tipos
+        // continuam inline (comportamento já efetivo por omissão,
+        // tornado explícito aqui).
+        ContentDisposition: categoria === "documento" ? "attachment" : "inline",
       })
     );
   } catch (erroEnvio) {

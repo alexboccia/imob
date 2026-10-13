@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, beforeEach, vi } from "vitest";
 import {
   imovelSchema,
   parseImovelFormData,
@@ -171,28 +171,66 @@ describe("camposImovel", () => {
 });
 
 describe("parseMidias", () => {
+  const R2_PUBLIC_URL_TESTE = "https://pub-test123.r2.dev";
+  const ORG_ID = "org-a";
+  const UUID_1 = "11111111-1111-1111-1111-111111111111";
+  const UUID_2 = "22222222-2222-2222-2222-222222222222";
+
+  beforeEach(() => {
+    vi.stubEnv("R2_PUBLIC_URL", R2_PUBLIC_URL_TESTE);
+  });
+
   test("retorna array vazio para entrada undefined", () => {
-    expect(parseMidias(undefined)).toEqual([]);
+    expect(parseMidias(undefined, ORG_ID)).toEqual([]);
   });
 
   test("retorna array vazio para JSON inválido, sem lançar erro", () => {
-    expect(parseMidias("{not valid json")).toEqual([]);
+    expect(parseMidias("{not valid json", ORG_ID)).toEqual([]);
   });
 
   test("mapeia tipo em português pro MediaType em inglês, preservando ordem", () => {
+    const urlFoto = `${R2_PUBLIC_URL_TESTE}/${ORG_ID}/imoveis/${UUID_1}.jpg`;
+    const urlPlanta = `${R2_PUBLIC_URL_TESTE}/${ORG_ID}/imoveis/${UUID_2}.jpg`;
     const json = JSON.stringify([
-      { tipo: "FOTO", url: "https://x/1.jpg", ehCapa: true },
-      { tipo: "PLANTA", url: "https://x/2.jpg", ehCapa: false },
+      { tipo: "FOTO", url: urlFoto, ehCapa: true },
+      { tipo: "PLANTA", url: urlPlanta, ehCapa: false },
       { tipo: "VIDEO", url: "https://x/3.mp4", ehCapa: false },
     ]);
-    const midias = parseMidias(json);
+    const midias = parseMidias(json, ORG_ID);
     expect(midias).toEqual([
       // Fase 45 — sem legenda informada, caption é null (e nunca existe
       // fora de foto).
-      { type: "PHOTO", url: "https://x/1.jpg", isCover: true, order: 0, caption: null },
-      { type: "FLOOR_PLAN", url: "https://x/2.jpg", isCover: false, order: 1, caption: null },
+      { type: "PHOTO", url: urlFoto, isCover: true, order: 0, caption: null },
+      { type: "FLOOR_PLAN", url: urlPlanta, isCover: false, order: 1, caption: null },
       { type: "VIDEO", url: "https://x/3.mp4", isCover: false, order: 2, caption: null },
     ]);
+  });
+
+  // Fase 120-A — FOTO/PLANTA fora do prefixo {organizationId}/imoveis/
+  // do bucket configurado nunca chega a virar linha Media (mesma defesa
+  // em profundidade já usada por materiais/hero/perfil/logo).
+  test("descarta FOTO/PLANTA com URL fora do bucket/prefixo da organização", () => {
+    const json = JSON.stringify([
+      { tipo: "FOTO", url: "https://x/1.jpg", ehCapa: true },
+      { tipo: "FOTO", url: `${R2_PUBLIC_URL_TESTE}/outra-org/imoveis/${UUID_1}.jpg`, ehCapa: false },
+      { tipo: "FOTO", url: `${R2_PUBLIC_URL_TESTE}/${ORG_ID}/imoveis/${UUID_1}.jpg`, ehCapa: false },
+    ]);
+    const midias = parseMidias(json, ORG_ID);
+    expect(midias).toHaveLength(1);
+    expect(midias[0].url).toBe(`${R2_PUBLIC_URL_TESTE}/${ORG_ID}/imoveis/${UUID_1}.jpg`);
+  });
+
+  // Fase 120-A — data: é autocontida (nunca referencia storage de
+  // ninguém), por isso passa sem a checagem de prefixo — usada por
+  // fixtures de teste (prisma/seed-e2e.ts) e preservada aqui de
+  // propósito, pra reabrir/resalvar um imóvel com essas fotos nunca
+  // apagá-las silenciosamente.
+  test("aceita FOTO/PLANTA com URL data: (autocontida), sem exigir prefixo do bucket", () => {
+    const urlDados = "data:image/svg+xml;utf8,%3Csvg%3E%3C/svg%3E";
+    const json = JSON.stringify([{ tipo: "FOTO", url: urlDados, ehCapa: true }]);
+    const midias = parseMidias(json, ORG_ID);
+    expect(midias).toHaveLength(1);
+    expect(midias[0].url).toBe(urlDados);
   });
 });
 

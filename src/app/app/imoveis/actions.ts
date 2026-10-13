@@ -25,6 +25,7 @@ import {
 } from "@/lib/locais-proximos";
 import { empreendimentoDaOrganizacao } from "@/lib/empreendimento-consultas";
 import { parseMateriais } from "@/lib/materiais-imovel";
+import { removerObjetosR2 } from "@/lib/r2-media";
 
 // SEM STORAGE CONFIGURADO, MATERIAL NÃO SE MEXE.
 //
@@ -101,9 +102,9 @@ export async function criarImovel(
   const resultado = parseImovelFormData(formData);
   if (!resultado.ok) return resultado.estado;
   const { dados } = resultado;
-  const midias = parseMidias(dados.midiasJson);
 
   const organizationId = await requireOrganizationId();
+  const midias = parseMidias(dados.midiasJson, organizationId);
   try {
     await verificarLimiteImoveis(organizationId);
     // Fase P.9: validado ANTES da transação de criação — a lista de
@@ -266,9 +267,9 @@ export async function atualizarImovel(
   const resultado = parseImovelFormData(formData);
   if (!resultado.ok) return resultado.estado;
   const { dados } = resultado;
-  const midias = parseMidias(dados.midiasJson);
 
   const organizationId = await requireOrganizationId();
+  const midias = parseMidias(dados.midiasJson, organizationId);
   try {
     await verificarLimiteFotos(organizationId, midias.length);
   } catch (erro) {
@@ -284,6 +285,22 @@ export async function atualizarImovel(
 
   const locais = resolverLocaisProximos(dados.locaisProximosJson);
   if (!locais.ok) return locais.estado;
+
+  // Fase 120-C — URLs ANTES de qualquer mudança, pra saber depois (só
+  // depois da transação confirmar com sucesso) o que foi de fato
+  // removido da lista e pode ser apagado também no R2. Nunca o
+  // contrário: apagar no R2 antes do banco confirmar poderia deixar uma
+  // Media apontando pra um objeto já removido, se a transação falhasse.
+  const materiaisNovos = materiaisDoFormulario(dados.materiaisJson, organizationId);
+  const [midiasAntigas, materiaisAntigos] = await Promise.all([
+    prisma.media.findMany({ where: { propertyId: imovelId, organizationId }, select: { url: true } }),
+    storageConfigurado()
+      ? prisma.propertyPresentationMaterial.findMany({
+          where: { propertyId: imovelId, organizationId },
+          select: { url: true },
+        })
+      : Promise.resolve([]),
+  ]);
 
   try {
   await withOrganization(organizationId, async () => {
@@ -376,9 +393,7 @@ export async function atualizarImovel(
           ...(storageConfigurado()
             ? {
                 presentationMaterials: {
-                  create: materiaisDoFormulario(dados.materiaisJson, organizationId).map(
-                    (material) => ({ ...material, organizationId })
-                  ),
+                  create: materiaisNovos.map((material) => ({ ...material, organizationId })),
                 },
               }
             : {}),
@@ -413,6 +428,21 @@ export async function atualizarImovel(
     }
     throw erro;
   }
+
+  // Fase 120-C — só depois da transação acima já ter sido confirmada: as
+  // URLs que saíram da lista (foto/material removido ou substituído) têm
+  // seu objeto R2 removido de fato, não só a linha no banco. Nunca lança
+  // — uma falha aqui fica como órfão tolerável (ver removerObjetosR2),
+  // nunca bloqueia a edição do imóvel que o usuário já confirmou.
+  const urlsNovasFotos = new Set(midias.map((m) => m.url));
+  const urlsNovasMateriais = new Set(materiaisNovos.map((m) => m.url));
+  await removerObjetosR2(
+    [
+      ...midiasAntigas.filter((m) => !urlsNovasFotos.has(m.url)).map((m) => m.url),
+      ...materiaisAntigos.filter((m) => !urlsNovasMateriais.has(m.url)).map((m) => m.url),
+    ],
+    organizationId
+  );
 
   await logActivity({
     organizationId,
