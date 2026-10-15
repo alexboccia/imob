@@ -148,7 +148,13 @@ export function GrupoNavAdmin({
         onClick={() => salvarPreferencia(titulo, !preferenciaAberto)}
         aria-expanded={expandido}
         aria-controls={idConteudo}
-        className="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide hover:text-gray-700 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        // Ajuste fino aprovado: 10px/semibold/uppercase, título e seta em
+        // extremidades opostas da MESMA linha (justify-between), nunca
+        // centralizado. whitespace-nowrap no título + shrink-0 na seta —
+        // nenhum dos dois cede espaço ao outro; a seta nunca fica espremida
+        // nem o título é cortado, porque o próprio nome do grupo foi
+        // escolhido (seção de título abaixo) para caber nesta largura.
+        className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-1.5 text-[10px] font-semibold whitespace-nowrap text-gray-500 uppercase tracking-wide hover:text-gray-700 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <span>{titulo}</span>
         <ChevronDown

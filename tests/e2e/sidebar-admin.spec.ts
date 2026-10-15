@@ -383,4 +383,53 @@ test.describe("Reorganização do menu lateral — grupos nomeados e recolhívei
       .evaluateAll((els) => els.map((el) => el.textContent?.trim()));
     expect(titulosGrupo).toEqual(GRUPOS_ESPERADOS.map((g) => g.titulo));
   });
+
+  // Ajuste fino aprovado: 10px/semibold, uma linha só, seta alinhada à
+  // direita sem sobreposição — "Cadastros e organização" é o título mais
+  // longo e o único caso real de risco de quebra.
+  test("os 4 títulos têm o mesmo padrão visual: 10px, semibold, uma linha, sem sobreposição com a seta", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    await page.goto("/app");
+
+    for (const grupo of GRUPOS_ESPERADOS) {
+      const botao = sidebar(page).getByRole("button", { name: grupo.titulo });
+      const medidas = await botao.evaluate((b) => {
+        const span = b.querySelector("span")!;
+        const svg = b.querySelector("svg")!;
+        const sRect = span.getBoundingClientRect();
+        const svgRect = svg.getBoundingClientRect();
+        const estilo = getComputedStyle(span);
+        return {
+          fontSize: estilo.fontSize,
+          fontWeight: estilo.fontWeight,
+          linhas: Math.round(sRect.height / parseFloat(estilo.lineHeight || "14")),
+          sobrepoe: sRect.right > svgRect.left,
+        };
+      });
+      expect(medidas.fontSize, grupo.titulo).toBe("10px");
+      expect(medidas.fontWeight, grupo.titulo).toBe("600");
+      expect(medidas.linhas, grupo.titulo).toBe(1);
+      expect(medidas.sobrepoe, grupo.titulo).toBe(false);
+    }
+  });
+
+  test("espaçamento de ~16px entre grupos (e entre Dashboard e o primeiro grupo)", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app");
+
+    // Medido pela distância real entre o fim de um bloco (Dashboard ou um
+    // grupo) e o início do próximo — independe de a espaçar vir de
+    // margin-top, margin-bottom ou gap, só o resultado visual importa.
+    const gaps = await sidebar(page)
+      .locator("> *")
+      .evaluateAll((els) => {
+        const rects = els.map((el) => el.getBoundingClientRect());
+        return rects.slice(1).map((r, i) => Math.round(r.top - rects[i].bottom));
+      });
+    expect(gaps.length).toBe(GRUPOS_ESPERADOS.length);
+    for (const g of gaps) expect(g).toBeGreaterThanOrEqual(14);
+    for (const g of gaps) expect(g).toBeLessThanOrEqual(18);
+  });
 });

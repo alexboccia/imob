@@ -98,7 +98,10 @@ export function AdminMobileNav({
               Ver site
             </a>
           )}
-          <nav className="flex-1 space-y-1 overflow-y-auto text-sm" aria-label="Navegação principal">
+          {/* space-y-4 (16px): mesmo ajuste da sidebar desktop — só ENTRE
+              grupos, nunca dentro de um grupo (space-y-1 próprio de
+              GrupoNavAdmin). */}
+          <nav className="flex-1 space-y-4 overflow-y-auto text-sm" aria-label="Navegação principal">
             {semGrupo.map((item) => (
               <ItemNavLinkAdmin key={item.href} item={item} pathname={pathname} onNavigate={() => setOpen(false)} />
             ))}

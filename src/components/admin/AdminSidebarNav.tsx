@@ -16,7 +16,10 @@ export function AdminSidebarNav({ itens }: { itens: ItemNavAdmin[] }) {
   const { semGrupo, grupos } = agruparItensNav(itens);
 
   return (
-    <nav className="flex-1 space-y-1 px-2 py-4 text-sm" aria-label="Navegação principal">
+    // space-y-4 (16px): espaçamento ENTRE grupos (e entre Dashboard e o
+    // primeiro grupo) — o espaçamento DENTRO de um grupo continua o
+    // space-y-1 do próprio GrupoNavAdmin, inalterado.
+    <nav className="flex-1 space-y-4 px-2 py-4 text-sm" aria-label="Navegação principal">
       {semGrupo.map((item) => (
         <ItemNavLinkAdmin key={item.href} item={item} pathname={pathname} />
       ))}
