@@ -368,7 +368,12 @@ export default async function DetalheClientePage({
           titulo={pessoa.name}
           descricao={`${pessoa.phone ?? "sem telefone"} · ${pessoa.email ?? "sem e-mail"} · ${pessoa.roles.join(", ")}`}
           acoes={
-            <>
+            // Mesmo achado/correção de src/app/app/imoveis/[id]/page.tsx:
+            // o wrapper `acoes` de CabecalhoPagina é shrink-0 de
+            // propósito, então sem um teto explícito o bloco inteiro
+            // (form + texto de apoio + botão de exclusão + editar)
+            // ultrapassava a viewport em 320-390px (achado real, medido).
+            <div className="flex min-w-0 max-w-64 flex-wrap items-center gap-2 sm:max-w-none">
             <GerenciarArquivamentoRegistro
               entidadeLabel="cliente"
               nomeDoRegistro={pessoa.name}
@@ -388,7 +393,7 @@ export default async function DetalheClientePage({
                 observacoes: pessoa.notes,
               }}
             />
-            </>
+            </div>
           }
         />
         {/* Fase 125 — Person.createdAt já existia (vem na mesma query,

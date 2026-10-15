@@ -268,7 +268,15 @@ export default async function EditarImovelPage({
         titulo="Editar imóvel"
         descricao="Dados, fotos e materiais que o site publica sobre este imóvel."
         acoes={
-          <>
+          // max-w-64 abaixo de sm: o wrapper `acoes` de CabecalhoPagina é
+          // shrink-0 de propósito (fica à direita em desktop) — seu
+          // tamanho "natural" (max-content) é calculado como se nada
+          // aqui dentro quebrasse linha, mesmo com flex-wrap. Nenhuma
+          // outra página batia nisso porque nenhuma tinha 2 botões +
+          // texto de apoio + um terceiro botão juntos; sem este teto, o
+          // bloco inteiro ultrapassava a viewport em 320-390px (achado
+          // real, medido com Playwright, não hipotético).
+          <div className="flex min-w-0 max-w-64 flex-wrap items-center gap-2 sm:max-w-none">
           <GerenciarArquivamentoRegistro
             entidadeLabel="imóvel"
             nomeDoRegistro={imovel.title}
@@ -305,7 +313,7 @@ export default async function EditarImovelPage({
               .map((m) => ({ id: m.id, url: m.url }))}
             urlAnuncio={urlAnuncio}
           />
-          </>
+          </div>
         }
       />
       <ImovelForm

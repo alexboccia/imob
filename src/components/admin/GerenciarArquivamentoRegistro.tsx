@@ -4,6 +4,7 @@ import { useActionState, useId, useState } from "react";
 import { Archive, ArchiveRestore, AlertTriangle } from "lucide-react";
 import type { ActionState } from "@/lib/action-result";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -54,7 +55,16 @@ export function GerenciarArquivamentoRegistro({
   if (!podeArquivar && !podeExcluirDefinitivamente) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    // min-w-0: sem isto, o form do botão Arquivar/Restaurar (que carrega
+    // um parágrafo de ajuda sem quebra própria) força a largura de
+    // conteúdo máxima em vez de ceder ao flex-wrap. O teto de largura em
+    // telas estreitas (necessário porque o wrapper `acoes` de
+    // CabecalhoPagina é shrink-0 de propósito) fica no componente que
+    // monta TODAS as ações do cabeçalho juntas (ver
+    // src/app/app/imoveis/[id]/page.tsx e clientes/[id]/page.tsx), não
+    // aqui — este componente não sabe o que mais vai ser renderizado ao
+    // seu lado.
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
       {arquivadoEm && (
         <Badge variant="secondary" className="gap-1">
           <Archive className="size-3" />
@@ -99,7 +109,12 @@ function BotaoArquivarOuRestaurar({
   );
 
   return (
-    <form action={formAction} className="flex flex-col gap-1">
+    // min-w-0 no form e max-w-[12rem] + break-words no texto de apoio:
+    // sem isso, "Reversível — pode ser restaurado a qualquer momento."
+    // nunca quebra linha (flex-col não encolhe por padrão) e força a
+    // largura do form — e, por tabela, de todo o bloco de ações do
+    // cabeçalho — além da viewport em 320-768px (achado real, medido).
+    <form action={formAction} className="flex min-w-0 flex-col gap-1">
       <Button type="submit" variant="outline" size="sm" disabled={pendente} className="gap-1.5">
         {arquivadoEm ? (
           <>
@@ -114,13 +129,18 @@ function BotaoArquivarOuRestaurar({
         )}
       </Button>
       {!arquivadoEm && (
-        <p className="text-xs text-muted-foreground">Reversível — pode ser restaurado a qualquer momento.</p>
+        <p className="max-w-48 text-xs text-muted-foreground break-words">
+          Reversível — pode ser restaurado a qualquer momento.
+        </p>
       )}
       {estado.message && (
         <p
           role="status"
           aria-live="polite"
-          className={estado.success ? "text-xs text-muted-foreground" : "text-xs text-destructive"}
+          className={cn(
+            "max-w-48 text-xs break-words",
+            estado.success ? "text-muted-foreground" : "text-destructive"
+          )}
         >
           {estado.message}
         </p>
