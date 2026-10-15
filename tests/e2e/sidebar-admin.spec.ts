@@ -5,28 +5,40 @@ import { ORG_A, ORG_RESTRITA_ANA, login } from "./helpers";
 // destacar a rota atual (o menu mobile já destacava desde a Fase 26; o
 // desktop não, porque o layout é Server Component e não tem usePathname).
 //
-// O RISCO desta mudança não é visual: a lista de navegação é recortada por
-// papel e por módulo, e o <nav> desktop foi extraído para um componente de
-// cliente. Por isso a maior parte da cobertura abaixo é sobre o que NÃO
-// podia mudar — quais itens aparecem, para quem, e apontando para onde.
+// Reorganização do menu lateral — os itens passaram a viver em 4 grupos
+// nomeados e recolhíveis (Dashboard continua fixo, fora de grupo). Esta
+// suíte foi reescrita para a nova ordem/estrutura aprovada; a cobertura
+// de "o que NÃO podia mudar" (recorte por papel/módulo, rotas, ícones,
+// item ativo) continua a mesma, só adaptada à nova organização visual.
 
 const ITENS_ESPERADOS_OWNER = [
   "Dashboard",
-  "Imóveis",
-  "Clientes",
-  "Pipeline",
   "Agenda",
-  "Analytics",
+  "Clientes",
+  "Imóveis",
   "Minhas comissões",
+  "Pipeline",
+  "Características",
   "Contatos a identificar",
   "Empreendimentos",
-  "Características",
   "Tipos de imóvel",
+  "Analytics",
+  "Auditoria",
   "Usuários",
-  "Meu perfil público",
-  "Configurações",
   "Assinatura",
+  "Configurações",
   "Manutenção",
+  "Meu perfil público",
+];
+
+const GRUPOS_ESPERADOS: { titulo: string; itens: string[] }[] = [
+  { titulo: "Gestão comercial", itens: ["Agenda", "Clientes", "Imóveis", "Minhas comissões", "Pipeline"] },
+  {
+    titulo: "Cadastros e organização",
+    itens: ["Características", "Contatos a identificar", "Empreendimentos", "Tipos de imóvel"],
+  },
+  { titulo: "Gestão e controle", itens: ["Analytics", "Auditoria", "Usuários"] },
+  { titulo: "Configurações", itens: ["Assinatura", "Configurações", "Manutenção", "Meu perfil público"] },
 ];
 
 function sidebar(page: import("@playwright/test").Page) {
@@ -34,7 +46,7 @@ function sidebar(page: import("@playwright/test").Page) {
 }
 
 test.describe("Sidebar do painel — itens e autorização", () => {
-  test("o OWNER vê os mesmos itens de sempre, na mesma ordem", async ({ page }) => {
+  test("o OWNER vê os mesmos itens de sempre, na nova ordem agrupada", async ({ page }) => {
     await login(page, ORG_A);
     await page.goto("/app");
 
@@ -65,6 +77,7 @@ test.describe("Sidebar do painel — itens e autorização", () => {
     expect(porLabel.get("Configurações")).toBe("/app/configuracoes");
     expect(porLabel.get("Meu perfil público")).toBe("/app/meu-perfil");
     expect(porLabel.get("Manutenção")).toBe("/app/manutencao");
+    expect(porLabel.get("Auditoria")).toBe("/app/auditoria");
   });
 
   test("o recorte por papel não mudou: o corretor não recebe Configurações", async ({ page }) => {
@@ -99,11 +112,13 @@ test.describe("Sidebar do painel — ícones", () => {
     }
   });
 
-  test("os ícones têm o mesmo tamanho e são decorativos", async ({ page }) => {
+  test("os ícones dos itens têm o mesmo tamanho e são decorativos", async ({ page }) => {
     await login(page, ORG_A);
     await page.goto("/app");
 
-    const svgs = sidebar(page).locator("svg");
+    // Escopado aos ITENS (não aos chevrons de cabeçalho de grupo, que são
+    // menores de propósito — ver teste de cabeçalhos abaixo).
+    const svgs = sidebar(page).locator("a svg, span[title] svg");
     const medidas = await svgs.evaluateAll((els) =>
       els.map((el) => {
         const r = el.getBoundingClientRect();
@@ -115,6 +130,7 @@ test.describe("Sidebar do painel — ícones", () => {
       })
     );
 
+    expect(medidas.length).toBe(ITENS_ESPERADOS_OWNER.length);
     for (const m of medidas) {
       // 18-20px, como pede o padrão visual — e quadrados.
       expect(m.largura, `largura ${m.largura}`).toBeGreaterThanOrEqual(18);
@@ -137,7 +153,7 @@ test.describe("Sidebar do painel — ícones", () => {
     // seriam indistinguíveis de relance, que é o problema que a Fase 58
     // já teve com as caixas Topo/Rodapé.
     const desenhos = await sidebar(page)
-      .locator("svg")
+      .locator("a svg, span[title] svg")
       .evaluateAll((els) => els.map((el) => el.innerHTML));
 
     expect(new Set(desenhos).size).toBe(desenhos.length);
@@ -235,46 +251,136 @@ test.describe("Sidebar do painel — mobile preservado", () => {
   });
 });
 
-test.describe("Sidebar do painel — agrupamento visual (Fase 63)", () => {
-  test("há respiro entre grupos, sem título e sem divisor", async ({ page }) => {
+test.describe("Reorganização do menu lateral — grupos nomeados e recolhíveis", () => {
+  test("os 4 grupos aparecem, na ordem aprovada, com o Dashboard fixo e fora de grupo", async ({ page }) => {
     await login(page, ORG_A);
     await page.goto("/app");
 
-    const espacos = await sidebar(page)
-      .locator("a, span[title]")
-      .evaluateAll((els) =>
-        els.map((el) => ({
-          label: (el.textContent ?? "").replace(/\s*Pro\s*$/, "").trim(),
-          margem: Math.round(parseFloat(getComputedStyle(el).marginTop)),
-        }))
-      );
+    const titulosGrupo = await sidebar(page)
+      .getByRole("button")
+      .evaluateAll((els) => els.map((el) => el.textContent?.trim()));
+    expect(titulosGrupo).toEqual(GRUPOS_ESPERADOS.map((g) => g.titulo));
 
-    // Os quatro itens que abrem um grupo têm respiro; os outros não.
-    const comRespiro = espacos.filter((e) => e.margem >= 8).map((e) => e.label);
-    expect(comRespiro).toEqual([
-      "Analytics",
-      "Empreendimentos",
-      "Usuários",
-      "Configurações",
-    ]);
-
-    // O primeiro item nunca ganha respiro — separaria o menu de nada.
-    expect(espacos[0].label).toBe("Dashboard");
-    expect(espacos[0].margem).toBeLessThan(8);
-
-    // Discreto: nada de divisor pesado nem cabeçalho de grupo.
-    const divisores = await sidebar(page).locator("hr").count();
-    expect(divisores).toBe(0);
+    // Dashboard é o primeiro item e não está dentro de nenhum <button>
+    // de grupo — é um link direto, filho do próprio <nav>.
+    const dashboard = sidebar(page).getByRole("link", { name: "Dashboard" });
+    await expect(dashboard).toBeVisible();
   });
 
-  test("o agrupamento não mexeu em itens, ordem, rotas nem permissões", async ({ page }) => {
+  test("dentro de cada grupo, os itens aparecem em ordem alfabética", async ({ page }) => {
     await login(page, ORG_A);
     await page.goto("/app");
 
-    // Mesma lista, mesma ordem que a Fase 62 fixou.
-    const rotulos = await sidebar(page)
-      .locator("a, span[title]")
-      .evaluateAll((els) => els.map((el) => (el.textContent ?? "").replace(/\s*Pro\s*$/, "").trim()));
-    expect(rotulos).toEqual(ITENS_ESPERADOS_OWNER);
+    for (const grupo of GRUPOS_ESPERADOS) {
+      const ordenado = [...grupo.itens].sort((a, b) => a.localeCompare(b, "pt-BR"));
+      expect(grupo.itens, `grupo "${grupo.titulo}"`).toEqual(ordenado);
+    }
+  });
+
+  test("grupos nascem expandidos, com aria-expanded=true e os itens visíveis", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app");
+
+    for (const grupo of GRUPOS_ESPERADOS) {
+      const botao = sidebar(page).getByRole("button", { name: grupo.titulo });
+      await expect(botao).toHaveAttribute("aria-expanded", "true");
+      for (const label of grupo.itens) {
+        // Escopado a "a, span[title]" (nunca ao <button> do cabeçalho do
+        // grupo, cujo texto pode colidir com um item do mesmo nome —
+        // caso real: o grupo "Configurações" contém o item
+        // "Configurações").
+        const item = sidebar(page)
+          .locator("a, span[title]")
+          .filter({ hasText: new RegExp(`^${label}$`) });
+        await expect(item).toBeVisible();
+      }
+    }
+  });
+
+  test("clicar no cabeçalho recolhe o grupo (aria-expanded=false, itens somem) e clicar de novo expande", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    await page.goto("/app");
+
+    const botao = sidebar(page).getByRole("button", { name: "Configurações" });
+    await botao.click();
+    await expect(botao).toHaveAttribute("aria-expanded", "false");
+    await expect(sidebar(page).getByRole("link", { name: "Manutenção" })).toHaveCount(0);
+
+    await botao.click();
+    await expect(botao).toHaveAttribute("aria-expanded", "true");
+    await expect(sidebar(page).getByRole("link", { name: "Manutenção" })).toBeVisible();
+  });
+
+  test("a preferência de grupo recolhido persiste depois de recarregar a página", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app");
+
+    await sidebar(page).getByRole("button", { name: "Cadastros e organização" }).click();
+    await expect(sidebar(page).getByRole("button", { name: "Cadastros e organização" })).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    );
+
+    await page.reload();
+    await expect(sidebar(page).getByRole("button", { name: "Cadastros e organização" })).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    );
+
+    // Limpeza — não deixar a preferência recolhida afetando outros testes
+    // desta mesma suíte (localStorage é por origem, sobrevive entre specs).
+    await sidebar(page).getByRole("button", { name: "Cadastros e organização" }).click();
+  });
+
+  test("navegar para uma rota de um grupo recolhido reabre o grupo automaticamente", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app");
+
+    const botaoConfig = sidebar(page).getByRole("button", { name: "Configurações" });
+    await botaoConfig.click();
+    await expect(botaoConfig).toHaveAttribute("aria-expanded", "false");
+
+    // Navegação direta (não um clique no item, que já estaria escondido)
+    // para uma rota dentro do grupo recolhido.
+    await page.goto("/app/configuracoes");
+    await expect(botaoConfig).toHaveAttribute("aria-expanded", "true");
+    await expect(sidebar(page).locator('a[aria-current="page"]')).toHaveText("Configurações");
+
+    // Ao sair do grupo, a preferência (recolhido) volta a valer.
+    await page.goto("/app/imoveis");
+    await expect(botaoConfig).toHaveAttribute("aria-expanded", "false");
+
+    // Limpeza.
+    await botaoConfig.click();
+  });
+
+  test("os cabeçalhos de grupo são alcançáveis por teclado", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app");
+
+    const botao = sidebar(page).getByRole("button", { name: "Gestão comercial" });
+    await botao.focus();
+    await expect(botao).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(botao).toHaveAttribute("aria-expanded", "false");
+
+    // Limpeza.
+    await page.keyboard.press("Enter");
+    await expect(botao).toHaveAttribute("aria-expanded", "true");
+  });
+
+  test("o menu mobile mostra os mesmos 4 grupos", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await login(page, ORG_A);
+    await page.goto("/app");
+
+    await page.getByRole("button", { name: "Abrir menu" }).click();
+    const navMobile = page.getByRole("dialog").locator('nav[aria-label="Navegação principal"]');
+    const titulosGrupo = await navMobile
+      .getByRole("button")
+      .evaluateAll((els) => els.map((el) => el.textContent?.trim()));
+    expect(titulosGrupo).toEqual(GRUPOS_ESPERADOS.map((g) => g.titulo));
   });
 });

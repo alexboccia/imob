@@ -3,13 +3,11 @@
 import { useState } from "react";
 import { SeletorOrganizacao } from "@/components/admin/SeletorOrganizacao";
 import type { OrganizacaoAcessivel } from "@/lib/organizacoes-do-usuario";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ExternalLink, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ICONES_NAV } from "@/components/admin/icones-nav";
-import { itemAtivo, type ItemNavAdmin } from "@/components/admin/AdminSidebarNav";
+import { agruparItensNav, type ItemNavAdmin } from "@/lib/nav-grupos";
+import { ItemNavLinkAdmin, GrupoNavAdmin } from "@/components/admin/GrupoNavAdmin";
 import { BuscaGlobal } from "@/components/admin/BuscaGlobal";
 import {
   Sheet,
@@ -61,6 +59,7 @@ export function AdminMobileNav({
   const nomeAtual = organizacaoAtual?.nome ?? "Painel";
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const { semGrupo, grupos } = agruparItensNav(navLinks);
 
   return (
     <header className="flex items-center gap-2 border-b bg-gray-50 px-4 py-3 md:hidden">
@@ -100,43 +99,18 @@ export function AdminMobileNav({
             </a>
           )}
           <nav className="flex-1 space-y-1 overflow-y-auto text-sm" aria-label="Navegação principal">
-            {navLinks.map((link, indice) => {
-              const Icone = ICONES_NAV[link.icone];
-              const ativo = itemAtivo(pathname, link.href);
-              // Mesmo respiro entre grupos da sidebar desktop.
-              const grupo = link.iniciaGrupo && indice > 0 ? " mt-2" : "";
-              if (!link.liberado) {
-                return (
-                  <span
-                    key={link.href}
-                    title="Disponível em planos superiores"
-                    className={`flex cursor-not-allowed items-center gap-2.5 rounded-md px-3 py-2 text-gray-400${grupo}`}
-                  >
-                    <Icone aria-hidden className="size-[18px] shrink-0" />
-                    <span className="min-w-0 flex-1 truncate">{link.label}</span>
-                    <Badge variant="secondary" className="text-[10px]">
-                      Pro
-                    </Badge>
-                  </span>
-                );
-              }
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  aria-current={ativo ? "page" : undefined}
-                  onClick={() => setOpen(false)}
-                  className={`flex items-center gap-2.5 rounded-md px-3 py-2${grupo} ${
-                    ativo
-                      ? "bg-primary/10 font-medium text-primary"
-                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                  }`}
-                >
-                  <Icone aria-hidden className="size-[18px] shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{link.label}</span>
-                </Link>
-              );
-            })}
+            {semGrupo.map((item) => (
+              <ItemNavLinkAdmin key={item.href} item={item} pathname={pathname} onNavigate={() => setOpen(false)} />
+            ))}
+            {grupos.map((grupo) => (
+              <GrupoNavAdmin
+                key={grupo.titulo}
+                titulo={grupo.titulo}
+                itens={grupo.itens}
+                pathname={pathname}
+                onNavigate={() => setOpen(false)}
+              />
+            ))}
           </nav>
           <div className="border-t pt-3 text-sm">
             <p className="min-w-0 truncate font-medium">{userName}</p>

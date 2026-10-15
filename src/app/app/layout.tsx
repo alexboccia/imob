@@ -22,6 +22,14 @@ import {
 } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
 
+// Reorganização do menu lateral — grupos nomeados e recolhíveis,
+// substituindo o respiro visual sem título da Fase 63. A ORDEM desta
+// lista É a ordem final exibida (agruparItensNav, src/lib/nav-grupos.ts,
+// preserva a ordem de primeira aparição de cada `grupo`) — dentro de
+// cada grupo, os itens entram em ordem alfabética do rótulo, por
+// decisão aprovada explicitamente (nunca calculada em runtime: um rótulo
+// como "Tipos de imóvel" não deve reordenar sozinho se um dia ganhar
+// acento ou maiúscula diferente).
 const TODOS_NAV_LINKS: {
   href: string;
   label: string;
@@ -31,31 +39,37 @@ const TODOS_NAV_LINKS: {
   // String, não componente: esta lista atravessa a fronteira servidor →
   // cliente (sidebar e menu mobile são componentes de cliente).
   icone: ChaveIconeNav;
-  // Fase 63 — primeiro item de um grupo conceitual: recebe um respiro de
-  // 8px acima, sem título e sem divisor. É só para o olho encontrar as
-  // seções mais rápido; não muda ordem, rota, papel nem visibilidade, e um
-  // item filtrado por papel simplesmente não aparece (o respiro vai com
-  // ele, ver AdminSidebarNav).
-  iniciaGrupo?: boolean;
+  // Título do grupo recolhível. Ausente = fora de grupo (só o Dashboard,
+  // fixo no topo, nunca recolhível).
+  grupo?: string;
 }[] = [
   { href: "/app", label: "Dashboard", icone: "dashboard" },
-  { href: "/app/imoveis", label: "Imóveis", icone: "imoveis" },
-  { href: "/app/clientes", label: "Clientes", modulo: "crm", icone: "clientes" },
-  { href: "/app/pipeline", label: "Pipeline", modulo: "crm", icone: "pipeline" },
-  { href: "/app/agenda", label: "Agenda", modulo: "crm", icone: "agenda" },
-  // Analytics comercial (Fase 5) — mesmo portão de módulo das outras
-  // telas de CRM: é uma agregação de Interaction, exatamente o dado que
-  // Clientes/Pipeline/Agenda já mostram linha a linha. Fica logo depois
-  // delas, fechando o bloco de CRM, e nunca antes de Imóveis/Clientes
-  // (que são o trabalho diário, não a leitura gerencial).
-  { href: "/app/analytics", label: "Analytics", modulo: "crm", icone: "analytics", iniciaGrupo: true },
+
+  // GESTÃO COMERCIAL — o trabalho comercial do dia a dia.
+  { href: "/app/agenda", label: "Agenda", modulo: "crm", icone: "agenda", grupo: "Gestão comercial" },
+  { href: "/app/clientes", label: "Clientes", modulo: "crm", icone: "clientes", grupo: "Gestão comercial" },
+  { href: "/app/imoveis", label: "Imóveis", icone: "imoveis", grupo: "Gestão comercial" },
   // Fase 35 — a carteira financeira do corretor. Mesmo portão de módulo
   // do resto do CRM e NENHUM recorte por papel: o saldo é pessoal, a
   // consulta filtra pelo membro da sessão, e todo mundo que participa de
-  // uma comissão tem direito à própria resposta. Fica depois do Analytics
-  // porque é leitura, não trabalho diário — e antes dos catálogos.
-  { href: "/app/minhas-comissoes", label: "Minhas comissões", modulo: "crm", icone: "comissoes" },
-  // Fase 24 — fila de identificação. Primeiro item do menu com recorte
+  // uma comissão tem direito à própria resposta.
+  {
+    href: "/app/minhas-comissoes",
+    label: "Minhas comissões",
+    modulo: "crm",
+    icone: "comissoes",
+    grupo: "Gestão comercial",
+  },
+  { href: "/app/pipeline", label: "Pipeline", modulo: "crm", icone: "pipeline", grupo: "Gestão comercial" },
+
+  // CADASTROS E ORGANIZAÇÃO — catálogos por organização.
+  {
+    href: "/app/caracteristicas",
+    label: "Características",
+    icone: "caracteristicas",
+    grupo: "Cadastros e organização",
+  },
+  // Fase 24 — fila de identificação. Único item deste grupo com recorte
   // por PAPEL, e não só por módulo: um BROKER não decide a qual cliente
   // pertence um contato ambíguo, então o item não existe para ele. Isso
   // é higiene de interface — quem controla o acesso são a página e a
@@ -66,24 +80,42 @@ const TODOS_NAV_LINKS: {
     modulo: "crm",
     papeis: PAPEIS_RESOLUCAO_IDENTIDADE,
     icone: "captacoes",
+    grupo: "Cadastros e organização",
   },
   // Fase 38 — junto dos outros catálogos por organização, e com o
   // mesmo portão de leitura: um corretor precisa reconhecer os
   // empreendimentos que vai selecionar no cadastro do imóvel.
-  { href: "/app/empreendimentos", label: "Empreendimentos", icone: "empreendimentos", iniciaGrupo: true },
-  { href: "/app/caracteristicas", label: "Características", icone: "caracteristicas" },
-  { href: "/app/tipos-imovel", label: "Tipos de imóvel", icone: "tipos-imovel" },
-  { href: "/app/usuarios", label: "Usuários", icone: "usuarios", iniciaGrupo: true },
-  // Autoatendimento do próprio perfil público — separado de "Usuários"
-  // de propósito: manter a própria identidade no site não é gestão de
-  // pessoas. Só aparece para quem pode ter perfil público; um assistente
-  // não vê a porta, porque não pode entrar (ver
-  // PAPEIS_PERFIL_PUBLICO_PROPRIO).
   {
-    href: "/app/meu-perfil",
-    label: "Meu perfil público",
-    papeis: PAPEIS_PERFIL_PUBLICO_PROPRIO,
-    icone: "meu-perfil",
+    href: "/app/empreendimentos",
+    label: "Empreendimentos",
+    icone: "empreendimentos",
+    grupo: "Cadastros e organização",
+  },
+  { href: "/app/tipos-imovel", label: "Tipos de imóvel", icone: "tipos-imovel", grupo: "Cadastros e organização" },
+
+  // GESTÃO E CONTROLE — leitura gerencial e administração de pessoas.
+  // Analytics comercial (Fase 5) — mesmo portão de módulo das outras
+  // telas de CRM: é uma agregação de Interaction, exatamente o dado que
+  // Clientes/Pipeline/Agenda já mostram linha a linha.
+  { href: "/app/analytics", label: "Analytics", modulo: "crm", icone: "analytics", grupo: "Gestão e controle" },
+  {
+    href: "/app/auditoria",
+    label: "Auditoria",
+    papeis: PAPEIS_GESTAO_CONFIGURACOES,
+    icone: "auditoria",
+    grupo: "Gestão e controle",
+  },
+  { href: "/app/usuarios", label: "Usuários", icone: "usuarios", grupo: "Gestão e controle" },
+
+  // CONFIGURAÇÕES — o contrato da imobiliária com o produto.
+  // Fase 27 — recortado por PAPEIS_FINANCEIRO: um gestor comercial não
+  // responde pelo contrato.
+  {
+    href: "/app/assinatura",
+    label: "Assinatura",
+    papeis: PAPEIS_FINANCEIRO,
+    icone: "assinatura",
+    grupo: "Configurações",
   },
   // Fase 25 — fecha a dívida que a Fase 24 deixou registrada ao criar o
   // recorte por papel. /app/configuracoes JÁ recusa quem não é
@@ -92,26 +124,29 @@ const TODOS_NAV_LINKS: {
   // alterar". Oferecer uma porta e negá-la na entrada é pior que não
   // mostrar a porta.
   //
-  // Só esta entrada muda. /app/usuarios e /app/manutencao continuam
-  // visíveis para todos DE PROPÓSITO: as duas telas renderizam conteúdo
-  // real e útil em modo somente-leitura, não uma recusa.
+  // /app/usuarios e /app/manutencao continuam visíveis para todos DE
+  // PROPÓSITO: as duas telas renderizam conteúdo real e útil em modo
+  // somente-leitura, não uma recusa.
   {
     href: "/app/configuracoes",
     label: "Configurações",
     papeis: PAPEIS_GESTAO_CONFIGURACOES,
     icone: "configuracoes",
-    iniciaGrupo: true,
+    grupo: "Configurações",
   },
-  // Fase 27 — o contrato da imobiliária com o produto. Recortado por
-  // PAPEIS_FINANCEIRO: um gestor comercial não responde pelo contrato.
-  { href: "/app/assinatura", label: "Assinatura", papeis: PAPEIS_FINANCEIRO, icone: "assinatura" },
+  { href: "/app/manutencao", label: "Manutenção", icone: "manutencao", grupo: "Configurações" },
+  // Autoatendimento do próprio perfil público — separado de
+  // "Configurações" de propósito: manter a própria identidade no site
+  // não é gestão de pessoas. Só aparece para quem pode ter perfil
+  // público; um assistente não vê a porta, porque não pode entrar (ver
+  // PAPEIS_PERFIL_PUBLICO_PROPRIO).
   {
-    href: "/app/auditoria",
-    label: "Auditoria",
-    papeis: PAPEIS_GESTAO_CONFIGURACOES,
-    icone: "auditoria",
+    href: "/app/meu-perfil",
+    label: "Meu perfil público",
+    papeis: PAPEIS_PERFIL_PUBLICO_PROPRIO,
+    icone: "meu-perfil",
+    grupo: "Configurações",
   },
-  { href: "/app/manutencao", label: "Manutenção", icone: "manutencao" },
 ];
 
 export default async function AdminLayout({
@@ -184,7 +219,7 @@ export default async function AdminLayout({
     label: link.label,
     liberado: !link.modulo || Boolean(modulosHabilitados.get(link.modulo)),
     icone: link.icone,
-    iniciaGrupo: link.iniciaGrupo ?? false,
+    grupo: link.grupo,
   }));
 
   return (
