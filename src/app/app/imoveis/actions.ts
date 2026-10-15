@@ -8,8 +8,10 @@ import { requireOrganizationId } from "@/lib/tenant";
 import { interpretarPosicao } from "@/lib/vitrine-home";
 import { withOrganization } from "@/lib/tenant-context";
 import { verificarLimiteImoveis, verificarLimiteFotos, LimiteDoPlanoError } from "@/lib/entitlements";
-import { logActivity } from "@/lib/activity-log";
-import { type ActionState, erroGenerico } from "@/lib/action-result";
+import { logActivity, diffAuditavel } from "@/lib/activity-log";
+import { type ActionState, erroGenerico, erroAcessoNegado, sucesso } from "@/lib/action-result";
+import { temPapel, PAPEIS_ARQUIVAMENTO, PAPEIS_EXCLUSAO_DEFINITIVA } from "@/lib/authorization";
+import { papelAtual } from "@/lib/papel-atual";
 import {
   parseImovelFormData,
   parseMidias,
@@ -306,7 +308,7 @@ export async function atualizarImovel(
   await withOrganization(organizationId, async () => {
     const imovelAtual = await prisma.property.findUniqueOrThrow({
       where: { id: imovelId, organizationId },
-      select: { status: true, publishedAt: true },
+      select: { status: true, publishedAt: true, price: true },
     });
 
     const statusMudou = imovelAtual.status !== dados.status;
@@ -344,39 +346,40 @@ export async function atualizarImovel(
     // é o que mantém banco e formulário idênticos. Remover um material
     // aqui não apaga o objeto no R2 — exatamente como já acontece com
     // foto removida (ver comentário do MediaUploader).
-    await prisma.$transaction([
+    //
+    // Convertido de array-form para callback-form (Logs de Auditoria —
+    // antes/depois): array-form não dá acesso a um `tx` para gravar o
+    // log na MESMA transação. Nenhuma query abaixo mudou de conteúdo,
+    // só de forma (prisma.X -> tx.X) e a adição do logActivity ao final.
+    await prisma.$transaction(async (tx) => {
       // Sai o que o corretor removeu da lista — e só isso.
-      prisma.nearbyPlace.deleteMany({
+      await tx.nearbyPlace.deleteMany({
         where: { propertyId: imovelId, organizationId, id: { notIn: idsMantidos } },
-      }),
+      });
       // updateMany com propertyId + organizationId no WHERE: mesmo que a
       // conferência acima falhasse, nenhuma linha de outro imóvel casaria.
-      ...mantidos.map(({ local, ordem }) =>
-        prisma.nearbyPlace.updateMany({
+      for (const { local, ordem } of mantidos) {
+        await tx.nearbyPlace.updateMany({
           where: { id: local.id, propertyId: imovelId, organizationId },
           data: colunasDoLocal(local, ordem),
-        })
-      ),
-      ...(novos.length > 0
-        ? [
-            prisma.nearbyPlace.createMany({
-              data: novos.map(({ local, ordem }) => ({
-                ...colunasDoLocal(local, ordem),
-                propertyId: imovelId,
-                organizationId,
-              })),
-            }),
-          ]
-        : []),
-      prisma.media.deleteMany({ where: { propertyId: imovelId, organizationId } }),
-      ...(storageConfigurado()
-        ? [
-            prisma.propertyPresentationMaterial.deleteMany({
-              where: { propertyId: imovelId, organizationId },
-            }),
-          ]
-        : []),
-      prisma.property.update({
+        });
+      }
+      if (novos.length > 0) {
+        await tx.nearbyPlace.createMany({
+          data: novos.map(({ local, ordem }) => ({
+            ...colunasDoLocal(local, ordem),
+            propertyId: imovelId,
+            organizationId,
+          })),
+        });
+      }
+      await tx.media.deleteMany({ where: { propertyId: imovelId, organizationId } });
+      if (storageConfigurado()) {
+        await tx.propertyPresentationMaterial.deleteMany({
+          where: { propertyId: imovelId, organizationId },
+        });
+      }
+      const imovelAtualizado = await tx.property.update({
         where: { id: imovelId, organizationId },
         data: {
           ...camposImovel(dados),
@@ -414,8 +417,23 @@ export async function atualizarImovel(
               }
             : {}),
         },
-      }),
-    ]);
+        select: { price: true, status: true },
+      });
+
+      // Logs de Auditoria — antes/depois de preço e status, única na
+      // transação: se o log falhar, a edição inteira reverte junto.
+      await logActivity(
+        {
+          organizationId,
+          userId: session.user.id,
+          entity: "Property",
+          entityId: imovelId,
+          action: "updated",
+          payload: diffAuditavel(imovelAtual, imovelAtualizado, ["price", "status"]),
+        },
+        tx
+      );
+    });
   });
   } catch (erro) {
     if (ehColisaoDeDestaque(erro)) {
@@ -444,13 +462,8 @@ export async function atualizarImovel(
     organizationId
   );
 
-  await logActivity({
-    organizationId,
-    userId: session.user.id,
-    entity: "Property",
-    entityId: imovelId,
-    action: "updated",
-  });
+  // logActivity do "updated" já foi gravado DENTRO da transação acima
+  // (com o payload de antes/depois) — não duplicar aqui.
 
   revalidatePath("/app/imoveis");
   revalidatePath(`/app/imoveis/${imovelId}`);
@@ -460,4 +473,218 @@ export async function atualizarImovel(
   revalidatePath("/imoveis");
   revalidatePath("/");
   redirect(`/app/imoveis/${imovelId}?salvo=1`);
+}
+
+// =======================================================================
+// Logs de Auditoria — Etapas 4 e 5: arquivamento reversível e exclusão
+// definitiva restrita.
+// =======================================================================
+//
+// ARQUIVAR != INATIVAR. `status: INACTIVE` é um estágio comercial do
+// imóvel (ver enum PropertyStatus) — continua existindo plenamente no
+// fluxo operacional, só não está anunciado publicamente. Arquivar é
+// ortogonal: tira o registro da listagem padrão de /app/imoveis para
+// TODA a equipe, sem alterar status, preço, ou qualquer outro campo —
+// e por isso tem seu próprio campo (`archivedAt`), nunca reaproveita o
+// enum de status.
+export async function arquivarImovel(
+  imovelId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  if (!temPapel(await papelAtual(), PAPEIS_ARQUIVAMENTO)) {
+    return erroAcessoNegado("Você não tem permissão para arquivar imóveis.");
+  }
+
+  const organizationId = await requireOrganizationId();
+  return withOrganization(organizationId, async () => {
+    const alvo = await prisma.property.findFirst({
+      where: { id: imovelId, organizationId },
+      select: { archivedAt: true },
+    });
+    if (!alvo) return erroAcessoNegado("Imóvel não encontrado.");
+    if (alvo.archivedAt) return erroGenerico("Este imóvel já está arquivado.");
+
+    await prisma.$transaction(async (tx) => {
+      await tx.property.updateMany({
+        where: { id: imovelId, organizationId },
+        data: {
+          archivedAt: new Date(),
+          archivedByMemberId: session.user.organizationMemberId ?? null,
+        },
+      });
+      await logActivity(
+        {
+          organizationId,
+          userId: session.user.id,
+          entity: "Property",
+          entityId: imovelId,
+          action: "archived",
+        },
+        tx
+      );
+    });
+
+    revalidatePath("/app/imoveis");
+    revalidatePath(`/app/imoveis/${imovelId}`);
+    revalidatePath(`/imoveis/${imovelId}`);
+    updateTag(tagFacetas(organizationId));
+    return sucesso("Imóvel arquivado — ele saiu das listagens operacionais, mas pode ser restaurado a qualquer momento.");
+  });
+}
+
+export async function restaurarImovel(
+  imovelId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  if (!temPapel(await papelAtual(), PAPEIS_ARQUIVAMENTO)) {
+    return erroAcessoNegado("Você não tem permissão para restaurar imóveis.");
+  }
+
+  const organizationId = await requireOrganizationId();
+  return withOrganization(organizationId, async () => {
+    const alvo = await prisma.property.findFirst({
+      where: { id: imovelId, organizationId },
+      select: { archivedAt: true },
+    });
+    if (!alvo) return erroAcessoNegado("Imóvel não encontrado.");
+    if (!alvo.archivedAt) return erroGenerico("Este imóvel não está arquivado.");
+
+    // A restauração NÃO reaplica o limite comercial de imóveis ativos —
+    // deliberado: um imóvel que já existia antes de ser arquivado não é
+    // um cadastro NOVO, e bloquear a restauração por causa de um limite
+    // atingido depois do arquivamento seria surpreendente (o usuário
+    // arquivou achando que podia trazer de volta quando quisesse). Fica
+    // registrado como decisão, não como lacuna.
+    await prisma.$transaction(async (tx) => {
+      await tx.property.updateMany({
+        where: { id: imovelId, organizationId },
+        data: { archivedAt: null, archivedByMemberId: null },
+      });
+      await logActivity(
+        {
+          organizationId,
+          userId: session.user.id,
+          entity: "Property",
+          entityId: imovelId,
+          action: "restored",
+        },
+        tx
+      );
+    });
+
+    revalidatePath("/app/imoveis");
+    revalidatePath(`/app/imoveis/${imovelId}`);
+    revalidatePath(`/imoveis/${imovelId}`);
+    updateTag(tagFacetas(organizationId));
+    return sucesso("Imóvel restaurado.");
+  });
+}
+
+// EXCLUSÃO DEFINITIVA — irreversível, restrita, com confirmação reforçada.
+//
+// Dependências reais (confirmadas em pg_constraint, não presumidas):
+// `deals` e `property_interests` têm FK RESTRICT para `properties` — o
+// próprio banco recusa a exclusão se existir qualquer negociação ou
+// oportunidade vinculada, e o catch abaixo só traduz esse erro (P2003)
+// numa mensagem legível, nunca contorna a proteção. Media/
+// PropertyStatusHistory/NearbyPlace/PropertyPresentationMaterial/
+// PropertyAnalyticsEvent/PortalListing são conteúdo do imóvel (CASCADE no
+// banco) — removidos junto, e seus arquivos no R2 são limpos DEPOIS da
+// confirmação da exclusão (nunca antes — mesma ordem de
+// atualizarImovel/removerObjetosR2).
+export async function excluirImovelDefinitivamente(
+  imovelId: string,
+   
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  if (!temPapel(await papelAtual(), PAPEIS_EXCLUSAO_DEFINITIVA)) {
+    return erroAcessoNegado("Você não tem permissão para excluir imóveis definitivamente.");
+  }
+
+  const organizationId = await requireOrganizationId();
+  return withOrganization(organizationId, async () => {
+    const alvo = await prisma.property.findFirst({
+      where: { id: imovelId, organizationId },
+      select: { title: true },
+    });
+    if (!alvo) return erroAcessoNegado("Imóvel não encontrado.");
+
+    // Confirmação reforçada: a pessoa precisa digitar o TÍTULO exato do
+    // imóvel, não só marcar uma caixa — torna o acionamento acidental
+    // praticamente impossível, e é verificado no servidor, nunca só no
+    // frontend.
+    const confirmacao = String(formData.get("confirmacao") ?? "").trim();
+    if (confirmacao !== alvo.title) {
+      return erroGenerico(
+        "Confirmação incorreta — digite exatamente o título do imóvel para confirmar a exclusão definitiva."
+      );
+    }
+
+    // URLs de mídia/materiais ANTES de excluir, pra poder limpar o R2
+    // DEPOIS que o banco confirmar — nunca o contrário (mesmo racional
+    // de Fase 120-C em atualizarImovel).
+    const [midias, materiais] = await Promise.all([
+      prisma.media.findMany({ where: { propertyId: imovelId, organizationId }, select: { url: true } }),
+      prisma.propertyPresentationMaterial.findMany({
+        where: { propertyId: imovelId, organizationId },
+        select: { url: true },
+      }),
+    ]);
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.property.delete({ where: { id: imovelId, organizationId } });
+        await logActivity(
+          {
+            organizationId,
+            userId: session.user.id,
+            entity: "Property",
+            entityId: imovelId,
+            action: "deleted_permanently",
+            // Só o título preservado — identificador mínimo, não um
+            // snapshot do registro inteiro (seção 7.4 do briefing).
+            payload: { title: alvo.title },
+          },
+          tx
+        );
+      });
+    } catch (erro) {
+      if (
+        erro &&
+        typeof erro === "object" &&
+        "code" in erro &&
+        (erro as { code?: string }).code === "P2003"
+      ) {
+        return erroGenerico(
+          "Este imóvel tem negociações ou compromissos vinculados — não é possível excluir definitivamente. Arquive-o em vez disso, ou resolva as negociações pendentes primeiro."
+        );
+      }
+      throw erro;
+    }
+
+    // Só depois da transação confirmada: limpeza do R2, best-effort
+    // (mesmo padrão de removerObjetosR2 em todo o projeto — órfão
+    // tolerável, nunca bloqueia a exclusão já confirmada no banco).
+    await removerObjetosR2(
+      [...midias.map((m) => m.url), ...materiais.map((m) => m.url)],
+      organizationId
+    );
+
+    revalidatePath("/app/imoveis");
+    updateTag(tagFacetas(organizationId));
+    return sucesso("Imóvel excluído definitivamente.");
+  });
 }

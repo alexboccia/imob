@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
+import { logActivity } from "@/lib/activity-log";
 import { temPapel, PAPEIS_GESTAO_CATALOGOS } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
 import {
@@ -71,7 +72,22 @@ export async function removerTipoImovel(id: string): Promise<ActionState> {
 
   const organizationId = await requireOrganizationId();
   await withOrganization(organizationId, async () => {
-    await prisma.propertyTypeOption.delete({ where: { id, organizationId } });
+    // Exclusão e auditoria na MESMA transação — mesmo padrão de
+    // removerCaracteristica (src/app/app/caracteristicas/actions.ts).
+    await prisma.$transaction(async (tx) => {
+      const removido = await tx.propertyTypeOption.delete({ where: { id, organizationId } });
+      await logActivity(
+        {
+          organizationId,
+          userId: session.user.id,
+          entity: "PropertyTypeOption",
+          entityId: id,
+          action: "deleted",
+          payload: { name: removido.name, category: removido.category },
+        },
+        tx
+      );
+    });
     revalidatePath("/app/tipos-imovel");
     updateTag(tagFacetas(organizationId));
   });

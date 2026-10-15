@@ -8,6 +8,8 @@ import {
   PAPEIS_LIQUIDACAO_COMISSAO,
   PAPEIS_RESOLUCAO_IDENTIDADE,
   PAPEIS_FINANCEIRO,
+  PAPEIS_ARQUIVAMENTO,
+  PAPEIS_EXCLUSAO_DEFINITIVA,
 } from "./authorization";
 
 // ---------------------------------------------------------------------
@@ -179,6 +181,43 @@ describe("PAPEIS_FINANCEIRO", () => {
 
   test("é conjunto PRÓPRIO: mudar configurações não pode mudar finanças", () => {
     expect(PAPEIS_FINANCEIRO).not.toBe(PAPEIS_GESTAO_CONFIGURACOES);
+  });
+});
+
+describe("PAPEIS_ARQUIVAMENTO — arquivar/restaurar Imóvel ou Cliente", () => {
+  test("OWNER, ADMIN e MANAGER podem arquivar/restaurar", () => {
+    expect(temPapel("OWNER", PAPEIS_ARQUIVAMENTO)).toBe(true);
+    expect(temPapel("ADMIN", PAPEIS_ARQUIVAMENTO)).toBe(true);
+    expect(temPapel("MANAGER", PAPEIS_ARQUIVAMENTO)).toBe(true);
+  });
+
+  test("BROKER e ASSISTANT não podem", () => {
+    expect(temPapel("BROKER", PAPEIS_ARQUIVAMENTO)).toBe(false);
+    expect(temPapel("ASSISTANT", PAPEIS_ARQUIVAMENTO)).toBe(false);
+  });
+
+  test("é conjunto PRÓPRIO: não é o mesmo objeto de PAPEIS_GESTAO_CATALOGOS", () => {
+    expect(PAPEIS_ARQUIVAMENTO).not.toBe(PAPEIS_GESTAO_CATALOGOS);
+  });
+});
+
+describe("PAPEIS_EXCLUSAO_DEFINITIVA — exclusão irreversível de Imóvel ou Cliente", () => {
+  test("só OWNER e ADMIN", () => {
+    expect(temPapel("OWNER", PAPEIS_EXCLUSAO_DEFINITIVA)).toBe(true);
+    expect(temPapel("ADMIN", PAPEIS_EXCLUSAO_DEFINITIVA)).toBe(true);
+  });
+
+  test("MANAGER, que PODE arquivar, não pode excluir definitivamente", () => {
+    expect(temPapel("MANAGER", PAPEIS_EXCLUSAO_DEFINITIVA)).toBe(false);
+  });
+
+  test("BROKER e ASSISTANT não podem", () => {
+    expect(temPapel("BROKER", PAPEIS_EXCLUSAO_DEFINITIVA)).toBe(false);
+    expect(temPapel("ASSISTANT", PAPEIS_EXCLUSAO_DEFINITIVA)).toBe(false);
+  });
+
+  test("é conjunto PRÓPRIO: mais restrito que PAPEIS_ARQUIVAMENTO, não o mesmo objeto", () => {
+    expect(PAPEIS_EXCLUSAO_DEFINITIVA).not.toBe(PAPEIS_ARQUIVAMENTO);
   });
 });
 

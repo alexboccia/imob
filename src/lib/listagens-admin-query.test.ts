@@ -3,6 +3,7 @@ import {
   construirWhereImoveis,
   construirWhereClientes,
   construirWhereUsuarios,
+  construirWhereAuditoria,
 } from "@/lib/listagens-admin-query";
 import { sanitizarFiltro, ORIGEM_LABEL, PAPEL_LABEL } from "@/lib/crm-labels";
 
@@ -261,5 +262,63 @@ describe("construirWhereUsuarios — isolamento e filtros", () => {
     });
     expect(where.role).toBe("ADMIN");
     expect(where.status).toBe("ACTIVE");
+  });
+});
+
+describe("construirWhereAuditoria — isolamento, filtros e período", () => {
+  test("organizationId está sempre presente, mesmo sem nenhum filtro", () => {
+    const where = construirWhereAuditoria({ organizationId: "org-a" });
+    expect(where.organizationId).toBe("org-a");
+    expect(where.userId).toBeUndefined();
+    expect(where.entity).toBeUndefined();
+    expect(where.action).toBeUndefined();
+    expect(where.createdAt).toBeUndefined();
+  });
+
+  test("organizações diferentes nunca produzem o mesmo where, mesmo com filtros idênticos", () => {
+    const whereA = construirWhereAuditoria({ organizationId: "org-a", entityFiltro: "Property" });
+    const whereB = construirWhereAuditoria({ organizationId: "org-b", entityFiltro: "Property" });
+    expect(whereA.organizationId).not.toBe(whereB.organizationId);
+  });
+
+  test("filtro de usuário, módulo (entity) e ação são aplicados", () => {
+    const where = construirWhereAuditoria({
+      organizationId: "org-a",
+      userIdFiltro: "user-1",
+      entityFiltro: "Property",
+      actionFiltro: "deleted",
+    });
+    expect(where.userId).toBe("user-1");
+    expect(where.entity).toBe("Property");
+    expect(where.action).toBe("deleted");
+  });
+
+  test("período: só 'de' define um piso (gte), sem teto", () => {
+    const where = construirWhereAuditoria({ organizationId: "org-a", de: "2026-01-01" });
+    const createdAt = where.createdAt as { gte?: Date; lte?: Date };
+    expect(createdAt.gte).toBeInstanceOf(Date);
+    expect(createdAt.lte).toBeUndefined();
+  });
+
+  test("período: 'ate' é o FIM do dia escolhido, não a meia-noite dele", () => {
+    const where = construirWhereAuditoria({ organizationId: "org-a", ate: "2026-01-15" });
+    const createdAt = where.createdAt as { gte?: Date; lte?: Date };
+    // 2026-01-15T23:59:59.999 — um evento às 20h desse dia precisa bater.
+    expect(createdAt.lte!.toISOString().startsWith("2026-01-15T23:59:59")).toBe(true);
+  });
+
+  test("data inválida ou vazia é ignorada, nunca quebra nem vira filtro vazio", () => {
+    const where = construirWhereAuditoria({ organizationId: "org-a", de: "não é uma data", ate: "" });
+    expect(where.createdAt).toBeUndefined();
+  });
+
+  test("período completo: gte e lte juntos, intervalo fechado", () => {
+    const where = construirWhereAuditoria({
+      organizationId: "org-a",
+      de: "2026-01-01",
+      ate: "2026-01-31",
+    });
+    const createdAt = where.createdAt as { gte?: Date; lte?: Date };
+    expect(createdAt.gte!.getTime()).toBeLessThan(createdAt.lte!.getTime());
   });
 });

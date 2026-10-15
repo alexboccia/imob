@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
+import { logActivity } from "@/lib/activity-log";
 import { temPapel, PAPEIS_GESTAO_CATALOGOS } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
 import {
@@ -76,7 +77,26 @@ export async function removerCaracteristica(id: string): Promise<ActionState> {
 
   const organizationId = await requireOrganizationId();
   await withOrganization(organizationId, async () => {
-    await prisma.featureOption.delete({ where: { id, organizationId } });
+    // Exclusão e auditoria na MESMA transação: se o log falhar, a
+    // exclusão reverte junto — nunca fica um registro apagado sem
+    // nenhum rastro (ver src/lib/activity-log.ts, seção de atomicidade).
+    await prisma.$transaction(async (tx) => {
+      // delete() devolve o registro apagado — aproveitado aqui pra
+      // preservar nome/categoria no log, sem precisar de uma consulta
+      // extra antes de excluir.
+      const removida = await tx.featureOption.delete({ where: { id, organizationId } });
+      await logActivity(
+        {
+          organizationId,
+          userId: session.user.id,
+          entity: "FeatureOption",
+          entityId: id,
+          action: "deleted",
+          payload: { name: removida.name, category: removida.category },
+        },
+        tx
+      );
+    });
     revalidatePath("/app/caracteristicas");
   });
 

@@ -4,7 +4,13 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ImovelForm } from "@/components/admin/ImovelForm";
 import { buscarOcupacaoVitrine } from "@/lib/vitrine-home-consultas";
-import { atualizarImovel } from "@/app/app/imoveis/actions";
+import {
+  atualizarImovel,
+  arquivarImovel,
+  restaurarImovel,
+  excluirImovelDefinitivamente,
+} from "@/app/app/imoveis/actions";
+import { GerenciarArquivamentoRegistro } from "@/components/admin/GerenciarArquivamentoRegistro";
 import { buscarOpcoesCaracteristicas } from "@/lib/caracteristicas";
 import { buscarOpcoesTiposImovel } from "@/lib/tipos-imovel";
 import { listarOpcoesEmpreendimento } from "@/lib/empreendimento-consultas";
@@ -22,7 +28,12 @@ import { InteresseImovelItem } from "@/components/admin/InteresseImovelItem";
 import { RecomendacaoClienteItem } from "@/components/admin/RecomendacaoClienteItem";
 import { buscarClientesCompativeis } from "@/lib/property-matching";
 import { papelAtual } from "@/lib/papel-atual";
-import { temPapel, PAPEIS_LIQUIDACAO_COMISSAO } from "@/lib/authorization";
+import {
+  temPapel,
+  PAPEIS_LIQUIDACAO_COMISSAO,
+  PAPEIS_ARQUIVAMENTO,
+  PAPEIS_EXCLUSAO_DEFINITIVA,
+} from "@/lib/authorization";
 import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
 import { paraResponsavel } from "@/lib/responsavel-negociacao";
 import { paraParticipantes } from "@/lib/participacao-comissao";
@@ -257,6 +268,17 @@ export default async function EditarImovelPage({
         titulo="Editar imóvel"
         descricao="Dados, fotos e materiais que o site publica sobre este imóvel."
         acoes={
+          <>
+          <GerenciarArquivamentoRegistro
+            entidadeLabel="imóvel"
+            nomeDoRegistro={imovel.title}
+            arquivadoEm={imovel.archivedAt ? imovel.archivedAt.toISOString() : null}
+            podeArquivar={temPapel(papel, PAPEIS_ARQUIVAMENTO)}
+            podeExcluirDefinitivamente={temPapel(papel, PAPEIS_EXCLUSAO_DEFINITIVA)}
+            acaoArquivar={arquivarImovel.bind(null, imovel.id)}
+            acaoRestaurar={restaurarImovel.bind(null, imovel.id)}
+            acaoExcluir={excluirImovelDefinitivamente.bind(null, imovel.id)}
+          />
           <GerarAnuncioImovel
             propertyId={imovel.id}
             titulo={imovel.title}
@@ -283,6 +305,7 @@ export default async function EditarImovelPage({
               .map((m) => ({ id: m.id, url: m.url }))}
             urlAnuncio={urlAnuncio}
           />
+          </>
         }
       />
       <ImovelForm

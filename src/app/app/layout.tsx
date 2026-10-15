@@ -105,6 +105,12 @@ const TODOS_NAV_LINKS: {
   // Fase 27 — o contrato da imobiliária com o produto. Recortado por
   // PAPEIS_FINANCEIRO: um gestor comercial não responde pelo contrato.
   { href: "/app/assinatura", label: "Assinatura", papeis: PAPEIS_FINANCEIRO, icone: "assinatura" },
+  {
+    href: "/app/auditoria",
+    label: "Auditoria",
+    papeis: PAPEIS_GESTAO_CONFIGURACOES,
+    icone: "auditoria",
+  },
   { href: "/app/manutencao", label: "Manutenção", icone: "manutencao" },
 ];
 

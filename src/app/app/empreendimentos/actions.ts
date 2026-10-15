@@ -7,6 +7,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
+import { logActivity } from "@/lib/activity-log";
 import { temPapel, PAPEIS_GESTAO_CATALOGOS } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
 import {
@@ -130,7 +131,7 @@ export async function removerEmpreendimento(
   return withOrganization(organizationId, async () => {
     const alvo = await prisma.development.findFirst({
       where: { id: developmentId, organizationId },
-      select: { id: true, _count: { select: { properties: true } } },
+      select: { id: true, name: true, _count: { select: { properties: true } } },
     });
     if (!alvo) return erroAcessoNegado("Empreendimento não encontrado.");
 
@@ -150,7 +151,25 @@ export async function removerEmpreendimento(
       );
     }
 
-    await prisma.development.deleteMany({ where: { id: developmentId, organizationId } });
+    // Exclusão e auditoria na MESMA transação: se o log falhar, a
+    // exclusão reverte junto (ver src/lib/activity-log.ts).
+    await prisma.$transaction(async (tx) => {
+      await tx.development.deleteMany({ where: { id: developmentId, organizationId } });
+      // Nome preservado no payload — o próprio registro deixa de existir
+      // depois do delete, então é a única forma de o log continuar
+      // dizendo "o que" foi excluído, não só o id.
+      await logActivity(
+        {
+          organizationId,
+          userId: session.user.id,
+          entity: "Development",
+          entityId: developmentId,
+          action: "deleted",
+          payload: { name: alvo.name },
+        },
+        tx
+      );
+    });
     revalidarEmpreendimentos();
     return sucesso("Empreendimento excluído.");
   });

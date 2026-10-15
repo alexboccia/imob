@@ -403,6 +403,17 @@ export const IDS_E2E = {
   membroPortfolioSonia: "e2e-membro-portfolio-sonia",
   imovelPortfolioSonia: "e2e-imovel-portfolio-sonia",
   imovelParaEditarOrgA: "e2e-imovel-editar-a",
+  // Logs de Auditoria — fixtures dedicadas, nunca tocadas por nenhum
+  // outro spec: arquivar/restaurar/excluir definitivamente MUTA o estado
+  // do registro, então precisa de ids próprios, nunca compartilhados com
+  // specs que presumem um imóvel/cliente sempre intacto.
+  imovelArquivamentoOrgA: "e2e-imovel-arquivamento-a",
+  pessoaArquivamentoOrgA: "e2e-pessoa-arquivamento-a",
+  imovelExclusaoOrgA: "e2e-imovel-exclusao-a",
+  pessoaExclusaoOrgA: "e2e-pessoa-exclusao-a",
+  membroBrokerOrgA: "e2e-membro-broker-a",
+  imovelBloqueadoOrgA: "e2e-imovel-bloqueado-a",
+  pessoaBloqueadaOrgA: "e2e-pessoa-bloqueada-a",
   membroOwnerOrgB: "e2e-membro-owner-b",
   imovelOrgB: "e2e-imovel-org-b",
   imovelOrgAgenda: "e2e-imovel-org-agenda",

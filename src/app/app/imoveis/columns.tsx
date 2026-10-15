@@ -30,6 +30,7 @@ export type ImovelRow = {
   preco: number | null;
   precoAluguel: number | null;
   status: string;
+  arquivado: boolean;
 };
 
 // Badges (Lançamento/Destaque/Oportunidade/Slideshow) — mesma fonte
@@ -195,11 +196,19 @@ export const imovelColumns: DataTableColumn<ImovelRow>[] = [
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => (
-      <Badge variant="outline" className={classeStatus(row.original.status)}>
-        {STATUS_IMOVEL_LABEL[
-          row.original.status as keyof typeof STATUS_IMOVEL_LABEL
-        ] ?? row.original.status}
-      </Badge>
+      <div className="flex flex-wrap items-center gap-1">
+        <Badge variant="outline" className={classeStatus(row.original.status)}>
+          {STATUS_IMOVEL_LABEL[
+            row.original.status as keyof typeof STATUS_IMOVEL_LABEL
+          ] ?? row.original.status}
+        </Badge>
+        {/* Logs de Auditoria, Etapa 4 — arquivado é ORTOGONAL ao status
+            (ver Property.archivedAt no schema): o badge de status
+            continua mostrando o estágio comercial normalmente, este é
+            um segundo badge, só visível quando "Ver arquivados" está
+            ativo (é a única forma de um arquivado aparecer aqui). */}
+        {row.original.arquivado && <Badge variant="secondary">Arquivado</Badge>}
+      </div>
     ),
   },
 ];

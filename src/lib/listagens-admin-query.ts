@@ -11,8 +11,13 @@ export function construirWhereImoveis(params: {
   statusFiltro?: string;
   tipoFiltro?: string;
   finalidadeFiltro?: string;
+  // Logs de Auditoria, Etapa 4 — default false: a listagem operacional
+  // padrão NUNCA mostra um imóvel arquivado, a menos que o usuário peça
+  // explicitamente (tela "Arquivados"). Mesma doutrina de "dúvida = não
+  // mostra" usada em outras exclusões por padrão deste projeto.
+  incluirArquivados?: boolean;
 }): Prisma.PropertyWhereInput {
-  const { organizationId, busca, statusFiltro, tipoFiltro, finalidadeFiltro } = params;
+  const { organizationId, busca, statusFiltro, tipoFiltro, finalidadeFiltro, incluirArquivados } = params;
   // "".replace(/\D/g,"") -> "" -> Number("") é 0, não NaN — sem o dígitos
   // ? ... : NaN, uma busca só de texto (sem nenhum número) incluiria por
   // engano a cláusula { code: 0 } no OR.
@@ -34,6 +39,7 @@ export function construirWhereImoveis(params: {
 
   return {
     organizationId,
+    ...(incluirArquivados ? {} : { archivedAt: null }),
     ...(statusFiltro ? { status: statusFiltro as Prisma.PropertyWhereInput["status"] } : {}),
     ...(tipoFiltro ? { type: tipoFiltro } : {}),
     ...(finalidadeFiltro ? { purpose: finalidadeFiltro as Prisma.PropertyWhereInput["purpose"] } : {}),
@@ -66,8 +72,12 @@ export function construirWhereClientes(params: {
   // negociação) e este objeto já usa `OR` para a busca — fundir os dois
   // no mesmo nível faria um sobrescrever o outro e ABRIR o filtro.
   escopo?: Prisma.PersonWhereInput;
+  // Logs de Auditoria, Etapa 4 — mesma doutrina de construirWhereImoveis:
+  // cliente arquivado nunca aparece na listagem padrão, a menos que
+  // pedido explicitamente.
+  incluirArquivados?: boolean;
 }): Prisma.PersonWhereInput {
-  const { organizationId, busca, estagioFiltro, origemFiltro, papelFiltro, escopo } = params;
+  const { organizationId, busca, estagioFiltro, origemFiltro, papelFiltro, escopo, incluirArquivados } = params;
   const temEscopo = escopo && Object.keys(escopo).length > 0;
   // Fase 129 — achado real: `phone` é gravado EXATAMENTE como o único
   // campo de telefone do produto grava (CampoTelefone, mascarado ao
@@ -83,6 +93,7 @@ export function construirWhereClientes(params: {
   return {
     ...(temEscopo ? { AND: [escopo] } : {}),
     organizationId,
+    ...(incluirArquivados ? {} : { archivedAt: null }),
     ...(estagioFiltro
       ? { pipelineStage: estagioFiltro as Prisma.PersonWhereInput["pipelineStage"] }
       : {}),
@@ -128,6 +139,52 @@ export function construirWhereUsuarios(params: {
               { name: { contains: busca, mode: "insensitive" } },
               { email: { contains: busca, mode: "insensitive" } },
             ],
+          },
+        }
+      : {}),
+  };
+}
+
+// Logs de Auditoria (Etapa 2) — mesmo racional: organizationId SEMPRE no
+// topo, nunca condicionado a nenhum filtro recebido do cliente. userId,
+// entity e action vêm de dropdowns alimentados por valores já existentes
+// no próprio banco (ver page.tsx) — nunca texto livre encaminhado direto
+// ao Prisma. "de"/"ate" são datas (YYYY-MM-DD do <input type="date">);
+// uma string inválida ou vazia é ignorada, nunca vira um filtro quebrado
+// ou um throw — uma tela de auditoria não deveria cair por causa de um
+// parâmetro de data malformado na URL.
+function dataValida(valor: string | undefined): Date | undefined {
+  if (!valor) return undefined;
+  const data = new Date(valor);
+  return Number.isNaN(data.getTime()) ? undefined : data;
+}
+
+export function construirWhereAuditoria(params: {
+  organizationId: string;
+  userIdFiltro?: string;
+  entityFiltro?: string;
+  actionFiltro?: string;
+  de?: string;
+  ate?: string;
+}): Prisma.ActivityLogWhereInput {
+  const { organizationId, userIdFiltro, entityFiltro, actionFiltro, de, ate } = params;
+
+  const inicio = dataValida(de);
+  // "ate" é o FIM do dia escolhido, não a meia-noite dele — sem isso,
+  // filtrar "até hoje" excluiria tudo que aconteceu hoje depois das 00h00.
+  const fimBruto = dataValida(ate);
+  const fim = fimBruto ? new Date(fimBruto.getTime() + 24 * 60 * 60 * 1000 - 1) : undefined;
+
+  return {
+    organizationId,
+    ...(userIdFiltro ? { userId: userIdFiltro } : {}),
+    ...(entityFiltro ? { entity: entityFiltro } : {}),
+    ...(actionFiltro ? { action: actionFiltro } : {}),
+    ...(inicio || fim
+      ? {
+          createdAt: {
+            ...(inicio ? { gte: inicio } : {}),
+            ...(fim ? { lte: fim } : {}),
           },
         }
       : {}),

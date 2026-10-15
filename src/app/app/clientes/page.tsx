@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 import { requireOrganizationId } from "@/lib/tenant";
 import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
@@ -45,6 +47,7 @@ type SearchParams = {
   search?: string;
   sort?: string;
   filters?: string;
+  arquivados?: string;
 };
 
 export default async function ClientesPage({
@@ -85,6 +88,7 @@ export default async function ClientesPage({
     direcao: "desc",
   });
 
+  const verArquivados = params.arquivados === "1";
   const where = construirWhereClientes({
     organizationId,
     busca,
@@ -94,6 +98,7 @@ export default async function ClientesPage({
     // Fase 22 — o escopo entra na QUERY. PII de cliente fora do escopo
     // não sai do banco; nada é filtrado em memória depois.
     escopo: escopoPessoa,
+    incluirArquivados: verArquivados,
   });
 
   const agora = new Date();
@@ -118,6 +123,7 @@ export default async function ClientesPage({
             phone: true,
             email: true,
             pipelineStage: true,
+            archivedAt: true,
             assignedMember: { select: { user: { select: { name: true } } } },
             preference: {
               select: {
@@ -205,6 +211,7 @@ export default async function ClientesPage({
         fuso
       ),
       corretorNome: pessoa.assignedMember?.user.name ?? null,
+      arquivado: pessoa.archivedAt !== null,
     };
   });
 
@@ -229,8 +236,28 @@ export default async function ClientesPage({
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <ClientesFiltrosEstagio />
-        <ClientesFiltrosAvancados />
+        <div className="flex flex-wrap items-center gap-2">
+          <ClientesFiltrosEstagio />
+          <ClientesFiltrosAvancados />
+        </div>
+        {/* Logs de Auditoria, Etapa 4 — mesmo toggle de /app/imoveis. */}
+        <Button
+          nativeButton={false}
+          render={
+            <Link
+              href={`/app/clientes?${new URLSearchParams({
+                ...(params.search ? { search: params.search } : {}),
+                ...(params.filters ? { filters: params.filters } : {}),
+                ...(params.sort ? { sort: params.sort } : {}),
+                ...(verArquivados ? {} : { arquivados: "1" }),
+              }).toString()}`}
+            />
+          }
+          variant="outline"
+          size="sm"
+        >
+          {verArquivados ? "Ocultar arquivados" : "Ver arquivados"}
+        </Button>
       </div>
 
       <ClientesTabelaComDrawer

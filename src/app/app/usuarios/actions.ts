@@ -13,7 +13,7 @@ import {
   perfilPublicoSchema,
 } from "@/lib/perfil-publico-schema";
 import { verificarLimiteUsuarios, LimiteDoPlanoError } from "@/lib/entitlements";
-import { logActivity } from "@/lib/activity-log";
+import { logActivity, diffAuditavel } from "@/lib/activity-log";
 import { normalizarEmail } from "@/lib/rate-limit";
 import { CUSTO_BCRYPT, senhaSchema } from "@/lib/senha";
 import {
@@ -380,62 +380,81 @@ export async function atualizarUsuario(
     if (erro) return erro;
   }
 
-  await prisma.user.update({
-    where: { id: membershipAlvo.userId },
-    data: {
-      name: dados.nome,
-      avatarUrl: dados.foto || null,
-      // Fase 25 — trocar a senha de alguém DERRUBA as sessões daquela
-      // pessoa (passwordChangedAt, ver requireOrganizationId). É o
-      // ponto: se um administrador precisou redefinir a senha de um
-      // membro, quem estava usando a senha antiga tem de sair. Vale
-      // inclusive para quem edita a si mesmo — que volta ao login.
-      ...(dados.novaSenha
-        ? {
-            passwordHash: await bcrypt.hash(dados.novaSenha, CUSTO_BCRYPT),
-            passwordChangedAt: new Date(),
-          }
-        : {}),
-    },
-  });
+  const statusFinal = dados.ativo ? "ACTIVE" : "SUSPENDED";
 
-  await prisma.organizationMember.update({
-    where: { id: membershipId, organizationId },
-    data: {
-      role: papelFinal,
-      status: dados.ativo ? "ACTIVE" : "SUSPENDED",
-      whatsapp: dados.whatsapp ? dados.whatsapp.replace(/\D/g, "") : null,
-      contactEmail: dados.emailContato || null,
-      // Mesmo mapeamento que a tela de autoatendimento usa — as duas não
-      // podem divergir sobre o que é um perfil válido.
-      ...camposDoPerfilPublico(dados),
-    },
-  });
-
-  await logActivity({
-    organizationId,
-    userId: session.user.id,
-    entity: "User",
-    entityId: membershipAlvo.userId,
-    action: "updated",
-  });
-
-  // Publicar/despublicar um profissional é uma decisão de privacidade —
-  // vale ter na trilha quem virou a chave e quando. Só o booleano entra
-  // no payload: CRECI, apresentação, foto e telefone continuam fora do
-  // log, seguindo o padrão do projeto de não guardar conteúdo sensível
-  // na trilha técnica.
-  if (membershipAlvo.publicProfileEnabled !== dados.perfilPublicoAtivo) {
-    await logActivity({
-      organizationId,
-      userId: session.user.id,
-      entity: "OrganizationMember",
-      entityId: membershipId,
-      action: dados.perfilPublicoAtivo
-        ? "public_profile_enabled"
-        : "public_profile_disabled",
+  // Logs de Auditoria — papel e ativação/desativação transacionais com a
+  // própria mudança: se o log falhar, nem o papel nem o status mudam
+  // (ver src/lib/activity-log.ts, atomicidade). Senha/nome/foto/contato
+  // continuam fora do payload — PII e segredo, nunca na trilha técnica.
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: membershipAlvo.userId },
+      data: {
+        name: dados.nome,
+        avatarUrl: dados.foto || null,
+        // Fase 25 — trocar a senha de alguém DERRUBA as sessões daquela
+        // pessoa (passwordChangedAt, ver requireOrganizationId). É o
+        // ponto: se um administrador precisou redefinir a senha de um
+        // membro, quem estava usando a senha antiga tem de sair. Vale
+        // inclusive para quem edita a si mesmo — que volta ao login.
+        ...(dados.novaSenha
+          ? {
+              passwordHash: await bcrypt.hash(dados.novaSenha, CUSTO_BCRYPT),
+              passwordChangedAt: new Date(),
+            }
+          : {}),
+      },
     });
-  }
+
+    await tx.organizationMember.update({
+      where: { id: membershipId, organizationId },
+      data: {
+        role: papelFinal,
+        status: statusFinal,
+        whatsapp: dados.whatsapp ? dados.whatsapp.replace(/\D/g, "") : null,
+        contactEmail: dados.emailContato || null,
+        // Mesmo mapeamento que a tela de autoatendimento usa — as duas não
+        // podem divergir sobre o que é um perfil válido.
+        ...camposDoPerfilPublico(dados),
+      },
+    });
+
+    await logActivity(
+      {
+        organizationId,
+        userId: session.user.id,
+        entity: "User",
+        entityId: membershipAlvo.userId,
+        action: "updated",
+        payload: diffAuditavel(
+          { role: membershipAlvo.role, status: membershipAlvo.status },
+          { role: papelFinal, status: statusFinal },
+          ["role", "status"]
+        ),
+      },
+      tx
+    );
+
+    // Publicar/despublicar um profissional é uma decisão de privacidade —
+    // vale ter na trilha quem virou a chave e quando. Só o booleano entra
+    // no payload: CRECI, apresentação, foto e telefone continuam fora do
+    // log, seguindo o padrão do projeto de não guardar conteúdo sensível
+    // na trilha técnica.
+    if (membershipAlvo.publicProfileEnabled !== dados.perfilPublicoAtivo) {
+      await logActivity(
+        {
+          organizationId,
+          userId: session.user.id,
+          entity: "OrganizationMember",
+          entityId: membershipId,
+          action: dados.perfilPublicoAtivo
+            ? "public_profile_enabled"
+            : "public_profile_disabled",
+        },
+        tx
+      );
+    }
+  });
 
   revalidatePath("/app/usuarios");
   revalidatePath(`/app/usuarios/${membershipId}`);
@@ -495,18 +514,24 @@ export async function alternarStatusUsuario(
     if (erro) return erro;
   }
 
-  await prisma.organizationMember.update({
-    where: { id: membershipId, organizationId },
-    data: { status: novoAtivo ? "ACTIVE" : "SUSPENDED" },
-  });
+  const statusFinal = novoAtivo ? "ACTIVE" : "SUSPENDED";
+  await prisma.$transaction(async (tx) => {
+    await tx.organizationMember.update({
+      where: { id: membershipId, organizationId },
+      data: { status: statusFinal },
+    });
 
-  await logActivity({
-    organizationId,
-    userId: session.user.id,
-    entity: "User",
-    entityId: membershipAlvo.userId,
-    action: "updated",
-    payload: { status: novoAtivo ? "ACTIVE" : "SUSPENDED" },
+    await logActivity(
+      {
+        organizationId,
+        userId: session.user.id,
+        entity: "User",
+        entityId: membershipAlvo.userId,
+        action: "updated",
+        payload: diffAuditavel({ status: membershipAlvo.status }, { status: statusFinal }, ["status"]),
+      },
+      tx
+    );
   });
 
   revalidatePath("/app/usuarios");

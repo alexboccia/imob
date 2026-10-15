@@ -32,6 +32,7 @@ export type ClienteRow = {
   ultimoContato: { texto: string; tipoLabel: string } | null;
   proximaAcao: { texto: string; dataTexto: string | null } | null;
   corretorNome: string | null;
+  arquivado: boolean;
 };
 
 function iniciais(nome: string): string {
@@ -66,13 +67,23 @@ export const clienteColumns: DataTableColumn<ClienteRow>[] = [
             <AvatarFallback>{iniciais(cliente.nome)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <Link
-              href={`/app/clientes/${cliente.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="font-medium hover:underline"
-            >
-              {cliente.nome}
-            </Link>
+            <div className="flex items-center gap-1.5">
+              <Link
+                href={`/app/clientes/${cliente.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="font-medium hover:underline"
+              >
+                {cliente.nome}
+              </Link>
+              {/* Logs de Auditoria, Etapa 4 — só aparece quando "Ver
+                  arquivados" está ativo (é a única forma de um arquivado
+                  chegar nesta lista). */}
+              {cliente.arquivado && (
+                <Badge variant="secondary" className="shrink-0">
+                  Arquivado
+                </Badge>
+              )}
+            </div>
             <p className="truncate text-xs text-muted-foreground">
               {cliente.telefone ?? cliente.email ?? "Sem contato cadastrado"}
             </p>

@@ -142,13 +142,18 @@ export async function getLimit(
 export async function contarUsoAtual(organizationId: string, feature: string): Promise<number | null> {
   switch (feature) {
     case FEATURE_PROPERTIES:
+      // Logs de Auditoria, Etapa 4 — um imóvel ARQUIVADO não conta contra
+      // o limite do plano: arquivar existe justamente para tirar algo do
+      // uso operacional sem contar como "em uso". Mesmo racional em
+      // verificarLimiteImoveis, abaixo.
       return prisma.property.count({
-        where: { organizationId, status: { in: [...STATUS_IMOVEL_ATIVO] } },
+        where: { organizationId, status: { in: [...STATUS_IMOVEL_ATIVO] }, archivedAt: null },
       });
     case FEATURE_USERS:
       return prisma.organizationMember.count({ where: { organizationId, status: "ACTIVE" } });
     case FEATURE_CRM_CLIENTS:
-      return prisma.person.count({ where: { organizationId } });
+      // Mesmo racional — um cliente arquivado não ocupa vaga do limite.
+      return prisma.person.count({ where: { organizationId, archivedAt: null } });
     default:
       return null;
   }
@@ -161,7 +166,7 @@ export async function verificarLimiteImoveis(organizationId: string): Promise<vo
   if (limite === null) return;
 
   const total = await prisma.property.count({
-    where: { organizationId, status: { in: [...STATUS_IMOVEL_ATIVO] } },
+    where: { organizationId, status: { in: [...STATUS_IMOVEL_ATIVO] }, archivedAt: null },
   });
   if (limiteExcedido(total, limite)) {
     throw new LimiteDoPlanoError(

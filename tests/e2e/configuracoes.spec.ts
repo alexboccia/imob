@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { ORG_A, login } from "./helpers";
+import { ORG_A, ORG_B, login, entrarComo } from "./helpers";
 
 // Redesenho de Configurações — comportamento (Server Action, upload,
 // validação, autorização, tenant isolation) permanece o mesmo já
@@ -1037,4 +1037,53 @@ test.describe("Configurações — prévia em telas reais", () => {
       expect(rolou, `rolou ${rolou}px`).toBe(0);
     });
   }
+});
+
+// Fase 124 (item 15) — interface administrativa do percentual padrão de
+// comissão, nova nesta fase (a infraestrutura já existia desde a Fase
+// 122, sem tela até aqui). Card próprio, fora das abas do formulário
+// grande de Configurações.
+test.describe("Configurações — comissão", () => {
+  test("salva um percentual válido, persiste após reload, e nunca aparece na outra organização", async ({
+    page,
+  }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes");
+
+    const campo = page.getByLabel("Percentual padrão de comissão");
+    await expect(campo).toBeVisible();
+    await campo.fill("6");
+    await page.getByRole("button", { name: "Salvar", exact: true }).click();
+    await expect(page.getByText("Percentual padrão de comissão salvo.")).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByLabel("Percentual padrão de comissão")).toHaveValue("6");
+
+    // Isolamento multi-tenant: a outra organização nunca vê este valor.
+    // entrarComo (não login): há sessão ativa de ORG_A neste mesmo teste.
+    await entrarComo(page, ORG_B);
+    await page.goto("/app/configuracoes");
+    const campoB = page.getByLabel("Percentual padrão de comissão");
+    if (await campoB.isVisible()) {
+      await expect(campoB).toHaveValue("");
+    }
+
+    // Limpeza — não deixar o valor configurado para não afetar outras
+    // execuções desta suíte.
+    await entrarComo(page, ORG_A);
+    await page.goto("/app/configuracoes");
+    await page.getByLabel("Percentual padrão de comissão").fill("");
+    await page.getByRole("button", { name: "Salvar", exact: true }).click();
+    await expect(page.getByText("Percentual padrão de comissão salvo.")).toBeVisible();
+  });
+
+  test("valor inválido (zero) é recusado, com mensagem específica", async ({ page }) => {
+    await login(page, ORG_A);
+    await page.goto("/app/configuracoes");
+
+    const campo = page.getByLabel("Percentual padrão de comissão");
+    await campo.fill("0");
+    await page.getByRole("button", { name: "Salvar", exact: true }).click();
+    await expect(page.getByText(/precisa ser maior que zero/)).toBeVisible();
+  });
 });

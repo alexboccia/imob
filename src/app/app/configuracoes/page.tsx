@@ -9,9 +9,11 @@ import { temPapel, PAPEIS_GESTAO_CONFIGURACOES } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
 import { withOrganization } from "@/lib/tenant-context";
 import { ConfiguracaoContatoForm } from "@/components/admin/ConfiguracaoContatoForm";
+import { ComissaoConfiguracaoForm } from "@/components/admin/ComissaoConfiguracaoForm";
 import { buscarImoveisPrevia } from "@/lib/previa-identidade-data";
 import { IMAGEM_HERO_PADRAO } from "@/lib/site-config";
 import { prisma } from "@/lib/prisma";
+import { buscarComissaoPadrao } from "@/app/app/configuracoes/comissao-actions";
 
 export default async function ConfiguracoesPage() {
   const organizationId = await requireOrganizationId();
@@ -45,6 +47,7 @@ export default async function ConfiguracoesPage() {
     visibilidadeComercial,
     imoveisPrevia,
     organizacao,
+    comissaoPadrao,
   ] = await withOrganization(organizationId, () =>
     Promise.all([
       buscarConfiguracaoContato(organizationId),
@@ -68,6 +71,7 @@ export default async function ConfiguracoesPage() {
         where: { id: organizationId },
         select: { name: true },
       }),
+      buscarComissaoPadrao(organizationId),
     ])
   );
 
@@ -100,6 +104,8 @@ export default async function ConfiguracoesPage() {
           visibilidadeComercial,
         }}
       />
+
+      <ComissaoConfiguracaoForm percentualAtual={comissaoPadrao} />
     </div>
   );
 }

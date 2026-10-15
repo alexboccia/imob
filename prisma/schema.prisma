@@ -353,6 +353,14 @@ model Person {
   responsibleMemberId String?
   responsibleMember   OrganizationMember? @relation("PersonResponsibleMember", fields: [responsibleMemberId], references: [id])
 
+  // Arquivamento (Logs de Auditoria, Etapa 4) — mesmo racional de
+  // Property.archivedAt: Person não tem nenhum campo de "status"
+  // operacional hoje (diferente de Property), então arquivar aqui não
+  // compete com nada existente — é puramente novo.
+  archivedAt         DateTime?
+  archivedByMemberId String?
+  archivedByMember   OrganizationMember? @relation("PersonArchivedByMember", fields: [archivedByMemberId], references: [id])
+
   ownedProperties        Property[]          @relation("PropertyOwner")
   interactions           Interaction[]
   leadCapturesResolvidas LeadCapture[]       @relation("LeadCaptureResolvedPerson")
@@ -460,6 +468,21 @@ model Property {
   isFeatured     Boolean         @default(false)
   isOpportunity  Boolean         @default(false)
   hasSlideshow   Boolean         @default(false)
+
+  // ARQUIVAMENTO (Logs de Auditoria, Etapa 4) — deliberadamente SEPARADO
+  // de `status`. `status` descreve o estágio comercial/operacional do
+  // imóvel (disponível, reservado, vendido, alugado, inativo) e continua
+  // significativo mesmo para um imóvel em uso normal do sistema —
+  // "inativo" não quer dizer "fora do fluxo operacional", quer dizer
+  // "não anunciado publicamente agora". Arquivar é uma ação ortogonal:
+  // tira o registro das listagens operacionais padrão SEM mexer no seu
+  // status comercial, e é reversível (restaurar não reconstrói status
+  // nenhum, porque nunca o alterou). NULL = não arquivado (padrão);
+  // preenchido = instante do arquivamento, também serve de boolean
+  // implícito sem precisar de uma segunda coluna.
+  archivedAt DateTime?
+  archivedByMemberId String?
+  archivedByMember   OrganizationMember? @relation("PropertyArchivedByMember", fields: [archivedByMemberId], references: [id])
 
   // VITRINE EDITORIAL DA HOME — posição 1..4, ou null (não exibido).
   //
@@ -1856,6 +1879,11 @@ model OrganizationMember {
   // Fase 34 — transições de disponibilidade de imóvel provocadas por
   // este membro. Ator, nunca posse.
   propertyStatusChanges          PropertyStatusHistory[]              @relation("PropertyStatusChangedByMember")
+  // Logs de Auditoria, Etapa 4 — quem arquivou/restaurou cada imóvel ou
+  // cliente. Ator, mesma convenção de todo "changedBy"/"archivedBy"
+  // deste schema — nunca posse.
+  archivedProperties             Property[]                           @relation("PropertyArchivedByMember")
+  archivedPeople                 Person[]                             @relation("PersonArchivedByMember")
   // Fase 33 — propostas REGISTRADAS por este membro (autoria). Nunca
   // "propostas dele": quem propõe é o cliente ou o proprietário.
   registeredOffers               PropertyInterestOffer[]              @relation("OfferCreatedByMember")
@@ -2098,6 +2126,22 @@ model OrganizationSettings {
   // no fallback estático do produto (IMAGEM_HERO_PADRAO, site-config.ts)
   // — a Home nunca fica sem Hero.
   heroImageUrl       String?
+
+  // Fase 122-B (AUD-121-006) — percentual PADRÃO de comissão desta
+  // imobiliária, só um ATALHO de preenchimento na tela de negociação
+  // (ver calcularComissaoPorPercentual em src/lib/comissao.ts): sugere um
+  // valor em reais a partir do valor fechado, que a pessoa vê e confirma
+  // antes de salvar. NUNCA é aplicado automaticamente a um negócio e
+  // NUNCA é escrito retroativamente em PropertyInterest.commissionValue
+  // — comissão continua sendo informada, nunca derivada (ver o
+  // comentário extenso em comissao.ts sobre por que o produto não
+  // calcula comissão sozinho). null = organização não configurou nenhum
+  // padrão (estado de toda linha existente; nenhum backfill).
+  //
+  // Decimal(5,2): 0.01 a 100.00 — validado em
+  // src/lib/comissao-configuracao.ts antes de qualquer escrita.
+  defaultCommissionPercent Decimal? @db.Decimal(5, 2)
+
   updatedAt          DateTime @updatedAt
 
   @@map("organization_settings")

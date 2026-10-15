@@ -11,7 +11,7 @@ import { normalizarEmail } from "@/lib/rate-limit";
 import { requireOrganizationId } from "@/lib/tenant";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule, getLimit, limiteExcedido, LimiteDoPlanoError, FEATURE_CRM_CLIENTS } from "@/lib/entitlements";
-import { logActivity } from "@/lib/activity-log";
+import { logActivity, diffAuditavel } from "@/lib/activity-log";
 import { oportunidadeElegivel } from "@/lib/oportunidade";
 import { interpretarValorFechamento, decimalParaValor } from "@/lib/valor-fechamento";
 import { interpretarComissao, comissaoExcedeValorFechado } from "@/lib/comissao";
@@ -30,6 +30,8 @@ import {
   temPapel,
   PAPEIS_LIQUIDACAO_COMISSAO,
   PAPEIS_DISTRIBUICAO_LEAD,
+  PAPEIS_ARQUIVAMENTO,
+  PAPEIS_EXCLUSAO_DEFINITIVA,
 } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
 import { escopoComercialDaSessao } from "@/lib/escopo-comercial-sessao";
@@ -202,7 +204,9 @@ export async function criarPessoa(
 
         const limite = await getLimit(organizationId, FEATURE_CRM_CLIENTS);
         if (limite !== null) {
-          const total = await tx.person.count({ where: { organizationId } });
+          // Cliente ARQUIVADO não ocupa vaga do limite (Logs de
+          // Auditoria, Etapa 4) — mesmo racional de verificarLimiteImoveis.
+          const total = await tx.person.count({ where: { organizationId, archivedAt: null } });
           if (limiteExcedido(total, limite)) {
             throw new LimiteDoPlanoError(
               `Seu plano permite até ${limite} clientes CRM. Faça upgrade de plano para cadastrar mais.`
@@ -393,14 +397,38 @@ export async function atualizarEstagioFunil(
   const escopo = await escopoComercialDaSessao(organizationId);
 
   await withOrganization(organizationId, async () => {
-    // Fase 22 — `updateMany` e não `update`: aqui a escrita É o ponto de
-    // autorização (não há leitura antes dela), e `update` só aceita
-    // where único, o que impediria o predicado de escopo. Fora do
-    // escopo, `count` é 0 e nada é alterado — sem revelar se a pessoa
-    // existe.
-    await prisma.person.updateMany({
+    // Logs de Auditoria (cobertura adicional — Pipeline) — leitura só
+    // para capturar o "antes" do estágio; a autorização continua sendo a
+    // escrita condicional abaixo (updateMany com o predicado de escopo),
+    // nunca esta leitura. Pessoa fora do escopo: `antes` vem null, o
+    // updateMany casa 0 linhas, e nenhum log é gravado — sem revelar se
+    // a pessoa existe.
+    const antes = await prisma.person.findFirst({
       where: wherePessoaAlvo(escopo, pessoaId, organizationId),
-      data: { pipelineStage: estagioFunil },
+      select: { pipelineStage: true },
+    });
+    if (!antes) return;
+
+    await prisma.$transaction(async (tx) => {
+      const atualizado = await tx.person.updateMany({
+        where: wherePessoaAlvo(escopo, pessoaId, organizationId),
+        data: { pipelineStage: estagioFunil },
+      });
+      if (atualizado.count === 0) return;
+
+      await logActivity(
+        {
+          organizationId,
+          userId: session.user.id,
+          entity: "Person",
+          entityId: pessoaId,
+          action: "pipeline_stage_updated",
+          payload: diffAuditavel({ pipelineStage: antes.pipelineStage }, { pipelineStage: estagioFunil }, [
+            "pipelineStage",
+          ]),
+        },
+        tx
+      );
     });
 
     revalidatePath(`/app/clientes/${pessoaId}`);
@@ -3156,5 +3184,167 @@ export async function buscarResumoClienteCrm(pessoaId: string): Promise<ResumoCl
       })),
       contagens: { favoritos, visitados, propostas, atividades },
     };
+  });
+}
+
+// =======================================================================
+// Logs de Auditoria — Etapas 4 e 5: arquivamento reversível e exclusão
+// definitiva restrita de Clientes.
+// =======================================================================
+// Person não tem nenhum campo de "status" operacional hoje (diferente de
+// Property) — arquivar aqui não compete com nada existente.
+export async function arquivarCliente(
+  personId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  if (!temPapel(await papelAtual(), PAPEIS_ARQUIVAMENTO)) {
+    return erroAcessoNegado("Você não tem permissão para arquivar clientes.");
+  }
+
+  const organizationId = await requireOrganizationId();
+  return withOrganization(organizationId, async () => {
+    const alvo = await prisma.person.findFirst({
+      where: { id: personId, organizationId },
+      select: { archivedAt: true },
+    });
+    if (!alvo) return erroAcessoNegado("Cliente não encontrado.");
+    if (alvo.archivedAt) return erroGenerico("Este cliente já está arquivado.");
+
+    await prisma.$transaction(async (tx) => {
+      await tx.person.updateMany({
+        where: { id: personId, organizationId },
+        data: { archivedAt: new Date(), archivedByMemberId: session.user.organizationMemberId ?? null },
+      });
+      await logActivity(
+        { organizationId, userId: session.user.id, entity: "Person", entityId: personId, action: "archived" },
+        tx
+      );
+    });
+
+    revalidatePath(`/app/clientes/${personId}`);
+    revalidatePath("/app/clientes");
+    return sucesso("Cliente arquivado — ele saiu das listagens operacionais, mas pode ser restaurado a qualquer momento.");
+  });
+}
+
+export async function restaurarCliente(
+  personId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prevState: ActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  if (!temPapel(await papelAtual(), PAPEIS_ARQUIVAMENTO)) {
+    return erroAcessoNegado("Você não tem permissão para restaurar clientes.");
+  }
+
+  const organizationId = await requireOrganizationId();
+  return withOrganization(organizationId, async () => {
+    const alvo = await prisma.person.findFirst({
+      where: { id: personId, organizationId },
+      select: { archivedAt: true },
+    });
+    if (!alvo) return erroAcessoNegado("Cliente não encontrado.");
+    if (!alvo.archivedAt) return erroGenerico("Este cliente não está arquivado.");
+
+    // Mesma decisão de restaurarImovel: a restauração NÃO reaplica o
+    // limite comercial de clientes CRM — registro já existente, não um
+    // cadastro novo.
+    await prisma.$transaction(async (tx) => {
+      await tx.person.updateMany({
+        where: { id: personId, organizationId },
+        data: { archivedAt: null, archivedByMemberId: null },
+      });
+      await logActivity(
+        { organizationId, userId: session.user.id, entity: "Person", entityId: personId, action: "restored" },
+        tx
+      );
+    });
+
+    revalidatePath(`/app/clientes/${personId}`);
+    revalidatePath("/app/clientes");
+    return sucesso("Cliente restaurado.");
+  });
+}
+
+// EXCLUSÃO DEFINITIVA — irreversível, restrita, com confirmação reforçada.
+//
+// Diferente de Property: `property_interests.personId` é CASCADE no
+// banco (confirmado em pg_constraint), não RESTRICT — ou seja, o próprio
+// banco NÃO bloqueia a exclusão de um cliente com negociações. Deixar
+// isso acontecer apagaria silenciosamente ofertas/pagamentos/histórico
+// de negociação, exatamente o tipo de "exclusão em cascata
+// indiscriminada" que o briefing pede para nunca fazer — por isso o
+// bloqueio é MANUAL aqui, checado antes de qualquer exclusão.
+// `deal_people.personId` já É RESTRICT nativamente (segunda camada,
+// redundante de propósito).
+export async function excluirClienteDefinitivamente(
+  personId: string,
+   
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const session = await auth();
+  if (!session) redirect("/app/login");
+  if (!temPapel(await papelAtual(), PAPEIS_EXCLUSAO_DEFINITIVA)) {
+    return erroAcessoNegado("Você não tem permissão para excluir clientes definitivamente.");
+  }
+
+  const organizationId = await requireOrganizationId();
+  return withOrganization(organizationId, async () => {
+    const alvo = await prisma.person.findFirst({
+      where: { id: personId, organizationId },
+      select: { name: true, _count: { select: { propertyInterests: true } } },
+    });
+    if (!alvo) return erroAcessoNegado("Cliente não encontrado.");
+
+    if (alvo._count.propertyInterests > 0) {
+      return erroGenerico(
+        alvo._count.propertyInterests === 1
+          ? "Este cliente tem 1 negociação vinculada. Não é possível excluir definitivamente — arquive-o em vez disso."
+          : `Este cliente tem ${alvo._count.propertyInterests} negociações vinculadas. Não é possível excluir definitivamente — arquive-o em vez disso.`
+      );
+    }
+
+    const confirmacao = String(formData.get("confirmacao") ?? "").trim();
+    if (confirmacao !== alvo.name) {
+      return erroGenerico(
+        "Confirmação incorreta — digite exatamente o nome do cliente para confirmar a exclusão definitiva."
+      );
+    }
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.person.delete({ where: { id: personId, organizationId } });
+        await logActivity(
+          {
+            organizationId,
+            userId: session.user.id,
+            entity: "Person",
+            entityId: personId,
+            action: "deleted_permanently",
+            payload: { name: alvo.name },
+          },
+          tx
+        );
+      });
+    } catch (erro) {
+      if (erro && typeof erro === "object" && "code" in erro && (erro as { code?: string }).code === "P2003") {
+        return erroGenerico(
+          "Este cliente tem registros vinculados que impedem a exclusão definitiva. Arquive-o em vez disso."
+        );
+      }
+      throw erro;
+    }
+
+    revalidatePath("/app/clientes");
+    return sucesso("Cliente excluído definitivamente.");
   });
 }

@@ -153,6 +153,38 @@ export const PAPEIS_PERFIL_PUBLICO_PROPRIO: ReadonlySet<string> = new Set([
   "BROKER",
 ]);
 
+// Logs de Auditoria, Etapa 4 — ARQUIVAR/RESTAURAR Imóvel ou Cliente.
+//
+// Conjunto próprio, não reuso de PAPEIS_GESTAO_CATALOGOS: aquele nomeia
+// "quem administra o catálogo da organização" (empreendimentos,
+// características, tipos — listas de apoio compartilhadas); isto nomeia
+// "quem pode tirar um registro operacional (imóvel, cliente) do fluxo
+// normal do time inteiro". São conceitos vizinhos, não o mesmo —
+// coincidirem no mesmo trio hoje é valor, não significado.
+//
+// Camada gerencial, não aberto a todo BROKER: arquivar esconde o
+// registro das listagens de TODA a equipe, não só da própria — é uma
+// decisão operacional de equipe, do mesmo nível de "distribuir lead" ou
+// "acompanhar o trabalho do time", não uma edição de ficha.
+export const PAPEIS_ARQUIVAMENTO: ReadonlySet<string> = new Set([
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+]);
+
+// Logs de Auditoria, Etapa 5 — EXCLUSÃO DEFINITIVA de Imóvel ou Cliente.
+//
+// Conjunto próprio, mais restrito que PAPEIS_ARQUIVAMENTO de propósito:
+// arquivar é reversível (o dado continua existindo, só sai da vista),
+// excluir definitivamente não é — a mesma distinção de autoridade que já
+// separa PAPEIS_GESTAO_CATALOGOS de PAPEIS_FINANCEIRO. MANAGER fica de
+// fora aqui: gerir a visibilidade operacional do time (arquivar) não dá
+// autoridade para destruir dado de forma irreversível.
+export const PAPEIS_EXCLUSAO_DEFINITIVA: ReadonlySet<string> = new Set([
+  "OWNER",
+  "ADMIN",
+]);
+
 export function temPapel(
   role: string | undefined,
   permitidos: ReadonlySet<string>

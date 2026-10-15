@@ -150,6 +150,24 @@ export const IDS_E2E = {
   membroPortfolioSonia: "e2e-membro-portfolio-sonia",
   imovelPortfolioSonia: "e2e-imovel-portfolio-sonia",
   imovelParaEditarOrgA: "e2e-imovel-editar-a",
+  // Logs de Auditoria — fixtures dedicadas, nunca tocadas por nenhum
+  // outro spec: arquivar/restaurar/excluir definitivamente MUTA o estado
+  // do registro, então precisa de ids próprios, nunca compartilhados com
+  // specs que presumem um imóvel/cliente sempre intacto.
+  imovelArquivamentoOrgA: "e2e-imovel-arquivamento-a",
+  pessoaArquivamentoOrgA: "e2e-pessoa-arquivamento-a",
+  imovelExclusaoOrgA: "e2e-imovel-exclusao-a",
+  pessoaExclusaoOrgA: "e2e-pessoa-exclusao-a",
+  // Homologação final — BROKER dedicado da Org A (a org não tinha nenhum
+  // até aqui, só o OWNER), para homologar visualmente que os 3 botões de
+  // arquivamento/exclusão ficam ocultos para quem não tem o papel.
+  membroBrokerOrgA: "e2e-membro-broker-a",
+  // Homologação final — imóvel e cliente com uma negociação vinculada
+  // entre os dois, dedicados e nunca excluídos de verdade (a exclusão é
+  // sempre recusada pela dependência): existem só para homologar
+  // visualmente a mensagem de bloqueio dentro do modal.
+  imovelBloqueadoOrgA: "e2e-imovel-bloqueado-a",
+  pessoaBloqueadaOrgA: "e2e-pessoa-bloqueada-a",
   membroOwnerOrgB: "e2e-membro-owner-b",
   // Organização dedicada da Agenda (ver comentário na seção "Organização
   // C" abaixo) — property fixa própria, nunca tocada por nenhum outro
@@ -1051,6 +1069,101 @@ async function main() {
     // provar a faixa de quatro colunas em desktop, que é o requisito
     // estrutural do card novo.
     homeHighlightPosition: 3,
+  });
+  // Logs de Auditoria — fixtures próprias (ver IDS_E2E acima). O
+  // `update` abaixo reseta archivedAt a cada rodada do seed: sem isso, a
+  // SEGUNDA execução da suíte completa encontraria o imóvel já
+  // arquivado pela rodada anterior, e o spec de homologação deixaria de
+  // ser determinístico.
+  await garantirImovel({
+    id: IDS_E2E.imovelArquivamentoOrgA,
+    organizationId: orgA.organization.id,
+    title: "Casa E2E Arquivamento",
+  });
+  await prisma.property.updateMany({
+    where: { id: IDS_E2E.imovelArquivamentoOrgA, organizationId: orgA.organization.id },
+    data: { archivedAt: null, archivedByMemberId: null },
+  });
+  await garantirImovel({
+    id: IDS_E2E.imovelExclusaoOrgA,
+    organizationId: orgA.organization.id,
+    title: "Casa E2E Exclusão Definitiva",
+  });
+  await prisma.person.upsert({
+    where: { id: IDS_E2E.pessoaArquivamentoOrgA },
+    update: { name: "Cliente E2E Arquivamento", archivedAt: null, archivedByMemberId: null },
+    create: {
+      id: IDS_E2E.pessoaArquivamentoOrgA,
+      organizationId: orgA.organization.id,
+      name: "Cliente E2E Arquivamento",
+      roles: ["CLIENT"],
+    },
+  });
+  await prisma.person.upsert({
+    where: { id: IDS_E2E.pessoaExclusaoOrgA },
+    update: { name: "Cliente E2E Exclusão Definitiva" },
+    create: {
+      id: IDS_E2E.pessoaExclusaoOrgA,
+      organizationId: orgA.organization.id,
+      name: "Cliente E2E Exclusão Definitiva",
+      roles: ["CLIENT"],
+    },
+  });
+
+  // Homologação final — BROKER da Org A: usuário/vínculo fixos, senha
+  // igual à do OWNER (mesma convenção de todo o seed), para o spec de
+  // homologação visual logar como BROKER e confirmar que nenhum dos 3
+  // botões (Arquivar/Restaurar/Excluir definitivamente) aparece.
+  const brokerUsuarioA = await prisma.user.upsert({
+    where: { email: "broker-a@e2e.test" },
+    update: { passwordHash: await bcrypt.hash(senha, 10) },
+    create: { name: "Broker E2E A", email: "broker-a@e2e.test", passwordHash: await bcrypt.hash(senha, 10) },
+  });
+  await prisma.organizationMember.upsert({
+    where: { organizationId_userId: { organizationId: orgA.organization.id, userId: brokerUsuarioA.id } },
+    update: { role: "BROKER", status: "ACTIVE" },
+    create: {
+      id: IDS_E2E.membroBrokerOrgA,
+      organizationId: orgA.organization.id,
+      userId: brokerUsuarioA.id,
+      role: "BROKER",
+      status: "ACTIVE",
+    },
+  });
+
+  // Homologação final — imóvel/cliente dedicados com uma negociação
+  // vinculada entre os dois: nunca excluídos de verdade (a Server Action
+  // recusa por dependência), existem só para a captura visual do aviso
+  // de bloqueio dentro do modal.
+  await garantirImovel({
+    id: IDS_E2E.imovelBloqueadoOrgA,
+    organizationId: orgA.organization.id,
+    title: "Casa E2E Bloqueada por Negociação",
+  });
+  await prisma.person.upsert({
+    where: { id: IDS_E2E.pessoaBloqueadaOrgA },
+    update: { name: "Cliente E2E Bloqueado por Negociação" },
+    create: {
+      id: IDS_E2E.pessoaBloqueadaOrgA,
+      organizationId: orgA.organization.id,
+      name: "Cliente E2E Bloqueado por Negociação",
+      roles: ["CLIENT"],
+    },
+  });
+  await prisma.propertyInterest.upsert({
+    where: {
+      organizationId_personId_propertyId: {
+        organizationId: orgA.organization.id,
+        personId: IDS_E2E.pessoaBloqueadaOrgA,
+        propertyId: IDS_E2E.imovelBloqueadoOrgA,
+      },
+    },
+    update: {},
+    create: {
+      organizationId: orgA.organization.id,
+      propertyId: IDS_E2E.imovelBloqueadoOrgA,
+      personId: IDS_E2E.pessoaBloqueadaOrgA,
+    },
   });
   // Redesenho de Imóveis — fixture dedicada, nunca tocada por "editar
   // imóvel" (que reescreve imovelParaEditarOrgA e resetaria os badges a

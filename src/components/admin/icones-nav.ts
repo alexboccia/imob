@@ -7,6 +7,7 @@ import {
   Contact,
   CreditCard,
   Funnel,
+  History,
   LayoutDashboard,
   Settings,
   SlidersHorizontal,
@@ -46,7 +47,8 @@ export type ChaveIconeNav =
   | "meu-perfil"
   | "configuracoes"
   | "assinatura"
-  | "manutencao";
+  | "manutencao"
+  | "auditoria";
 
 export const ICONES_NAV: Record<ChaveIconeNav, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -70,4 +72,5 @@ export const ICONES_NAV: Record<ChaveIconeNav, LucideIcon> = {
   configuracoes: Settings,
   assinatura: CreditCard,
   manutencao: Wrench,
+  auditoria: History,
 };

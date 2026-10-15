@@ -52,7 +52,15 @@ import {
   temPapel,
   PAPEIS_LIQUIDACAO_COMISSAO,
   PAPEIS_DISTRIBUICAO_LEAD,
+  PAPEIS_ARQUIVAMENTO,
+  PAPEIS_EXCLUSAO_DEFINITIVA,
 } from "@/lib/authorization";
+import {
+  arquivarCliente,
+  restaurarCliente,
+  excluirClienteDefinitivamente,
+} from "@/app/app/clientes/actions";
+import { GerenciarArquivamentoRegistro } from "@/components/admin/GerenciarArquivamentoRegistro";
 import { PosseContato } from "@/components/admin/PosseContato";
 import { paraResponsavelPessoa } from "@/lib/posse-lead";
 import { papelAtual } from "@/lib/papel-atual";
@@ -360,6 +368,17 @@ export default async function DetalheClientePage({
           titulo={pessoa.name}
           descricao={`${pessoa.phone ?? "sem telefone"} · ${pessoa.email ?? "sem e-mail"} · ${pessoa.roles.join(", ")}`}
           acoes={
+            <>
+            <GerenciarArquivamentoRegistro
+              entidadeLabel="cliente"
+              nomeDoRegistro={pessoa.name}
+              arquivadoEm={pessoa.archivedAt ? pessoa.archivedAt.toISOString() : null}
+              podeArquivar={temPapel(papel, PAPEIS_ARQUIVAMENTO)}
+              podeExcluirDefinitivamente={temPapel(papel, PAPEIS_EXCLUSAO_DEFINITIVA)}
+              acaoArquivar={arquivarCliente.bind(null, pessoa.id)}
+              acaoRestaurar={restaurarCliente.bind(null, pessoa.id)}
+              acaoExcluir={excluirClienteDefinitivamente.bind(null, pessoa.id)}
+            />
             <EditarClienteDialog
               personId={pessoa.id}
               valoresIniciais={{
@@ -369,6 +388,7 @@ export default async function DetalheClientePage({
                 observacoes: pessoa.notes,
               }}
             />
+            </>
           }
         />
         {/* Fase 125 — Person.createdAt já existia (vem na mesma query,

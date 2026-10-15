@@ -52,6 +52,11 @@ type SearchParams = {
   search?: string;
   sort?: string;
   filters?: string;
+  // Logs de Auditoria, Etapa 4 — "1" mostra os arquivados junto com os
+  // ativos; parâmetro próprio (não dentro de "filters"), mesmo padrão de
+  // PeriodoFiltro na tela de Auditoria: é um booleano de visualização,
+  // não um filtro de valor numa allowlist.
+  arquivados?: string;
 };
 
 export default async function AdminImoveisPage({
@@ -81,7 +86,15 @@ export default async function AdminImoveisPage({
   const TIPO_VALIDOS = new Set(tipoOpcoes);
   const tipoFiltro = filtros.tipo && TIPO_VALIDOS.has(filtros.tipo) ? filtros.tipo : undefined;
 
-  const where = construirWhereImoveis({ organizationId, busca, statusFiltro, tipoFiltro, finalidadeFiltro });
+  const verArquivados = params.arquivados === "1";
+  const where = construirWhereImoveis({
+    organizationId,
+    busca,
+    statusFiltro,
+    tipoFiltro,
+    finalidadeFiltro,
+    incluirArquivados: verArquivados,
+  });
 
   // Listagem da página atual + total filtrado + os 4 KPIs (sempre GLOBAIS,
   // não aplicam busca/filtro — mesmo racional de Clientes/Usuários) + a
@@ -112,6 +125,7 @@ export default async function AdminImoveisPage({
             price: true,
             rentPrice: true,
             status: true,
+            archivedAt: true,
           },
         }),
         prisma.property.count({ where }),
@@ -143,6 +157,7 @@ export default async function AdminImoveisPage({
     preco: imovel.price != null ? Number(imovel.price) : null,
     precoAluguel: imovel.rentPrice != null ? Number(imovel.rentPrice) : null,
     status: imovel.status,
+    arquivado: imovel.archivedAt !== null,
   }));
 
   const temFiltroOuBuscaAtivo = Boolean(busca || statusFiltro || tipoFiltro || finalidadeFiltro);
@@ -188,11 +203,33 @@ export default async function AdminImoveisPage({
           descricao="Gerencie, filtre e encontre rapidamente os imóveis cadastrados."
         />
 
-        <ImoveisFiltrosBar
-          statusOpcoes={Object.entries(STATUS_IMOVEL_LABEL).map(([value, label]) => ({ value, label }))}
-          tipoOpcoes={tipoOpcoes}
-          finalidadeOpcoes={Object.entries(FINALIDADE_LABEL).map(([value, label]) => ({ value, label }))}
-        />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <ImoveisFiltrosBar
+            statusOpcoes={Object.entries(STATUS_IMOVEL_LABEL).map(([value, label]) => ({ value, label }))}
+            tipoOpcoes={tipoOpcoes}
+            finalidadeOpcoes={Object.entries(FINALIDADE_LABEL).map(([value, label]) => ({ value, label }))}
+          />
+          {/* Logs de Auditoria, Etapa 4 — toggle simples, link puro (Server
+              Component, sem JS de cliente necessário): preserva busca/
+              filtros/ordenação atuais, só alterna o parâmetro "arquivados". */}
+          <Button
+            nativeButton={false}
+            render={
+              <Link
+                href={`/app/imoveis?${new URLSearchParams({
+                  ...(params.search ? { search: params.search } : {}),
+                  ...(params.filters ? { filters: params.filters } : {}),
+                  ...(params.sort ? { sort: params.sort } : {}),
+                  ...(verArquivados ? {} : { arquivados: "1" }),
+                }).toString()}`}
+              />
+            }
+            variant="outline"
+            size="sm"
+          >
+            {verArquivados ? "Ocultar arquivados" : "Ver arquivados"}
+          </Button>
+        </div>
 
         <DataTable
         columns={imovelColumns}
