@@ -119,7 +119,13 @@ export function PreferenciaImovelForm({
         </Alert>
       )}
 
-      <div className="space-y-1.5 max-w-xs">
+      {/* Sem max-w aqui: era o único campo deste formulário preso a uma
+          largura estreita (max-w-xs) enquanto todos os outros (campo de
+          busca de Tipo de imóvel, Cidades/Bairros, valores, etc.) ocupam
+          a largura total do container — a mesma inconsistência visual
+          que "Estágio no funil", acima, não tem (o Select de lá já é
+          w-full). */}
+      <div className="space-y-1.5">
         <Label htmlFor="transactionType">Finalidade</Label>
         <Select
           name="transactionType"
