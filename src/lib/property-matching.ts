@@ -50,6 +50,20 @@ export type CriterioMatchKey =
   | "propertyFeatures"
   | "condoFeatures";
 
+// Rótulo do `detail` do critério "Finalidade" — a partir do PONTO DE
+// VISTA DO IMÓVEL ("este imóvel é para vender/alugar"), por isso
+// "Vender"/"Alugar" e não "Comprar"/"Alugar" de FINALIDADE_LABEL
+// (format.ts): aquele mapa traduz a INTENÇÃO de quem busca (um filtro,
+// uma preferência de cliente — "eu quero comprar"), nunca o atributo do
+// imóvel em si. Antes desta correção, `property.purpose` (o valor cru do
+// enum: "SALE"/"RENT"/"SALE_AND_RENT") vazava sem tradução nenhuma no
+// card de recomendação — achado real, visível em produção.
+const PROPOSITO_IMOVEL_LABEL: Record<string, string> = {
+  SALE: "Vender",
+  RENT: "Alugar",
+  SALE_AND_RENT: "Vender ou Alugar",
+};
+
 const CRITERIO_LABEL: Record<CriterioMatchKey, string> = {
   purpose: "Finalidade",
   price: "Preço",
@@ -204,7 +218,9 @@ export function calcularCompatibilidade(
           : ["SALE", "RENT", "SALE_AND_RENT"];
     const atendeu = purposesCompativeis.includes(property.purpose);
     if (!atendeu) hardFiltersOk = false;
-    criteria.push(criterioBooleano("purpose", 0, true, atendeu, property.purpose));
+    criteria.push(
+      criterioBooleano("purpose", 0, true, atendeu, PROPOSITO_IMOVEL_LABEL[property.purpose] ?? property.purpose)
+    );
   } else {
     criteria.push(criterioInativo("purpose", 0));
   }

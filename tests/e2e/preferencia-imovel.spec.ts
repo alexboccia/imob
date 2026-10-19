@@ -283,7 +283,11 @@ test.describe("Fase 98 — explicabilidade visual do matching", () => {
     // atrás do <details>: é curto (no máximo 3 itens) e já reaproveitado
     // como confirmação rápida sem exigir clique nenhum.
     await expect(cardImovel.getByText("Requisitos atendidos")).toBeVisible();
-    await expect(cardImovel.getByText(/SALE/)).toBeVisible();
+    // "Vender" — o rótulo traduzido do atributo do IMÓVEL (property.purpose
+    // = SALE), nunca o valor cru do enum. Achado real: antes desta
+    // correção aparecia "SALE" sem tradução nenhuma.
+    await expect(cardImovel.getByText("✓ Vender", { exact: true })).toBeVisible();
+    await expect(cardImovel.getByText(/SALE/)).toHaveCount(0);
   });
 
   test("o disclosure de critérios é operável por teclado, sem precisar de mouse", async ({ page }) => {
