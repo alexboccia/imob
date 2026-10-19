@@ -6,6 +6,8 @@ import { FormDisclosure } from "@/components/admin/FormDisclosure";
 import { Input } from "@/components/ui/input";
 import { CampoTelefone } from "@/components/CampoTelefone";
 import { Button } from "@/components/ui/button";
+import { PAPEL_LABEL } from "@/lib/crm-labels";
+import { rotuloSelecionado } from "@/lib/select-rotulo";
 import {
   Select,
   SelectContent,
@@ -48,7 +50,10 @@ export function CriarClienteForm({
         <Input name="email" type="email" placeholder="E-mail" />
         <Select name="papel" defaultValue="LEAD">
           <SelectTrigger className="w-full">
-            <SelectValue />
+            {/* Sem children, o trigger mostra o valor cru do enum
+                ("LEAD") em vez do rótulo ("Lead") — mesmo achado já
+                corrigido em outras telas (ver select-rotulo.ts). */}
+            <SelectValue>{rotuloSelecionado("LEAD", PAPEL_LABEL, "Papel")}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="LEAD">Lead</SelectItem>

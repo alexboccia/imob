@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ErroCampo } from "@/components/admin/ErroCampo";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
+import { PAPEL_USUARIO_LABEL } from "@/lib/format";
+import { rotuloSelecionado } from "@/lib/select-rotulo";
 import {
   Select,
   SelectContent,
@@ -58,7 +60,10 @@ export function CriarUsuarioForm({
       </div>
       <Select name="papel" defaultValue="BROKER">
         <SelectTrigger className="w-full">
-          <SelectValue />
+          {/* Sem children, o trigger mostra o valor cru do enum
+              ("BROKER") em vez do rótulo ("Corretor") — mesmo achado já
+              corrigido em outras telas (ver select-rotulo.ts). */}
+          <SelectValue>{rotuloSelecionado("BROKER", PAPEL_USUARIO_LABEL, "Papel")}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="ADMIN">Administrador</SelectItem>

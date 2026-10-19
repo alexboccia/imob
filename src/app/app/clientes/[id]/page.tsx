@@ -785,7 +785,10 @@ export default async function DetalheClientePage({
             >
               <Select name="tipo" defaultValue="VISIT">
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  {/* Mesmo achado de "Estágio no funil", acima: sem
+                      children, o trigger mostra o valor cru do enum
+                      ("VISIT") em vez do rótulo ("Visita"). */}
+                  <SelectValue>{rotuloSelecionado("VISIT", TIPO_INTERACAO_LABEL, "Tipo")}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(TIPO_INTERACAO_LABEL).map(([value, label]) => (

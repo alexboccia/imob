@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PAPEL_USUARIO_LABEL } from "@/lib/format";
+import { rotuloSelecionado } from "@/lib/select-rotulo";
 import { FotoCorretorUpload } from "@/components/admin/FotoCorretorUpload";
 
 export function EditarUsuarioForm({
@@ -137,7 +138,11 @@ export function EditarUsuarioForm({
                 <Label htmlFor="papel">Papel</Label>
                 <Select name="papel" defaultValue={usuario.papel}>
                   <SelectTrigger id="papel" className="w-full">
-                    <SelectValue />
+                    {/* Sem children, o trigger mostra o valor cru do
+                        enum (ex.: "BROKER") em vez do rótulo ("Corretor")
+                        — mesmo achado já corrigido em outras telas (ver
+                        select-rotulo.ts). */}
+                    <SelectValue>{rotuloSelecionado(usuario.papel, PAPEL_USUARIO_LABEL, "Papel")}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {/* Só quem já é proprietário pode conceder esse papel a
