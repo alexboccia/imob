@@ -362,7 +362,11 @@ export default async function DetalheClientePage({
   );
 
   return (
-    <div className="max-w-3xl">
+    // Sem max-w aqui: a ficha do imóvel (mesmo nível de informação) usa
+    // a largura total disponível — esta página ficava presa a 768px
+    // (max-w-3xl) enquanto o resto do painel ocupa o espaço real da
+    // tela, deixando uma faixa vazia enorme em telas largas.
+    <div>
       <div className="mb-6">
         <CabecalhoPagina
           titulo={pessoa.name}
