@@ -181,7 +181,7 @@ test.describe("estado com perfil", () => {
     await expect(page.getByText("Nenhuma preferência cadastrada ainda")).toHaveCount(0);
   });
 
-  test("perfil compatível mostra o imóvel recomendado, com explicação do match, e navega para a ficha real", async ({
+  test("perfil compatível mostra o imóvel recomendado, com explicação do match, e 'Ver imóvel' abre a ficha PÚBLICA (site no ar), em nova aba", async ({
     page,
   }) => {
     // "São Paulo" — uma cidade REAL já usada no seed da Org A, não uma
@@ -237,12 +237,18 @@ test.describe("estado com perfil", () => {
     await cardImovel.getByText("Ver critérios de compatibilidade").click();
     await expect(cardImovel.getByText(cidade)).toBeVisible();
 
-    // Reutiliza a MESMA ficha de imóvel já existente — não uma segunda
-    // ficha.
-    await cardImovel.getByRole("link", { name: "Ver imóvel" }).click();
-    await page.waitForURL(/\/app\/imoveis\/[^/?]+$/);
-    expect(page.url()).toBe(urlImovel);
-    await expect(page.getByRole("heading", { name: "Editar imóvel" })).toBeVisible();
+    // "Ver imóvel" aponta para a ficha PÚBLICA (site no ar), nunca para
+    // a rota interna /app/imoveis/[id] — quem recebe este link (ex.: um
+    // cliente) não tem acesso ao painel administrativo. Checado pelo
+    // próprio atributo href (não navegado de verdade: NEXT_PUBLIC_SITE_URL
+    // no ambiente de teste aponta para uma porta que não serve nada —
+    // mesma limitação já aceita pelos demais testes de link público/
+    // compartilhamento desta suíte).
+    const idImovel = urlImovel.match(/\/app\/imoveis\/([^/?]+)$/)?.[1];
+    const linkVerImovel = cardImovel.getByRole("link", { name: "Ver imóvel" });
+    await expect(linkVerImovel).toHaveAttribute("href", `http://localhost:3000/imoveis/${idImovel}`);
+    await expect(linkVerImovel).toHaveAttribute("target", "_blank");
+    await expect(linkVerImovel).toHaveAttribute("rel", "noopener noreferrer");
   });
 });
 

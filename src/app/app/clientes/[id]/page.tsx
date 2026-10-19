@@ -29,6 +29,9 @@ import { oportunidadeElegivel } from "@/lib/oportunidade";
 import { decimalParaValor } from "@/lib/valor-fechamento";
 import { RecomendacaoImovelItem } from "@/components/admin/RecomendacaoImovelItem";
 import { buscarImoveisCompativeis } from "@/lib/property-matching";
+import { urlCanonicaDoImovel } from "@/lib/compartilhar-imovel";
+import { resolverBasePath } from "@/lib/site-url";
+import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
 import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
 import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
@@ -116,6 +119,8 @@ export default async function DetalheClientePage({
     [pessoa, { opcoesImovel, opcoesCondominio }, { opcoesResidencial, opcoesComercial }, sugestoesLocalizacao, imoveisDisponiveis],
     membrosAtribuiveis,
     recomendacoes,
+    organizationParaUrlPublica,
+    hostnameCustomParaUrlPublica,
   ] = await Promise.all([
     withOrganization(organizationId, () =>
     Promise.all([
@@ -347,9 +352,28 @@ export default async function DetalheClientePage({
     // bloco acima em vez de aninhada, evita withOrganization dentro de
     // withOrganization pro mesmo organizationId.
     buscarImoveisCompativeis(organizationId, id),
+    // "Ver imóvel" (Imóveis recomendados, abaixo) precisa da URL
+    // PÚBLICA — mesma resolução canônica do Kit de Divulgação na ficha
+    // do imóvel (urlCanonicaDoImovel/MKT-005/MKT-006), nunca a rota
+    // interna /app/imoveis/[id]: quem recebe esse link não tem (nem
+    // precisa ter) acesso ao painel administrativo.
+    prisma.organization.findUnique({ where: { id: organizationId }, select: { slug: true } }),
+    buscarHostnameCustomAtivo(organizationId),
   ]);
 
   if (!pessoa) notFound();
+
+  // Mesma guarda de urlAnuncio em imoveis/[id]/page.tsx: sem slug não há
+  // basePath para montar a URL com segurança — null faz o link cair de
+  // volta na rota interna (ver RecomendacaoImovelItem).
+  const urlPublicaBaseImovel = organizationParaUrlPublica
+    ? (imovelId: string) =>
+        urlCanonicaDoImovel({
+          hostnameCustom: hostnameCustomParaUrlPublica,
+          basePath: resolverBasePath(organizationParaUrlPublica.slug),
+          imovelId,
+        })
+    : null;
 
   const atualizarEstagioComId = atualizarEstagioFunil.bind(null, pessoa.id);
   const registrarInteracaoComId = registrarInteracao.bind(null, pessoa.id);
@@ -577,6 +601,7 @@ export default async function DetalheClientePage({
                     ...precosDoImovel(recomendacao.property),
                   },
                 }}
+                urlPublicaImovel={urlPublicaBaseImovel?.(recomendacao.property.id) ?? null}
               />
             ))}
           </div>

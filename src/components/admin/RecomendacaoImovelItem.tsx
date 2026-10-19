@@ -17,8 +17,14 @@ import { Button } from "@/components/ui/button";
 export function RecomendacaoImovelItem({
   pessoaId,
   recomendacao,
+  urlPublicaImovel,
 }: {
   pessoaId: string;
+  // URL pública (site no ar) do imóvel — null só quando a organização
+  // não pôde ser resolvida (guarda equivalente à de urlAnuncio em
+  // imoveis/[id]/page.tsx); nesse caso o link cai de volta na rota
+  // interna, nunca fica quebrado.
+  urlPublicaImovel: string | null;
   recomendacao: {
     score: number;
     activeSoftCriteriaCount: number;
@@ -64,7 +70,9 @@ export function RecomendacaoImovelItem({
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Link
-            href={`/app/imoveis/${recomendacao.property.id}`}
+            href={urlPublicaImovel ?? `/app/imoveis/${recomendacao.property.id}`}
+            target={urlPublicaImovel ? "_blank" : undefined}
+            rel={urlPublicaImovel ? "noopener noreferrer" : undefined}
             className="text-sm text-blue-600 hover:underline"
           >
             Ver imóvel
