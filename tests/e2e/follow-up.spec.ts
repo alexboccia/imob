@@ -34,7 +34,7 @@ async function negociacaoNova(page: import("@playwright/test").Page, nome: strin
   await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
 
   await page.getByRole("link", { name: nome }).first().click();
-  await page.locator("#propertyId").click();
+  await page.locator("#relacionar-imovel-busca").click();
   await page.getByRole("listbox").getByRole("option").first().click();
   await Promise.all([
     page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/app/clientes/")),

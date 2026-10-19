@@ -49,9 +49,12 @@ test.describe("Pipeline", () => {
     // estava na vitrine da Home, que passava a mostrar três cards em vez
     // de quatro. E, de quebra, some o acoplamento com imoveis.spec.ts,
     // que renomeava aquele título no meio da execução.
-    await page.getByRole("combobox", { name: "Imóvel" }).click();
-    const opcaoImovel = page.getByRole("option", { name: /^A00 Negocio E2E/ }).first();
-    const tituloImovel = (await opcaoImovel.textContent()) ?? "Apartamento E2E";
+    // Autocomplete (RelacionarImovelForm): o rótulo da opção agora é
+    // "#código — título — bairro, cidade", não mais só o título — o
+    // regex não pode mais ser ancorado no início (^).
+    await page.getByLabel("Imóvel").click();
+    const opcaoImovel = page.getByRole("option", { name: /A00 Negocio E2E/ }).first();
+    const tituloImovel = (await opcaoImovel.textContent())?.match(/A00 Negocio E2E[^—]*/)?.[0]?.trim() ?? "Apartamento E2E";
     await opcaoImovel.click();
     await page.getByRole("button", { name: "Relacionar imóvel" }).click();
     await expect(page.getByText(tituloImovel)).toBeVisible();

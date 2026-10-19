@@ -19,7 +19,7 @@ async function novaNegociacao(page: import("@playwright/test").Page, nome: strin
   await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
 
   await page.getByRole("link", { name: nome }).first().click();
-  await page.locator("#propertyId").click();
+  await page.locator("#relacionar-imovel-busca").click();
   // Escopado ao listbox ABERTO: a ficha tem <select> nativos cujas
   // <option> ficam no DOM mesmo fechadas.
   await page.getByRole("listbox").getByRole("option").first().click();

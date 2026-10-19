@@ -102,7 +102,7 @@ test.describe("Fechamento — comissão e correção", () => {
     await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
 
     await page.getByRole("link", { name: nome }).first().click();
-    await page.locator("#propertyId").click();
+    await page.locator("#relacionar-imovel-busca").click();
     // Escopado ao listbox ABERTO: a ficha do cliente também tem um
     // <select> nativo (responsável), cujas <option> ficam no DOM mesmo
     // fechadas e casariam um getByRole("option") solto.
@@ -166,7 +166,7 @@ test.describe("Fechamento — comissão e correção", () => {
     await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
 
     await page.getByRole("link", { name: nome }).first().click();
-    await page.locator("#propertyId").click();
+    await page.locator("#relacionar-imovel-busca").click();
     // Escopado ao listbox ABERTO: a ficha do cliente também tem um
     // <select> nativo (responsável), cujas <option> ficam no DOM mesmo
     // fechadas e casariam um getByRole("option") solto.

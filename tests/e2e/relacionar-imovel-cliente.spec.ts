@@ -89,6 +89,69 @@ test.describe("estrutura", () => {
   });
 });
 
+test.describe("campo 'Imóvel' — autocomplete por código, bairro ou nome", () => {
+  test("busca por bairro encontra o imóvel certo entre outros, e selecionar relaciona o mesmo PropertyInterest de sempre", async ({
+    page,
+  }) => {
+    const tituloImovel = `Imóvel Autocomplete E2E ${Date.now()}`;
+    await criarImovelDisponivel(page, tituloImovel);
+    // criarImovelDisponivel sempre usa "Bairro E2E Relacionar" — não é
+    // exclusivo deste imóvel, então a asserção de resultado único abaixo
+    // escopa pelo TÍTULO (único de verdade), só a QUERY de busca é pelo
+    // bairro — é isso que prova que o campo busca por bairro, não que o
+    // bairro sozinho identifica um imóvel.
+    const nome = nomeUnico("Cliente Autocomplete Bairro");
+    await criarCliente(page, nome);
+
+    const campoBusca = page.getByLabel("Imóvel");
+    await campoBusca.click();
+    await campoBusca.fill("Bairro E2E Relacionar");
+    const opcao = page.getByRole("option", { name: tituloImovel });
+    await expect(opcao).toBeVisible();
+    // A opção mostra código + nome + bairro/cidade juntos — confirma que
+    // o rótulo exibido também carrega o código (achado visual pedido:
+    // "código, nome do bairro").
+    await expect(opcao).toContainText(/^#\d+/);
+    await expect(opcao).toContainText("Bairro E2E Relacionar");
+    await opcao.click();
+
+    await Promise.all([
+      page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/app/clientes/")),
+      page.getByRole("button", { name: "Relacionar imóvel" }).click(),
+    ]);
+    await page.reload();
+
+    const secaoRelacionados = page.locator("section", {
+      has: page.getByRole("heading", { level: 2, name: "Imóveis relacionados" }),
+    });
+    await expect(
+      secaoRelacionados.locator('[data-slot="card"]').filter({ hasText: tituloImovel })
+    ).toBeVisible();
+  });
+
+  test("busca pelo código exibido na própria opção encontra o mesmo imóvel", async ({ page }) => {
+    const tituloImovel = `Imóvel Autocomplete Codigo E2E ${Date.now()}`;
+    await criarImovelDisponivel(page, tituloImovel);
+
+    const nome = nomeUnico("Cliente Autocomplete Codigo");
+    await criarCliente(page, nome);
+
+    // Descobre o código pela própria UI (nunca lendo o banco direto,
+    // convenção desta suíte) — abre a lista inteira (sem query) e lê o
+    // código do rótulo do item que tem o título único deste teste.
+    const campoBusca = page.getByLabel("Imóvel");
+    await campoBusca.click();
+    const opcaoCompleta = await page.getByRole("option", { name: tituloImovel }).textContent();
+    const codigo = opcaoCompleta?.match(/^#(\d+)/)?.[1];
+    expect(codigo).toBeTruthy();
+
+    // Busca só pelo código, sem nenhuma palavra do título/bairro.
+    await campoBusca.fill(codigo!);
+    const opcaoPorCodigo = page.getByRole("option", { name: tituloImovel });
+    await expect(opcaoPorCodigo).toBeVisible();
+  });
+});
+
 test.describe("de recomendação a relacionamento", () => {
   test("'Relacionar' numa recomendação cria o mesmo PropertyInterest, aparece em Imóveis relacionados, e a recomendação para de oferecer a ação", async ({
     page,

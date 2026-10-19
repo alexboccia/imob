@@ -99,10 +99,10 @@ test.describe("Fechamento — jornada do corretor", () => {
     await expect(page.getByRole("heading", { name: nome })).toBeVisible();
 
     // Relaciona um imóvel: cria a oportunidade pelo fluxo manual de sempre.
-    // #propertyId é o trigger do Select de RelacionarImovelForm — a
-    // página tem outros selects (estágio do funil), então nada de
-    // getByRole("combobox").first().
-    await page.locator("#propertyId").click();
+    // #relacionar-imovel-busca é o campo de busca (autocomplete) de
+    // RelacionarImovelForm — a página tem outros selects (estágio do
+    // funil), então nada de getByRole("combobox").first().
+    await page.locator("#relacionar-imovel-busca").click();
     // Escopado ao listbox ABERTO: a ficha do cliente também tem um
     // <select> nativo (responsável), cujas <option> ficam no DOM mesmo
     // fechadas e casariam um getByRole("option") solto.

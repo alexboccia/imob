@@ -338,7 +338,9 @@ export default async function DetalheClientePage({
           status: "AVAILABLE",
           NOT: { interests: { some: { personId: id, organizationId } } },
         },
-        select: { id: true, title: true },
+        // code/neighborhood/city — a busca por autocomplete (abaixo)
+        // precisa filtrar por código e bairro, não só pelo título.
+        select: { id: true, title: true, code: true, neighborhood: true, city: true },
         orderBy: { title: "asc" },
       }),
     ])
