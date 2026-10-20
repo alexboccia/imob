@@ -83,6 +83,9 @@ test.describe("Liquidação — jornada do corretor", () => {
     await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
 
     await page.getByRole("link", { name: nome }).first().click();
+    // Redesenho da ficha do cliente — "Relacionar imóvel" agora vive na
+    // aba Imóveis, não na Visão geral (aba padrão ao abrir a ficha).
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await page.locator("#relacionar-imovel-busca").click();
     // Escopado ao listbox ABERTO: a ficha tem <select> nativos cujas
     // <option> ficam no DOM mesmo fechadas.
@@ -180,6 +183,9 @@ test.describe("Liquidação — jornada do corretor", () => {
     await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
 
     await page.getByRole("link", { name: nome }).first().click();
+    // Redesenho da ficha do cliente — "Relacionar imóvel" agora vive na
+    // aba Imóveis, não na Visão geral (aba padrão ao abrir a ficha).
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await page.locator("#relacionar-imovel-busca").click();
     await page.getByRole("listbox").getByRole("option").first().click();
     await Promise.all([
@@ -250,6 +256,9 @@ test.describe("Liquidação — jornada do corretor", () => {
     await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
 
     await page.getByRole("link", { name: nome }).first().click();
+    // Redesenho da ficha do cliente — "Relacionar imóvel" agora vive na
+    // aba Imóveis, não na Visão geral (aba padrão ao abrir a ficha).
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await page.locator("#relacionar-imovel-busca").click();
     await page.getByRole("listbox").getByRole("option").first().click();
     await Promise.all([

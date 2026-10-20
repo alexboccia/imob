@@ -42,6 +42,9 @@ test.describe("Pipeline", () => {
       .getByRole("button", { name: "Ver perfil completo" })
       .click();
     await page.waitForURL(/\/app\/clientes\/.+/);
+    // Redesenho da ficha do cliente — "Relacionar imóvel" agora vive na
+    // aba Imóveis, não na Visão geral (aba padrão ao abrir a ficha).
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     // Fase 34 — passou a usar o POOL de imóveis de fechamento em vez do
     // imóvel seedado compartilhado. Dois motivos: este spec GANHA a

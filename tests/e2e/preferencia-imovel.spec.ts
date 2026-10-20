@@ -65,9 +65,14 @@ test.describe("estado sem perfil", () => {
     const nome = nomeUnico("Cliente Sem Perfil");
     await criarCliente(page, nome);
 
+    // Redesenho da ficha do cliente — as duas seções agora vivem em abas
+    // separadas (Preferências / Imóveis), não mais empilhadas na mesma
+    // tela: cada uma é checada na sua própria aba.
+    await page.getByRole("tab", { name: "Preferências" }).click();
     await expect(page.getByRole("heading", { level: 2, name: "Preferências de imóvel" })).toBeVisible();
     await expect(page.getByText("Nenhuma preferência de imóvel cadastrada")).toBeVisible();
 
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await expect(page.getByRole("heading", { level: 2, name: "Imóveis recomendados" })).toBeVisible();
     // Mensagem de "sem perfil" é DIFERENTE da de "perfil sem match" — a
     // seção nunca diz "0 encontrados" pra quem ainda não definiu critério
@@ -75,6 +80,7 @@ test.describe("estado sem perfil", () => {
     await expect(page.getByText("Nenhuma preferência cadastrada ainda")).toBeVisible();
     await expect(page.getByText("Nenhum imóvel corresponde aos critérios atuais")).toHaveCount(0);
 
+    await page.getByRole("tab", { name: "Preferências" }).click();
     await page.getByRole("button", { name: "Adicionar preferências" }).click();
     await expect(page.getByRole("combobox", { name: "Finalidade" })).toBeVisible();
   });
@@ -84,6 +90,7 @@ test.describe("criação e edição do perfil", () => {
   test("cria preferência, ela persiste após reload, e dá pra editar depois", async ({ page }) => {
     const nome = nomeUnico("Cliente Cria Perfil");
     const url = await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Preferências" }).click();
 
     await page.getByRole("button", { name: "Adicionar preferências" }).click();
     await page.getByRole("combobox", { name: "Finalidade" }).click();
@@ -102,7 +109,9 @@ test.describe("criação e edição do perfil", () => {
       page.getByRole("button", { name: "Salvar preferências" }).click(),
     ]);
 
+    // `url` foi capturado por criarCliente antes da troca de aba.
     await page.goto(url);
+    await page.getByRole("tab", { name: "Preferências" }).click();
     await expect(page.locator("#minPrice")).toHaveValue("400.000,00");
     await expect(page.locator("#maxPrice")).toHaveValue("600.000,00");
     await expect(page.locator("#minBedrooms")).toHaveValue("2");
@@ -116,6 +125,7 @@ test.describe("criação e edição do perfil", () => {
       page.getByRole("button", { name: "Salvar preferências" }).click(),
     ]);
     await page.goto(url);
+    await page.getByRole("tab", { name: "Preferências" }).click();
     await expect(page.locator("#minBedrooms")).toHaveValue("3");
   });
 
@@ -124,6 +134,7 @@ test.describe("criação e edição do perfil", () => {
   }) => {
     const nome = nomeUnico("Cliente Fieldset");
     await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Preferências" }).click();
     await page.getByRole("button", { name: "Adicionar preferências" }).click();
 
     // fieldset tem role "group" implícito, e o nome acessível vem do
@@ -138,6 +149,7 @@ test.describe("criação e edição do perfil", () => {
   }) => {
     const nome = nomeUnico("Cliente Legenda Preco");
     await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Preferências" }).click();
     await page.getByRole("button", { name: "Adicionar preferências" }).click();
 
     // Sem finalidade escolhida: rótulo neutro, igual ao teste acima.
@@ -163,6 +175,7 @@ test.describe("estado com perfil", () => {
   }) => {
     const nome = nomeUnico("Cliente Zero Match");
     await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Preferências" }).click();
 
     await page.getByRole("button", { name: "Adicionar preferências" }).click();
     await page.getByRole("combobox", { name: "Finalidade" }).click();
@@ -175,6 +188,7 @@ test.describe("estado com perfil", () => {
       page.getByRole("button", { name: "Salvar preferências" }).click(),
     ]);
     await page.reload();
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     await expect(page.getByText("Nenhum imóvel corresponde aos critérios atuais")).toBeVisible();
     // Não é mais a mensagem de "sem perfil" — o perfil existe agora.
@@ -200,6 +214,7 @@ test.describe("estado com perfil", () => {
 
     const nome = nomeUnico("Cliente Com Match");
     await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Preferências" }).click();
 
     await page.getByRole("button", { name: "Adicionar preferências" }).click();
     await page.getByRole("combobox", { name: "Finalidade" }).click();
@@ -213,6 +228,7 @@ test.describe("estado com perfil", () => {
       page.getByRole("button", { name: "Salvar preferências" }).click(),
     ]);
     await page.reload();
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     // Escopado ao CARD desta recomendação específica (não à seção
     // inteira): "São Paulo" é uma cidade real que outros imóveis da Org A
@@ -260,6 +276,7 @@ test.describe("Fase 98 — explicabilidade visual do matching", () => {
 
     const nome = nomeUnico("Cliente Requisitos Visiveis");
     await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Preferências" }).click();
 
     await page.getByRole("button", { name: "Adicionar preferências" }).click();
     await page.getByRole("combobox", { name: "Finalidade" }).click();
@@ -271,6 +288,7 @@ test.describe("Fase 98 — explicabilidade visual do matching", () => {
       page.getByRole("button", { name: "Salvar preferências" }).click(),
     ]);
     await page.reload();
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     const secaoRecomendados = page.locator("section", {
       has: page.getByRole("heading", { level: 2, name: "Imóveis recomendados" }),
@@ -297,6 +315,7 @@ test.describe("Fase 98 — explicabilidade visual do matching", () => {
 
     const nome = nomeUnico("Cliente Teclado Disclosure");
     await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Preferências" }).click();
 
     await page.getByRole("button", { name: "Adicionar preferências" }).click();
     await page.getByRole("combobox", { name: "Finalidade" }).click();
@@ -308,6 +327,7 @@ test.describe("Fase 98 — explicabilidade visual do matching", () => {
       page.getByRole("button", { name: "Salvar preferências" }).click(),
     ]);
     await page.reload();
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     const secaoRecomendados = page.locator("section", {
       has: page.getByRole("heading", { level: 2, name: "Imóveis recomendados" }),
@@ -334,8 +354,17 @@ test.describe("estrutura e acessibilidade", () => {
     const nome = nomeUnico("Cliente Headings");
     await criarCliente(page, nome);
 
+    // O h1 (cartão de identificação) fica acima das abas e continua
+    // visível em qualquer uma delas; os h2 de cada seção, por sua vez,
+    // só montam quando a aba correspondente está ativa.
+    await expect(page.getByRole("heading", { level: 1, name: nome })).toBeVisible();
+
+    await page.getByRole("tab", { name: "Preferências" }).click();
     await expect(page.getByRole("heading", { level: 1, name: nome })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Preferências de imóvel" })).toBeVisible();
+
+    await page.getByRole("tab", { name: "Imóveis" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: nome })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Imóveis recomendados" })).toBeVisible();
   });
 });
@@ -353,6 +382,7 @@ test.describe("responsivo", () => {
       const url = await criarCliente(page, nome);
       await page.setViewportSize({ width: largura, height: 900 });
       await page.goto(url);
+      await page.getByRole("tab", { name: "Preferências" }).click();
       await page.getByRole("button", { name: "Adicionar preferências" }).click();
 
       const semOverflow = await page.evaluate(

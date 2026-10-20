@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
@@ -32,17 +33,15 @@ import { buscarImoveisCompativeis } from "@/lib/property-matching";
 import { urlCanonicaDoImovel } from "@/lib/compartilhar-imovel";
 import { resolverBasePath } from "@/lib/site-url";
 import { buscarHostnameCustomAtivo } from "@/lib/platform/organization-domain";
-import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
 import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
 import {
   SlidersHorizontal,
   Building2,
   Handshake,
-  Milestone,
-  StickyNote,
   MessageSquarePlus,
   History,
+  ChevronLeft,
 } from "lucide-react";
 import { buscarMembrosAtribuiveis } from "@/lib/membros-organizacao";
 import { paraResponsavel } from "@/lib/responsavel-negociacao";
@@ -50,6 +49,7 @@ import { paraParticipantes } from "@/lib/participacao-comissao";
 import { paraPagamentos } from "@/lib/pagamento-comissao";
 import { paraAtorTransicao } from "@/lib/ator-transicao";
 import { precosDoImovel } from "@/lib/imovel-precos";
+import { obterProximaAcaoComercial } from "@/lib/proxima-acao-comercial";
 import { paraAutorInteracao, rotuloAutorInteracao } from "@/lib/autor-interacao";
 import {
   temPapel,
@@ -78,18 +78,27 @@ import {
 import { ESTAGIO_LABEL, ESTAGIOS_PIPELINE, TIPO_INTERACAO_LABEL } from "@/lib/crm-labels";
 import { rotuloSelecionado } from "@/lib/select-rotulo";
 import { formatarDataHoraNoFuso } from "@/lib/fuso-horario";
+import { ClienteAbas } from "@/components/admin/cliente/ClienteAbas";
+import { ClienteCabecalhoIdentificacao } from "@/components/admin/cliente/ClienteCabecalhoIdentificacao";
+import { ClienteIndicadores } from "@/components/admin/cliente/ClienteIndicadores";
+import { ClienteVisaoGeral } from "@/components/admin/cliente/ClienteVisaoGeral";
+import { ResumoPreferencias } from "@/components/admin/cliente/ResumoPreferencias";
+import { BotaoIrParaAba } from "@/components/admin/cliente/BotaoIrParaAba";
 
-// Redesenho da tela de Clientes — ESTAGIO_LABEL/TIPO_INTERACAO_LABEL
+// Redesenho da ficha do cliente — ESTAGIO_LABEL/TIPO_INTERACAO_LABEL
 // consolidados em src/lib/crm-labels.ts (antes duplicados aqui e em
 // columns.tsx).
 const ESTAGIOS = ESTAGIOS_PIPELINE;
 
 export default async function DetalheClientePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ aba?: string }>;
 }) {
   const { id } = await params;
+  const { aba } = await searchParams;
   const organizationId = await requireOrganizationId();
   // Fuso comercial da organização (Fase 18) — uma resolução por
   // carregamento, repassada a todos os itens da ficha.
@@ -387,206 +396,170 @@ export default async function DetalheClientePage({
     pessoa.propertyInterests.map((interesse) => interesse.propertyId)
   );
 
-  return (
-    // Sem max-w aqui: a ficha do imóvel (mesmo nível de informação) usa
-    // a largura total disponível — esta página ficava presa a 768px
-    // (max-w-3xl) enquanto o resto do painel ocupa o espaço real da
-    // tela, deixando uma faixa vazia enorme em telas largas.
-    <div>
-      <div className="mb-6">
-        <CabecalhoPagina
-          titulo={pessoa.name}
-          descricao={`${pessoa.phone ?? "sem telefone"} · ${pessoa.email ?? "sem e-mail"} · ${pessoa.roles.join(", ")}`}
-          acoes={
-            // Mesmo achado/correção de src/app/app/imoveis/[id]/page.tsx:
-            // o wrapper `acoes` de CabecalhoPagina é shrink-0 de
-            // propósito, então sem um teto explícito o bloco inteiro
-            // (form + texto de apoio + botão de exclusão + editar)
-            // ultrapassava a viewport em 320-390px (achado real, medido).
-            <div className="flex min-w-0 max-w-64 flex-wrap items-center gap-2 sm:max-w-none">
-            <GerenciarArquivamentoRegistro
-              entidadeLabel="cliente"
-              nomeDoRegistro={pessoa.name}
-              arquivadoEm={pessoa.archivedAt ? pessoa.archivedAt.toISOString() : null}
-              podeArquivar={temPapel(papel, PAPEIS_ARQUIVAMENTO)}
-              podeExcluirDefinitivamente={temPapel(papel, PAPEIS_EXCLUSAO_DEFINITIVA)}
-              acaoArquivar={arquivarCliente.bind(null, pessoa.id)}
-              acaoRestaurar={restaurarCliente.bind(null, pessoa.id)}
-              acaoExcluir={excluirClienteDefinitivamente.bind(null, pessoa.id)}
-            />
-            <EditarClienteDialog
-              personId={pessoa.id}
-              valoresIniciais={{
-                nome: pessoa.name,
-                email: pessoa.email,
-                telefone: pessoa.phone,
-                observacoes: pessoa.notes,
-              }}
-            />
-            </div>
-          }
-        />
-        {/* Fase 125 — Person.createdAt já existia (vem na mesma query,
-            `include` nunca escondeu nenhum campo escalar) e nunca
-            aparecia em lugar nenhum: nem aqui, nem na listagem, nem no
-            drawer. Para um cliente recém-cadastrado, sem nenhuma
-            Interaction e sem nenhuma negociação ainda, a ficha inteira
-            não tinha NENHUMA data respondendo "desde quando ele é nosso
-            cliente" — a mesma pergunta que a Fase 92 já resolveu para a
-            negociação ("Criada em..."), nunca para a Person em si. */}
-        <p className="mt-1 text-xs text-muted-foreground">
-          Cliente desde {formatarDataHoraNoFuso(pessoa.createdAt, fuso)}
-        </p>
+  // Redesenho — "Próxima ação" (Visão geral): a negociação ABERTA mais
+  // recentemente atualizada (propertyInterests já vem ordenada por
+  // updatedAt desc) com uma ação ainda ativa. Nenhum dado novo: mesma
+  // obterProximaAcaoComercial já usada em cada InteresseImovelItem.
+  const proximaAcaoCliente = pessoa.propertyInterests
+    .map((interesse) => ({
+      interesse,
+      acao: obterProximaAcaoComercial(interesse.stage, interesse.property.status),
+    }))
+    .find(({ acao }) => acao.ativa);
+
+  // Redesenho — "Última interação" (Visão geral): a mais recente da
+  // timeline, que já vem ordenada por occurredAt desc.
+  const ultimaInteracao = pessoa.interactions[0] ?? null;
+  const autorUltimaInteracao = ultimaInteracao
+    ? rotuloAutorInteracao(
+        paraAutorInteracao(ultimaInteracao.member, organizationId),
+        ultimaInteracao.origin
+      )
+    : null;
+
+  const posse = (
+    <PosseContato
+      personId={pessoa.id}
+      nomePessoa={pessoa.name}
+      responsavel={paraResponsavelPessoa(pessoa.responsibleMember, organizationId)}
+      souEu={pessoa.responsibleMemberId === (session?.user.organizationMemberId ?? null)}
+      podeAtribuir={podeAtribuirContato}
+      membros={membrosAtribuiveis}
+    />
+  );
+
+  const valoresEdicao = {
+    nome: pessoa.name,
+    email: pessoa.email,
+    telefone: pessoa.phone,
+    observacoes: pessoa.notes,
+  };
+
+  const estagioFunilForm = (
+    <form action={atualizarEstagioComId} className="flex gap-2">
+      <Select name="estagioFunil" defaultValue={pessoa.pipelineStage}>
+        <SelectTrigger className="w-full">
+          {/* Fase 105 — mesmo achado visual de InteresseImovelItem: sem
+              children, o trigger mostrava o valor cru ("NEW_LEAD") em vez
+              do rótulo. Mesma correção (src/lib/select-rotulo.ts), já
+              usada em dois seletores públicos — mas AQUI como string
+              pronta, nunca como função: esta página é Server Component,
+              e uma função como children de um Client Component não
+              atravessa a fronteira. */}
+          <SelectValue>
+            {rotuloSelecionado(pessoa.pipelineStage, ESTAGIO_LABEL, "Estágio")}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {ESTAGIOS.map((estagio) => (
+            <SelectItem key={estagio} value={estagio}>
+              {ESTAGIO_LABEL[estagio]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button type="submit" variant="outline">
+        Atualizar
+      </Button>
+    </form>
+  );
+
+  const proximaAcaoConteudo = proximaAcaoCliente ? (
+    <div className="space-y-3 text-sm">
+      <p>
+        <span className="font-medium">{proximaAcaoCliente.acao.label}</span>
+        {" — "}
+        {proximaAcaoCliente.interesse.property.title}
+      </p>
+      <p className="text-muted-foreground">
+        Negociação em {ESTAGIO_LABEL[proximaAcaoCliente.interesse.stage] ?? proximaAcaoCliente.interesse.stage}.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <BotaoIrParaAba aba="historico" variant="default">
+          Registrar atendimento
+        </BotaoIrParaAba>
+        <BotaoIrParaAba aba="imoveis" variant="outline">
+          Relacionar imóvel
+        </BotaoIrParaAba>
       </div>
-
-      {/* Fase 36 — de quem é este cliente. Mesmo componente da caixa de
-          entrada, e mesmas actions: a resposta não pode depender da tela
-          onde a pergunta foi feita. NÃO é o responsável das negociações
-          dele, que continua sendo declarado negócio a negócio abaixo. */}
-      <div className="mb-6">
-        <PosseContato
-          personId={pessoa.id}
-          nomePessoa={pessoa.name}
-          responsavel={paraResponsavelPessoa(pessoa.responsibleMember, organizationId)}
-          souEu={pessoa.responsibleMemberId === (session?.user.organizationMemberId ?? null)}
-          podeAtribuir={podeAtribuirContato}
-          membros={membrosAtribuiveis}
-        />
+    </div>
+  ) : (
+    <div className="space-y-3 text-sm">
+      <p className="text-muted-foreground">
+        Nenhuma ação comercial pendente neste momento. Registre um atendimento ou relacione um
+        imóvel para começar uma negociação.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <BotaoIrParaAba aba="historico" variant="default">
+          Registrar atendimento
+        </BotaoIrParaAba>
+        <BotaoIrParaAba aba="imoveis" variant="outline">
+          Relacionar imóvel
+        </BotaoIrParaAba>
       </div>
+    </div>
+  );
 
-      {/* Fase 79 — estágio GERAL da pessoa no funil de leads
-          (Person.pipelineStage: NEW_LEAD/CONTACTED/...), manual, sem
-          relação com PropertyInterest.stage (o estágio de CADA
-          negociação, em Imóveis relacionados/Pipeline abaixo). Os dois
-          usam a palavra "estágio" por coincidência de vocabulário, não
-          porque sejam o mesmo dado — descricao explicita a diferença. */}
-      <section className="mb-6 min-w-0 space-y-4">
-        <CabecalhoSecao
-          icone={Milestone}
-          titulo="Estágio no funil"
-          descricao="Estágio geral deste cliente, usado nos filtros da lista de Clientes — diferente do estágio de cada negociação, em Imóveis relacionados."
-        />
-        <Card className="min-w-0">
-          <CardContent>
-            <form action={atualizarEstagioComId} className="flex gap-2">
-              <Select name="estagioFunil" defaultValue={pessoa.pipelineStage}>
-                <SelectTrigger className="w-full">
-                  {/* Fase 105 — mesmo achado visual de InteresseImovelItem:
-                      sem children, o trigger mostrava o valor cru
-                      ("NEW_LEAD") em vez do rótulo. Mesma correção
-                      (src/lib/select-rotulo.ts), já usada em dois
-                      seletores públicos — mas AQUI como string pronta,
-                      nunca como função: esta página é Server Component,
-                      e uma função como children de um Client Component
-                      não atravessa a fronteira (erro real reproduzido:
-                      "Functions cannot be passed directly to Client
-                      Components"). O valor já é conhecido no servidor,
-                      então a string resolvida é tudo que a travessia
-                      precisa. */}
-                  <SelectValue>
-                    {rotuloSelecionado(pessoa.pipelineStage, ESTAGIO_LABEL, "Estágio")}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {ESTAGIOS.map((estagio) => (
-                    <SelectItem key={estagio} value={estagio}>
-                      {ESTAGIO_LABEL[estagio]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button type="submit" variant="outline">
-                Atualizar
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </section>
-
-      {pessoa.notes && (
-        <section className="mb-6 min-w-0 space-y-4">
-          <CabecalhoSecao icone={StickyNote} titulo="Observações" />
-          <Card className="min-w-0">
-            <CardContent>
-              <p className="text-sm text-foreground whitespace-pre-line">
-                {pessoa.notes}
-              </p>
-            </CardContent>
-          </Card>
-        </section>
+  const ultimaInteracaoConteudo = ultimaInteracao ? (
+    <div className="space-y-1">
+      <p className="flex flex-wrap items-center gap-2">
+        <Badge variant="secondary">{TIPO_INTERACAO_LABEL[ultimaInteracao.type]}</Badge>
+        {formatarDataHoraNoFuso(ultimaInteracao.occurredAt, fuso)}
+      </p>
+      {autorUltimaInteracao && (
+        <p className="text-xs text-muted-foreground">por {autorUltimaInteracao}</p>
       )}
+      {ultimaInteracao.notes && <p className="text-foreground">{ultimaInteracao.notes}</p>}
+    </div>
+  ) : null;
 
-      <section className="mb-6 min-w-0 space-y-4">
-        <CabecalhoSecao
-          icone={SlidersHorizontal}
-          titulo="Preferências de imóvel"
-          descricao="O que este cliente procura — usado para recomendar imóveis compatíveis, logo abaixo."
-        />
-        <Card className="min-w-0">
-        <CardContent>
-          <PreferenciaImovelForm
+  // Preview compacto (até 3) — a lista completa, com todos os critérios,
+  // continua na aba Imóveis; nenhum dado novo, só um recorte da mesma
+  // lista já calculada por buscarImoveisCompativeis.
+  const recomendacoesPreview =
+    recomendacoes.length > 0 ? (
+      <div className="space-y-3">
+        {recomendacoes.slice(0, 3).map((recomendacao) => (
+          <RecomendacaoImovelItem
+            key={recomendacao.property.id}
             pessoaId={pessoa.id}
-            existe={preferencia != null}
-            valoresIniciais={
-              preferencia
-                ? {
-                    transactionType: preferencia.transactionType,
-                    propertyTypes: preferencia.propertyTypes,
-                    cities: preferencia.cities,
-                    neighborhoods: preferencia.neighborhoods,
-                    minPrice: preferencia.minPrice?.toString() ?? null,
-                    maxPrice: preferencia.maxPrice?.toString() ?? null,
-                    minBedrooms: preferencia.minBedrooms,
-                    minBathrooms: preferencia.minBathrooms,
-                    minParkingSpots: preferencia.minParkingSpots,
-                    minArea: preferencia.minArea,
-                    maxArea: preferencia.maxArea,
-                    desiredPropertyFeatures: preferencia.desiredPropertyFeatures,
-                    desiredCondoFeatures: preferencia.desiredCondoFeatures,
-                    notes: preferencia.notes,
-                  }
-                : undefined
-            }
-            opcoesTiposResidencial={opcoesResidencial}
-            opcoesTiposComercial={opcoesComercial}
-            opcoesCaracteristicasImovel={opcoesImovel}
-            opcoesCaracteristicasCondominio={opcoesCondominio}
-            sugestoesCidades={sugestoesLocalizacao.cidades}
-            sugestoesBairros={sugestoesLocalizacao.bairros}
+            variante="compacta"
+            recomendacao={{
+              ...recomendacao,
+              property: {
+                ...recomendacao.property,
+                ...precosDoImovel(recomendacao.property),
+                fotoCapaUrl: recomendacao.property.media?.[0]?.url ?? null,
+              },
+            }}
+            urlPublicaImovel={urlPublicaBaseImovel?.(recomendacao.property.id) ?? null}
           />
-        </CardContent>
-        </Card>
-      </section>
+        ))}
+      </div>
+    ) : null;
 
-      {/* Fase 77 — sempre renderizada, com três estados reais e
-          distintos (nunca "0 encontrados" para quem não tem perfil, que
-          é uma pergunta diferente de "tem perfil e não bateu nenhum
-          imóvel"). Sem Card envolvendo a lista: cada RecomendacaoImovelItem
-          já É um Card.
-          Fase 79 — esta seção veio para ANTES de "Imóveis relacionados"
-          (ordem original: relacionados antes de recomendados, invertida):
-          a jornada real é recomendação → corretor decide relacionar, e a
-          seção que ainda não existe (recomendados) fazia mais sentido
-          vir depois da que já é resultado de uma decisão (relacionados)
-          — nenhuma seção tem outra estrutura ou dado alterado, só a
-          posição. */}
-      <section className="mb-6 min-w-0 space-y-4">
+  // --- Aba Imóveis — combina recomendados (curadoria do algoritmo) e
+  // relacionados (negociações reais), como duas seções distintas, nunca
+  // uma lista só.
+  const abaImoveis = (
+    <div className="space-y-8">
+      <section className="min-w-0 space-y-4">
         <CabecalhoSecao
           icone={Building2}
           titulo="Imóveis recomendados"
-          descricao="Imóveis disponíveis que atendem os critérios de Preferências de imóvel, acima."
+          descricao="Imóveis disponíveis que atendem os critérios de Preferências de imóvel."
         />
         {!preferencia ? (
           <EstadoVazio
             icone={SlidersHorizontal}
             titulo="Nenhuma preferência cadastrada ainda"
-            descricao="Defina o que este cliente procura em Preferências de imóvel, acima, para ver recomendações aqui."
+            descricao="Defina o que este cliente procura na aba Preferências para ver recomendações aqui."
           />
         ) : recomendacoes.length === 0 ? (
           <EstadoVazio
             icone={Building2}
             titulo="Nenhum imóvel corresponde aos critérios atuais"
-            descricao="Ajuste os critérios em Preferências de imóvel, acima, ou aguarde novos imóveis disponíveis."
+            descricao="Ajuste os critérios na aba Preferências, ou aguarde novos imóveis disponíveis."
           />
         ) : (
           <div className="space-y-3">
@@ -594,13 +567,12 @@ export default async function DetalheClientePage({
               <RecomendacaoImovelItem
                 key={recomendacao.property.id}
                 pessoaId={pessoa.id}
-                // Fase 16 — mesma conversão na fronteira: o resultado
-                // do matching carrega os preços como Decimal cru.
                 recomendacao={{
                   ...recomendacao,
                   property: {
                     ...recomendacao.property,
                     ...precosDoImovel(recomendacao.property),
+                    fotoCapaUrl: recomendacao.property.media?.[0]?.url ?? null,
                   },
                 }}
                 urlPublicaImovel={urlPublicaBaseImovel?.(recomendacao.property.id) ?? null}
@@ -610,17 +582,7 @@ export default async function DetalheClientePage({
         )}
       </section>
 
-      {/* Fase 78 — esta seção é a curadoria: cada item já é um
-          PropertyInterest real (Fase D do CRM), a MESMA negociação que
-          aparece no Pipeline (Fase P.4, projeção operacional de
-          PropertyInterest — nunca uma segunda fonte de verdade) e na
-          ficha do imóvel ("Clientes interessados"). "Relacionar" (em
-          Imóveis recomendados acima e na ficha do imóvel) sempre
-          cria/reusa o MESMO registro — não existem dois modelos para a
-          mesma relação. Sem Card envolvendo a lista, pelo mesmo motivo
-          de "Imóveis recomendados": cada InteresseImovelItem já É um
-          Card. */}
-      <section className="mb-6 min-w-0 space-y-4">
+      <section className="min-w-0 space-y-4">
         <CabecalhoSecao
           icone={Handshake}
           titulo="Imóveis relacionados"
@@ -642,38 +604,32 @@ export default async function DetalheClientePage({
           <EstadoVazio
             icone={Handshake}
             titulo="Nenhum imóvel relacionado ainda."
-            descricao="Relacione um imóvel acima, ou use 'Relacionar' numa recomendação em Imóveis recomendados, acima."
+            descricao="Relacione um imóvel acima, ou use 'Relacionar' numa recomendação."
           />
         ) : (
-            <div className="space-y-3">
-              {pessoa.propertyInterests.map((interesse) => {
-                // A lista já vem ordenada por scheduledAt: o primeiro de
-                // cada tipo é o compromisso mais próximo daquele tipo.
-                // Visita e follow-up são dimensões separadas e podem
-                // coexistir na mesma negociação.
-                // O filtro de status é OBRIGATÓRIO aqui desde a Fase 37:
-                // a relação passou a trazer visitas encerradas junto, e
-                // sem ele a ficha anunciaria como "próxima" uma visita
-                // que já aconteceu.
-                const proximaVisita = interesse.scheduledActivities.find(
-                  (a) => a.type === "VISIT" && a.status === "SCHEDULED"
-                );
-                const proximoFollowUp = interesse.scheduledActivities.find(
-                  (a) => a.type === "FOLLOW_UP" && a.status === "SCHEDULED"
-                );
-                // Encerradas, mais recente primeiro — a ordem em que a
-                // tela lê ("o que aconteceu da última vez?").
-                const visitasEncerradas = interesse.scheduledActivities
-                  .filter((a) => a.type === "VISIT" && a.status !== "SCHEDULED")
-                  .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime())
-                  .map((a) => ({
-                    id: a.id,
-                    scheduledAtISO: a.scheduledAt.toISOString(),
-                    status: a.status,
-                    visitOutcome: a.visitOutcome,
-                    outcomeNotes: a.outcomeNotes,
-                  }));
-                return (
+          <div className="space-y-3">
+            {pessoa.propertyInterests.map((interesse) => {
+              // A lista já vem ordenada por scheduledAt: o primeiro de
+              // cada tipo é o compromisso mais próximo daquele tipo.
+              // Visita e follow-up são dimensões separadas e podem
+              // coexistir na mesma negociação.
+              const proximaVisita = interesse.scheduledActivities.find(
+                (a) => a.type === "VISIT" && a.status === "SCHEDULED"
+              );
+              const proximoFollowUp = interesse.scheduledActivities.find(
+                (a) => a.type === "FOLLOW_UP" && a.status === "SCHEDULED"
+              );
+              const visitasEncerradas = interesse.scheduledActivities
+                .filter((a) => a.type === "VISIT" && a.status !== "SCHEDULED")
+                .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime())
+                .map((a) => ({
+                  id: a.id,
+                  scheduledAtISO: a.scheduledAt.toISOString(),
+                  status: a.status,
+                  visitOutcome: a.visitOutcome,
+                  outcomeNotes: a.outcomeNotes,
+                }));
+              return (
                 <InteresseImovelItem
                   key={interesse.id}
                   fuso={fuso}
@@ -693,9 +649,6 @@ export default async function DetalheClientePage({
                       id: interesse.property.id,
                       title: interesse.property.title,
                       purpose: interesse.property.purpose,
-                      // Fase 16 — Decimal do Prisma convertido AQUI, na
-                      // fronteira servidor→cliente. Mesmo racional (e
-                      // mesma solução) já usada no formulário de imóvel.
                       ...precosDoImovel(interesse.property),
                       status: interesse.property.status,
                     },
@@ -704,8 +657,6 @@ export default async function DetalheClientePage({
                       valor: decimalParaValor(o.amount) ?? 0,
                       lado: o.side,
                       ocorridoEmISO: o.offeredAt.toISOString(),
-                      // Nome redigido quando a relação é cross-tenant —
-                      // mesma defesa em profundidade do resto da tela.
                       registradoPor:
                         o.createdByMember && o.createdByMember.organizationId === organizationId
                           ? o.createdByMember.user.name
@@ -722,25 +673,16 @@ export default async function DetalheClientePage({
                     proximoFollowUp: proximoFollowUp
                       ? {
                           id: proximoFollowUp.id,
-                          // subject é obrigatório em regra de aplicação
-                          // para FOLLOW_UP; o fallback só existe para não
-                          // quebrar a tela diante de uma linha anômala.
                           assunto: proximoFollowUp.subject ?? "Follow-up",
                           scheduledAtISO: proximoFollowUp.scheduledAt.toISOString(),
                           notes: proximoFollowUp.notes,
                         }
                       : null,
-                    // Membro de outro tenant é redigido para null dentro
-                    // de paraResponsavel — o nome jamais chega à tela.
                     responsavel: paraResponsavel(interesse.responsibleMember, organizationId),
-                    // Fase 14 — num negócio encerrado a última transição
-                    // é o próprio fechamento. Redigido contra tenant.
                     atorFechamento: paraAtorTransicao(
                       interesse.stageHistory[0]?.changedByMember ?? null,
                       organizationId
                     ),
-                    // Mesma defesa em paraParticipantes: linha anômala
-                    // apontando para outro tenant é descartada na leitura.
                     participantes: paraParticipantes(
                       interesse.participants.map((p) => ({
                         ...p,
@@ -748,8 +690,6 @@ export default async function DetalheClientePage({
                       })),
                       organizationId
                     ),
-                    // Fase 13 — ledger por participante, já saneado
-                    // contra linha cross-tenant em paraPagamentos.
                     pagamentosPorParticipante: Object.fromEntries(
                       interesse.participants.map((p) => [
                         p.id,
@@ -764,20 +704,20 @@ export default async function DetalheClientePage({
                     ),
                   }}
                 />
-                );
-              })}
-            </div>
-          )}
+              );
+            })}
+          </div>
+        )}
       </section>
+    </div>
+  );
 
-      {/* Fase 87 — id de âncora: a Busca global oferece um atalho
-          direto pra cá ("Registrar interação" no resultado de cliente),
-          porque medição real mostrou ~1,8-2,4 telas de rolagem até aqui
-          mesmo num cliente recém-criado sem nenhuma negociação. scroll-mt
-          dá um respiro visual no destino (não existe cabeçalho fixo
-          nesta página, mas encostar o heading na borda do viewport
-          continua desconfortável de ler). */}
-      <section id="registrar-interacao" className="mb-6 min-w-0 scroll-mt-6 space-y-4">
+  // --- Aba Histórico — "Registrar nova interação" no topo, timeline
+  // completa abaixo (nada mudou no formulário nem na timeline, só a
+  // posição dentro da nova estrutura de abas).
+  const abaHistorico = (
+    <div className="space-y-8">
+      <section id="registrar-interacao" className="min-w-0 scroll-mt-6 space-y-4">
         <CabecalhoSecao icone={MessageSquarePlus} titulo="Registrar nova interação" />
         <Card className="min-w-0">
           <CardContent>
@@ -787,9 +727,6 @@ export default async function DetalheClientePage({
             >
               <Select name="tipo" defaultValue="VISIT">
                 <SelectTrigger className="w-full">
-                  {/* Mesmo achado de "Estágio no funil", acima: sem
-                      children, o trigger mostra o valor cru do enum
-                      ("VISIT") em vez do rótulo ("Visita"). */}
                   <SelectValue>{rotuloSelecionado("VISIT", TIPO_INTERACAO_LABEL, "Tipo")}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -807,12 +744,6 @@ export default async function DetalheClientePage({
         </Card>
       </section>
 
-      {/* Fase 79 — heading real (já era h2, agora via CabecalhoSecao
-          como o resto da ficha) num <section> real: público-form.spec.ts
-          e captacao-pendente.spec.ts localizavam o histórico subindo do
-          h2 pro pai direto (xpath=..) — com o h2 agora aninhado dentro
-          de CabecalhoSecao, o pai direto não é mais quem contém a lista;
-          os dois specs foram adaptados para escopar pelo <section>. */}
       <section className="min-w-0 space-y-4">
         <CabecalhoSecao icone={History} titulo="Histórico de interações" />
         {pessoa.interactions.length === 0 ? (
@@ -827,21 +758,11 @@ export default async function DetalheClientePage({
                       <Badge variant="secondary">
                         {TIPO_INTERACAO_LABEL[interacao.type]}
                       </Badge>
-                      {/* Origem só existe em contato vindo do site
-                          público; interação registrada à mão pelo
-                          corretor e as anteriores a este campo não têm
-                          etiqueta, em vez de mostrarem um rótulo vazio. */}
                       {rotuloOrigemCaptacao(interacao.origin) && (
                         <Badge variant="outline">
                           {rotuloOrigemCaptacao(interacao.origin)}
                         </Badge>
                       )}
-                      {/* MKT-006 — canal de divulgação (Instagram/
-                          Facebook/WhatsApp), lido do utm_source/
-                          referrerHost desta MESMA interação. Omitido
-                          quando "Não identificado": mesmo idioma do
-                          badge de origem acima (rótulo vazio nunca
-                          aparece como badge nesta lista). */}
                       {rotuloOrigemDivulgacao(interacao) !== "Não identificado" && (
                         <Badge variant="outline">
                           {rotuloOrigemDivulgacao(interacao)}
@@ -849,13 +770,6 @@ export default async function DetalheClientePage({
                       )}
                       {formatarDataHoraNoFuso(interacao.occurredAt, fuso)}
                     </p>
-                    {/* Fase 15 — AUTORIA em texto, na timeline que já
-                        existia. Nunca aparece em captação pública: ali o
-                        fato é completo (quem originou foi o visitante) e
-                        a etiqueta de origem acima já diz isso — escrever
-                        "autor não registrado" sugeriria dado faltante
-                        onde não há. Membro de outro tenant é redigido
-                        dentro de paraAutorInteracao. */}
                     {rotuloAutorInteracao(
                       paraAutorInteracao(interacao.member, organizationId),
                       interacao.origin
@@ -876,12 +790,6 @@ export default async function DetalheClientePage({
                     {interacao.notes && (
                       <p className="text-foreground mt-1">{interacao.notes}</p>
                     )}
-                    {/* Fase 8 — só para contato de captação sobre um
-                        imóvel específico (ver oportunidadeElegivel). O
-                        botão some quando o imóvel já virou oportunidade
-                        deste cliente: o par (pessoa, imóvel) é único, e
-                        oferecer a ação de novo só levaria a uma mensagem
-                        de "já existe". */}
                     {oportunidadeElegivel(interacao) &&
                       !idsImoveisComOportunidade.has(interacao.propertyId!) && (
                         <BotaoCriarOportunidade interactionId={interacao.id} />
@@ -893,6 +801,145 @@ export default async function DetalheClientePage({
           </ul>
         )}
       </section>
+    </div>
+  );
+
+  const abaPreferencias = (
+    <div className="space-y-4">
+      <CabecalhoSecao
+        icone={SlidersHorizontal}
+        titulo="Preferências de imóvel"
+        descricao="O que este cliente procura — usado para recomendar imóveis compatíveis, na aba Imóveis."
+      />
+      <PreferenciaImovelForm
+      pessoaId={pessoa.id}
+      existe={preferencia != null}
+      valoresIniciais={
+        preferencia
+          ? {
+              transactionType: preferencia.transactionType,
+              propertyTypes: preferencia.propertyTypes,
+              cities: preferencia.cities,
+              neighborhoods: preferencia.neighborhoods,
+              minPrice: preferencia.minPrice?.toString() ?? null,
+              maxPrice: preferencia.maxPrice?.toString() ?? null,
+              minBedrooms: preferencia.minBedrooms,
+              minBathrooms: preferencia.minBathrooms,
+              minParkingSpots: preferencia.minParkingSpots,
+              minArea: preferencia.minArea,
+              maxArea: preferencia.maxArea,
+              desiredPropertyFeatures: preferencia.desiredPropertyFeatures,
+              desiredCondoFeatures: preferencia.desiredCondoFeatures,
+              notes: preferencia.notes,
+            }
+          : undefined
+      }
+      opcoesTiposResidencial={opcoesResidencial}
+      opcoesTiposComercial={opcoesComercial}
+      opcoesCaracteristicasImovel={opcoesImovel}
+      opcoesCaracteristicasCondominio={opcoesCondominio}
+      sugestoesCidades={sugestoesLocalizacao.cidades}
+      sugestoesBairros={sugestoesLocalizacao.bairros}
+      />
+    </div>
+  );
+
+  const abaVisaoGeral = (
+    <ClienteVisaoGeral
+      pessoaId={pessoa.id}
+      telefone={pessoa.phone}
+      email={pessoa.email}
+      roles={pessoa.roles}
+      clienteDesde={formatarDataHoraNoFuso(pessoa.createdAt, fuso)}
+      estagioFunilForm={estagioFunilForm}
+      proximaAcao={proximaAcaoConteudo}
+      observacoes={pessoa.notes}
+      valoresEdicao={valoresEdicao}
+      ultimaInteracao={ultimaInteracaoConteudo}
+      preferenciasResumo={
+        <ResumoPreferencias
+          preferencia={
+            preferencia
+              ? {
+                  transactionType: preferencia.transactionType,
+                  propertyTypes: preferencia.propertyTypes,
+                  cities: preferencia.cities,
+                  neighborhoods: preferencia.neighborhoods,
+                  minPrice: preferencia.minPrice?.toString() ?? null,
+                  maxPrice: preferencia.maxPrice?.toString() ?? null,
+                  minArea: preferencia.minArea,
+                  maxArea: preferencia.maxArea,
+                  desiredPropertyFeatures: preferencia.desiredPropertyFeatures,
+                  desiredCondoFeatures: preferencia.desiredCondoFeatures,
+                }
+              : null
+          }
+        />
+      }
+      recomendacoesPreview={recomendacoesPreview}
+      totalRecomendados={recomendacoes.length}
+    />
+  );
+
+  return (
+    <div>
+      {/* Barra superior (item 3.1 da autorização) — "Voltar" à esquerda,
+          ações de registro à direita. Mesmas actions/permissões de
+          sempre (GerenciarArquivamentoRegistro/EditarClienteDialog), só
+          reposicionadas: o nome/telefone/e-mail saíram daqui para o
+          cartão de identificação, abaixo. */}
+      <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <Link
+          href="/app/clientes"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="size-4" aria-hidden />
+          Voltar para clientes
+        </Link>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <GerenciarArquivamentoRegistro
+            entidadeLabel="cliente"
+            nomeDoRegistro={pessoa.name}
+            arquivadoEm={pessoa.archivedAt ? pessoa.archivedAt.toISOString() : null}
+            podeArquivar={temPapel(papel, PAPEIS_ARQUIVAMENTO)}
+            podeExcluirDefinitivamente={temPapel(papel, PAPEIS_EXCLUSAO_DEFINITIVA)}
+            acaoArquivar={arquivarCliente.bind(null, pessoa.id)}
+            acaoRestaurar={restaurarCliente.bind(null, pessoa.id)}
+            acaoExcluir={excluirClienteDefinitivamente.bind(null, pessoa.id)}
+          />
+          <EditarClienteDialog personId={pessoa.id} valoresIniciais={valoresEdicao} />
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <ClienteCabecalhoIdentificacao
+          nome={pessoa.name}
+          telefone={pessoa.phone}
+          email={pessoa.email}
+          roles={pessoa.roles}
+          pipelineStage={pessoa.pipelineStage}
+          clienteDesde={formatarDataHoraNoFuso(pessoa.createdAt, fuso)}
+          arquivadoEm={pessoa.archivedAt ? pessoa.archivedAt.toISOString() : null}
+          posse={posse}
+          indicadores={
+            <ClienteIndicadores
+              totalRelacionados={pessoa.propertyInterests.length}
+              totalRecomendados={recomendacoes.length}
+              ultimaInteracaoData={
+                ultimaInteracao ? formatarDataHoraNoFuso(ultimaInteracao.occurredAt, fuso) : null
+              }
+            />
+          }
+        />
+      </div>
+
+      <ClienteAbas
+        abaInicial={aba}
+        visaoGeral={abaVisaoGeral}
+        preferencias={abaPreferencias}
+        imoveis={abaImoveis}
+        historico={abaHistorico}
+      />
     </div>
   );
 }

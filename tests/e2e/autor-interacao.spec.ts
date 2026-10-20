@@ -22,6 +22,9 @@ async function clienteComOportunidade(page: import("@playwright/test").Page, nom
   await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
 
   await page.getByRole("link", { name: nome }).first().click();
+  // Redesenho da ficha do cliente — "Relacionar imóvel" agora vive na
+  // aba Imóveis, não na Visão geral (aba padrão ao abrir a ficha).
+  await page.getByRole("tab", { name: "Imóveis" }).click();
   await page.locator("#relacionar-imovel-busca").click();
   // Escopado ao listbox ABERTO: a ficha tem <select> nativos cujas
   // <option> ficam no DOM mesmo fechadas.
@@ -40,6 +43,14 @@ test.describe("Autoria na timeline do cliente", () => {
     await login(page, ORG_AGENDA);
     const nome = `Cliente Autor ${Date.now()}`;
     await clienteComOportunidade(page, nome);
+    // O responsável pela NEGOCIAÇÃO (coisa separada da autoria da
+    // interação, provada abaixo) fica no card da aba Imóveis, onde o
+    // helper já deixa a ficha depois de relacionar o imóvel.
+    const fichaImoveis = (await page.locator("main").innerText()).replace(/ /g, " ");
+    expect(fichaImoveis).toContain("Responsável:");
+
+    // "Registrar nova interação" e a timeline agora vivem na aba Histórico.
+    await page.getByRole("tab", { name: "Histórico" }).click();
 
     // Antes de qualquer interação da equipe, nenhuma autoria na tela.
     const antes = (await page.locator("main").innerText()).replace(/ /g, " ");
@@ -60,9 +71,8 @@ test.describe("Autoria na timeline do cliente", () => {
     expect(depois).toContain("por ");
     // Interação da equipe tem autor conhecido: nada de "não registrado".
     expect(depois).not.toContain("Autor não registrado");
-    // E o responsável pela negociação continua sendo uma coisa separada,
-    // exibida com o seu próprio rótulo.
-    expect(depois).toContain("Responsável:");
+    // O responsável pela negociação (checado acima, na aba Imóveis)
+    // continua sendo uma coisa separada da autoria desta interação.
   });
 
   test("autoria legível e sem overflow em 375/768/1024/1280/1440", async ({ page }) => {
@@ -74,6 +84,9 @@ test.describe("Autoria na timeline do cliente", () => {
     // é alcançada uma vez, e só a MEDIÇÃO muda de largura.
     const nome = `Cliente Autor Resp ${Date.now()}`;
     await clienteComOportunidade(page, nome);
+    // "Registrar nova interação" e a timeline agora vivem na aba Histórico
+    // — a URL capturada abaixo (após o clique) já reflete `?aba=historico`.
+    await page.getByRole("tab", { name: "Histórico" }).click();
     await page.getByPlaceholder("Notas").fill("Contato registrado pela equipe");
     await Promise.all([
       page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/app/clientes/")),

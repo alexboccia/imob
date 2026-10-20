@@ -34,6 +34,12 @@ async function negociacaoNova(page: import("@playwright/test").Page, nome: strin
   await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
 
   await page.getByRole("link", { name: nome }).first().click();
+  // Redesenho da ficha do cliente — "Relacionar imóvel" e o card da
+  // negociação agora vivem na aba Imóveis, não na Visão geral (aba
+  // padrão ao abrir a ficha). O reload no fim desta função acontece já
+  // com `?aba=imoveis` na URL, então `page.url()` capturado por quem
+  // chama esta função já abre direto nessa aba.
+  await page.getByRole("tab", { name: "Imóveis" }).click();
   await page.locator("#relacionar-imovel-busca").click();
   await page.getByRole("listbox").getByRole("option").first().click();
   await Promise.all([
@@ -105,8 +111,10 @@ test.describe("ciclo de vida do follow-up", () => {
     const depoisFicha = (await page.locator("main").innerText()).replace(/ /g, " ");
     expect(depoisFicha).toContain("Interessado");
     expect(depoisFicha).not.toContain("Visitado");
-    // E nenhuma interação foi inventada na timeline.
-    expect(depoisFicha).toContain("Nenhuma interação registrada");
+    // E nenhuma interação foi inventada na timeline — aba Histórico.
+    await page.getByRole("tab", { name: "Histórico" }).click();
+    const historico = (await page.locator("main").innerText()).replace(/ /g, " ");
+    expect(historico).toContain("Nenhuma interação registrada");
   });
 
   test("o assunto é obrigatório e o formulário diz o fuso do horário", async ({ page }) => {

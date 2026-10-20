@@ -102,6 +102,9 @@ test.describe("Fechamento — jornada do corretor", () => {
     // #relacionar-imovel-busca é o campo de busca (autocomplete) de
     // RelacionarImovelForm — a página tem outros selects (estágio do
     // funil), então nada de getByRole("combobox").first().
+    // Redesenho da ficha do cliente — "Relacionar imóvel" agora vive na
+    // aba Imóveis, não na Visão geral (aba padrão ao abrir a ficha).
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await page.locator("#relacionar-imovel-busca").click();
     // Escopado ao listbox ABERTO: a ficha do cliente também tem um
     // <select> nativo (responsável), cujas <option> ficam no DOM mesmo

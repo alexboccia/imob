@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { atualizarPessoa } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
+import { Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CampoTelefone } from "@/components/CampoTelefone";
@@ -36,22 +37,39 @@ type ValoresCliente = {
 export function EditarClienteDialog({
   personId,
   valoresIniciais,
+  variante = "botao",
 }: {
   personId: string;
   valoresIniciais: ValoresCliente;
+  // Redesenho da ficha do cliente — "Observações" (Visão geral) abre o
+  // MESMO diálogo a partir de um ícone de lápis no cabeçalho da seção,
+  // em vez do botão "Editar" padrão (que continua sendo o default, no
+  // topo da página). Um enum resolvido DENTRO do componente, nunca uma
+  // função recebida como prop: esta é uma Client Component, e aceitar um
+  // render-prop de quem a chama (Server Component) quebra a fronteira
+  // ("Functions cannot be passed directly to Client Components" — achado
+  // real desta mesma fase).
+  variante?: "botao" | "icone";
 }) {
   const [sessao, setSessao] = useState(0);
+  const abrir = () => setSessao((s) => s + 1);
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => setSessao((s) => s + 1)}
-      >
-        Editar
-      </Button>
+      {variante === "icone" ? (
+        <button
+          type="button"
+          onClick={abrir}
+          aria-label="Editar observações"
+          className="flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <Pencil className="size-3.5" aria-hidden />
+        </button>
+      ) : (
+        <Button type="button" variant="outline" size="sm" onClick={abrir}>
+          Editar
+        </Button>
+      )}
 
       {sessao > 0 && (
         <ConteudoEdicao

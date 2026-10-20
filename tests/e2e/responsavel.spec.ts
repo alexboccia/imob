@@ -69,6 +69,9 @@ test.describe("Pipeline — ownership visível, filtrável e transferível", () 
     await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
 
     await page.getByRole("link", { name: nome }).first().click();
+    // Redesenho da ficha do cliente — "Relacionar imóvel" (autocomplete +
+    // responsável) agora vive na aba Imóveis, não na Visão geral.
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     // O seletor nasce preenchido com o membro logado — a auto-atribuição
     // é VISÍVEL, não silenciosa.
@@ -139,6 +142,7 @@ test.describe("Pipeline — ownership visível, filtrável e transferível", () 
     await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
 
     await page.getByRole("link", { name: nome }).first().click();
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await page.locator("#relacionar-imovel-busca").click();
     // Escopado ao listbox ABERTO: a ficha do cliente também tem um
     // <select> nativo (responsável), cujas <option> ficam no DOM mesmo

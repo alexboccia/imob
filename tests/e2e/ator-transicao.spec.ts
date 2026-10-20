@@ -19,6 +19,9 @@ async function novaNegociacao(page: import("@playwright/test").Page, nome: strin
   await expect(page.getByRole("heading", { name: "Novo cliente" })).not.toBeVisible();
 
   await page.getByRole("link", { name: nome }).first().click();
+  // Redesenho da ficha do cliente — "Relacionar imóvel" agora vive na
+  // aba Imóveis, não na Visão geral (aba padrão ao abrir a ficha).
+  await page.getByRole("tab", { name: "Imóveis" }).click();
   await page.locator("#relacionar-imovel-busca").click();
   // Escopado ao listbox ABERTO: a ficha tem <select> nativos cujas
   // <option> ficam no DOM mesmo fechadas.
@@ -70,6 +73,7 @@ test.describe("Accountability do funil", () => {
     // Fecha como ganho e confere o ator do FECHAMENTO na ficha.
     await page.goto("/app/clientes");
     await page.getByRole("link", { name: nome }).first().click();
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await page.getByRole("button", { name: "Marcar como ganho" }).first().click();
     const dialogo = page.getByRole("dialog");
     await dialogo.getByLabel("Valor de fechamento").fill("50000000");

@@ -64,6 +64,9 @@ test.describe("estrutura", () => {
   test("h2 real, e sem card dentro de card", async ({ page }) => {
     const nome = nomeUnico("Cliente Estrutura Relacionados");
     await criarCliente(page, nome);
+    // Redesenho da ficha do cliente — "Imóveis relacionados" agora vive
+    // na aba Imóveis, não na Visão geral (aba padrão ao abrir a ficha).
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     const heading = page.getByRole("heading", { level: 2, name: "Imóveis relacionados" });
     await expect(heading).toBeVisible();
@@ -82,6 +85,7 @@ test.describe("estrutura", () => {
   }) => {
     const nome = nomeUnico("Cliente Vazio Relacionados");
     await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     const heading = page.getByRole("heading", { level: 2, name: "Imóveis relacionados" });
     const secao = page.locator("section", { has: heading });
@@ -102,6 +106,7 @@ test.describe("campo 'Imóvel' — autocomplete por código, bairro ou nome", ()
     // bairro sozinho identifica um imóvel.
     const nome = nomeUnico("Cliente Autocomplete Bairro");
     await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     const campoBusca = page.getByLabel("Imóvel");
     await campoBusca.click();
@@ -135,6 +140,7 @@ test.describe("campo 'Imóvel' — autocomplete por código, bairro ou nome", ()
 
     const nome = nomeUnico("Cliente Autocomplete Codigo");
     await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     // Descobre o código pela própria UI (nunca lendo o banco direto,
     // convenção desta suíte) — abre a lista inteira (sem query) e lê o
@@ -161,6 +167,10 @@ test.describe("de recomendação a relacionamento", () => {
 
     const nome = nomeUnico("Cliente Relaciona Recomendacao");
     await criarCliente(page, nome);
+    // Redesenho da ficha do cliente — o formulário de preferências agora
+    // vive na aba Preferências; recomendados/relacionados, na aba
+    // Imóveis (ver troca de aba após salvar, abaixo).
+    await page.getByRole("tab", { name: "Preferências" }).click();
 
     // Perfil compatível com o imóvel criado acima.
     await page.getByRole("button", { name: "Adicionar preferências" }).click();
@@ -175,6 +185,7 @@ test.describe("de recomendação a relacionamento", () => {
       page.getByRole("button", { name: "Salvar preferências" }).click(),
     ]);
     await page.reload();
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     const secaoRecomendados = page.locator("section", {
       has: page.getByRole("heading", { level: 2, name: "Imóveis recomendados" }),
@@ -254,6 +265,7 @@ test.describe("encerramento", () => {
 
     const nome = nomeUnico("Cliente Remover Encerrado");
     const url = await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     await page.getByLabel("Imóvel").click();
     await page.getByRole("option", { name: tituloImovel }).click();
@@ -276,7 +288,11 @@ test.describe("encerramento", () => {
       page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/app/clientes/")),
       dialogo.getByRole("button", { name: "Confirmar ganho" }).click(),
     ]);
+    // `url` foi capturado por criarCliente antes da troca de aba — este
+    // goto volta pra Visão geral, então a aba precisa ser escolhida de
+    // novo para ver o card da negociação encerrada.
     await page.goto(url);
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     const cardFechado = secaoRelacionados.locator('[data-slot="card"]').filter({ hasText: tituloImovel });
     await expect(cardFechado.getByText("Ganho").first()).toBeVisible();
@@ -294,6 +310,7 @@ test.describe("responsivo", () => {
 
       const nome = nomeUnico(`Cliente Responsivo ${largura}px`);
       const url = await criarCliente(page, nome);
+      await page.getByRole("tab", { name: "Imóveis" }).click();
 
       // Relaciona pelo formulário manual — mesmo mecanismo, caminho mais
       // curto do que passar por preferência/match pra este teste, que só
@@ -306,7 +323,10 @@ test.describe("responsivo", () => {
       ]);
 
       await page.setViewportSize({ width: largura, height: 900 });
+      // `url` foi capturado antes da troca de aba — este goto volta pra
+      // Visão geral, então a aba precisa ser escolhida de novo.
       await page.goto(url);
+      await page.getByRole("tab", { name: "Imóveis" }).click();
       await expect(page.getByText(tituloImovel).first()).toBeVisible();
 
       const semOverflow = await page.evaluate(

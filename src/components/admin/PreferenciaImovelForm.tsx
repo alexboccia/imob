@@ -10,6 +10,7 @@ import { SeletorTags } from "@/components/admin/SeletorTags";
 import { CampoMoeda } from "@/components/admin/CampoMoeda";
 import { ErroCampo } from "@/components/admin/ErroCampo";
 import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -119,164 +120,188 @@ export function PreferenciaImovelForm({
         </Alert>
       )}
 
-      {/* Sem max-w aqui: era o único campo deste formulário preso a uma
-          largura estreita (max-w-xs) enquanto todos os outros (campo de
-          busca de Tipo de imóvel, Cidades/Bairros, valores, etc.) ocupam
-          a largura total do container — a mesma inconsistência visual
-          que "Estágio no funil", acima, não tem (o Select de lá já é
-          w-full). */}
-      <div className="space-y-1.5">
-        <Label htmlFor="transactionType">Finalidade</Label>
-        <Select
-          name="transactionType"
-          value={transactionType}
-          onValueChange={(valor) => setTransactionType(String(valor ?? ""))}
-        >
-          <SelectTrigger id="transactionType" className="w-full">
-            <SelectValue placeholder="Qualquer" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="SALE">Comprar</SelectItem>
-            <SelectItem value="RENT">Alugar</SelectItem>
-          </SelectContent>
-        </Select>
-        <ErroCampo erros={estado.fieldErrors?.transactionType} />
-      </div>
+      {/* Redesenho da ficha do cliente (autorização "aba Preferências") —
+          o formulário continua sendo UM form/UMA action só (nenhum campo,
+          validação ou comportamento de salvamento mudou): a reorganização
+          é só visual, em seções A-F com cabeçalho próprio e grade de 2
+          colunas em desktop / 1 em mobile, no lugar da lista única de
+          campos empilhados que existia antes. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6">
+      <section className="space-y-4">
+        <CabecalhoSecao nivel={3} titulo="Finalidade e tipo" />
+        {/* Sem max-w aqui: era o único campo deste formulário preso a uma
+            largura estreita (max-w-xs) enquanto todos os outros (campo de
+            busca de Tipo de imóvel, Cidades/Bairros, valores, etc.) ocupam
+            a largura total do container. */}
+        <div className="space-y-1.5">
+          <Label htmlFor="transactionType">Finalidade</Label>
+          <Select
+            name="transactionType"
+            value={transactionType}
+            onValueChange={(valor) => setTransactionType(String(valor ?? ""))}
+          >
+            <SelectTrigger id="transactionType" className="w-full">
+              {/* Mesmo achado de "Estágio no funil"/"Registrar nova
+                  interação": sem children, o trigger mostrava o valor
+                  cru do enum ("SALE") em vez do rótulo ("Comprar") —
+                  aqui como função (Client Component controlado), já que
+                  o valor muda em tempo real pelo próprio estado local. */}
+              <SelectValue placeholder="Qualquer">
+                {(valor) =>
+                  valor === "SALE" ? "Comprar" : valor === "RENT" ? "Alugar" : "Qualquer"
+                }
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="SALE">Comprar</SelectItem>
+              <SelectItem value="RENT">Alugar</SelectItem>
+            </SelectContent>
+          </Select>
+          <ErroCampo erros={estado.fieldErrors?.transactionType} />
+        </div>
 
-      <div>
-        <SeletorCaracteristicas
-          nome="propertyTypes"
-          titulo="Tipo de imóvel"
-          opcoes={[...opcoesTiposResidencial, ...opcoesTiposComercial]}
-          selecionadas={v?.propertyTypes ?? []}
-        />
-        <ErroCampo erros={estado.fieldErrors?.propertyTypes} />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <SeletorTags
-            nome="cities"
-            titulo="Cidades"
-            sugestoes={sugestoesCidades}
-            valoresIniciais={v?.cities ?? []}
-            placeholder="Ex: São Paulo"
+          <SeletorCaracteristicas
+            nome="propertyTypes"
+            titulo="Tipo de imóvel"
+            opcoes={[...opcoesTiposResidencial, ...opcoesTiposComercial]}
+            selecionadas={v?.propertyTypes ?? []}
           />
-          <ErroCampo erros={estado.fieldErrors?.cities} />
+          <ErroCampo erros={estado.fieldErrors?.propertyTypes} />
         </div>
-        <div>
-          <SeletorTags
-            nome="neighborhoods"
-            titulo="Bairros"
-            sugestoes={sugestoesBairros}
-            valoresIniciais={v?.neighborhoods ?? []}
-            placeholder="Ex: Vila Mariana"
-          />
-          <ErroCampo erros={estado.fieldErrors?.neighborhoods} />
-        </div>
-      </div>
+      </section>
 
-      <fieldset className="border-0 p-0 m-0">
-        <legend className="text-sm font-medium mb-2">{legendaFaixaPreco}</legend>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="minPrice" className="text-xs text-muted-foreground">
-              Mínimo
-            </Label>
-            <CampoMoeda
-              id="minPrice"
-              name="minPrice"
-              defaultValue={v?.minPrice ?? null}
-              className="w-full border rounded-md px-3 py-2"
+      <section className="space-y-4">
+        <CabecalhoSecao nivel={3} titulo="Localização" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <SeletorTags
+              nome="cities"
+              titulo="Cidades"
+              sugestoes={sugestoesCidades}
+              valoresIniciais={v?.cities ?? []}
+              placeholder="Ex: São Paulo"
             />
-            <ErroCampo erros={estado.fieldErrors?.minPrice} />
+            <ErroCampo erros={estado.fieldErrors?.cities} />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="maxPrice" className="text-xs text-muted-foreground">
-              Máximo
-            </Label>
-            <CampoMoeda
-              id="maxPrice"
-              name="maxPrice"
-              defaultValue={v?.maxPrice ?? null}
-              className="w-full border rounded-md px-3 py-2"
+          <div>
+            <SeletorTags
+              nome="neighborhoods"
+              titulo="Bairros"
+              sugestoes={sugestoesBairros}
+              valoresIniciais={v?.neighborhoods ?? []}
+              placeholder="Ex: Vila Mariana"
             />
-            <ErroCampo erros={estado.fieldErrors?.maxPrice} />
+            <ErroCampo erros={estado.fieldErrors?.neighborhoods} />
           </div>
         </div>
-      </fieldset>
+      </section>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="minBedrooms">Quartos (mínimo)</Label>
-          <Input
-            id="minBedrooms"
-            name="minBedrooms"
-            type="number"
-            min={0}
-            defaultValue={v?.minBedrooms ?? ""}
-          />
-          <ErroCampo erros={estado.fieldErrors?.minBedrooms} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="minBathrooms">Banheiros (mínimo)</Label>
-          <Input
-            id="minBathrooms"
-            name="minBathrooms"
-            type="number"
-            min={0}
-            defaultValue={v?.minBathrooms ?? ""}
-          />
-          <ErroCampo erros={estado.fieldErrors?.minBathrooms} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="minParkingSpots">Vagas (mínimo)</Label>
-          <Input
-            id="minParkingSpots"
-            name="minParkingSpots"
-            type="number"
-            min={0}
-            defaultValue={v?.minParkingSpots ?? ""}
-          />
-          <ErroCampo erros={estado.fieldErrors?.minParkingSpots} />
-        </div>
-      </div>
+      <section className="space-y-4">
+        <CabecalhoSecao nivel={3} titulo="Orçamento" />
+        <fieldset className="border-0 p-0 m-0">
+          <legend className="text-sm font-medium mb-2">{legendaFaixaPreco}</legend>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="minPrice" className="text-xs text-muted-foreground">
+                Mínimo
+              </Label>
+              <CampoMoeda
+                id="minPrice"
+                name="minPrice"
+                defaultValue={v?.minPrice ?? null}
+                className="w-full border rounded-md px-3 py-2"
+              />
+              <ErroCampo erros={estado.fieldErrors?.minPrice} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="maxPrice" className="text-xs text-muted-foreground">
+                Máximo
+              </Label>
+              <CampoMoeda
+                id="maxPrice"
+                name="maxPrice"
+                defaultValue={v?.maxPrice ?? null}
+                className="w-full border rounded-md px-3 py-2"
+              />
+              <ErroCampo erros={estado.fieldErrors?.maxPrice} />
+            </div>
+          </div>
+        </fieldset>
+      </section>
 
-      <fieldset className="border-0 p-0 m-0">
-        <legend className="text-sm font-medium mb-2">Área privativa (m²)</legend>
-        <div className="grid grid-cols-2 gap-4">
+      <section className="space-y-4">
+        <CabecalhoSecao nivel={3} titulo="Características do imóvel" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="space-y-1.5">
-            <Label htmlFor="minArea" className="text-xs text-muted-foreground">
-              Mínima
-            </Label>
+            <Label htmlFor="minBedrooms">Quartos (mínimo)</Label>
             <Input
-              id="minArea"
-              name="minArea"
+              id="minBedrooms"
+              name="minBedrooms"
               type="number"
-              step="0.01"
               min={0}
-              defaultValue={v?.minArea ?? ""}
+              defaultValue={v?.minBedrooms ?? ""}
             />
-            <ErroCampo erros={estado.fieldErrors?.minArea} />
+            <ErroCampo erros={estado.fieldErrors?.minBedrooms} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="maxArea" className="text-xs text-muted-foreground">
-              Máxima
-            </Label>
+            <Label htmlFor="minBathrooms">Banheiros (mínimo)</Label>
             <Input
-              id="maxArea"
-              name="maxArea"
+              id="minBathrooms"
+              name="minBathrooms"
               type="number"
-              step="0.01"
               min={0}
-              defaultValue={v?.maxArea ?? ""}
+              defaultValue={v?.minBathrooms ?? ""}
             />
-            <ErroCampo erros={estado.fieldErrors?.maxArea} />
+            <ErroCampo erros={estado.fieldErrors?.minBathrooms} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="minParkingSpots">Vagas (mínimo)</Label>
+            <Input
+              id="minParkingSpots"
+              name="minParkingSpots"
+              type="number"
+              min={0}
+              defaultValue={v?.minParkingSpots ?? ""}
+            />
+            <ErroCampo erros={estado.fieldErrors?.minParkingSpots} />
           </div>
         </div>
-      </fieldset>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <fieldset className="border-0 p-0 m-0">
+          <legend className="text-sm font-medium mb-2">Área privativa (m²)</legend>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="minArea" className="text-xs text-muted-foreground">
+                Mínima
+              </Label>
+              <Input
+                id="minArea"
+                name="minArea"
+                type="number"
+                step="0.01"
+                min={0}
+                defaultValue={v?.minArea ?? ""}
+              />
+              <ErroCampo erros={estado.fieldErrors?.minArea} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="maxArea" className="text-xs text-muted-foreground">
+                Máxima
+              </Label>
+              <Input
+                id="maxArea"
+                name="maxArea"
+                type="number"
+                step="0.01"
+                min={0}
+                defaultValue={v?.maxArea ?? ""}
+              />
+              <ErroCampo erros={estado.fieldErrors?.maxArea} />
+            </div>
+          </div>
+        </fieldset>
+
         <div>
           <SeletorCaracteristicas
             nome="desiredPropertyFeatures"
@@ -286,6 +311,10 @@ export function PreferenciaImovelForm({
           />
           <ErroCampo erros={estado.fieldErrors?.desiredPropertyFeatures} />
         </div>
+      </section>
+
+      <section className="space-y-4">
+        <CabecalhoSecao nivel={3} titulo="Características do condomínio" />
         <div>
           <SeletorCaracteristicas
             nome="desiredCondoFeatures"
@@ -295,18 +324,22 @@ export function PreferenciaImovelForm({
           />
           <ErroCampo erros={estado.fieldErrors?.desiredCondoFeatures} />
         </div>
-      </div>
+      </section>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="notes">Observações</Label>
-        <Textarea
-          id="notes"
-          name="notes"
-          rows={3}
-          defaultValue={v?.notes ?? ""}
-          placeholder="Ex: Prefere andar alto e condomínio com lazer."
-        />
-        <ErroCampo erros={estado.fieldErrors?.notes} />
+      <section className="space-y-4">
+        <CabecalhoSecao nivel={3} titulo="Observações" />
+        <div className="space-y-1.5">
+          <Label htmlFor="notes">Observações</Label>
+          <Textarea
+            id="notes"
+            name="notes"
+            rows={3}
+            defaultValue={v?.notes ?? ""}
+            placeholder="Ex: Prefere andar alto e condomínio com lazer."
+          />
+          <ErroCampo erros={estado.fieldErrors?.notes} />
+        </div>
+      </section>
       </div>
 
       <Button type="submit" disabled={pendente}>

@@ -153,6 +153,10 @@ export type PropertyParaMatching = {
   propertyFeatures: string[];
   condoFeatures: string[];
   updatedAt: Date;
+  // Só preenchido por buscarImoveisCompativeis (capa pro card da ficha
+  // do cliente) — opcional porque buscarClientesCompativeis (matching
+  // reverso, ficha do imóvel) não busca mídia nenhuma.
+  media?: { url: string }[];
 };
 
 // Mesmo padrão de conversão de Decimal/unknown já usado em
@@ -482,6 +486,19 @@ export async function buscarImoveisCompativeis(
               ...(preferencia.maxPrice != null && { lte: preferencia.maxPrice }),
             },
           }),
+      },
+      // Capa do imóvel para o card de recomendação na ficha do cliente —
+      // mesmo critério de SELECT_IMOVEL_CARD (src/lib/imovel-card.ts):
+      // PHOTO, capa primeiro, só a mais relevante (take: 1). `include`
+      // sem `select` continua devolvendo TODAS as colunas escalares que
+      // PropertyParaMatching exige, só acrescentando a relação.
+      include: {
+        media: {
+          where: { type: "PHOTO" },
+          orderBy: [{ isCover: "desc" }, { order: "asc" }],
+          take: 1,
+          select: { url: true },
+        },
       },
     });
 
