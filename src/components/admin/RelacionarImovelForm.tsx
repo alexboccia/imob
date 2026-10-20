@@ -86,15 +86,18 @@ export function RelacionarImovelForm({
         </Alert>
       )}
       <div className="space-y-1.5 w-full sm:max-w-sm">
-        <Label htmlFor="relacionar-imovel-busca" className="sr-only">
-          Imóvel
-        </Label>
+        {/* Rótulo visível (era sr-only) — era o motivo do campo parecer
+            desalinhado com "Responsável pela negociação", ao lado: um
+            tinha label visível empurrando o controle pra baixo, o outro
+            não, então os dois controles não ficavam na mesma altura
+            mesmo com items-end na linha. */}
+        <Label htmlFor="relacionar-imovel-busca">Imóvel</Label>
         <Combobox items={itens} filter={filtroImovel} autoHighlight name="propertyId">
-          {/* h-8: mesma altura do Input/SelectTrigger padrão deste
-              formulário (ComboboxInputGroup nasce h-12, pensado pro
-              buscador da Home) — só o tamanho muda, nenhum outro
-              comportamento do primitivo compartilhado. */}
-          <ComboboxInputGroup className="h-8">
+          {/* h-9: mesma altura do <select> de SeletorResponsavel, ao
+              lado (ComboboxInputGroup nasce h-12, pensado pro buscador
+              da Home) — só o tamanho muda, nenhum outro comportamento do
+              primitivo compartilhado. */}
+          <ComboboxInputGroup className="h-9">
             <ComboboxInput
               id="relacionar-imovel-busca"
               placeholder="Buscar por código, bairro ou nome..."
@@ -124,7 +127,9 @@ export function RelacionarImovelForm({
           rotuloVazio="Sem responsável"
         />
       </div>
-      <Button type="submit" variant="outline" disabled={pendente}>
+      {/* variant default (preto) — igual ao botão "Registrar" de
+          "Registrar nova interação", abaixo desta mesma ficha. */}
+      <Button type="submit" disabled={pendente}>
         {pendente ? "Relacionando..." : "Relacionar imóvel"}
       </Button>
     </form>

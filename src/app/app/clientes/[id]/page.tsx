@@ -626,11 +626,23 @@ export default async function DetalheClientePage({
           titulo="Imóveis relacionados"
           descricao="Negociações abertas com este cliente — a mesma lista aparece no Pipeline."
         />
+        <Card className="min-w-0">
+          <CardContent>
+            <p className="text-sm font-medium mb-2">Relacionar imóvel</p>
+            <RelacionarImovelForm
+              pessoaId={pessoa.id}
+              imoveisDisponiveis={imoveisDisponiveis}
+              membros={membrosAtribuiveis}
+              membroAtualId={session?.user.organizationMemberId ?? null}
+            />
+          </CardContent>
+        </Card>
+
         {pessoa.propertyInterests.length === 0 ? (
           <EstadoVazio
             icone={Handshake}
             titulo="Nenhum imóvel relacionado ainda."
-            descricao="Relacione um imóvel manualmente abaixo, ou use 'Relacionar' numa recomendação em Imóveis recomendados, acima."
+            descricao="Relacione um imóvel acima, ou use 'Relacionar' numa recomendação em Imóveis recomendados, acima."
           />
         ) : (
             <div className="space-y-3">
@@ -756,18 +768,6 @@ export default async function DetalheClientePage({
               })}
             </div>
           )}
-
-        <Card className="min-w-0">
-          <CardContent>
-            <p className="text-sm font-medium mb-2">Relacionar imóvel</p>
-            <RelacionarImovelForm
-              pessoaId={pessoa.id}
-              imoveisDisponiveis={imoveisDisponiveis}
-              membros={membrosAtribuiveis}
-              membroAtualId={session?.user.organizationMemberId ?? null}
-            />
-          </CardContent>
-        </Card>
       </section>
 
       {/* Fase 87 — id de âncora: a Busca global oferece um atalho
