@@ -30,6 +30,9 @@ test.describe("ganho", () => {
 
     // Fecha usando o diálogo de ganho.
     await page.goto(FICHA_GANHO);
+    // Redesenho da ficha do cliente — a negociação (e o botão de
+    // fechamento) vive na aba Imóveis, não na Visão geral.
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await page.getByRole("button", { name: "Marcar como ganho" }).first().click();
     const dialogo = page.getByRole("dialog");
     await expect(dialogo).toBeVisible();
@@ -53,6 +56,7 @@ test.describe("ganho", () => {
 
     // Persistência real.
     await page.goto(FICHA_GANHO);
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await expect(page.getByText("Ganho").first()).toBeVisible();
   });
 });
@@ -61,6 +65,7 @@ test.describe("perda", () => {
   test("perder registra o motivo e o imóvel CONTINUA disponível", async ({ page }) => {
     await login(page, ORG_INBOX);
     await page.goto(FICHA_PERDA);
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     await page.getByRole("button", { name: "Marcar como perdido" }).first().click();
     const dialogo = page.getByRole("dialog");
@@ -78,6 +83,7 @@ test.describe("perda", () => {
     await expect(page.getByText("Casa do Fechamento Perda").first()).toBeVisible();
 
     await page.goto(FICHA_PERDA);
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await expect(page.getByText("Não fecharam no valor").first()).toBeVisible();
   });
 });
@@ -86,6 +92,7 @@ test.describe("acessibilidade e mobile", () => {
   test("o diálogo de perda é operável por teclado", async ({ page }) => {
     await login(page, ORG_INBOX);
     await page.goto(FICHA_DIALOGO);
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     const abrir = page.getByRole("button", { name: "Marcar como perdido" }).first();
     await abrir.focus();
     await expect(abrir).toBeFocused();
@@ -104,6 +111,7 @@ test.describe("acessibilidade e mobile", () => {
       await login(page, ORG_INBOX);
       await page.setViewportSize({ width: largura, height: 900 });
       await page.goto(FICHA_DIALOGO);
+      await page.getByRole("tab", { name: "Imóveis" }).click();
       await page.getByRole("button", { name: "Marcar como perdido" }).first().click();
 
       const dialogo = page.getByRole("dialog");

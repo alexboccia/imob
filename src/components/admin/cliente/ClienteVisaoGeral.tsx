@@ -90,26 +90,32 @@ export function ClienteVisaoGeral({
       </section>
 
       <section className="space-y-3">
-        <CabecalhoSecao
-          icone={StickyNote}
-          titulo="Observações"
-          acoes={
-            <EditarClienteDialog
-              personId={pessoaId}
-              valoresIniciais={valoresEdicao}
-              variante="icone"
+        {/* Mesma regra de sempre (Fase 79): a seção só existe quando há
+            observação — sem isto, "Observações" apareceria como h2 real
+            para todo cliente, mesmo os que nunca tiveram nada escrito. O
+            único jeito de ADICIONAR a primeira observação continua
+            sendo o "Editar" do topo da página — este ícone aqui só
+            edita a que já existe. */}
+        {observacoes && (
+          <>
+            <CabecalhoSecao
+              icone={StickyNote}
+              titulo="Observações"
+              acoes={
+                <EditarClienteDialog
+                  personId={pessoaId}
+                  valoresIniciais={valoresEdicao}
+                  variante="icone"
+                />
+              }
             />
-          }
-        />
-        <Card className="min-w-0">
-          <CardContent className="text-sm">
-            {observacoes ? (
-              <p className="whitespace-pre-line text-foreground">{observacoes}</p>
-            ) : (
-              <p className="text-muted-foreground">Nenhuma observação registrada.</p>
-            )}
-          </CardContent>
-        </Card>
+            <Card className="min-w-0">
+              <CardContent className="text-sm">
+                <p className="whitespace-pre-line text-foreground">{observacoes}</p>
+              </CardContent>
+            </Card>
+          </>
+        )}
 
         <CabecalhoSecao
           icone={History}

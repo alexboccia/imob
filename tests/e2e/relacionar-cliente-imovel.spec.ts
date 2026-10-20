@@ -47,6 +47,9 @@ async function criarClienteComPreferenciaCompativel(page: Page, nome: string) {
   await page.waitForURL(/\/app\/clientes\/[^/?]+$/);
   const personId = page.url().split("/").pop()!;
 
+  // Redesenho da ficha do cliente — o formulário de preferências vive
+  // na aba Preferências, não na Visão geral (aba padrão ao abrir a ficha).
+  await page.getByRole("tab", { name: "Preferências" }).click();
   await page.getByRole("button", { name: "Adicionar preferências" }).click();
   await page.getByRole("combobox", { name: "Finalidade" }).click();
   await page.getByRole("option", { name: "Comprar" }).click();

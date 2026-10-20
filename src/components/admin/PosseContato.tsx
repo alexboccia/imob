@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { assumirContato, atribuirContato } from "@/app/app/clientes/actions";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ export function PosseContato({
   souEu,
   podeAtribuir,
   membros,
+  variante = "padrao",
 }: {
   personId: string;
   nomePessoa: string;
@@ -46,6 +48,12 @@ export function PosseContato({
   souEu: boolean;
   podeAtribuir: boolean;
   membros: OpcaoResponsavel[];
+  // Fase 128.1 — "pill" é só a casca visual (pílula com borda, igual ao
+  // protótipo do cabeçalho da ficha do cliente): mesmo texto, mesma ação
+  // de transferência, mesmo Dialog — nenhuma lógica nova, nenhum
+  // dropdown decorativo. "padrao" (default) preserva o visual já usado
+  // na Caixa de entrada (NovosContatos), intocado.
+  variante?: "padrao" | "pill";
 }) {
   const assumir = assumirContato.bind(null, personId);
   const [estadoAssumir, formAssumir, assumindo] = useActionState(assumir, ESTADO_INICIAL_ACAO);
@@ -57,45 +65,62 @@ export function PosseContato({
     ESTADO_INICIAL_ACAO
   );
 
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      {responsavel ? (
-        <span className="min-w-0 text-xs text-muted-foreground">
-          Responsável:{" "}
-          <span className="font-medium text-foreground">{responsavel.nome}</span>
-          {/* Membro desativado continua sendo o responsável. O nome
-              permanece e ganha a marca — desativar não é apagar. */}
-          {responsavel.inativo && " (inativo)"}
-          {souEu && " · você"}
-        </span>
+  const conteudoResponsavel = responsavel ? (
+    <span className="min-w-0 text-xs text-muted-foreground">
+      Responsável:{" "}
+      <span className="font-medium text-foreground">{responsavel.nome}</span>
+      {/* Membro desativado continua sendo o responsável. O nome
+          permanece e ganha a marca — desativar não é apagar. */}
+      {responsavel.inativo && " (inativo)"}
+      {souEu && " · você"}
+    </span>
+  ) : (
+    <Badge variant="outline" className="shrink-0">
+      Sem responsável
+    </Badge>
+  );
+
+  // Assumir só aparece quando há o que assumir. Quem já tem dono não
+  // oferece o botão: assumir NUNCA rouba, e mostrar uma ação que o
+  // servidor vai recusar seria oferecer uma porta fechada.
+  const botaoAssumir = !responsavel && (
+    <form action={formAssumir}>
+      <Button type="submit" size="sm" variant="outline" disabled={assumindo}>
+        {assumindo ? "Assumindo..." : "Assumir"}
+      </Button>
+    </form>
+  );
+
+  const botaoTransferir = podeAtribuir && (
+    <Button
+      type="button"
+      size="sm"
+      variant="ghost"
+      onClick={() => setAberto(true)}
+      disabled={atribuindo}
+      className={variante === "pill" ? "h-auto gap-1 p-0 text-xs hover:bg-transparent" : undefined}
+    >
+      {variante === "pill" && responsavel ? (
+        <ChevronDown className="size-3.5" aria-hidden />
+      ) : responsavel ? (
+        "Transferir"
       ) : (
-        <Badge variant="outline" className="shrink-0">
-          Sem responsável
-        </Badge>
+        "Atribuir a..."
       )}
+    </Button>
+  );
 
-      {/* Assumir só aparece quando há o que assumir. Quem já tem dono não
-          oferece o botão: assumir NUNCA rouba, e mostrar uma ação que o
-          servidor vai recusar seria oferecer uma porta fechada. */}
-      {!responsavel && (
-        <form action={formAssumir}>
-          <Button type="submit" size="sm" variant="outline" disabled={assumindo}>
-            {assumindo ? "Assumindo..." : "Assumir"}
-          </Button>
-        </form>
-      )}
-
-      {podeAtribuir && (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() => setAberto(true)}
-          disabled={atribuindo}
-        >
-          {responsavel ? "Transferir" : "Atribuir a..."}
-        </Button>
-      )}
+  return (
+    <div
+      className={
+        variante === "pill"
+          ? "inline-flex flex-wrap items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5"
+          : "mt-2 flex flex-wrap items-center gap-2"
+      }
+    >
+      {conteudoResponsavel}
+      {botaoAssumir}
+      {botaoTransferir}
 
       {/* Resultado inline com aria-live: quem usa leitor de tela recebe
           "já foi assumido por outro membro" sem procurar na página. */}

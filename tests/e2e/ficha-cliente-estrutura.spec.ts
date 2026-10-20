@@ -42,8 +42,17 @@ test.beforeEach(async ({ page }) => {
   await login(page, ORG_A);
 });
 
+// Redesenho da ficha do cliente (Fase 128) — as 6 seções que esta fase
+// auditou deixaram de conviver numa única página rolável: agora vivem
+// em 4 abas (Visão geral: Estágio no funil; Preferências: Preferências
+// de imóvel; Imóveis: recomendados + relacionados; Histórico: registrar
+// + histórico). "Observações" também migrou para a Visão geral. Os
+// testes abaixo verificam a hierarquia de cabeçalhos e a presença de
+// cada seção DENTRO da aba onde ela agora mora, em vez de todas
+// simultaneamente na mesma tela — a garantia de fundo (h2 real, nunca
+// CardTitle-só-visual) continua sendo exatamente a mesma.
 test.describe("hierarquia de cabeçalhos da ficha inteira", () => {
-  test("h1 único, h2 em todas as seções (nunca CardTitle-só-visual), nenhum h3", async ({
+  test("h1 único, h2 em cada aba (nunca CardTitle-só-visual), nenhum h3 solto", async ({
     page,
   }) => {
     const nome = nomeUnico("Cliente Hierarquia Ficha");
@@ -52,21 +61,35 @@ test.describe("hierarquia de cabeçalhos da ficha inteira", () => {
     await expect(page.getByRole("heading", { level: 1, name: nome })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 
-    for (const titulo of [
-      "Estágio no funil",
-      "Preferências de imóvel",
-      "Imóveis recomendados",
-      "Imóveis relacionados",
-      "Registrar nova interação",
-      "Histórico de interações",
-    ]) {
-      await expect(
-        page.getByRole("heading", { level: 2, name: titulo }),
-        `h2 ausente: ${titulo}`
-      ).toBeVisible();
-    }
+    const secoesPorAba: Record<string, string[]> = {
+      "Visão geral": ["Estágio no funil"],
+      Preferências: ["Preferências de imóvel"],
+      Imóveis: ["Imóveis recomendados", "Imóveis relacionados"],
+      Histórico: ["Registrar nova interação", "Histórico de interações"],
+    };
 
-    await expect(page.getByRole("heading", { level: 3 })).toHaveCount(0);
+    for (const [aba, titulos] of Object.entries(secoesPorAba)) {
+      await page.getByRole("tab", { name: aba }).click();
+      for (const titulo of titulos) {
+        await expect(
+          page.getByRole("heading", { level: 2, name: titulo }),
+          `h2 ausente na aba ${aba}: ${titulo}`
+        ).toBeVisible();
+      }
+      // h1 continua único e visível em qualquer aba (fica no cabeçalho,
+      // acima das abas) — nenhuma aba reintroduz um segundo h1.
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+      // "Nenhum h3 solto" continua valendo — SALVO na aba Preferências,
+      // que desde a Fase 128 tem h3 de propósito (as 6 seções A-F do
+      // formulário, ver PreferenciaImovelForm): manter a asserção
+      // original removeria cobertura real em vez de só reposicioná-la.
+      if (aba !== "Preferências") {
+        await expect(
+          page.getByRole("heading", { level: 3 }),
+          `h3 inesperado na aba ${aba}`
+        ).toHaveCount(0);
+      }
+    }
   });
 
   test("'Observações' só aparece (com h2 real) quando a pessoa tem notes", async ({ page }) => {
@@ -77,29 +100,26 @@ test.describe("hierarquia de cabeçalhos da ficha inteira", () => {
 });
 
 test.describe("ordem das seções", () => {
-  test("Imóveis recomendados vem ANTES de Imóveis relacionados — a jornada é recomendar, depois decidir relacionar", async ({
+  test("na aba Imóveis, Imóveis recomendados vem ANTES de Imóveis relacionados — a jornada é recomendar, depois decidir relacionar", async ({
     page,
   }) => {
     const nome = nomeUnico("Cliente Ordem Secoes");
     await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     const headings = await page.getByRole("heading", { level: 2 }).allTextContents();
-    const indiceRecomendados = headings.indexOf("Imóveis recomendados");
-    const indiceRelacionados = headings.indexOf("Imóveis relacionados");
-    expect(indiceRecomendados).toBeGreaterThanOrEqual(0);
-    expect(indiceRelacionados).toBeGreaterThanOrEqual(0);
-    expect(indiceRecomendados).toBeLessThan(indiceRelacionados);
+    expect(headings).toEqual(["Imóveis recomendados", "Imóveis relacionados"]);
+  });
 
-    // E a ordem geral prevista pela investigação: identidade/estágio →
-    // preferências → recomendados → relacionados → interações.
-    expect(headings).toEqual([
-      "Estágio no funil",
-      "Preferências de imóvel",
-      "Imóveis recomendados",
-      "Imóveis relacionados",
-      "Registrar nova interação",
-      "Histórico de interações",
-    ]);
+  test("na aba Histórico, Registrar nova interação vem ANTES do Histórico de interações", async ({
+    page,
+  }) => {
+    const nome = nomeUnico("Cliente Ordem Historico");
+    await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Histórico" }).click();
+
+    const headings = await page.getByRole("heading", { level: 2 }).allTextContents();
+    expect(headings).toEqual(["Registrar nova interação", "Histórico de interações"]);
   });
 });
 
@@ -148,6 +168,7 @@ test.describe("estados vazios diferenciados", () => {
   }) => {
     const nome = nomeUnico("Cliente Sem Interacao");
     await criarCliente(page, nome);
+    await page.getByRole("tab", { name: "Histórico" }).click();
 
     const secao = page.locator("section", {
       has: page.getByRole("heading", { level: 2, name: "Histórico de interações" }),
@@ -174,10 +195,14 @@ test.describe("nascimento do cliente (Fase 125)", () => {
     const nome = nomeUnico("Cliente Recem Cadastrado");
     await criarCliente(page, nome);
 
+    // Cliente desde aparece no cabeçalho E no card "Informações do
+    // cliente" (Visão geral) — .first() porque o teste só afirma que a
+    // data existe em algum lugar visível, não qual dos dois.
+    await expect(page.getByText(/Cliente desde/).first()).toBeVisible();
     // Confirma o cenário mais exigente: zero interações, zero
     // negociações — sem o fix, a página inteira não teria data nenhuma.
+    await page.getByRole("tab", { name: "Histórico" }).click();
     await expect(page.getByText("Nenhuma interação registrada")).toBeVisible();
-    await expect(page.getByText(/Cliente desde/)).toBeVisible();
   });
 });
 
@@ -198,8 +223,10 @@ test.describe("responsivo — ficha com todas as seções preenchidas", () => {
         page.getByRole("button", { name: "Atualizar" }).click(),
       ]);
 
-      // Interação (form já existente) — texto propositalmente longo
-      // pra estressar quebra de linha em telas estreitas.
+      // Interação (form já existente) — agora na aba Histórico. Texto
+      // propositalmente longo pra estressar quebra de linha em telas
+      // estreitas.
+      await page.getByRole("tab", { name: "Histórico" }).click();
       await page.locator('input[name="notas"]').fill(
         "Cliente ligou perguntando sobre disponibilidade de horário para visita neste fim de semana, mencionou preferência por andares altos."
       );
@@ -209,7 +236,9 @@ test.describe("responsivo — ficha com todas as seções preenchidas", () => {
       ]);
 
       await page.setViewportSize({ width: largura, height: 1000 });
+      // `url` foi capturado por criarCliente antes da troca de aba.
       await page.goto(url);
+      await page.getByRole("tab", { name: "Histórico" }).click();
       await expect(page.getByRole("heading", { level: 2, name: "Histórico de interações" })).toBeVisible();
 
       const semOverflow = await page.evaluate(

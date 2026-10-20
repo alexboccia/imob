@@ -217,6 +217,9 @@ test.describe("contato sem imóvel", () => {
     await ana.pagina.goto("/app/clientes");
     await ana.pagina.getByRole("link", { name: "Lead Sem Imovel Posse" }).first().click();
     await ana.pagina.waitForURL(/\/app\/clientes\/[^/]+$/);
+    // Redesenho da ficha do cliente — "Imóveis relacionados" agora vive
+    // na aba Imóveis, não na Visão geral (aba padrão ao abrir a ficha).
+    await ana.pagina.getByRole("tab", { name: "Imóveis" }).click();
     await expect(ana.pagina.getByText("Nenhum imóvel relacionado ainda.")).toBeVisible();
     // E a posse está declarada na própria ficha.
     await expect(ana.pagina.getByText("Ana Posse").first()).toBeVisible();

@@ -35,6 +35,9 @@ test.describe("negociação de valores", () => {
   test("a jornada inteira: oferta, contraproposta, nova oferta", async ({ page }) => {
     await login(page, ORG_INBOX);
     await page.goto(FICHA);
+    // Redesenho da ficha do cliente — o bloco de negociação de valores
+    // vive dentro do card da negociação, na aba Imóveis.
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     const bloco = page.locator(BLOCO);
     await expect(bloco).toBeVisible();
@@ -76,6 +79,9 @@ test.describe("negociação de valores", () => {
   test("a negociação saiu de VISITA para PROPOSTA por causa do fato", async ({ page }) => {
     await login(page, ORG_INBOX);
     await page.goto(FICHA);
+    // Redesenho da ficha do cliente — o bloco de negociação de valores
+    // vive dentro do card da negociação, na aba Imóveis.
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     // O spec anterior já registrou propostas nesta negociação; o estágio
     // acompanhou o fato, sem ninguém mover o card à mão.
     await expect(page.getByText("Proposta", { exact: false }).first()).toBeVisible();
@@ -92,6 +98,9 @@ test.describe("negociação de valores", () => {
   test("o fechamento já abre com o valor que está na mesa", async ({ page }) => {
     await login(page, ORG_INBOX);
     await page.goto(FICHA);
+    // Redesenho da ficha do cliente — o bloco de negociação de valores
+    // vive dentro do card da negociação, na aba Imóveis.
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await page.getByRole("button", { name: /Marcar como ganho|Fechar negócio/i }).first().click();
     const dialogo = page.getByRole("dialog");
     await expect(dialogo).toBeVisible();
@@ -104,6 +113,9 @@ test.describe("negociação de valores", () => {
   test("teclado e acessibilidade do diálogo", async ({ page }) => {
     await login(page, ORG_INBOX);
     await page.goto(FICHA);
+    // Redesenho da ficha do cliente — o bloco de negociação de valores
+    // vive dentro do card da negociação, na aba Imóveis.
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     const abrir = page.locator(BLOCO).getByRole("button", { name: "Registrar proposta" });
     await abrir.focus();
     await expect(abrir).toBeFocused();
@@ -119,6 +131,9 @@ test.describe("negociação de valores", () => {
   test("valor inválido é recusado com erro no campo", async ({ page }) => {
     await login(page, ORG_INBOX);
     await page.goto(FICHA);
+    // Redesenho da ficha do cliente — o bloco de negociação de valores
+    // vive dentro do card da negociação, na aba Imóveis.
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await page.locator(BLOCO).getByRole("button", { name: "Registrar proposta" }).click();
     const dialogo = page.getByRole("dialog");
     await dialogo.getByLabel("Valor proposto").fill("0");
@@ -132,6 +147,9 @@ test.describe("negociação de valores", () => {
       await login(page, ORG_INBOX);
       await page.setViewportSize({ width: largura, height: 900 });
       await page.goto(FICHA);
+      // Redesenho da ficha do cliente — o bloco de negociação de valores
+      // vive dentro do card da negociação, na aba Imóveis.
+      await page.getByRole("tab", { name: "Imóveis" }).click();
 
       const medida = await page.locator(BLOCO).evaluate((bloco) => ({
         semOverflowInterno: bloco.scrollWidth <= bloco.clientWidth + 1,

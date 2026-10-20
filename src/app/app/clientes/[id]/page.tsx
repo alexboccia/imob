@@ -77,7 +77,7 @@ import {
 } from "@/components/ui/select";
 import { ESTAGIO_LABEL, ESTAGIOS_PIPELINE, TIPO_INTERACAO_LABEL } from "@/lib/crm-labels";
 import { rotuloSelecionado } from "@/lib/select-rotulo";
-import { formatarDataHoraNoFuso } from "@/lib/fuso-horario";
+import { formatarDataHoraNoFuso, formatarDataNoFuso } from "@/lib/fuso-horario";
 import { ClienteAbas } from "@/components/admin/cliente/ClienteAbas";
 import { ClienteCabecalhoIdentificacao } from "@/components/admin/cliente/ClienteCabecalhoIdentificacao";
 import { ClienteIndicadores } from "@/components/admin/cliente/ClienteIndicadores";
@@ -425,6 +425,7 @@ export default async function DetalheClientePage({
       souEu={pessoa.responsibleMemberId === (session?.user.organizationMemberId ?? null)}
       podeAtribuir={podeAtribuirContato}
       membros={membrosAtribuiveis}
+      variante="pill"
     />
   );
 
@@ -926,6 +927,9 @@ export default async function DetalheClientePage({
               totalRelacionados={pessoa.propertyInterests.length}
               totalRecomendados={recomendacoes.length}
               ultimaInteracaoData={
+                ultimaInteracao ? formatarDataNoFuso(ultimaInteracao.occurredAt, fuso) : null
+              }
+              ultimaInteracaoDataHoraCompleta={
                 ultimaInteracao ? formatarDataHoraNoFuso(ultimaInteracao.occurredAt, fuso) : null
               }
             />

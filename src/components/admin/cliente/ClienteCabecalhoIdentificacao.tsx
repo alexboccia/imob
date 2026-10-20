@@ -41,22 +41,34 @@ export function ClienteCabecalhoIdentificacao({
   const tipo = roles.map((papel) => PAPEL_LABEL[papel] ?? papel).join(", ");
 
   return (
-    <Card className="min-w-0">
-      <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 flex-1 gap-4">
+    // Fase 128.1 — raio e padding maiores que o Card padrão do design
+    // system (18-20px/24-28px no protótipo aprovado, contra os ~12px/
+    // 16px do Card genérico): só neste cartão, que é o único "hero" da
+    // ficha — os demais cards da tela continuam no padrão compartilhado.
+    <Card className="min-w-0 rounded-[20px]">
+      {/* xl (1280px), não lg (1024px): com min-w-[150px] por indicador
+          (ver ClienteIndicadores), 3 tiles lado a lado exigem ~480px só
+          pros KPIs — um w-[45%] a partir de 1024px cortava "Última
+          interação" fora da viewport (achado real, medido). Abaixo de
+          xl, os indicadores caem pra baixo e ocupam a largura toda do
+          card (grid-cols-3), onde sobra espaço de sobra. */}
+      <CardContent className="flex flex-col gap-6 p-6 xl:flex-row xl:items-center xl:justify-between xl:gap-8 xl:p-7">
+        <div className="flex min-w-0 gap-4 xl:w-[55%]">
           {/* Azul explícito (não `primary`): o token `primary` deste tema É
               preto/grayscale (usado nos botões de ação), então
               `bg-primary-light`/`text-primary` renderizava um círculo
               cinza com letra preta — a referência mostra azul, mesmo tom
               já usado nos ícones dos KPIs/badge "Novo lead" ao lado. */}
-          <Avatar className="size-12 shrink-0 bg-blue-100 text-base text-blue-700">
-            <AvatarFallback className="bg-blue-100 text-base text-blue-700">
+          <Avatar className="size-16 shrink-0 bg-blue-100 text-xl text-blue-700">
+            <AvatarFallback className="bg-blue-100 text-xl text-blue-700">
               {inicial}
             </AvatarFallback>
           </Avatar>
 
           <div className="min-w-0 flex-1 space-y-2">
-            <h1 className="min-w-0 break-words text-xl font-semibold tracking-tight">{nome}</h1>
+            <h1 className="min-w-0 break-words text-[28px] leading-tight font-bold tracking-tight">
+              {nome}
+            </h1>
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
               {telefone && (
@@ -103,7 +115,7 @@ export function ClienteCabecalhoIdentificacao({
           </div>
         </div>
 
-        <div className="shrink-0">{indicadores}</div>
+        <div className="min-w-0 xl:w-[45%]">{indicadores}</div>
       </CardContent>
     </Card>
   );

@@ -132,6 +132,9 @@ test.describe("Oportunidade — jornada do corretor", () => {
     await login(page, ORG_ANALYTICS);
     await page.goto("/app/clientes");
     await page.getByRole("link", { name: "Lead Analytics Ocasional" }).first().click();
+    // Redesenho da ficha do cliente — "Histórico de interações" e
+    // "Criar oportunidade" vivem na aba Histórico.
+    await page.getByRole("tab", { name: "Histórico" }).click();
     await expect(page.locator("h2", { hasText: "Histórico de interações" })).toBeVisible();
 
     // Esta pessoa tem exatamente UM contato de página de imóvel, e ele
@@ -171,6 +174,7 @@ test.describe("Oportunidade — jornada do corretor", () => {
     // O proprietário do seed só tem contatos de "anuncie seu imóvel" —
     // o oposto comercial do funil de comprador.
     await page.getByRole("link", { name: "Proprietário Analytics" }).first().click();
+    await page.getByRole("tab", { name: "Histórico" }).click();
     await expect(page.locator("h2", { hasText: "Histórico de interações" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Criar oportunidade" })).toHaveCount(0);
   });

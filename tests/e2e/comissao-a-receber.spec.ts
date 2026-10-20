@@ -134,6 +134,9 @@ test.describe("carteira do corretor", () => {
       .getByRole("link", { name: "Cliente Comissao Parcial" })
       .click();
     await page.waitForURL(/\/app\/clientes\/[^/]+$/);
+    // Redesenho da ficha do cliente — "Dividir comissão" vive no card da
+    // negociação, dentro da aba Imóveis, não na Visão geral.
+    await page.getByRole("tab", { name: "Imóveis" }).click();
 
     await page.getByRole("button", { name: "Dividir comissão" }).first().click();
     const dialogo = page.getByRole("dialog");
@@ -172,6 +175,7 @@ test.describe("o saldo segue o que realmente aconteceu", () => {
       .getByRole("link", { name: "Cliente Comissao Jornada" })
       .click();
     await page.waitForURL(/\/app\/clientes\/[^/]+$/);
+    await page.getByRole("tab", { name: "Imóveis" }).click();
     await page.getByRole("button", { name: "Dividir comissão" }).first().click();
     return page.getByRole("dialog");
   }
