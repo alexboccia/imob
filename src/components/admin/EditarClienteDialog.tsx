@@ -66,7 +66,8 @@ export function EditarClienteDialog({
           <Pencil className="size-3.5" aria-hidden />
         </button>
       ) : (
-        <Button type="button" variant="outline" size="sm" onClick={abrir}>
+        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={abrir}>
+          <Pencil className="size-4" />
           Editar
         </Button>
       )}

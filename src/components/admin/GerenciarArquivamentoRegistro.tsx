@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useId, useState } from "react";
-import { Archive, ArchiveRestore, AlertTriangle } from "lucide-react";
+import { Archive, ArchiveRestore, AlertTriangle, Trash2 } from "lucide-react";
 import type { ActionState } from "@/lib/action-result";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { cn } from "@/lib/utils";
@@ -164,12 +164,12 @@ function ExcluirDefinitivamenteDialog({
     <>
       <Button
         type="button"
-        variant="ghost"
+        variant="outline"
         size="sm"
-        className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+        className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
         onClick={() => setSessao((s) => s + 1)}
       >
-        <AlertTriangle className="size-4" />
+        <Trash2 className="size-4" />
         Excluir definitivamente
       </Button>
 
