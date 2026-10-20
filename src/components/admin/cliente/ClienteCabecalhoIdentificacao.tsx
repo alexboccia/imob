@@ -44,8 +44,13 @@ export function ClienteCabecalhoIdentificacao({
     <Card className="min-w-0">
       <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 flex-1 gap-4">
-          <Avatar className="size-12 shrink-0 bg-primary-light text-base text-primary">
-            <AvatarFallback className="bg-primary-light text-base text-primary">
+          {/* Azul explícito (não `primary`): o token `primary` deste tema É
+              preto/grayscale (usado nos botões de ação), então
+              `bg-primary-light`/`text-primary` renderizava um círculo
+              cinza com letra preta — a referência mostra azul, mesmo tom
+              já usado nos ícones dos KPIs/badge "Novo lead" ao lado. */}
+          <Avatar className="size-12 shrink-0 bg-blue-100 text-base text-blue-700">
+            <AvatarFallback className="bg-blue-100 text-base text-blue-700">
               {inicial}
             </AvatarFallback>
           </Avatar>
