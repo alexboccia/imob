@@ -109,13 +109,21 @@ function BotaoArquivarOuRestaurar({
   );
 
   return (
-    // min-w-0 no form e max-w-[12rem] + break-words no texto de apoio:
-    // sem isso, "Reversível — pode ser restaurado a qualquer momento."
-    // nunca quebra linha (flex-col não encolhe por padrão) e força a
-    // largura do form — e, por tabela, de todo o bloco de ações do
-    // cabeçalho — além da viewport em 320-768px (achado real, medido).
+    // "Reversível — pode ser restaurado a qualquer momento." virou
+    // `title` (tooltip nativo, ao passar o mouse) em vez de texto sempre
+    // visível abaixo do botão — era o que empurrava este botão pra fora
+    // da linha dos outros dois (Excluir/Editar), que não têm nenhum
+    // texto de apoio. min-w-0 no form continua necessário pro flex-wrap
+    // do bloco de ações funcionar em telas estreitas.
     <form action={formAction} className="flex min-w-0 flex-col gap-1">
-      <Button type="submit" variant="outline" size="sm" disabled={pendente} className="gap-1.5">
+      <Button
+        type="submit"
+        variant="outline"
+        size="sm"
+        disabled={pendente}
+        className="gap-1.5"
+        title={arquivadoEm ? undefined : "Reversível — pode ser restaurado a qualquer momento."}
+      >
         {arquivadoEm ? (
           <>
             <ArchiveRestore className="size-4" />
@@ -128,11 +136,6 @@ function BotaoArquivarOuRestaurar({
           </>
         )}
       </Button>
-      {!arquivadoEm && (
-        <p className="max-w-48 text-xs text-muted-foreground break-words">
-          Reversível — pode ser restaurado a qualquer momento.
-        </p>
-      )}
       {estado.message && (
         <p
           role="status"
