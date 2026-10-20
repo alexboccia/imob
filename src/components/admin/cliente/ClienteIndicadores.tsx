@@ -14,6 +14,7 @@ function Indicador({
   valor,
   rotulo,
   titulo,
+  tamanhoValor = "text-2xl",
 }: {
   icone: typeof Home;
   tom: "azul" | "laranja";
@@ -22,6 +23,11 @@ function Indicador({
   /** Tooltip nativo — usado pela "Última interação" pra guardar a HORA
       exata (o valor principal mostra só a data, numa linha só). */
   titulo?: string;
+  /** "Última interação" mostra uma data ("19/10/2026", bem mais larga
+      que um contador de 1-2 dígitos) — achado real: no mesmo tamanho
+      dos outros dois valores, ela vazava pra fora do card em qualquer
+      largura. Menor só aqui, os contadores continuam no tamanho padrão. */
+  tamanhoValor?: "text-2xl" | "text-lg";
 }) {
   return (
     <div
@@ -36,7 +42,9 @@ function Indicador({
       >
         <Icone className="size-4.5" aria-hidden />
       </span>
-      <p className="whitespace-nowrap text-2xl leading-tight font-bold tabular-nums">{valor}</p>
+      <p className={`whitespace-nowrap ${tamanhoValor} leading-tight font-bold tabular-nums`}>
+        {valor}
+      </p>
       <p className="text-sm leading-tight text-muted-foreground">{rotulo}</p>
     </div>
   );
@@ -65,6 +73,7 @@ export function ClienteIndicadores({
         valor={ultimaInteracaoData ?? "—"}
         rotulo="Última interação"
         titulo={ultimaInteracaoDataHoraCompleta ?? undefined}
+        tamanhoValor="text-lg"
       />
     </div>
   );
