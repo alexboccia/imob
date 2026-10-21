@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Milestone, StickyNote, History, SlidersHorizontal, Building2 } from "lucide-react";
+import { Milestone, StickyNote, History, SlidersHorizontal, Building2, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
@@ -47,7 +47,7 @@ export function ClienteVisaoGeral({
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <section className="space-y-3">
-        <CabecalhoSecao titulo="Informações do cliente" />
+        <CabecalhoSecao icone={User} titulo="Informações do cliente" />
         <Card className="min-w-0">
           <CardContent className="space-y-2 text-sm">
             <p>
