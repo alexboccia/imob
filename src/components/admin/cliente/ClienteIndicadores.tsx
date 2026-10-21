@@ -8,13 +8,18 @@ import { Home, Star, Calendar } from "lucide-react";
 // linhas e a data de "Última interação" vazar para uma segunda linha.
 // Todos os 3 números vêm de dados já carregados pela página — nenhuma
 // contagem é aproximada ou fabricada.
+//
+// Achado real: o valor de "Última interação" ("19/10/2026", bem mais
+// largo que um contador de 1 dígito) vazava do card quando o tile tinha
+// só 140px de largura mínima — a correção certa é dar espaço ao tile
+// (min-w maior), não diminuir a fonte da data: os 3 valores precisam do
+// MESMO tamanho/alinhamento entre si, por pedido explícito.
 function Indicador({
   icone: Icone,
   tom,
   valor,
   rotulo,
   titulo,
-  tamanhoValor = "text-2xl",
 }: {
   icone: typeof Home;
   tom: "azul" | "laranja";
@@ -23,16 +28,11 @@ function Indicador({
   /** Tooltip nativo — usado pela "Última interação" pra guardar a HORA
       exata (o valor principal mostra só a data, numa linha só). */
   titulo?: string;
-  /** "Última interação" mostra uma data ("19/10/2026", bem mais larga
-      que um contador de 1-2 dígitos) — achado real: no mesmo tamanho
-      dos outros dois valores, ela vazava pra fora do card em qualquer
-      largura. Menor só aqui, os contadores continuam no tamanho padrão. */
-  tamanhoValor?: "text-2xl" | "text-lg";
 }) {
   return (
     <div
       title={titulo}
-      className="flex min-w-[140px] flex-1 flex-col items-start gap-2 rounded-2xl border border-border bg-background px-4 py-4"
+      className="flex min-w-[168px] flex-1 flex-col items-start gap-2 rounded-2xl border border-border bg-background px-4 py-4"
     >
       <span
         className={
@@ -42,9 +42,7 @@ function Indicador({
       >
         <Icone className="size-4.5" aria-hidden />
       </span>
-      <p className={`whitespace-nowrap ${tamanhoValor} leading-tight font-bold tabular-nums`}>
-        {valor}
-      </p>
+      <p className="whitespace-nowrap text-2xl leading-tight font-bold tabular-nums">{valor}</p>
       <p className="text-sm leading-tight text-muted-foreground">{rotulo}</p>
     </div>
   );
@@ -73,7 +71,6 @@ export function ClienteIndicadores({
         valor={ultimaInteracaoData ?? "—"}
         rotulo="Última interação"
         titulo={ultimaInteracaoDataHoraCompleta ?? undefined}
-        tamanhoValor="text-lg"
       />
     </div>
   );

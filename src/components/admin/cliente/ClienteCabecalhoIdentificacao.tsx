@@ -46,14 +46,16 @@ export function ClienteCabecalhoIdentificacao({
     // 16px do Card genérico): só neste cartão, que é o único "hero" da
     // ficha — os demais cards da tela continuam no padrão compartilhado.
     <Card className="min-w-0 rounded-[20px]">
-      {/* xl (1280px), não lg (1024px): com min-w-[150px] por indicador
-          (ver ClienteIndicadores), 3 tiles lado a lado exigem ~480px só
-          pros KPIs — um w-[45%] a partir de 1024px cortava "Última
-          interação" fora da viewport (achado real, medido). Abaixo de
-          xl, os indicadores caem pra baixo e ocupam a largura toda do
-          card (grid-cols-3), onde sobra espaço de sobra. */}
+      {/* xl (1280px). Os KPIs têm largura MÍNIMA fixa (560px — 3 tiles
+          de ~168px, já que os 3 valores usam o MESMO tamanho de fonte
+          dos contadores, pedido explícito, nunca menor só na data), não
+          uma porcentagem: um w-45% ficava alguns pixels curto demais em
+          1280-1440px e cortava a borda do card (achado real, medido com
+          duas larguras percentuais diferentes). shrink-0 garante que o
+          bloco de KPIs nunca encolhe abaixo do que cabe; a identificação
+          é quem cede espaço (min-w-0, texto já preparado pra quebrar). */}
       <CardContent className="flex flex-col gap-6 p-6 xl:flex-row xl:items-center xl:justify-between xl:gap-8 xl:p-7">
-        <div className="flex min-w-0 gap-4 xl:w-[55%]">
+        <div className="flex min-w-0 flex-1 gap-4">
           {/* Azul explícito (não `primary`): o token `primary` deste tema É
               preto/grayscale (usado nos botões de ação), então
               `bg-primary-light`/`text-primary` renderizava um círculo
@@ -115,7 +117,7 @@ export function ClienteCabecalhoIdentificacao({
           </div>
         </div>
 
-        <div className="min-w-0 xl:w-[45%]">{indicadores}</div>
+        <div className="min-w-0 xl:w-[560px] xl:shrink-0">{indicadores}</div>
       </CardContent>
     </Card>
   );
