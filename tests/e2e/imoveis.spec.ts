@@ -114,7 +114,7 @@ test("edita um imóvel existente", async ({ page }) => {
   await expect(page.locator("#titulo")).toHaveValue("Apartamento E2E para edição");
 
   await page.locator("#titulo").fill("Apartamento E2E editado com sucesso");
-  await page.getByRole("button", { name: "Salvar imóvel" }).click();
+  await page.getByRole("button", { name: "Salvar alterações" }).first().click();
 
   await page.waitForURL(`/app/imoveis/${IDS_E2E.imovelParaEditarOrgA}?salvo=1`);
   await expect(page.locator("#titulo")).toHaveValue("Apartamento E2E editado com sucesso");
@@ -537,7 +537,7 @@ test.describe("Imóveis — cadastro de lançamento", () => {
     await page.goto(`/app/imoveis/${idImovel}`);
     await page.getByText("Este imóvel é um lançamento").click();
     await expect(page.locator("#construtora")).toHaveValue(construtora);
-    await page.getByRole("button", { name: "Salvar imóvel" }).click();
+    await page.getByRole("button", { name: "Salvar alterações" }).first().click();
     await page.waitForURL(/\/app\/imoveis\/[^/]+\?salvo=1/);
 
     await page.goto(`/app/imoveis/${idImovel}`);

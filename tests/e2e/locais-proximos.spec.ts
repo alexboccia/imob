@@ -441,7 +441,7 @@ test("o corretor cadastra, edita, limpa a distância, reordena e remove", async 
   expect((await linhas.nth(2).locator("p").nth(1).innerText()).trim()).toBe("Escola");
 
   // Salvar e recarregar: persistiu na ordem.
-  await page.getByRole("button", { name: "Salvar imóvel" }).click();
+  await page.getByRole("button", { name: "Salvar alterações" }).first().click();
   await page.waitForURL(/\?salvo=1/);
   await page.reload();
   await expect(linhas).toHaveCount(3);
@@ -481,7 +481,7 @@ test("o corretor cadastra, edita, limpa a distância, reordena e remove", async 
   await page.getByRole("button", { name: "Remover local Drogaria Admin E2E" }).click();
   await expect(linhas).toHaveCount(2);
 
-  await page.getByRole("button", { name: "Salvar imóvel" }).click();
+  await page.getByRole("button", { name: "Salvar alterações" }).first().click();
   await page.waitForURL(/\?salvo=1/);
   await page.reload();
   await expect(linhas).toHaveCount(2);
@@ -502,7 +502,7 @@ test("o corretor cadastra, edita, limpa a distância, reordena e remove", async 
   while ((await linhas.count()) > 0) {
     await linhas.first().getByRole("button", { name: /^Remover local/ }).click();
   }
-  await page.getByRole("button", { name: "Salvar imóvel" }).click();
+  await page.getByRole("button", { name: "Salvar alterações" }).first().click();
   await page.waitForURL(/\?salvo=1/);
   await page.goto(ficha(IDS_E2E.imovelLocaisAdmin));
   await expect(secaoPublica(page)).toHaveCount(0);

@@ -243,14 +243,14 @@ test.describe("admin", () => {
 
     // Editar persiste.
     await page.locator(CAMPO).fill("Entrada facilitada durante o lançamento");
-    await page.getByRole("button", { name: "Salvar imóvel" }).click();
+    await page.getByRole("button", { name: "Salvar alterações" }).first().click();
     await page.waitForURL(/\?salvo=1/);
     await page.goto(url.split("?")[0]);
     await expect(page.locator(CAMPO)).toHaveValue("Entrada facilitada durante o lançamento");
 
     // Limpar remove de vez.
     await page.locator(CAMPO).fill("");
-    await page.getByRole("button", { name: "Salvar imóvel" }).click();
+    await page.getByRole("button", { name: "Salvar alterações" }).first().click();
     await page.waitForURL(/\?salvo=1/);
     await page.goto(url.split("?")[0]);
     await expect(page.locator(CAMPO)).toHaveValue("");

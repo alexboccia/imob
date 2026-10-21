@@ -149,7 +149,7 @@ test("o corretor cadastra, edita e limpa a frase pelo formulário", async ({ pag
 
   const nova = "Projeto completo a poucos minutos do metro.";
   await campo.fill(nova);
-  await page.getByRole("button", { name: "Salvar imóvel" }).click();
+  await page.getByRole("button", { name: "Salvar alterações" }).first().click();
   await page.waitForURL(/\?salvo=1/);
 
   // Persistiu no servidor.
@@ -163,7 +163,7 @@ test("o corretor cadastra, edita e limpa a frase pelo formulário", async ({ pag
   // LIMPAR: apagar o campo devolve o imóvel ao estado sem bloco.
   await page.goto(`/app/imoveis/${IDS_E2E.imovelSemFrase}`);
   await page.locator("#fraseDestaque").fill("");
-  await page.getByRole("button", { name: "Salvar imóvel" }).click();
+  await page.getByRole("button", { name: "Salvar alterações" }).first().click();
   await page.waitForURL(/\?salvo=1/);
 
   await page.goto(ficha(IDS_E2E.imovelSemFrase));
@@ -183,7 +183,7 @@ test("frase acima do limite é recusada pelo servidor", async ({ page }) => {
     campo.dispatchEvent(new Event("input", { bubbles: true }));
   }, "x".repeat(181));
 
-  await page.getByRole("button", { name: "Salvar imóvel" }).click();
+  await page.getByRole("button", { name: "Salvar alterações" }).first().click();
   await expect(page.getByText(/no máximo 180 caracteres/i)).toBeVisible();
 
   // E a frase original continua intacta na ficha pública.

@@ -136,6 +136,17 @@ export const STATUS_IMOVEL_LABEL: Record<string, string> = {
   INACTIVE: "Inativo",
 };
 
+// Redesign da tela de edição de imóvel — cor do badge de status no
+// card de resumo. A autorização só especificou a cor de UM estado
+// ("Reservado: verde, conforme a referência aprovada") e pediu pra
+// preservar a semântica já existente nos demais — por isso só
+// RESERVED ganha classe própria aqui; o resto continua neutro
+// (variant="secondary" do Badge), em vez de uma paleta inventada para
+// estados que a autorização não especificou.
+export const STATUS_IMOVEL_BADGE_CLASSE: Record<string, string> = {
+  RESERVED: "bg-success-muted text-success-muted-foreground",
+};
+
 export const PAPEL_USUARIO_LABEL: Record<string, string> = {
   OWNER: "Proprietário",
   ADMIN: "Administrador",

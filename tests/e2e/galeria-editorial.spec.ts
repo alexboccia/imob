@@ -354,7 +354,7 @@ test.describe("admin", () => {
     Promise.all((await itens(page).all()).map((item) => numeroDaFoto(item)));
 
   async function salvar(page: Page) {
-    await page.getByRole("button", { name: "Salvar imóvel" }).click();
+    await page.getByRole("button", { name: "Salvar alterações" }).first().click();
     await page.waitForURL(/\?salvo=1/);
   }
 
@@ -573,7 +573,7 @@ test.describe("admin", () => {
       campo.value = texto;
       campo.dispatchEvent(new Event("input", { bubbles: true }));
     }, "x".repeat(81));
-    await page.getByRole("button", { name: "Salvar imóvel" }).click();
+    await page.getByRole("button", { name: "Salvar alterações" }).first().click();
     await expect(page.getByText(/título do destaque deve ter no máximo 80/i)).toBeVisible();
   });
 });

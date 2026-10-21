@@ -1,8 +1,8 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useActionState } from "react";
 import {
-  Banknote,
   FileText,
   Image as ImageIcon,
   Landmark,
@@ -10,7 +10,8 @@ import {
   MapPin,
   Megaphone,
   Ruler,
-  Tag,
+  CircleDollarSign,
+  House,
 } from "lucide-react";
 import { FINALIDADE_LABEL, STATUS_IMOVEL_LABEL } from "@/lib/format";
 import { ESTADO_INICIAL_ACAO, type ActionState } from "@/lib/action-result";
@@ -55,6 +56,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CabecalhoEdicaoImovel } from "@/components/admin/imoveis/CabecalhoEdicaoImovel";
+import { ResumoImovelCard } from "@/components/admin/imoveis/ResumoImovelCard";
+import { NavegacaoHorizontalImovel } from "@/components/admin/imoveis/NavegacaoHorizontalImovel";
 
 type ImovelFormValues = {
   /** Fase 45 — título/subtítulo exibidos sobre a foto de destaque. */
@@ -120,6 +124,7 @@ export function ImovelForm({
   opcoesTiposResidencial = [],
   opcoesTiposComercial = [],
   ocupacaoVitrine = [],
+  edicao,
 }: {
   action: (prevState: ActionState, formData: FormData) => Promise<ActionState>;
   valoresIniciais?: Partial<ImovelFormValues>;
@@ -137,6 +142,32 @@ export function ImovelForm({
   opcoesTiposComercial?: string[];
   /** Quem ocupa cada uma das quatro posições da vitrine da Home hoje. */
   ocupacaoVitrine?: OcupacaoVitrine[];
+  /** Redesign da tela de edição (autorização "navegação horizontal") —
+      cabeçalho + card de resumo + barra de navegação. Só existe na
+      EDIÇÃO (propertyId já existe); "Novo imóvel" (src/app/app/imoveis/
+      novo/page.tsx) não passa esta prop e continua com o layout antigo
+      (sem resumo/navegação, uma pilha simples de seções) — fora do
+      escopo desta fase, que é só a tela de EDIÇÃO. */
+  edicao?: {
+    acoesArquivamento: ReactNode;
+    urlPublica: string | null;
+    kitDivulgacao: ReactNode;
+    resumo: {
+      titulo: string;
+      bairro: string | null;
+      cidade: string;
+      estado: string;
+      status: string;
+      finalidade: string;
+      preco: number | null;
+      precoAluguel: number | null;
+      precoCondominio: number | null;
+      precoIptu: number | null;
+      codigo: number;
+      fotoCapaUrl: string | null;
+      totalFotos: number;
+    };
+  };
 }) {
   const [estado, formAction] = useActionState(action, ESTADO_INICIAL_ACAO);
   const v = valoresIniciais ?? {};
@@ -168,15 +199,27 @@ export function ImovelForm({
   // reorganização visual, e o que a action recebe continua idêntico.
   return (
     <form action={formAction} className="space-y-5">
+      {edicao && (
+        <>
+          <CabecalhoEdicaoImovel
+            acoesArquivamento={edicao.acoesArquivamento}
+            urlPublica={edicao.urlPublica}
+            botaoSalvar={<BotaoSalvarImovel rotulo="Salvar alterações" />}
+          />
+          <ResumoImovelCard {...edicao.resumo} />
+          <NavegacaoHorizontalImovel />
+        </>
+      )}
+
       {estado.message && !estado.success && (
         <Alert variant="destructive">
           <AlertDescription>{estado.message}</AlertDescription>
         </Alert>
       )}
 
-      <section className="min-w-0 space-y-4">
+      <section id="secao-identificacao" className="min-w-0 scroll-mt-20 space-y-4">
         <CabecalhoSecao
-          icone={Tag}
+          icone={House}
           titulo="Identificação"
           descricao="Como o imóvel é apresentado e em que situação ele está."
         />
@@ -338,11 +381,12 @@ export function ImovelForm({
         </Card>
       </section>
 
-      <section className="min-w-0 space-y-4">
+      <section id="secao-divulgacao" className="min-w-0 scroll-mt-20 space-y-4">
         <CabecalhoSecao
           icone={Megaphone}
           titulo="Divulgação"
           descricao="Onde este imóvel aparece no site e com quais selos."
+          acoes={edicao?.kitDivulgacao}
         />
         <Card className="min-w-0">
         <CardContent className="min-w-0 space-y-6">
@@ -423,7 +467,7 @@ export function ImovelForm({
         </Card>
       </section>
 
-      <section className="min-w-0 space-y-4">
+      <section id="secao-endereco" className="min-w-0 scroll-mt-20 space-y-4">
         <CabecalhoSecao
           icone={MapPin}
           titulo="Endereço"
@@ -450,9 +494,9 @@ export function ImovelForm({
         </Card>
       </section>
 
-      <section className="min-w-0 space-y-4">
+      <section id="secao-valores" className="min-w-0 scroll-mt-20 space-y-4">
         <CabecalhoSecao
-          icone={Banknote}
+          icone={CircleDollarSign}
           titulo="Valores"
           descricao="O site mostra o preço da finalidade escolhida acima."
         />
@@ -526,7 +570,7 @@ export function ImovelForm({
         </Card>
       </section>
 
-      <section className="min-w-0 space-y-4">
+      <section id="secao-medidas" className="min-w-0 scroll-mt-20 space-y-4">
         <CabecalhoSecao
           icone={Ruler}
           titulo="Medidas e cômodos"
@@ -597,7 +641,7 @@ export function ImovelForm({
         </Card>
       </section>
 
-      <section className="min-w-0 space-y-4">
+      <section id="secao-caracteristicas" className="min-w-0 scroll-mt-20 space-y-4">
         <CabecalhoSecao
           icone={ListChecks}
           titulo="Características"
@@ -628,7 +672,7 @@ export function ImovelForm({
           é o mesmo recurso que as Configurações usam DENTRO de um card
           para dividir assuntos próximos. Aqui são assuntos inteiros, e
           viram seções inteiras como as demais. */}
-      <section className="min-w-0 space-y-4">
+      <section id="secao-fotos" className="min-w-0 scroll-mt-20 space-y-4">
         <CabecalhoSecao
           icone={ImageIcon}
           titulo="Fotos"
@@ -705,8 +749,10 @@ export function ImovelForm({
 
       {/* Mesma anatomia da seção de Características: cabeçalho, uma linha
           do que o bloco decide e o editor direto no conteúdo, sem card
-          dentro de card. */}
-      <section className="min-w-0 space-y-4">
+          dentro de card — inclui o `scroll-mt-20` mesmo esta seção não
+          sendo uma âncora do menu horizontal (item 5 da autorização),
+          só para preservar essa paridade de classes. */}
+      <section className="min-w-0 scroll-mt-20 space-y-4">
         <CabecalhoSecao
           icone={Landmark}
           titulo="O que tem por perto"
@@ -722,7 +768,7 @@ export function ImovelForm({
         </Card>
       </section>
 
-      <BotaoSalvarImovel />
+      <BotaoSalvarImovel rotulo={edicao ? "Salvar alterações" : "Salvar imóvel"} />
     </form>
   );
 }

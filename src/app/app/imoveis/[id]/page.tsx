@@ -20,7 +20,6 @@ import { buscarFusoOrganizacao } from "@/lib/fuso-organizacao";
 import { withOrganization } from "@/lib/tenant-context";
 import { hasModule } from "@/lib/entitlements";
 import { Card, CardContent } from "@/components/ui/card";
-import { CabecalhoPagina } from "@/components/admin/ui/CabecalhoPagina";
 import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
 import { Handshake, UserSearch } from "lucide-react";
@@ -259,63 +258,18 @@ export default async function EditarImovelPage({
       })
     : null;
 
+  // Redesign da tela de edição (navegação horizontal) — capa e contagem
+  // de fotos pro card de resumo. `imovel.media` já vem ordenada
+  // (isCover desc, order asc) pelo include da própria query acima —
+  // media[0] é a capa quando existe alguma foto, sem consulta nova.
+  const fotosDoImovel = imovel.media.filter((m) => m.type === "PHOTO");
+  const fotoCapaUrl = fotosDoImovel[0]?.url ?? null;
+
   return (
     <div className="space-y-5">
       <Suspense fallback={null}>
         <ToastSalvo />
       </Suspense>
-      <CabecalhoPagina
-        titulo="Editar imóvel"
-        descricao="Dados, fotos e materiais que o site publica sobre este imóvel."
-        acoes={
-          // max-w-64 abaixo de sm: o wrapper `acoes` de CabecalhoPagina é
-          // shrink-0 de propósito (fica à direita em desktop) — seu
-          // tamanho "natural" (max-content) é calculado como se nada
-          // aqui dentro quebrasse linha, mesmo com flex-wrap. Nenhuma
-          // outra página batia nisso porque nenhuma tinha 2 botões +
-          // texto de apoio + um terceiro botão juntos; sem este teto, o
-          // bloco inteiro ultrapassava a viewport em 320-390px (achado
-          // real, medido com Playwright, não hipotético).
-          <div className="flex min-w-0 max-w-64 flex-wrap items-center gap-2 sm:max-w-none">
-          <GerenciarArquivamentoRegistro
-            entidadeLabel="imóvel"
-            nomeDoRegistro={imovel.title}
-            arquivadoEm={imovel.archivedAt ? imovel.archivedAt.toISOString() : null}
-            podeArquivar={temPapel(papel, PAPEIS_ARQUIVAMENTO)}
-            podeExcluirDefinitivamente={temPapel(papel, PAPEIS_EXCLUSAO_DEFINITIVA)}
-            acaoArquivar={arquivarImovel.bind(null, imovel.id)}
-            acaoRestaurar={restaurarImovel.bind(null, imovel.id)}
-            acaoExcluir={excluirImovelDefinitivamente.bind(null, imovel.id)}
-          />
-          <GerarAnuncioImovel
-            propertyId={imovel.id}
-            titulo={imovel.title}
-            tipo={imovel.type}
-            cidade={imovel.city}
-            purpose={imovel.purpose}
-            price={precosAnuncio.price}
-            rentPrice={precosAnuncio.rentPrice}
-            condoFee={decimalParaValor(imovel.condoFee)}
-            propertyTax={decimalParaValor(imovel.propertyTax)}
-            neighborhood={imovel.neighborhood}
-            city={imovel.city}
-            state={imovel.state}
-            totalArea={imovel.totalArea}
-            privateArea={imovel.privateArea}
-            bedrooms={imovel.bedrooms}
-            suites={imovel.suites}
-            bathrooms={imovel.bathrooms}
-            parkingSpots={imovel.parkingSpots}
-            nomeOrganizacao={nomeOrganizacaoAnuncio}
-            whatsapp={whatsappAnuncio}
-            fotos={imovel.media
-              .filter((m) => m.type === "PHOTO")
-              .map((m) => ({ id: m.id, url: m.url }))}
-            urlAnuncio={urlAnuncio}
-          />
-          </div>
-        }
-      />
       <ImovelForm
         action={atualizarComId}
         propertyId={imovel.id}
@@ -395,6 +349,65 @@ export default async function EditarImovelPage({
         opcoesTiposResidencial={opcoesResidencial}
         opcoesTiposComercial={opcoesComercial}
         ocupacaoVitrine={ocupacaoVitrine}
+        edicao={{
+          // Mesmo componente/lógica de sempre (confirmação, permissão
+          // de arquivar/excluir) — só muda ONDE renderiza (cabeçalho
+          // novo em vez do CabecalhoPagina antigo).
+          acoesArquivamento: (
+            <GerenciarArquivamentoRegistro
+              entidadeLabel="imóvel"
+              nomeDoRegistro={imovel.title}
+              arquivadoEm={imovel.archivedAt ? imovel.archivedAt.toISOString() : null}
+              podeArquivar={temPapel(papel, PAPEIS_ARQUIVAMENTO)}
+              podeExcluirDefinitivamente={temPapel(papel, PAPEIS_EXCLUSAO_DEFINITIVA)}
+              acaoArquivar={arquivarImovel.bind(null, imovel.id)}
+              acaoRestaurar={restaurarImovel.bind(null, imovel.id)}
+              acaoExcluir={excluirImovelDefinitivamente.bind(null, imovel.id)}
+            />
+          ),
+          urlPublica: urlAnuncio,
+          kitDivulgacao: (
+            <GerarAnuncioImovel
+              propertyId={imovel.id}
+              titulo={imovel.title}
+              tipo={imovel.type}
+              cidade={imovel.city}
+              purpose={imovel.purpose}
+              price={precosAnuncio.price}
+              rentPrice={precosAnuncio.rentPrice}
+              condoFee={decimalParaValor(imovel.condoFee)}
+              propertyTax={decimalParaValor(imovel.propertyTax)}
+              neighborhood={imovel.neighborhood}
+              city={imovel.city}
+              state={imovel.state}
+              totalArea={imovel.totalArea}
+              privateArea={imovel.privateArea}
+              bedrooms={imovel.bedrooms}
+              suites={imovel.suites}
+              bathrooms={imovel.bathrooms}
+              parkingSpots={imovel.parkingSpots}
+              nomeOrganizacao={nomeOrganizacaoAnuncio}
+              whatsapp={whatsappAnuncio}
+              fotos={fotosDoImovel.map((m) => ({ id: m.id, url: m.url }))}
+              urlAnuncio={urlAnuncio}
+            />
+          ),
+          resumo: {
+            titulo: imovel.title,
+            bairro: imovel.neighborhood,
+            cidade: imovel.city,
+            estado: imovel.state,
+            status: imovel.status,
+            finalidade: imovel.purpose,
+            preco: precosAnuncio.price,
+            precoAluguel: precosAnuncio.rentPrice,
+            precoCondominio: decimalParaValor(imovel.condoFee),
+            precoIptu: decimalParaValor(imovel.propertyTax),
+            codigo: imovel.code,
+            fotoCapaUrl,
+            totalFotos: fotosDoImovel.length,
+          },
+        }}
       />
 
       {/* Fase 80 — ordem espelha a ficha do cliente (Fase 79): o que o
