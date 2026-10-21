@@ -54,7 +54,14 @@ export function ClienteCabecalhoIdentificacao({
           duas larguras percentuais diferentes). shrink-0 garante que o
           bloco de KPIs nunca encolhe abaixo do que cabe; a identificação
           é quem cede espaço (min-w-0, texto já preparado pra quebrar). */}
-      <CardContent className="flex flex-col gap-6 p-6 xl:flex-row xl:items-center xl:justify-between xl:gap-8 xl:p-7">
+      {/* Padding ESQUERDO menor que os demais lados, de propósito: o
+          avatar/nome ficava visivelmente mais recuado da borda do card
+          que o resto da página (voltar/abas/títulos de seção, todos no
+          mesmo x) — achado real, apontado numa captura real. Reduzir só
+          `pl` aproxima o bloco de identificação da borda esquerda sem
+          mexer no respiro vertical nem no lado dos KPIs (achado
+          aprovado antes). */}
+      <CardContent className="flex flex-col gap-6 py-6 pr-6 pl-4 xl:flex-row xl:items-center xl:justify-between xl:gap-8 xl:py-7 xl:pr-7 xl:pl-5">
         <div className="flex min-w-0 flex-1 gap-4">
           {/* Azul explícito (não `primary`): o token `primary` deste tema É
               preto/grayscale (usado nos botões de ação), então
