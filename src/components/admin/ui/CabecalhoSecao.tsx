@@ -1,5 +1,6 @@
 import type { ElementType, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // Cabeçalho de SEÇÃO — o nível abaixo de CabecalhoPagina (Fase 65).
 //
@@ -19,6 +20,7 @@ export function CabecalhoSecao({
   icone: Icone,
   acoes,
   nivel = 2,
+  tom = "neutro",
 }: {
   titulo: ReactNode;
   descricao?: ReactNode;
@@ -26,6 +28,16 @@ export function CabecalhoSecao({
   icone?: LucideIcon;
   acoes?: ReactNode;
   nivel?: 2 | 3;
+  /**
+   * "neutro" (padrão, preto/cinza via `--primary`) é o visual de todo o
+   * backoffice — `--primary` é intencionalmente grayscale aqui (só a
+   * ficha pública aplica a cor de marca da imobiliária). "azul" é
+   * explícito (Tailwind `blue-*`, não um token de tema) e existe só
+   * para a Fase 130 (Meu perfil público), cuja referência aprovada pede
+   * ícone azul sobre fundo azul-claro nos 4 cards — mesmo raciocínio já
+   * aplicado ao cabeçalho/CTA da Fase 129.
+   */
+  tom?: "neutro" | "azul";
 }) {
   const Heading = `h${nivel}` as ElementType;
 
@@ -33,7 +45,12 @@ export function CabecalhoSecao({
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-2.5">
         {Icone && (
-          <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary-light text-primary">
+          <span
+            className={cn(
+              "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg",
+              tom === "azul" ? "bg-blue-100 text-blue-600" : "bg-primary-light text-primary"
+            )}
+          >
             <Icone aria-hidden className="size-4" />
           </span>
         )}

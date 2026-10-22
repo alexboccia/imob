@@ -42,12 +42,12 @@ async function salvarPerfil(
   const marcado =
     (await page
       .getByTestId("perfil-publico-ativo")
-      .locator('[role="checkbox"]')
+      .locator('[role="switch"]')
       .getAttribute("aria-checked")) === "true";
   if (marcado !== valores.publicar) {
     await page.getByTestId("perfil-publico-ativo").click();
   }
-  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
   await expect(page.getByText("Perfil público atualizado.")).toBeVisible();
 }
 
@@ -196,7 +196,7 @@ test.describe("corretor mantém o próprio perfil público", () => {
     try {
       await abrirMeuPerfil(page);
       await page.locator("#perfilPublicoTelefone").fill("1234");
-      await page.getByRole("button", { name: "Salvar", exact: true }).click();
+      await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
       await expect(page.getByText("Telefone inválido.")).toBeVisible();
       await expect(page.getByText("Perfil público atualizado.")).toHaveCount(0);
     } finally {
@@ -231,11 +231,16 @@ test.describe("autoatendimento não vira gestão de usuários", () => {
       await expect(creci).toBeFocused();
       await creci.fill(CRECI);
 
-      const checkbox = page.getByTestId("perfil-publico-ativo").locator('[role="checkbox"]');
-      await checkbox.focus();
-      await expect(checkbox).toBeFocused();
+      // Fase 130 — o controle de visibilidade passou de checkbox para um
+      // switch de verdade (role="switch", a semântica ARIA correta para
+      // um toggle), seguindo a referência visual aprovada. Base UI Switch
+      // submete o mesmo "on"/nada de um checkbox nativo — nenhuma mudança
+      // na action nem no schema.
+      const switchEl = page.getByTestId("perfil-publico-ativo").locator('[role="switch"]');
+      await switchEl.focus();
+      await expect(switchEl).toBeFocused();
       await page.keyboard.press("Space");
-      await expect(checkbox).toHaveAttribute("aria-checked", "true");
+      await expect(switchEl).toHaveAttribute("aria-checked", "true");
     } finally {
       despublicarPerfisNoBanco();
     }
@@ -308,7 +313,15 @@ test.describe("layout administrativo", () => {
       await login(page, ORG_CENTRAL_CORRETOR);
       await page.setViewportSize({ width: largura, height: 900 });
 
-      const perfil = await geometria(page, "/app/meu-perfil", "fieldset");
+      // Fase 130 — não existe mais um único `fieldset` (a tela virou 4
+      // cards); o `<form>` que os envolve ocupa a mesma largura cheia do
+      // container que o fieldset ocupava antes, e é o equivalente certo
+      // pra esta régua continuar medindo "o formulário acompanha o
+      // container, não vira coluna estreita".
+      // "main form": a sidebar também tem um <form> (o de logout) —
+      // sem escopo, document.querySelector pegava ELE (estreito),
+      // explicando um "formulário" aparentemente menor que o container.
+      const perfil = await geometria(page, "/app/meu-perfil", "main form");
       // Referência viva: outra tela administrativa, medida agora, na
       // mesma janela e com a mesma fonte.
       const referencia = await geometria(page, "/app/clientes");
@@ -331,8 +344,10 @@ test.describe("layout administrativo", () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await abrirMeuPerfil(page);
 
+    // Fase 130 — os campos não vivem mais num `fieldset` só, mas os ids
+    // continuam os mesmos e únicos na página: basta o prefixo.
     const campos = await page
-      .locator("fieldset input[id^='perfilPublico'], fieldset textarea[id^='perfilPublico']")
+      .locator("main form input[id^='perfilPublico'], main form textarea[id^='perfilPublico']")
       .evaluateAll((els) => els.map((e) => e.id));
     expect(campos).toEqual([
       "perfilPublicoCreci",
@@ -342,13 +357,13 @@ test.describe("layout administrativo", () => {
       "perfilPublicoBio",
     ]);
     await expect(page.getByTestId("perfil-publico-ativo")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Salvar" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Salvar alterações" })).toBeVisible();
     // O upload cabe na coluna, em qualquer largura.
     for (const largura of [320, 1440]) {
       await page.setViewportSize({ width: largura, height: 900 });
-      const arquivo = page.locator('fieldset input[type="file"]');
+      const arquivo = page.locator('main form input[type="file"]');
       const caixa = await arquivo.boundingBox();
-      const limite = await page.locator("fieldset").boundingBox();
+      const limite = await page.locator("main form").boundingBox();
       expect(caixa!.x + caixa!.width, `upload @ ${largura}`).toBeLessThanOrEqual(
         limite!.x + limite!.width + 1
       );

@@ -1,15 +1,17 @@
 "use client";
 
 import { useActionState } from "react";
-import { PerfilPublicoCorretorFields } from "@/components/admin/PerfilPublicoCorretorFields";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { salvarMeuPerfilPublico } from "@/app/app/meu-perfil/actions";
+import { CardPerfilPublico } from "@/components/admin/meu-perfil/CardPerfilPublico";
+import { CardFotoPublica } from "@/components/admin/meu-perfil/CardFotoPublica";
+import { CardContatosPublicos } from "@/components/admin/meu-perfil/CardContatosPublicos";
+import { CardApresentacao } from "@/components/admin/meu-perfil/CardApresentacao";
 
-// Formulário de autoatendimento. Reaproveita o MESMO bloco de campos da
-// tela de gestão de usuários — o que muda é só a action por trás e a
-// pasta de upload da foto. Nenhum JSX foi copiado.
+// Fase 130 — Redesign visual (4 cards, referência aprovada) de cima do
+// MESMO formulário/action/schema de sempre. `PerfilPublicoCorretorFields`
+// (usado por EditarUsuarioForm, a gestão de usuários) continua intocado —
+// esta reescrita vale só para a tela de autoatendimento.
 export function MeuPerfilPublicoForm({
   valores,
   perfilPublicoHref,
@@ -32,22 +34,24 @@ export function MeuPerfilPublicoForm({
 
   return (
     <form action={formAction} className="space-y-4">
-      <PerfilPublicoCorretorFields
-        valores={valores}
+      <CardPerfilPublico publicado={valores.publicado} />
+      <CardFotoPublica foto={valores.foto} />
+      <CardContatosPublicos
+        valores={{
+          creci: valores.creci,
+          whatsapp: valores.whatsapp,
+          telefone: valores.telefone,
+          email: valores.email,
+        }}
         erros={estado.fieldErrors}
-        perfilPublicoHref={perfilPublicoHref}
-        pastaDaFoto="perfil"
       />
-
-      {estado.message && (
-        <Alert variant={estado.success ? "default" : "destructive"}>
-          <AlertDescription>{estado.message}</AlertDescription>
-        </Alert>
-      )}
-
-      <Button type="submit" disabled={pendente}>
-        {pendente ? "Salvando..." : "Salvar"}
-      </Button>
+      <CardApresentacao
+        bio={valores.bio}
+        erro={estado.fieldErrors?.perfilPublicoBio}
+        perfilPublicoHref={perfilPublicoHref}
+        mensagem={estado.message ? { texto: estado.message, sucesso: estado.success } : null}
+        pendente={pendente}
+      />
     </form>
   );
 }
