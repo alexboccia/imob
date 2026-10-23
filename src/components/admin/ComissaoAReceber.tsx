@@ -152,6 +152,7 @@ export function ComissaoAReceber({
         <CabecalhoSecao
           icone={HandCoins}
           titulo="Resumo das comissões"
+          tom="azul"
           descricao="Veja sua participação, o que já foi recebido e o saldo que ainda está em aberto."
         />
 
@@ -220,6 +221,7 @@ export function ComissaoAReceber({
         <CabecalhoSecao
           icone={Handshake}
           titulo="Negócios"
+          tom="azul"
           descricao="De onde vem o saldo acima. Negócios com valor a receber aparecem primeiro."
         />
 

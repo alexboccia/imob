@@ -37,6 +37,7 @@ export function ContatosAIdentificar({
     <section className="min-w-0 space-y-4">
       <CabecalhoSecao
         icone={UserSearch}
+        tom="azul"
         titulo={
           total > 0 ? (
             <span className="inline-flex flex-wrap items-center gap-2">

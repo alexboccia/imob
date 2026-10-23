@@ -147,6 +147,7 @@ export function EmpreendimentosCard({
         <CabecalhoSecao
           icone={Building2}
           titulo="Empreendimentos cadastrados"
+          tom="azul"
           // Confirmada em actions.ts: a exclusão é RECUSADA enquanto
           // houver unidade vinculada (a FK é SET NULL, mas desvincular
           // dezenas de imóveis em silêncio seria destrutivo na prática) —
@@ -188,6 +189,7 @@ export function EmpreendimentosCard({
           <CabecalhoSecao
             icone={Plus}
             titulo="Novo empreendimento"
+            tom="azul"
             descricao="Digite o nome do empreendimento para cadastrá-lo."
           />
 

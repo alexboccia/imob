@@ -227,6 +227,7 @@ export default async function PipelinePage({
           <CabecalhoSecao
             icone={KanbanSquare}
             titulo="Negociações"
+            tom="azul"
             descricao="Acompanhe e organize as oportunidades em cada etapa do funil."
           />
 

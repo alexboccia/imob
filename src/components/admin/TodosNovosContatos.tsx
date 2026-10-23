@@ -38,6 +38,7 @@ export function TodosNovosContatos({
     <section className="min-w-0 space-y-4">
       <CabecalhoSecao
         icone={Inbox}
+        tom="azul"
         titulo={
           dados.total > 0 ? (
             <span className="inline-flex flex-wrap items-center gap-2">

@@ -62,6 +62,7 @@ export function TiposImovelGrupoCard({
       <CabecalhoSecao
         icone={Icone}
         titulo={titulo}
+        tom="azul"
         descricao={total === 1 ? "1 tipo cadastrado" : `${total} tipos cadastrados`}
       />
 

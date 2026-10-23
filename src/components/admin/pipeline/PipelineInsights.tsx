@@ -48,6 +48,7 @@ export function PipelineInsights({ analytics }: { analytics: TipoAnalytics }) {
       <CabecalhoSecao
         icone={ChartNoAxesCombined}
         titulo="Análise do pipeline"
+        tom="azul"
         descricao="Indicadores sobre movimentação e tempo das negociações."
       />
 
