@@ -1,4 +1,6 @@
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Megaphone } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import {
   Table,
   TableBody,
@@ -40,25 +42,20 @@ export function AnalyticsAquisicao({
   const { canais, campanhas } = aquisicao;
 
   return (
-    <Card className="min-w-0" role="region" aria-labelledby="analytics-aquisicao-titulo">
-      <CardHeader>
-        {/* Fase 68 — <h2> de verdade. CardTitle renderiza um <div>, sem
-            semântica de heading, e havia uma quebra PRÉ-EXISTENTE de
-            hierarquia aqui: o bloco "Campanhas" abaixo é um <h3>, e sem
-            nenhum <h2> antes dele a página saltava de h1 para h3. Mesmas
-            classes do CardTitle, então nada muda visualmente e o
-            componente compartilhado (usado por muitas telas) fica
-            intocado — o mesmo caminho já adotado em CentralTrabalho. */}
-        <h2
-          id="analytics-aquisicao-titulo"
-          className="font-heading text-base leading-snug font-medium"
-        >
-          Canal de aquisição
-        </h2>
-        <p className="pt-1 text-sm text-muted-foreground">
-          {periodoLabel} · como as pessoas chegaram ao site nesta visita
-        </p>
-      </CardHeader>
+    <section className="min-w-0 space-y-4">
+      {/* Fase 137 — o <h2> avulso (Fase 68) virou CabecalhoSecao, o
+          mesmo componente que já resolve esse achado (CardTitle
+          renderiza um <div>, sem heading real) no resto do backoffice.
+          O id continua o mesmo, então a ligação aria-labelledby do Card
+          abaixo não quebra. */}
+      <CabecalhoSecao
+        icone={Megaphone}
+        titulo="Canal de aquisição"
+        tom="azul"
+        id="analytics-aquisicao-titulo"
+        descricao={`${periodoLabel} · como as pessoas chegaram ao site nesta visita`}
+      />
+      <Card className="min-w-0" role="region" aria-labelledby="analytics-aquisicao-titulo">
       <CardContent className="space-y-4">
         {canais.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -207,6 +204,7 @@ export function AnalyticsAquisicao({
           nenhum dos dois é receita da imobiliária.
         </p>
       </CardContent>
-    </Card>
+      </Card>
+    </section>
   );
 }

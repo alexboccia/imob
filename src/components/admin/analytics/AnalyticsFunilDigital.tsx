@@ -1,5 +1,6 @@
-import { Eye, MessageCircle, Inbox } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Eye, MessageCircle, Inbox, Filter } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { formatarNumero } from "@/lib/format";
 import { formatarTaxa, type FunilDigital } from "@/lib/analytics-comercial";
 
@@ -36,19 +37,19 @@ export function AnalyticsFunilDigital({
   const base = funil.etapas[0]?.total ?? 0;
 
   return (
-    // role="region" + aria-labelledby: o funil é uma seção com identidade
-    // própria dentro da página, e um leitor de tela deve conseguir pular
-    // direto pra ela pelo nome — mesmo tratamento já dado à nota de
-    // método em /app/analytics.
-    <Card className="min-w-0" role="region" aria-labelledby="analytics-funil-titulo">
-      <CardHeader>
-        <CardTitle className="text-base" id="analytics-funil-titulo">
-          Funil digital
-        </CardTitle>
-        <p className="pt-1 text-sm text-muted-foreground">
-          {periodoLabel} · do anúncio visto até o contato registrado
-        </p>
-      </CardHeader>
+    <section className="min-w-0 space-y-4">
+      <CabecalhoSecao
+        icone={Filter}
+        titulo="Funil digital"
+        tom="azul"
+        id="analytics-funil-titulo"
+        descricao={`${periodoLabel} · do anúncio visto até o contato registrado`}
+      />
+      {/* role="region" + aria-labelledby apontando pro id do heading
+          acima (fora do Card): o funil continua uma seção com identidade
+          própria que um leitor de tela pode alcançar pelo nome — mesmo
+          tratamento já dado à nota de método em /app/analytics. */}
+      <Card className="min-w-0" role="region" aria-labelledby="analytics-funil-titulo">
       <CardContent className="space-y-4">
         {funil.semHistoricoDigital ? (
           // Estado do dia seguinte ao deploy: nunca houve evento nenhum.
@@ -119,6 +120,7 @@ export function AnalyticsFunilDigital({
           </>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </section>
   );
 }

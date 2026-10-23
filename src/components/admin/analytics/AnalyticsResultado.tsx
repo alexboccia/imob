@@ -1,4 +1,6 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Handshake } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { formatarNumero, formatarPreco } from "@/lib/format";
 import { formatarTaxa, type ResultadoComercial } from "@/lib/analytics-comercial";
 
@@ -39,15 +41,15 @@ export function AnalyticsResultado({
     oportunidadesCriadas === 0 && fechamentosGanhos === 0 && fechamentosPerdidos === 0;
 
   return (
-    <Card className="min-w-0" role="region" aria-labelledby="analytics-resultado-titulo">
-      <CardHeader>
-        <CardTitle className="text-base" id="analytics-resultado-titulo">
-          Resultado comercial
-        </CardTitle>
-        <p className="pt-1 text-sm text-muted-foreground">
-          {periodoLabel} · do contato à negociação fechada
-        </p>
-      </CardHeader>
+    <section className="min-w-0 space-y-4">
+      <CabecalhoSecao
+        icone={Handshake}
+        titulo="Resultado comercial"
+        tom="azul"
+        id="analytics-resultado-titulo"
+        descricao={`${periodoLabel} · do contato à negociação fechada`}
+      />
+      <Card className="min-w-0" role="region" aria-labelledby="analytics-resultado-titulo">
       <CardContent className="space-y-4">
         {semNadaNoPeriodo ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -205,6 +207,7 @@ export function AnalyticsResultado({
           configurado, e o preço anunciado do imóvel nunca vira valor fechado.
         </p>
       </CardContent>
-    </Card>
+      </Card>
+    </section>
   );
 }

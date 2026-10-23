@@ -1,4 +1,6 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Compass } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { formatarNumero } from "@/lib/format";
 import type { ItemOrigem } from "@/lib/analytics-comercial";
 
@@ -20,13 +22,14 @@ export function AnalyticsOrigens({
   total: number;
 }) {
   return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle className="text-base">Origem dos contatos</CardTitle>
-        <p className="pt-1 text-sm text-muted-foreground">
-          De qual página do site a pessoa decidiu falar com você.
-        </p>
-      </CardHeader>
+    <section className="min-w-0 space-y-4">
+      <CabecalhoSecao
+        icone={Compass}
+        titulo="Origem dos contatos"
+        tom="azul"
+        descricao="De qual página do site a pessoa decidiu falar com você."
+      />
+      <Card className="min-w-0">
       <CardContent>
         {total === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -59,6 +62,7 @@ export function AnalyticsOrigens({
           </dl>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </section>
   );
 }

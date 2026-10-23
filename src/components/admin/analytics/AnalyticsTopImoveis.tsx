@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Building2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import {
   Table,
   TableBody,
@@ -31,13 +33,14 @@ import { formatarTaxa, type ImovelMaisProcurado } from "@/lib/analytics-comercia
 // e e-mail de quem procurou não têm função nenhuma numa agregação.
 export function AnalyticsTopImoveis({ imoveis }: { imoveis: ImovelMaisProcurado[] }) {
   return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle className="text-base">Imóveis com mais movimento</CardTitle>
-        <p className="pt-1 text-sm text-muted-foreground">
-          Ordenados por contato e, em seguida, por visualização.
-        </p>
-      </CardHeader>
+    <section className="min-w-0 space-y-4">
+      <CabecalhoSecao
+        icone={Building2}
+        titulo="Imóveis com mais movimento"
+        tom="azul"
+        descricao="Ordenados por contato e, em seguida, por visualização."
+      />
+      <Card className="min-w-0">
       <CardContent>
         {imoveis.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -127,6 +130,7 @@ export function AnalyticsTopImoveis({ imoveis }: { imoveis: ImovelMaisProcurado[
             </Table>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </section>
   );
 }

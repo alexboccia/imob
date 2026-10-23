@@ -21,6 +21,7 @@ export function CabecalhoSecao({
   acoes,
   nivel = 2,
   tom = "neutro",
+  id,
 }: {
   titulo: ReactNode;
   descricao?: ReactNode;
@@ -38,6 +39,14 @@ export function CabecalhoSecao({
    * aplicado ao cabeçalho/CTA da Fase 129.
    */
   tom?: "neutro" | "azul";
+  /**
+   * Fase 137 — id do próprio heading. Existe para os cards de Analytics
+   * que já usavam `role="region" aria-labelledby="X"` apontando pro id
+   * do título (CardTitle ou um <h2> avulso): ao migrar para este
+   * componente, o id continua podendo ser o alvo do aria-labelledby,
+   * sem quebrar a ligação ARIA que já existia.
+   */
+  id?: string;
 }) {
   const Heading = `h${nivel}` as ElementType;
 
@@ -56,6 +65,7 @@ export function CabecalhoSecao({
         )}
         <div className="min-w-0">
           <Heading
+            id={id}
             className={
               nivel === 2
                 ? "min-w-0 break-words text-lg font-semibold tracking-tight"

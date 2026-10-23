@@ -1,4 +1,6 @@
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Handshake, Info, PieChart } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { formatarPreco } from "@/lib/format";
 import { direcaoVariacao } from "@/lib/analytics-comercial";
 import { formatarPercentualInteiro } from "@/lib/format";
@@ -6,20 +8,14 @@ import type { AnalyticsCarteira as DadosCarteira } from "@/lib/analytics-carteir
 import type { ComparacaoPeriodo } from "@/lib/analytics-comercial";
 
 // Analytics da minha carteira (Fase 23) — Server Component, só leitura.
+// Fase 137 — os 3 TituloBloco locais (CardTitle renderiza um <div>, sem
+// heading real) viraram CabecalhoSecao, mesmo tratamento do resto do
+// Analytics.
 //
 // Mostra APENAS o que tem posse real. As seções organizacionais da tela
 // (tráfego do site, origens, UTM, top imóveis, funil, comparação entre
 // responsáveis) não aparecem aqui, e o bloco final explica por quê em
 // vez de simplesmente sumir com elas.
-
-function TituloBloco({ children }: { children: React.ReactNode }) {
-  // CardTitle do design system renderiza um <div> (achado da Fase 17).
-  return (
-    <h2 className="flex flex-wrap items-center gap-2 font-heading text-base leading-snug font-medium">
-      {children}
-    </h2>
-  );
-}
 
 function Indicador({
   valor,
@@ -69,15 +65,16 @@ export function AnalyticsCarteira({
 
   return (
     <div className="grid grid-cols-1 gap-4">
+      <section className="min-w-0 space-y-4">
+        {/* A descrição impede a leitura errada: o banco guarda o
+            responsável ATUAL, não quem conduziu no passado. */}
+        <CabecalhoSecao
+          icone={Handshake}
+          titulo="Minhas negociações"
+          tom="azul"
+          descricao={`Negociações atualmente sob sua responsabilidade. ${periodoLabel}.`}
+        />
       <Card className="min-w-0">
-        <CardHeader>
-          <TituloBloco>Minhas negociações</TituloBloco>
-          {/* A frase que impede a leitura errada: o banco guarda o
-              responsável ATUAL, não quem conduziu no passado. */}
-          <p className="pt-1 text-sm text-muted-foreground">
-            Negociações atualmente sob sua responsabilidade. {periodoLabel}.
-          </p>
-        </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Indicador
@@ -112,17 +109,18 @@ export function AnalyticsCarteira({
           </div>
         </CardContent>
       </Card>
+      </section>
 
+      <section className="min-w-0 space-y-4">
+        {/* Dimensão DIFERENTE da seção acima: participar da comissão não
+            é conduzir a negociação (Fase 12). */}
+        <CabecalhoSecao
+          icone={PieChart}
+          titulo="Minha participação na comissão"
+          tom="azul"
+          descricao={`Onde você é beneficiário da divisão — pode não coincidir com as negociações acima. ${periodoLabel}.`}
+        />
       <Card className="min-w-0">
-        <CardHeader>
-          <TituloBloco>Minha participação na comissão</TituloBloco>
-          {/* Dimensão DIFERENTE da de cima: participar da comissão não é
-              conduzir a negociação (Fase 12). */}
-          <p className="pt-1 text-sm text-muted-foreground">
-            Onde você é beneficiário da divisão — pode não coincidir com as negociações acima.{" "}
-            {periodoLabel}.
-          </p>
-        </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Indicador
@@ -158,12 +156,12 @@ export function AnalyticsCarteira({
           )}
         </CardContent>
       </Card>
+      </section>
 
       {/* Não sumir em silêncio: dizer o que não está aqui, e por quê. */}
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao icone={Info} titulo="O que não aparece nesta visão" tom="azul" />
       <Card className="min-w-0">
-        <CardHeader>
-          <TituloBloco>O que não aparece nesta visão</TituloBloco>
-        </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
           <p className="min-w-0 break-words">
             Visualizações de imóveis, cliques no WhatsApp, origem dos contatos, campanhas e
@@ -173,6 +171,7 @@ export function AnalyticsCarteira({
           </p>
         </CardContent>
       </Card>
+      </section>
     </div>
   );
 }

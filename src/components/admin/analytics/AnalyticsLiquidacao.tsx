@@ -1,4 +1,6 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Banknote } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import {
   Table,
   TableBody,
@@ -39,15 +41,15 @@ export function AnalyticsLiquidacao({
   const { pagoNoPeriodo, pagamentos, participantes } = liquidacao;
 
   return (
-    <Card className="min-w-0" role="region" aria-labelledby="analytics-liquidacao-titulo">
-      <CardHeader>
-        <CardTitle className="text-base" id="analytics-liquidacao-titulo">
-          Liquidação de comissão
-        </CardTitle>
-        <p className="pt-1 text-sm text-muted-foreground">
-          {periodoLabel} · comissão efetivamente paga, pela data do pagamento
-        </p>
-      </CardHeader>
+    <section className="min-w-0 space-y-4">
+      <CabecalhoSecao
+        icone={Banknote}
+        titulo="Liquidação de comissão"
+        tom="azul"
+        id="analytics-liquidacao-titulo"
+        descricao={`${periodoLabel} · comissão efetivamente paga, pela data do pagamento`}
+      />
+      <Card className="min-w-0" role="region" aria-labelledby="analytics-liquidacao-titulo">
       <CardContent className="space-y-4">
         <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="min-w-0">
@@ -120,6 +122,7 @@ export function AnalyticsLiquidacao({
           ser estoque atual e não movimento do período.
         </p>
       </CardContent>
-    </Card>
+      </Card>
+    </section>
   );
 }

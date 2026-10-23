@@ -3,6 +3,7 @@ import {
   CartaoEstatistica,
   GradeEstatisticas,
 } from "@/components/admin/ui/CartaoEstatistica";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { EstadoVazio } from "@/components/admin/ui/EstadoVazio";
 import { BotaoVerAbaAnalytics } from "@/components/admin/analytics/BotaoVerAbaAnalytics";
 import { formatarNumero, formatarPreco } from "@/lib/format";
@@ -54,21 +55,14 @@ export function AnalyticsResumoComercial({
     oportunidadesCriadas === 0 && fechamentosGanhos === 0 && fechamentosPerdidos === 0;
 
   return (
-    <div className="min-w-0 space-y-3 rounded-xl border bg-card p-4 shadow-sm">
-      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          {/* <h2>: esta é uma seção PRINCIPAL do painel "Visão geral",
-              lado a lado com "Evolução dos contatos" — precisa de heading
-              real, não do <div> que CardTitle renderiza. */}
-          <h2 className="font-heading text-base leading-snug font-medium">
-            Resultado no período
-          </h2>
-          <p className="pt-1 text-sm text-muted-foreground">
-            Resumo do avanço comercial no período selecionado.
-          </p>
-        </div>
-        <BotaoVerAbaAnalytics aba="comercial" rotulo="Ver análise comercial" />
-      </div>
+    <div className="min-w-0 space-y-4 rounded-xl border bg-card p-4 shadow-sm">
+      <CabecalhoSecao
+        icone={Handshake}
+        titulo="Resultado no período"
+        tom="azul"
+        descricao="Resumo do avanço comercial no período selecionado."
+        acoes={<BotaoVerAbaAnalytics aba="comercial" rotulo="Ver análise comercial" />}
+      />
 
       {semNadaNoPeriodo ? (
         <EstadoVazio

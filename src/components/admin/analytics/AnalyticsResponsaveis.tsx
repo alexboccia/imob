@@ -1,4 +1,6 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Users } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import {
   Table,
   TableBody,
@@ -36,15 +38,15 @@ export function AnalyticsResponsaveis({
   semOwnership: boolean;
 }) {
   return (
-    <Card className="min-w-0" role="region" aria-labelledby="analytics-responsaveis-titulo">
-      <CardHeader>
-        <CardTitle className="text-base" id="analytics-responsaveis-titulo">
-          Performance por responsável
-        </CardTitle>
-        <p className="pt-1 text-sm text-muted-foreground">
-          {periodoLabel} · quem conduz cada negociação
-        </p>
-      </CardHeader>
+    <section className="min-w-0 space-y-4">
+      <CabecalhoSecao
+        icone={Users}
+        titulo="Performance por responsável"
+        tom="azul"
+        id="analytics-responsaveis-titulo"
+        descricao={`${periodoLabel} · quem conduz cada negociação`}
+      />
+      <Card className="min-w-0" role="region" aria-labelledby="analytics-responsaveis-titulo">
       <CardContent className="space-y-4">
         {semOwnership ? (
           // Estado inicial legítimo: ownership passou a existir agora e
@@ -141,6 +143,7 @@ export function AnalyticsResponsaveis({
           </p>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </section>
   );
 }

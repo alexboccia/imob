@@ -1,4 +1,6 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { PieChart } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import {
   Table,
   TableBody,
@@ -38,15 +40,15 @@ export function AnalyticsParticipacao({
   } = participacao;
 
   return (
-    <Card className="min-w-0" role="region" aria-labelledby="analytics-participacao-titulo">
-      <CardHeader>
-        <CardTitle className="text-base" id="analytics-participacao-titulo">
-          Participação na comissão
-        </CardTitle>
-        <p className="pt-1 text-sm text-muted-foreground">
-          {periodoLabel} · como a comissão dos negócios ganhos foi dividida
-        </p>
-      </CardHeader>
+    <section className="min-w-0 space-y-4">
+      <CabecalhoSecao
+        icone={PieChart}
+        titulo="Participação na comissão"
+        tom="azul"
+        id="analytics-participacao-titulo"
+        descricao={`${periodoLabel} · como a comissão dos negócios ganhos foi dividida`}
+      />
+      <Card className="min-w-0" role="region" aria-labelledby="analytics-participacao-titulo">
       <CardContent className="space-y-4">
         <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="min-w-0">
@@ -141,6 +143,7 @@ export function AnalyticsParticipacao({
           distribuída”.
         </p>
       </CardContent>
-    </Card>
+      </Card>
+    </section>
   );
 }

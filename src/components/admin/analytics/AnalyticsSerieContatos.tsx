@@ -10,7 +10,9 @@ import {
   CartesianGrid,
   Tooltip,
 } from "recharts";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { TrendingUp } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import {
   Table,
   TableBody,
@@ -66,13 +68,14 @@ export function AnalyticsSerieContatos({
   const unidadePlural = granularidade === "SEMANA" ? "semanas" : "dias";
 
   return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle className="text-base">Evolução dos contatos</CardTitle>
-        <p className="pt-1 text-sm text-muted-foreground">
-          {periodoLabel} · um ponto por {unidade}
-        </p>
-      </CardHeader>
+    <section className="min-w-0 space-y-4">
+      <CabecalhoSecao
+        icone={TrendingUp}
+        titulo="Evolução dos contatos"
+        tom="azul"
+        descricao={`${periodoLabel} · um ponto por ${unidade}`}
+      />
+      <Card className="min-w-0">
       <CardContent className="space-y-3">
         {total === 0 ? (
           // Estado vazio explícito: um gráfico de 30 barras invisíveis não
@@ -165,6 +168,7 @@ export function AnalyticsSerieContatos({
           )}
         </div>
       </CardContent>
-    </Card>
+      </Card>
+    </section>
   );
 }
