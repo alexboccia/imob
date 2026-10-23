@@ -16,6 +16,8 @@ import {
   type ItemAgenda,
 } from "@/lib/agenda";
 import { periodoDaVisita, proximaVisita, painelAgoraDoDia, type PeriodoDia } from "@/lib/scheduled-activity-date";
+import { Inbox, CalendarCheck, CalendarDays, History } from "lucide-react";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { ModuloBloqueado } from "@/components/admin/ModuloBloqueado";
 import { AgendaItemCard } from "@/components/admin/AgendaItemCard";
 import { SolicitacaoVisitaCard } from "@/components/admin/agenda/SolicitacaoVisitaCard";
@@ -58,6 +60,33 @@ const PERIODO_DIA_LABEL: Record<PeriodoDia, string> = {
   MANHA: "Manhã",
   TARDE: "Tarde",
   NOITE: "Noite",
+};
+
+// Fase 136 — a área de conteúdo (lista/estado vazio/paginação) nunca
+// tinha um CabecalhoSecao: nem heading real, nem ícone, só o <h1> da
+// página do início ao fim. Título/ícone por aba — o mesmo tratamento já
+// dado a Pipeline (seção "Negociações") e Características.
+const ABA_SECAO: Record<Aba, { titulo: string; descricao: string; icone: typeof Inbox }> = {
+  solicitacoes: {
+    titulo: "Solicitações de visita",
+    descricao: "Pedidos de clientes aguardando sua resposta.",
+    icone: Inbox,
+  },
+  hoje: {
+    titulo: "Compromissos de hoje",
+    descricao: "Visitas agendadas para o dia de hoje.",
+    icone: CalendarCheck,
+  },
+  proximas: {
+    titulo: "Próximas visitas",
+    descricao: "Visitas agendadas para os próximos dias.",
+    icone: CalendarDays,
+  },
+  anteriores: {
+    titulo: "Visitas anteriores",
+    descricao: "Visitas já realizadas ou que já passaram da data.",
+    icone: History,
+  },
 };
 
 type SearchParams = {
@@ -195,6 +224,14 @@ export default async function AgendaPage({
 
       {painelAgora && <PainelAgoraAgenda estado={painelAgora} fuso={fuso} />}
 
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={ABA_SECAO[aba].icone}
+          titulo={ABA_SECAO[aba].titulo}
+          tom="azul"
+          descricao={ABA_SECAO[aba].descricao}
+        />
+
       {itens.length === 0 ? (
         <div className="rounded-xl border bg-card p-2 text-center sm:p-8">
           <p className="text-sm text-muted-foreground">{mensagemVaziaFinal}</p>
@@ -246,6 +283,7 @@ export default async function AgendaPage({
           ))}
         </div>
       )}
+      </section>
 
       {aba === "anteriores" && (page > 1 || itens.length === take) && (
         <div className="flex items-center justify-between text-sm">
