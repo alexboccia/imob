@@ -548,6 +548,7 @@ export default async function DetalheClientePage({
         <CabecalhoSecao
           icone={Building2}
           titulo="Imóveis recomendados"
+          tom="azul"
           descricao="Imóveis disponíveis que atendem os critérios de Preferências de imóvel."
         />
         {!preferencia ? (
@@ -587,6 +588,7 @@ export default async function DetalheClientePage({
         <CabecalhoSecao
           icone={Handshake}
           titulo="Imóveis relacionados"
+          tom="azul"
           descricao="Negociações abertas com este cliente — a mesma lista aparece no Pipeline."
         />
         <Card className="min-w-0">
@@ -810,6 +812,7 @@ export default async function DetalheClientePage({
       <CabecalhoSecao
         icone={SlidersHorizontal}
         titulo="Preferências de imóvel"
+          tom="azul"
         descricao="O que este cliente procura — usado para recomendar imóveis compatíveis, na aba Imóveis."
       />
       <PreferenciaImovelForm

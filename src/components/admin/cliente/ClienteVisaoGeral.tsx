@@ -47,7 +47,7 @@ export function ClienteVisaoGeral({
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <section className="space-y-3">
-        <CabecalhoSecao icone={User} titulo="Informações do cliente" />
+        <CabecalhoSecao icone={User} titulo="Informações do cliente" tom="azul" />
         <Card className="min-w-0">
           <CardContent className="space-y-2 text-sm">
             <p>
@@ -75,6 +75,7 @@ export function ClienteVisaoGeral({
         <CabecalhoSecao
           icone={Milestone}
           titulo="Estágio no funil"
+          tom="azul"
           descricao="Estágio geral deste cliente — diferente do estágio de cada negociação, na aba Imóveis."
         />
         <Card className="min-w-0">
@@ -83,7 +84,7 @@ export function ClienteVisaoGeral({
       </section>
 
       <section className="space-y-3">
-        <CabecalhoSecao icone={Building2} titulo="Próxima ação" />
+        <CabecalhoSecao icone={Building2} titulo="Próxima ação" tom="azul" />
         <Card className="min-w-0">
           <CardContent>{proximaAcao}</CardContent>
         </Card>
@@ -101,6 +102,7 @@ export function ClienteVisaoGeral({
             <CabecalhoSecao
               icone={StickyNote}
               titulo="Observações"
+              tom="azul"
               acoes={
                 <EditarClienteDialog
                   personId={pessoaId}
@@ -120,6 +122,7 @@ export function ClienteVisaoGeral({
         <CabecalhoSecao
           icone={History}
           titulo="Última interação"
+          tom="azul"
           acoes={<LinkIrParaAba aba="historico">Ver histórico</LinkIrParaAba>}
         />
         <Card className="min-w-0">
@@ -135,6 +138,7 @@ export function ClienteVisaoGeral({
         <CabecalhoSecao
           icone={SlidersHorizontal}
           titulo="Preferências de imóvel (resumo)"
+          tom="azul"
           acoes={<LinkIrParaAba aba="preferencias">Ver todas</LinkIrParaAba>}
         />
         <Card className="min-w-0">
@@ -146,6 +150,7 @@ export function ClienteVisaoGeral({
         <CabecalhoSecao
           icone={Building2}
           titulo="Imóveis recomendados"
+          tom="azul"
           acoes={<LinkIrParaAba aba="imoveis">Ver todos ({totalRecomendados})</LinkIrParaAba>}
         />
         {recomendacoesPreview ?? (

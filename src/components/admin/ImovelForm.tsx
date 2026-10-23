@@ -221,6 +221,7 @@ export function ImovelForm({
         <CabecalhoSecao
           icone={House}
           titulo="Identificação"
+          tom="azul"
           descricao="Como o imóvel é apresentado e em que situação ele está."
         />
         <Card className="min-w-0">
@@ -385,6 +386,7 @@ export function ImovelForm({
         <CabecalhoSecao
           icone={Megaphone}
           titulo="Divulgação"
+          tom="azul"
           descricao="Onde este imóvel aparece no site e com quais selos."
           acoes={edicao?.kitDivulgacao}
         />
@@ -471,6 +473,7 @@ export function ImovelForm({
         <CabecalhoSecao
           icone={MapPin}
           titulo="Endereço"
+          tom="azul"
           descricao="Onde o imóvel fica. Define bairro e cidade nos filtros do site."
         />
         <Card className="min-w-0">
@@ -498,6 +501,7 @@ export function ImovelForm({
         <CabecalhoSecao
           icone={CircleDollarSign}
           titulo="Valores"
+          tom="azul"
           descricao="O site mostra o preço da finalidade escolhida acima."
         />
         <Card className="min-w-0">
@@ -574,6 +578,7 @@ export function ImovelForm({
         <CabecalhoSecao
           icone={Ruler}
           titulo="Medidas e cômodos"
+          tom="azul"
           descricao="Alimentam os filtros de área, dormitórios e vagas do site."
         />
         <Card className="min-w-0">
@@ -645,6 +650,7 @@ export function ImovelForm({
         <CabecalhoSecao
           icone={ListChecks}
           titulo="Características"
+          tom="azul"
           descricao="O que o imóvel e o condomínio oferecem. Viram filtros no site."
         />
         <Card className="min-w-0">
@@ -676,6 +682,7 @@ export function ImovelForm({
         <CabecalhoSecao
           icone={ImageIcon}
           titulo="Fotos"
+          tom="azul"
           descricao="A primeira foto é a capa nas listagens e no compartilhamento."
         />
         <Card className="min-w-0">
@@ -735,6 +742,7 @@ export function ImovelForm({
         <CabecalhoSecao
           icone={FileText}
           titulo="Materiais de apresentação"
+          tom="azul"
           descricao="Book, plantas e tabelas — entregues no site após o visitante se identificar."
         />
         <Card className="min-w-0">
@@ -756,6 +764,7 @@ export function ImovelForm({
         <CabecalhoSecao
           icone={Landmark}
           titulo="O que tem por perto"
+          tom="azul"
           descricao="Cadastre os principais serviços, comércios e pontos de interesse próximos ao imóvel."
         />
         <Card className="min-w-0">
