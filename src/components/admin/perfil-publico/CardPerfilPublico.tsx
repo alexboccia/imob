@@ -3,11 +3,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { Switch } from "@/components/ui/switch";
 
-// Fase 130 — Card 1 de "Meu perfil público": a DECISÃO de publicar.
-// Mesmo contrato de sempre com a action (`name="perfilPublicoAtivo"`,
-// submete "on" quando ligado) — só o controle visual mudou de checkbox
-// para switch (Base UI Switch submete o mesmo "on"/nada que um checkbox
-// nativo, então nenhuma mudança na action nem no schema).
+// Fase 130 — Card 1 de "Meu perfil público"; Fase 131 promoveu este
+// componente para também ser usado por EditarUsuarioForm (gestão de
+// usuários), substituindo o antigo `PerfilPublicoCorretorFields`
+// (removido — ficou sem nenhum outro consumidor). A DECISÃO de
+// publicar. Mesmo contrato de sempre com a action
+// (`name="perfilPublicoAtivo"`, submete "on" quando ligado) — só o
+// controle visual mudou de checkbox para switch (Base UI Switch submete
+// o mesmo "on"/nada que um checkbox nativo, então nenhuma mudança na
+// action nem no schema, em nenhuma das duas telas).
 export function CardPerfilPublico({ publicado }: { publicado: boolean }) {
   return (
     <Card className="min-w-0">
@@ -19,10 +23,10 @@ export function CardPerfilPublico({ publicado }: { publicado: boolean }) {
           tom="azul"
         />
 
-        {/* Bloco informativo — mesmas regras de privacidade do texto
-            anterior (PerfilPublicoCorretorFields), só reorganizadas em
-            um único bloco visual com ícone, em vez de dois parágrafos
-            soltos. Nenhuma regra foi omitida. */}
+        {/* Bloco informativo — mesmas regras de privacidade do antigo
+            PerfilPublicoCorretorFields, só reorganizadas em um único
+            bloco visual com ícone, em vez de dois parágrafos soltos.
+            Nenhuma regra foi omitida. */}
         <div className="flex gap-2.5 rounded-lg bg-blue-50 p-3 text-xs text-blue-900">
           <Info className="mt-0.5 size-4 shrink-0 text-blue-500" aria-hidden />
           <div className="space-y-1.5">

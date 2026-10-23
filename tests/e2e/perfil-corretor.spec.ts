@@ -52,15 +52,17 @@ async function definirPerfilPublico(
   await page.locator("#perfilPublicoWhatsapp").fill(valores.whatsapp ?? "");
   await page.locator("#perfilPublicoTelefone").fill(valores.telefone ?? "");
   await page.locator("#perfilPublicoEmail").fill(valores.email ?? "");
+  // Fase 131 — mesmo switch real (role="switch") adotado em Meu perfil
+  // público (Fase 130); mesma label do botão ("Salvar alterações").
   const marcado =
     (await page
       .getByTestId("perfil-publico-ativo")
-      .locator('[role="checkbox"]')
+      .locator('[role="switch"]')
       .getAttribute("aria-checked")) === "true";
   if (marcado !== valores.publicar) {
     await page.getByTestId("perfil-publico-ativo").click();
   }
-  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
   await page.waitForURL(/\/app\/usuarios$/);
 }
 

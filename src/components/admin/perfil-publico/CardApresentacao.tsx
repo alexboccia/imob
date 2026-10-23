@@ -1,30 +1,34 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, FileText, Save } from "lucide-react";
+import { FileText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { LIMITE_BIO_PUBLICA } from "@/lib/perfil-publico-limites";
+import { RodapeSalvarPerfilPublico } from "@/components/admin/perfil-publico/RodapeSalvarPerfilPublico";
 
-// Fase 130 — Card 4: a Apresentação, mais o rodapé de ações (link
-// "Ver este perfil no site" + "Salvar alterações", o único botão de
-// salvar da tela — nenhum segundo fluxo de persistência).
+// Fase 130 — Card 4: a Apresentação. O rodapé de ações (link "Ver este
+// perfil no site" + "Salvar alterações") renderiza AQUI DENTRO por
+// padrão (Meu perfil público termina no próprio card). Fase 131 — em
+// EditarUsuarioForm o formulário continua depois da Apresentação (Papel,
+// status, senha), então ali `rodape={false}` e quem chama renderiza
+// `<RodapeSalvarPerfilPublico>` por conta própria, no fim do form.
 export function CardApresentacao({
   bio,
   erro,
   perfilPublicoHref,
   mensagem,
   pendente,
+  rodape = true,
 }: {
   bio: string | null;
   erro?: string[];
   perfilPublicoHref: string | null;
   mensagem: { texto: string; sucesso: boolean } | null;
   pendente: boolean;
+  rodape?: boolean;
 }) {
   // Contador não-controlado: `onChange` só atualiza a contagem exibida,
   // o `defaultValue`/envio do campo continuam não-controlados (evita o
@@ -66,42 +70,13 @@ export function CardApresentacao({
           {erro?.length ? <p className="text-xs text-destructive">{erro[0]}</p> : null}
         </div>
 
-        {mensagem && (
-          <Alert variant={mensagem.sucesso ? "default" : "destructive"}>
-            <AlertDescription>{mensagem.texto}</AlertDescription>
-          </Alert>
+        {rodape && (
+          <RodapeSalvarPerfilPublico
+            perfilPublicoHref={perfilPublicoHref}
+            mensagem={mensagem}
+            pendente={pendente}
+          />
         )}
-
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-          {perfilPublicoHref ? (
-            <p className="text-xs">
-              <a
-                href={perfilPublicoHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-link hover:underline"
-                data-testid="ver-perfil-publico"
-              >
-                <ExternalLink className="size-3.5" aria-hidden />
-                Ver este perfil no site
-              </a>{" "}
-              <span className="text-muted-foreground">
-                — abre a página pública real, como o visitante a vê.
-              </span>
-            </p>
-          ) : (
-            <span />
-          )}
-
-          <Button
-            type="submit"
-            disabled={pendente}
-            className="gap-1.5 bg-blue-600 font-semibold text-white hover:bg-blue-700"
-          >
-            <Save className="size-4" />
-            {pendente ? "Salvando..." : "Salvar alterações"}
-          </Button>
-        </div>
       </CardContent>
     </Card>
   );

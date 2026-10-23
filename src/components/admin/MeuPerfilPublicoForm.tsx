@@ -3,15 +3,15 @@
 import { useActionState } from "react";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { salvarMeuPerfilPublico } from "@/app/app/meu-perfil/actions";
-import { CardPerfilPublico } from "@/components/admin/meu-perfil/CardPerfilPublico";
-import { CardFotoPublica } from "@/components/admin/meu-perfil/CardFotoPublica";
-import { CardContatosPublicos } from "@/components/admin/meu-perfil/CardContatosPublicos";
-import { CardApresentacao } from "@/components/admin/meu-perfil/CardApresentacao";
+import { CardPerfilPublico } from "@/components/admin/perfil-publico/CardPerfilPublico";
+import { CardFotoPublica } from "@/components/admin/perfil-publico/CardFotoPublica";
+import { CardContatosPublicos } from "@/components/admin/perfil-publico/CardContatosPublicos";
+import { CardApresentacao } from "@/components/admin/perfil-publico/CardApresentacao";
 
 // Fase 130 — Redesign visual (4 cards, referência aprovada) de cima do
-// MESMO formulário/action/schema de sempre. `PerfilPublicoCorretorFields`
-// (usado por EditarUsuarioForm, a gestão de usuários) continua intocado —
-// esta reescrita vale só para a tela de autoatendimento.
+// MESMO formulário/action/schema de sempre. Fase 131 promoveu os cards
+// de `meu-perfil/` para `perfil-publico/` (nome genérico) porque
+// EditarUsuarioForm (gestão de usuários) passou a reutilizá-los também.
 export function MeuPerfilPublicoForm({
   valores,
   perfilPublicoHref,

@@ -2,25 +2,22 @@
 
 import { useActionState } from "react";
 import { atualizarUsuario } from "@/app/app/usuarios/actions";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { PerfilPublicoCorretorFields } from "@/components/admin/PerfilPublicoCorretorFields";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent } from "@/components/ui/card";
-import { ErroCampo } from "@/components/admin/ErroCampo";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { PAPEL_USUARIO_LABEL } from "@/lib/format";
-import { rotuloSelecionado } from "@/lib/select-rotulo";
-import { FotoCorretorUpload } from "@/components/admin/FotoCorretorUpload";
+import { CardIdentificacaoUsuario } from "@/components/admin/usuarios/CardIdentificacaoUsuario";
+import { CardContatoOperacional } from "@/components/admin/usuarios/CardContatoOperacional";
+import { CardPerfilPublico } from "@/components/admin/perfil-publico/CardPerfilPublico";
+import { CardFotoPublica } from "@/components/admin/perfil-publico/CardFotoPublica";
+import { CardContatosPublicos } from "@/components/admin/perfil-publico/CardContatosPublicos";
+import { CardApresentacao } from "@/components/admin/perfil-publico/CardApresentacao";
+import { CardAcessoPermissoes } from "@/components/admin/usuarios/CardAcessoPermissoes";
+import { RodapeSalvarPerfilPublico } from "@/components/admin/perfil-publico/RodapeSalvarPerfilPublico";
 
+// Fase 131 — mesmo design system da Fase 129/130 (cards por assunto,
+// ícone azul, switch) aplicado à gestão de usuários. Reaproveita os
+// MESMOS 4 cards de perfil público que "Meu perfil público" usa — nunca
+// duplicado, só promovido para `perfil-publico/` (ver Fase 130). Mesma
+// action/schema/validação de sempre; nenhuma regra de autorização,
+// permissão ou persistência mudou.
 export function EditarUsuarioForm({
   usuario,
   ehVoceMesmo,
@@ -58,136 +55,58 @@ export function EditarUsuarioForm({
   );
 
   return (
-    <Card>
-      <CardContent>
-        <form action={formAction} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>E-mail</Label>
-            <Input value={usuario.email} disabled />
-          </div>
+    <form action={formAction} className="space-y-4">
+      <CardIdentificacaoUsuario
+        email={usuario.email}
+        nome={usuario.nome}
+        foto={usuario.foto}
+        erroNome={estado.fieldErrors?.nome}
+      />
 
-          <div className="space-y-1.5">
-            <Label htmlFor="nome">Nome</Label>
-            <Input id="nome" name="nome" defaultValue={usuario.nome} required />
-            <ErroCampo erros={estado.fieldErrors?.nome} />
-          </div>
+      <CardContatoOperacional
+        whatsapp={usuario.whatsapp}
+        emailContato={usuario.emailContato}
+        erros={estado.fieldErrors}
+      />
 
-          <FotoCorretorUpload
-            fotoInicial={usuario.foto}
-            label="Foto no painel"
-            alt="Foto do usuário no painel"
-            descricao="Usada apenas dentro do painel. Não aparece no site público."
-          />
+      <CardPerfilPublico publicado={usuario.perfilPublico.publicado} />
+      <CardFotoPublica foto={usuario.perfilPublico.foto} />
+      <CardContatosPublicos
+        valores={{
+          creci: usuario.perfilPublico.creci,
+          whatsapp: usuario.perfilPublico.whatsapp,
+          telefone: usuario.perfilPublico.telefone,
+          email: usuario.perfilPublico.email,
+        }}
+        erros={estado.fieldErrors}
+      />
+      <CardApresentacao
+        bio={usuario.perfilPublico.bio}
+        erro={estado.fieldErrors?.perfilPublicoBio}
+        perfilPublicoHref={perfilPublicoHref ?? null}
+        mensagem={null}
+        pendente={pendente}
+        rodape={false}
+      />
 
-          <div className="space-y-1.5">
-            <Label htmlFor="whatsapp">WhatsApp operacional (opcional)</Label>
-            <Input
-              id="whatsapp"
-              name="whatsapp"
-              defaultValue={usuario.whatsapp ?? ""}
-              placeholder="5511999998888 (DDI + DDD + número, só dígitos)"
-            />
-            <p className="text-xs text-muted-foreground">
-              Uso interno da equipe. Não é publicado no site — para isso há
-              o WhatsApp público, na seção Perfil público abaixo.
-            </p>
-            <ErroCampo erros={estado.fieldErrors?.whatsapp} />
-          </div>
+      <CardAcessoPermissoes
+        papel={usuario.papel}
+        ativo={usuario.ativo}
+        ehVoceMesmo={ehVoceMesmo}
+        podeGerenciarOwner={podeGerenciarOwner}
+        erroPapel={estado.fieldErrors?.papel}
+        erroNovaSenha={estado.fieldErrors?.novaSenha}
+      />
 
-          <div className="space-y-1.5">
-            <Label htmlFor="emailContato">E-mail de contato (opcional)</Label>
-            <Input
-              id="emailContato"
-              name="emailContato"
-              type="email"
-              defaultValue={usuario.emailContato ?? ""}
-              placeholder="corretor@suaimobiliaria.com.br"
-            />
-            <p className="text-xs text-muted-foreground">
-              Para onde vão as mensagens do formulário de contato dos imóveis
-              deste corretor. Se vazio, usa o e-mail configurado em
-              Configurações.
-            </p>
-            <ErroCampo erros={estado.fieldErrors?.emailContato} />
-          </div>
-
-          <PerfilPublicoCorretorFields
-            valores={usuario.perfilPublico}
-            erros={estado.fieldErrors}
-            perfilPublicoHref={perfilPublicoHref}
-          />
-
-          {ehVoceMesmo ? (
-            <>
-              <input type="hidden" name="papel" value={usuario.papel} />
-              <input type="hidden" name="ativo" value="on" />
-              <div className="space-y-1.5">
-                <Label>Papel</Label>
-                <p className="text-sm">
-                  {PAPEL_USUARIO_LABEL[usuario.papel] ?? usuario.papel}
-                </p>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Você não pode alterar seu próprio papel nem desativar sua
-                própria conta por aqui.
-              </p>
-            </>
-          ) : (
-            <>
-              <div className="space-y-1.5">
-                <Label htmlFor="papel">Papel</Label>
-                <Select name="papel" defaultValue={usuario.papel}>
-                  <SelectTrigger id="papel" className="w-full">
-                    {/* Sem children, o trigger mostra o valor cru do
-                        enum (ex.: "BROKER") em vez do rótulo ("Corretor")
-                        — mesmo achado já corrigido em outras telas (ver
-                        select-rotulo.ts). */}
-                    <SelectValue>{rotuloSelecionado(usuario.papel, PAPEL_USUARIO_LABEL, "Papel")}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {/* Só quem já é proprietário pode conceder esse papel a
-                        outro membro — a regra de verdade é sempre checada de
-                        novo no servidor, isso aqui só evita oferecer uma
-                        opção que vai ser recusada. */}
-                    {(podeGerenciarOwner || usuario.papel === "OWNER") && (
-                      <SelectItem value="OWNER">Proprietário</SelectItem>
-                    )}
-                    <SelectItem value="ADMIN">Administrador</SelectItem>
-                    <SelectItem value="MANAGER">Gestor</SelectItem>
-                    <SelectItem value="BROKER">Corretor</SelectItem>
-                    <SelectItem value="ASSISTANT">Assistente</SelectItem>
-                  </SelectContent>
-                </Select>
-                <ErroCampo erros={estado.fieldErrors?.papel} />
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox name="ativo" defaultChecked={usuario.ativo} />
-                Usuário ativo
-              </label>
-            </>
-          )}
-
-          <div className="space-y-1.5">
-            <Label htmlFor="novaSenha">Nova senha (opcional)</Label>
-            <Input
-              id="novaSenha"
-              name="novaSenha"
-              type="password"
-              placeholder="Deixe em branco para manter a senha atual"
-              minLength={6}
-            />
-            <ErroCampo erros={estado.fieldErrors?.novaSenha} />
-          </div>
-
-          {!estado.success && estado.message && (
-            <p className="text-sm text-destructive">{estado.message}</p>
-          )}
-
-          <Button type="submit" disabled={pendente}>
-            {pendente ? "Salvando..." : "Salvar"}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+      <RodapeSalvarPerfilPublico
+        perfilPublicoHref={perfilPublicoHref ?? null}
+        mensagem={
+          !estado.success && estado.message
+            ? { texto: estado.message, sucesso: false }
+            : null
+        }
+        pendente={pendente}
+      />
+    </form>
   );
 }

@@ -40,9 +40,22 @@ export default async function EditarUsuarioPage({
     );
   }
 
+  // Fase 131 — mesmo esqueleto das outras telas administrativas de
+  // conteúdo (Meu perfil público, Configurações): `space-y-5`, cabeçalho
+  // em bloco próprio e NENHUMA largura máxima — quem limita a linha é o
+  // <main> do layout do painel. O `max-w-lg` continua valendo só pro
+  // estado de RECUSA acima (sem papel elegível), que é uma tela curta de
+  // uma frase só, não de conteúdo.
   return (
-    <div className="max-w-lg">
-      <h1 className="text-2xl font-semibold mb-6">Editar usuário</h1>
+    <div className="space-y-5">
+      <div className="min-w-0">
+        <h1 className="min-w-0 break-words text-2xl font-bold tracking-tight">
+          Editar usuário
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Dados de acesso, contatos e perfil público deste usuário.
+        </p>
+      </div>
       <EditarUsuarioForm
         usuario={{
           id: membro.id,
