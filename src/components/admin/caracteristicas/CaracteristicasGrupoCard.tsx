@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Building2, ListChecks } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ErroCampo } from "@/components/admin/ErroCampo";
@@ -23,6 +25,15 @@ import { normalizarTexto } from "@/lib/texto";
 // `normalizarTexto` (já usado pelo mesmo catálogo no formulário de
 // imóvel, SeletorCaracteristicas.tsx) garante busca case+accent-
 // insensitive consistente com o resto do produto, sem reinventar regra.
+//
+// Fase 135 — CardTitle virou CabecalhoSecao (mesmo achado de
+// acessibilidade já corrigido em Tipos de imóvel, Fase 72: CardTitle
+// renderiza um <div>, sem semântica de heading — "Características do
+// imóvel"/"do condomínio" nunca foram heading nenhum, só o <h1> da
+// página existia). Ícone por categoria (ListChecks/Building2) e
+// tom="azul", consistentes com o resto do backoffice já redesenhado.
+const ICONE_POR_CATEGORIA = { PROPERTY: ListChecks, CONDO: Building2 } as const;
+
 export function CaracteristicasGrupoCard({
   titulo,
   categoria,
@@ -50,23 +61,15 @@ export function CaracteristicasGrupoCard({
       : `${total} ${total === 1 ? "opção" : "opções"}`;
 
   return (
-    <Card className="min-w-0">
-      {/* min-w-0 break-words no título: achado real em 375/360px — CardHeader
-          é `display:grid` (ver card.tsx), e um item de grid tem
-          `min-width:auto` implícito por padrão, então "Características do
-          imóvel"/"do condomínio" (mais longo que qualquer título de KPI já
-          testado) não quebrava linha e empurrava a coluna/o card/o
-          documento pra fora do viewport (scrollWidth 424 vs innerWidth 375
-          antes desta correção) — mesma classe de bug já corrigida em
-          Dashboard/Imóveis, aqui no CardTitle em vez de num <h1>/badge.
-          Aplicado só nesta instância (className), não no componente
-          CardTitle compartilhado — usado em Dashboard/Usuários/Imóveis/
-          Clientes/etc. com títulos mais curtos, sem necessidade de mudar
-          o componente base. */}
-      <CardHeader>
-        <CardTitle className="min-w-0 break-words">{titulo}</CardTitle>
-        <CardDescription>{contagemLabel}</CardDescription>
-      </CardHeader>
+    <section className="min-w-0 space-y-4">
+      <CabecalhoSecao
+        icone={ICONE_POR_CATEGORIA[categoria]}
+        titulo={titulo}
+        tom="azul"
+        descricao={contagemLabel}
+      />
+
+      <Card className="min-w-0">
       <CardContent className="min-w-0 space-y-4">
         <Input
           value={busca}
@@ -113,6 +116,7 @@ export function CaracteristicasGrupoCard({
           </ul>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </section>
   );
 }

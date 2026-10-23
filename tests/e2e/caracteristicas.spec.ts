@@ -16,15 +16,22 @@ test.beforeEach(async ({ page }) => {
   await login(page, ORG_A);
 });
 
+// Fase 135 — o título do grupo deixou de ser um CardTitle (um <div>,
+// sem semântica de heading) e virou um <h2> real via CabecalhoSecao,
+// FORA do Card (mesmo padrão já usado por Tipos de imóvel/Locais
+// próximos). O locator escopa pela <section> (cabeçalho + card juntos),
+// não mais pelo card isolado — toda busca abaixo (getByPlaceholder/
+// getByText/getByRole) continua funcionando igual, pois procura
+// descendentes de qualquer ancestral comum.
 function grupoImovel(page: Page) {
-  return page.locator('[data-slot="card"]').filter({
-    has: page.locator('[data-slot="card-title"]', { hasText: "Características do imóvel" }),
+  return page.locator("section").filter({
+    has: page.getByRole("heading", { level: 2, name: "Características do imóvel" }),
   });
 }
 
 function grupoCondominio(page: Page) {
-  return page.locator('[data-slot="card"]').filter({
-    has: page.locator('[data-slot="card-title"]', { hasText: "Características do condomínio" }),
+  return page.locator("section").filter({
+    has: page.getByRole("heading", { level: 2, name: "Características do condomínio" }),
   });
 }
 
