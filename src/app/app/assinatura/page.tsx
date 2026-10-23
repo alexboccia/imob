@@ -60,6 +60,7 @@ export default async function AssinaturaPage() {
       <section className="min-w-0 space-y-4">
         <CabecalhoSecao
           icone={FileText}
+          tom="azul"
           titulo={
             <span className="inline-flex flex-wrap items-center gap-2">
               {assinatura.nomePlano}
@@ -124,7 +125,7 @@ export default async function AssinaturaPage() {
       </section>
 
       <section className="min-w-0 space-y-4">
-        <CabecalhoSecao icone={Info} titulo="Contratação" />
+        <CabecalhoSecao icone={Info} tom="azul" titulo="Contratação" />
 
         <Card className="min-w-0">
           <CardContent className="min-w-0 space-y-2 text-sm text-muted-foreground">
