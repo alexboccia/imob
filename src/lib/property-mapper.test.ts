@@ -93,6 +93,51 @@ describe("imovelSchema", () => {
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.preco).toBe(undefined);
   });
+
+  test("codigo ausente (criação) vira undefined, não erro", () => {
+    const r = imovelSchema.safeParse({
+      titulo: "Apartamento 2 quartos",
+      tipo: "Apartamento",
+      finalidade: "SALE",
+      status: "AVAILABLE",
+      bairro: "Pinheiros",
+      cidade: "São Paulo",
+      estado: "SP",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.codigo).toBe(undefined);
+  });
+
+  test("codigo válido (edição) é aceito como número", () => {
+    const r = imovelSchema.safeParse({
+      titulo: "Apartamento 2 quartos",
+      tipo: "Apartamento",
+      finalidade: "SALE",
+      status: "AVAILABLE",
+      bairro: "Pinheiros",
+      cidade: "São Paulo",
+      estado: "SP",
+      codigo: "100042",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.codigo).toBe(100042);
+  });
+
+  test("codigo recusa zero, negativo e fracionário", () => {
+    for (const valor of ["0", "-5", "1.5"]) {
+      const r = imovelSchema.safeParse({
+        titulo: "Apartamento 2 quartos",
+        tipo: "Apartamento",
+        finalidade: "SALE",
+        status: "AVAILABLE",
+        bairro: "Pinheiros",
+        cidade: "São Paulo",
+        estado: "SP",
+        codigo: valor,
+      });
+      expect(r.success, `codigo=${valor} deveria ser recusado`).toBe(false);
+    }
+  });
 });
 
 describe("parseImovelFormData", () => {

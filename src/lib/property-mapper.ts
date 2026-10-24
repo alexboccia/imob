@@ -68,6 +68,19 @@ function lerMidiasBrutas(json: string | undefined): ItemMidiaBruto[] {
 
 export const imovelSchema = z.object({
   titulo: z.string().min(3, "Informe um título com ao menos 3 caracteres."),
+  // Fase 140 — editável só na EDIÇÃO (o formulário de criação não manda
+  // este campo; o código é gerado pelo banco no create). Fora de
+  // camposImovel() de propósito: ao contrário dos demais campos, não faz
+  // sentido na criação, e quem decide a unicidade é a action (mensagem
+  // amigável antes de tentar gravar — ver resolverCodigo).
+  codigo: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : Number(v)),
+    z
+      .number()
+      .int("O ID do imóvel deve ser um número inteiro.")
+      .positive("O ID do imóvel deve ser maior que zero.")
+      .optional()
+  ),
   descricao: z.string().optional(),
   // A validação de tamanho roda sobre o texto JÁ SEM espaços nas pontas:
   // 180 espaços seguidos de uma palavra não são uma frase de 181

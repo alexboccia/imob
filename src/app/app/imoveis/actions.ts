@@ -231,6 +231,34 @@ async function resolverPosicaoDestaque(
   return { ok: true, posicao: interpretado.posicao };
 }
 
+// Fase 140 — ID do imóvel editável (só na edição, nunca na criação: o
+// formulário de "Novo imóvel" não manda este campo, e o código nasce do
+// autoincrement do banco). Mesmo padrão de resolverPosicaoDestaque:
+// checagem para MENSAGEM boa (nomeia o imóvel que já usa o número); quem
+// garante a unicidade de verdade é o índice @@unique([organizationId,
+// code]) do banco.
+async function resolverCodigo(
+  organizationId: string,
+  imovelId: string,
+  codigoDesejado: number | undefined
+): Promise<{ ok: true; codigo: number | undefined } | { ok: false; estado: ActionState }> {
+  if (codigoDesejado === undefined) return { ok: true, codigo: undefined };
+
+  const ocupante = await prisma.property.findFirst({
+    where: { organizationId, code: codigoDesejado, id: { not: imovelId } },
+    select: { title: true },
+  });
+  if (ocupante) {
+    return {
+      ok: false,
+      estado: erroGenerico(
+        `O ID ${codigoDesejado} já pertence ao imóvel "${ocupante.title}". Escolha outro número.`
+      ),
+    };
+  }
+  return { ok: true, codigo: codigoDesejado };
+}
+
 // A vitrine tem no máximo quatro posições e o banco garante isso com um
 // índice único. Uma corrida por posição chega aqui como P2002 — o
 // segundo a gravar perde, e recebe uma mensagem que explica o que
@@ -281,6 +309,9 @@ export async function atualizarImovel(
 
   const destaque = await resolverPosicaoDestaque(organizationId, imovelId, formData);
   if (!destaque.ok) return destaque.estado;
+
+  const codigo = await resolverCodigo(organizationId, imovelId, dados.codigo);
+  if (!codigo.ok) return codigo.estado;
 
   const empreendimento = await resolverEmpreendimento(organizationId, dados.empreendimentoId);
   if (!empreendimento.ok) return empreendimento.estado;
@@ -383,6 +414,11 @@ export async function atualizarImovel(
         where: { id: imovelId, organizationId },
         data: {
           ...camposImovel(dados),
+          // undefined = não mexe no campo: é o que preserva o código
+          // atual quando o formulário não manda nenhum (nunca deveria
+          // acontecer na edição, mas é a mesma defesa de "não apagar o
+          // que não foi mandado" do resto do formulário).
+          code: codigo.codigo,
           // Vínculo SEMPRE reescrito na edição (inclusive para null):
           // é o que permite desvincular uma unidade pelo próprio
           // formulário, sem uma segunda ação.

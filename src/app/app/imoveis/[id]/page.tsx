@@ -407,6 +407,9 @@ export default async function EditarImovelPage({
             fotoCapaUrl,
             totalFotos: fotosDoImovel.length,
           },
+          // Fase 140 — prefixo da organização (Configurações > Geral),
+          // só para exibir ao lado do campo "ID do imóvel" na edição.
+          codigoImovelPrefixo: config.codigoImovelPrefixo,
         }}
       />
 

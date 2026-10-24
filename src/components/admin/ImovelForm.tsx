@@ -167,6 +167,9 @@ export function ImovelForm({
       fotoCapaUrl: string | null;
       totalFotos: number;
     };
+    /** Fase 140 — prefixo da organização, só para exibir ao lado do
+        campo "ID do imóvel" (Configurações > Geral). */
+    codigoImovelPrefixo: string;
   };
 }) {
   const [estado, formAction] = useActionState(action, ESTADO_INICIAL_ACAO);
@@ -231,6 +234,39 @@ export function ImovelForm({
             <Input id="titulo" name="titulo" defaultValue={v.titulo ?? ""} required />
             <ErroCampo erros={estado.fieldErrors?.titulo} />
           </div>
+
+          {/* Fase 140 — ID do imóvel editável, só na EDIÇÃO: o código
+              nasce do autoincrement do banco na criação, então só existe
+              depois de o imóvel já ter sido salvo pela primeira vez. A
+              unicidade de verdade é garantida pela action
+              (resolverCodigo) + índice único do banco — este campo só
+              deixa o corretor corrigir um número digitado errado. */}
+          {edicao && (
+            <div className="space-y-1.5">
+              <Label htmlFor="codigo">ID do imóvel</Label>
+              <div className="flex min-w-0 items-center gap-2">
+                {edicao.codigoImovelPrefixo && (
+                  <span className="text-sm text-muted-foreground">
+                    {edicao.codigoImovelPrefixo}-
+                  </span>
+                )}
+                <Input
+                  id="codigo"
+                  name="codigo"
+                  type="number"
+                  min={1}
+                  step={1}
+                  defaultValue={edicao.resumo.codigo}
+                  className="max-w-40"
+                />
+              </div>
+              <ErroCampo erros={estado.fieldErrors?.codigo} />
+              <p className="text-xs text-muted-foreground">
+                Identificador único usado nas listagens e na ficha pública. Alterar não move o
+                imóvel de lugar nem muda o link da ficha.
+              </p>
+            </div>
+          )}
 
           {/* Fase 38 — a que EMPREENDIMENTO esta unidade pertence.
               Fica em Identificação, junto de tipo e finalidade: é o que
