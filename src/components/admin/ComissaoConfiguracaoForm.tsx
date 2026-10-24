@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
+import { Percent } from "lucide-react";
 import { ESTADO_INICIAL_ACAO } from "@/lib/action-result";
 import { salvarComissaoPadrao } from "@/app/app/configuracoes/comissao-actions";
 
@@ -28,10 +30,9 @@ export function ComissaoConfiguracaoForm({
   const [estado, formAction, pendente] = useActionState(salvarComissaoPadrao, ESTADO_INICIAL_ACAO);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Comissão</CardTitle>
-      </CardHeader>
+    <section className="min-w-0 space-y-4">
+      <CabecalhoSecao icone={Percent} titulo="Comissão" tom="azul" />
+      <Card>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
           Defina um percentual padrão para ajudar no preenchimento ao registrar uma proposta.
@@ -75,6 +76,7 @@ export function ComissaoConfiguracaoForm({
           </Button>
         </form>
       </CardContent>
-    </Card>
+      </Card>
+    </section>
   );
 }

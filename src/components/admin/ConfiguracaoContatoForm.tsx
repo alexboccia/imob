@@ -7,12 +7,15 @@ import { formatarCodigoImovel } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ErroCampo } from "@/components/admin/ErroCampo";
 import { CorBarraTopo } from "@/components/admin/CorBarraTopo";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import {
+  Building2,
+  Hash,
   Monitor,
   Palette,
   Share2,
@@ -153,13 +156,14 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
               seus `name`, seus ids e a persistência são exatamente os
               mesmos — a mudança é de layout. "Código do imóvel" continua
               num card à parte, porque é outro assunto. */}
+          <section className="min-w-0 space-y-4">
+          <CabecalhoSecao
+            icone={Building2}
+            titulo="Informações gerais"
+            tom="azul"
+            descricao="Os dados básicos da sua imobiliária."
+          />
           <Card className="min-w-0">
-            <CardHeader>
-              <CardTitle className="min-w-0 break-words">Informações gerais</CardTitle>
-              <CardDescription className="min-w-0 break-words">
-                Os dados básicos da sua imobiliária.
-              </CardDescription>
-            </CardHeader>
             <CardContent className="min-w-0">
               <div className="grid min-w-0 gap-5 lg:grid-cols-2">
                 <div className="min-w-0 space-y-1.5">
@@ -214,15 +218,16 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
               </div>
             </CardContent>
           </Card>
+          </section>
 
+          <section className="min-w-0 space-y-4">
+          <CabecalhoSecao
+            icone={Hash}
+            titulo="Código do imóvel"
+            tom="azul"
+            descricao="Os imóveis recebem um código numérico automático (ex: 100001). Defina um prefixo opcional para personalizar como ele é exibido."
+          />
           <Card className="min-w-0">
-            <CardHeader>
-              <CardTitle className="min-w-0 break-words">Código do imóvel</CardTitle>
-              <CardDescription className="min-w-0 break-words">
-                Os imóveis recebem um código numérico automático (ex: 100001).
-                Defina um prefixo opcional para personalizar como ele é exibido.
-              </CardDescription>
-            </CardHeader>
             <CardContent className="min-w-0">
               {/* Prefixo à esquerda, exemplo à direita — o exemplo é só
                   informação visual derivada do prefixo, nunca um campo. */}
@@ -251,6 +256,7 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
               </div>
             </CardContent>
           </Card>
+          </section>
               </>
             ),
           },
@@ -267,14 +273,15 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           {/* xl:items-start é obrigatório para o sticky da prévia: com o
                   `stretch` padrão a coluna ocuparia a altura toda da linha
                   e não sobraria folga para grudar. */}
+          <section className="min-w-0 space-y-4">
+          <CabecalhoSecao
+            icone={Palette}
+            titulo="Identidade visual"
+            tom="azul"
+            descricao="Como sua imobiliária aparece no site público."
+          />
               <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,62fr)_minmax(0,38fr)] xl:items-start">
             <Card className="min-w-0">
-              <CardHeader>
-                <CardTitle className="min-w-0 break-words">Identidade visual</CardTitle>
-                <CardDescription className="min-w-0 break-words">
-                  Como sua imobiliária aparece no site público.
-                </CardDescription>
-              </CardHeader>
               <CardContent className="min-w-0 space-y-6">
             <LogoUpload logoInicial={config.logo} alturaInicial={config.logoAltura} />
             <FaviconUpload faviconInicial={config.favicon} />
@@ -323,6 +330,7 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
               </Card>
             </div>
           </div>
+          </section>
               </>
             ),
           },
@@ -332,13 +340,14 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
             icone: Monitor,
             conteudo: (
               <>
+          <section className="min-w-0 space-y-4">
+          <CabecalhoSecao
+            icone={Monitor}
+            titulo="Site público"
+            tom="azul"
+            descricao="A imagem principal da Home, o rodapé e a faixa de contatos do topo."
+          />
           <Card className="min-w-0">
-            <CardHeader>
-              <CardTitle className="min-w-0 break-words">Site público</CardTitle>
-              <CardDescription className="min-w-0 break-words">
-                A imagem principal da Home, o rodapé e a faixa de contatos do topo.
-              </CardDescription>
-            </CardHeader>
             <CardContent className="min-w-0 space-y-6">
               <HeroImageUpload heroImageInicial={config.heroImage} />
 
@@ -361,6 +370,7 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
             </div>
             </CardContent>
           </Card>
+          </section>
               </>
             ),
           },
@@ -370,13 +380,14 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
             icone: Share2,
             conteudo: (
               <>
+          <section className="min-w-0 space-y-4">
+          <CabecalhoSecao
+            icone={Share2}
+            titulo="Contatos, redes sociais e atendimento"
+            tom="azul"
+            descricao="Escolha onde cada contato ou rede social será exibido no site público. Campos não preenchidos não serão exibidos."
+          />
           <Card className="min-w-0">
-            <CardHeader>
-              <CardTitle className="min-w-0 break-words">Contatos, redes sociais e atendimento</CardTitle>
-              <CardDescription className="min-w-0 break-words">
-                Escolha onde cada contato ou rede social será exibido no site público. Campos não preenchidos não serão exibidos.
-              </CardDescription>
-            </CardHeader>
             <CardContent className="min-w-0 space-y-4">
             {CANAIS_PUBLICOS.map((canal) => {
               const valores = config.canais[canal.chave];
@@ -496,6 +507,7 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
             </div>
             </CardContent>
           </Card>
+          </section>
               </>
             ),
           },
@@ -508,14 +520,14 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
           {/* Visibilidade da carteira comercial (Fase 22). Fica junto do
               resto da configuração institucional — nenhuma tela nova, e o
               mesmo gate de OWNER/ADMIN que já protege esta página. */}
+          <section className="min-w-0 space-y-4">
+          <CabecalhoSecao
+            icone={ShieldCheck}
+            titulo="Visibilidade da carteira comercial"
+            tom="azul"
+            descricao="Define o que cada pessoa da equipe enxerga em Clientes, Pipeline e Agenda. Alterar esta opção não transfere nem apaga nada — muda apenas quem tem acesso."
+          />
           <Card className="min-w-0">
-            <CardHeader>
-              <CardTitle className="min-w-0 break-words">Visibilidade da carteira comercial</CardTitle>
-              <CardDescription className="min-w-0 break-words">
-                Define o que cada pessoa da equipe enxerga em Clientes, Pipeline e Agenda. Alterar
-                esta opção não transfere nem apaga nada — muda apenas quem tem acesso.
-              </CardDescription>
-            </CardHeader>
             <CardContent className="min-w-0">
               {/* <fieldset> + <legend>: as duas opções são uma escolha única
                   e precisam ser anunciadas como grupo por leitor de tela. */}
@@ -558,6 +570,7 @@ export function ConfiguracaoContatoForm({ config }: { config: ConfiguracaoInicia
               <ErroCampo erros={estado.fieldErrors?.visibilidadeComercial} />
             </CardContent>
           </Card>
+          </section>
               </>
             ),
           },

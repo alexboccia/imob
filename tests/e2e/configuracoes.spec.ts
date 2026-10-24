@@ -251,9 +251,14 @@ test.describe("Configurações", () => {
     expect(m.scrollWidth <= m.innerWidth + 1, `innerWidth=${m.innerWidth} scrollWidth=${m.scrollWidth}`).toBe(true);
 
     await abrirAba(page, "Identidade visual");
+    // Fase 139 — "Identidade visual" virou CabecalhoSecao (h2 real) FORA do
+    // Card, não mais um CardTitle dentro dele; o card de controles é o
+    // primeiro [data-slot="card"] da mesma <section>.
     const identidade = await page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { level: 2, name: "Identidade visual" }) })
       .locator('[data-slot="card"]')
-      .filter({ has: page.locator('[data-slot="card-title"]', { hasText: "Identidade visual" }) })
+      .first()
       .boundingBox();
     const previa = await page.locator("[data-previa-identidade]").boundingBox();
 

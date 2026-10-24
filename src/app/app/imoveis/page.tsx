@@ -200,6 +200,7 @@ export default async function AdminImoveisPage({
         <CabecalhoSecao
           icone={Building2}
           titulo="Portfólio de imóveis"
+          tom="azul"
           descricao="Gerencie, filtre e encontre rapidamente os imóveis cadastrados."
         />
 

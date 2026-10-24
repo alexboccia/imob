@@ -423,6 +423,7 @@ export default async function EditarImovelPage({
           <CabecalhoSecao
             icone={UserSearch}
             titulo="Clientes compatíveis"
+            tom="azul"
             descricao="Clientes cujas preferências cadastradas combinam com este imóvel."
           />
           <Card className="min-w-0">
@@ -485,6 +486,7 @@ export default async function EditarImovelPage({
         <CabecalhoSecao
           icone={Handshake}
           titulo="Clientes interessados"
+          tom="azul"
           descricao="Negociações abertas com este imóvel — a mesma lista aparece no Pipeline."
         />
         {interesses.length === 0 ? (

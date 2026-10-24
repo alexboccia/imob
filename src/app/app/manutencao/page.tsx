@@ -1,8 +1,9 @@
-import { ShieldCheck, Clock } from "lucide-react";
+import { ShieldCheck, Clock, Trash2 } from "lucide-react";
 import { temPapel, PAPEIS_MANUTENCAO } from "@/lib/authorization";
 import { papelAtual } from "@/lib/papel-atual";
 import { LimparMidiasButton } from "@/components/admin/LimparMidiasButton";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 
 export default async function ManutencaoPage() {
   // AUTORIZAÇÃO INALTERADA — exatamente o mesmo trio de sempre, agora
@@ -20,14 +21,14 @@ export default async function ManutencaoPage() {
         </p>
       </div>
 
+      <section className="min-w-0 space-y-4">
+      <CabecalhoSecao
+        icone={Trash2}
+        titulo="Fotos não utilizadas"
+        tom="azul"
+        descricao="Remova arquivos temporários que não estão associados a imóveis cadastrados."
+      />
       <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="min-w-0 break-words">Fotos não utilizadas</CardTitle>
-          <CardDescription className="min-w-0 break-words">
-            Remova arquivos temporários que não estão associados a imóveis
-            cadastrados.
-          </CardDescription>
-        </CardHeader>
         <CardContent className="min-w-0 space-y-5">
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="flex min-w-0 items-start gap-3 rounded-lg border p-3">
@@ -84,6 +85,7 @@ export default async function ManutencaoPage() {
           )}
         </CardContent>
       </Card>
+      </section>
     </div>
   );
 }

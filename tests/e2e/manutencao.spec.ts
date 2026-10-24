@@ -21,7 +21,9 @@ test.describe("Manutenção", () => {
 
   test("página renderiza com as proteções reais e a ação principal", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Manutenção" })).toBeVisible();
-    await expect(page.locator('[data-slot="card-title"]', { hasText: "Fotos não utilizadas" })).toBeVisible();
+    // Fase 139 — "Fotos não utilizadas" virou CabecalhoSecao (h2 real, ver
+    // CabecalhoSecao.tsx), não mais um CardTitle (`[data-slot="card-title"]`).
+    await expect(page.getByRole("heading", { level: 2, name: "Fotos não utilizadas" })).toBeVisible();
     await expect(page.getByText("Proteção automática")).toBeVisible();
     await expect(page.getByText("Somente fotos sem vínculo com imóveis")).toBeVisible();
     await expect(page.getByText("Período de segurança")).toBeVisible();
