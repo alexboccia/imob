@@ -14,8 +14,9 @@ import {
   Bar,
   Cell,
 } from "recharts";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Building2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
+import { Building2, TrendingUp } from "lucide-react";
 import {
   BarraSegmentada,
   classesItemSegmentado,
@@ -89,21 +90,26 @@ export function DashboardCharts({
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <section className="min-w-0 space-y-4">
+        <CabecalhoSecao
+          icone={TrendingUp}
+          titulo="Desempenho comercial"
+          tom="azul"
+          descricao={
+            <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span>Últimos 6 meses</span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-[#171717]" aria-hidden />
+                Leads: <span className="font-medium text-foreground">{totalLeads}</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-full bg-[#2563eb]" aria-hidden />
+                Negócios fechados: <span className="font-medium text-foreground">{totalNegocios}</span>
+              </span>
+            </span>
+          }
+        />
       <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="text-base">Desempenho comercial</CardTitle>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-sm text-muted-foreground">
-            <span>Últimos 6 meses</span>
-            <span className="flex items-center gap-1.5">
-              <span className="size-2 rounded-full bg-[#171717]" aria-hidden />
-              Leads: <span className="font-medium text-foreground">{totalLeads}</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="size-2 rounded-full bg-[#2563eb]" aria-hidden />
-              Negócios fechados: <span className="font-medium text-foreground">{totalNegocios}</span>
-            </span>
-          </div>
-        </CardHeader>
         <CardContent>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -139,38 +145,44 @@ export function DashboardCharts({
           </div>
         </CardContent>
       </Card>
+      </section>
 
+      <section className="min-w-0 space-y-4">
+        {/* flex-wrap: mesmo achado/correção já aplicado em
+            UsuariosFiltrosBar (Finding #2 da auditoria de Usuários) —
+            em ~88-118px de coluna real (360-390px atrás da sidebar
+            fixa), as 3 pills (Status/Tipo/Bairro) não cabem numa única
+            linha; sem flex-wrap aqui, isso empurrava o scrollWidth do
+            DOCUMENTO inteiro (373 vs 360 medido). Aditivo: em telas
+            largas as 3 continuam lado a lado normalmente. */}
+        {/* Fase 65 — mesma moldura das outras opções segmentadas do
+            backoffice. A semântica NÃO mudou: continuam <button
+            aria-pressed>, porque é estado local do gráfico, não
+            navegação. A barra rola em vez de quebrar em ~88-118px de
+            coluna real (360-390px atrás da sidebar fixa), onde as três
+            pills nunca couberam numa linha — antes isso empurrava o
+            scrollWidth do documento inteiro. */}
+        <CabecalhoSecao
+          icone={Building2}
+          titulo="Composição do portfólio"
+          tom="azul"
+          acoes={
+            <BarraSegmentada role="group" aria-label="Dimensão da composição do portfólio">
+              {(Object.keys(DIMENSAO_LABEL) as Dimensao[]).map((chave) => (
+                <button
+                  key={chave}
+                  type="button"
+                  aria-pressed={dimensao === chave}
+                  onClick={() => setDimensao(chave)}
+                  className={classesItemSegmentado(dimensao === chave)}
+                >
+                  {DIMENSAO_LABEL[chave]}
+                </button>
+              ))}
+            </BarraSegmentada>
+          }
+        />
       <Card className="min-w-0">
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">Composição do portfólio</CardTitle>
-          {/* flex-wrap: mesmo achado/correção já aplicado em
-              UsuariosFiltrosBar (Finding #2 da auditoria de Usuários) —
-              em ~88-118px de coluna real (360-390px atrás da sidebar
-              fixa), as 3 pills (Status/Tipo/Bairro) não cabem numa única
-              linha; sem flex-wrap aqui, isso empurrava o scrollWidth do
-              DOCUMENTO inteiro (373 vs 360 medido). Aditivo: em telas
-              largas as 3 continuam lado a lado normalmente. */}
-          {/* Fase 65 — mesma moldura das outras opções segmentadas do
-              backoffice. A semântica NÃO mudou: continuam <button
-              aria-pressed>, porque é estado local do gráfico, não
-              navegação. A barra rola em vez de quebrar em ~88-118px de
-              coluna real (360-390px atrás da sidebar fixa), onde as três
-              pills nunca couberam numa linha — antes isso empurrava o
-              scrollWidth do documento inteiro. */}
-          <BarraSegmentada role="group" aria-label="Dimensão da composição do portfólio">
-            {(Object.keys(DIMENSAO_LABEL) as Dimensao[]).map((chave) => (
-              <button
-                key={chave}
-                type="button"
-                aria-pressed={dimensao === chave}
-                onClick={() => setDimensao(chave)}
-                className={classesItemSegmentado(dimensao === chave)}
-              >
-                {DIMENSAO_LABEL[chave]}
-              </button>
-            ))}
-          </BarraSegmentada>
-        </CardHeader>
         <CardContent>
           {dados.length === 0 ? (
             // Copy preservada palavra por palavra — só o invólucro passou
@@ -208,6 +220,7 @@ export function DashboardCharts({
           )}
         </CardContent>
       </Card>
+      </section>
     </div>
   );
 }

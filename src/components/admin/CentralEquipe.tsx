@@ -49,6 +49,7 @@ export function CentralEquipe({ dados, fuso }: { dados: VisaoEquipe; fuso: strin
         <CabecalhoSecao
           icone={UsersRound}
           titulo="Visão da equipe"
+          tom="azul"
           // Descrição PRESERVADA: ela é mais precisa que um texto genérico
           // sobre carga de trabalho — deixa explícito que os números são da
           // ORGANIZAÇÃO, não "meus", que é a diferença inteira entre esta
@@ -137,6 +138,7 @@ export function CentralEquipe({ dados, fuso }: { dados: VisaoEquipe; fuso: strin
         <CabecalhoSecao
           icone={Users}
           titulo="Distribuição por responsável"
+          tom="azul"
           descricao="Trabalho em aberto de cada pessoa, em ordem alfabética. Não é ranking nem avaliação."
         />
 

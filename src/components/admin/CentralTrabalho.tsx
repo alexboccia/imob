@@ -113,6 +113,7 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
         <CabecalhoSecao
           icone={CalendarDays}
           titulo="Agenda"
+          tom="azul"
           descricao="Seus compromissos e próximos atendimentos."
         />
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -182,6 +183,7 @@ export function CentralTrabalho({ dados, fuso }: { dados: DadosCentral; fuso: st
         <CabecalhoSecao
           icone={Handshake}
           titulo="Minhas negociações"
+          tom="azul"
           descricao="Negociações em andamento sob sua responsabilidade."
         />
       <Card className="min-w-0">

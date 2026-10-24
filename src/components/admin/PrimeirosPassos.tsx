@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Rocket } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CabecalhoSecao } from "@/components/admin/ui/CabecalhoSecao";
 import { Badge } from "@/components/ui/badge";
 import type { Onboarding } from "@/lib/onboarding";
 
@@ -16,19 +18,21 @@ export function PrimeirosPassos({ dados }: { dados: Onboarding }) {
   if (dados.pendentes === 0) return null;
 
   return (
+    <section className="min-w-0 space-y-4">
+      <CabecalhoSecao
+        icone={Rocket}
+        titulo={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            Primeiros passos
+            <Badge variant="outline">
+              {dados.pendentes === 1 ? "1 item pendente" : `${dados.pendentes} itens pendentes`}
+            </Badge>
+          </span>
+        }
+        tom="azul"
+        descricao="Nada aqui é obrigatório para usar o sistema — é só o caminho mais curto para o seu site ficar no ar."
+      />
     <Card className="min-w-0">
-      <CardHeader>
-        <h2 className="flex flex-wrap items-center gap-2 font-heading text-base leading-snug font-medium">
-          Primeiros passos
-          <Badge variant="outline">
-            {dados.pendentes === 1 ? "1 item pendente" : `${dados.pendentes} itens pendentes`}
-          </Badge>
-        </h2>
-        <p className="pt-1 text-sm text-muted-foreground">
-          Nada aqui é obrigatório para usar o sistema — é só o caminho mais curto para o
-          seu site ficar no ar.
-        </p>
-      </CardHeader>
       <CardContent>
         <ul className="space-y-3 text-sm">
           {dados.passos.map((passo) => (
@@ -68,5 +72,6 @@ export function PrimeirosPassos({ dados }: { dados: Onboarding }) {
         </ul>
       </CardContent>
     </Card>
+    </section>
   );
 }

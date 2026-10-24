@@ -205,6 +205,7 @@ export default async function DashboardPage({
           <CabecalhoSecao
             icone={Inbox}
             titulo="O que precisa da sua atenção"
+            tom="azul"
             descricao="Priorizamos os contatos e compromissos que precisam de ação."
           />
 
@@ -248,6 +249,7 @@ export default async function DashboardPage({
         <CabecalhoSecao
           icone={ChartNoAxesCombined}
           titulo="Visão geral"
+          tom="azul"
           descricao="Panorama da operação imobiliária."
         />
 
