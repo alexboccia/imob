@@ -442,9 +442,9 @@ test.describe("header", () => {
     const comprar = page.locator("header nav").first().getByRole("link", { name: "Comprar" });
     await expect(comprar).not.toHaveAttribute("aria-current", "page");
     const cor = (l: Locator) => l.evaluate((el) => getComputedStyle(el).borderColor);
-    // Mesmo tratamento visual do item ativo de "Comprar" em /imoveis?finalidade=SALE.
+    // Mesmo tratamento visual do item ativo de "Comprar" em /imoveis?finalidade=venda.
     const corAtiva = await cor(link);
-    await page.goto(`${BASE}/imoveis?finalidade=SALE`);
+    await page.goto(`${BASE}/imoveis?finalidade=venda`);
     expect(await cor(page.locator("header nav").first().getByRole("link", { name: "Comprar" }))).toBe(corAtiva);
     await expect(linkFavoritosDesktop(page)).not.toHaveAttribute("aria-current", "page");
   });

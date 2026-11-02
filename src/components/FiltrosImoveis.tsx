@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { normalizarTexto } from "@/lib/texto";
 import { FINALIDADE_LABEL, formatarPreco, formatarMilharDigitos } from "@/lib/format";
+import { finalidadeParaUrl } from "@/lib/finalidade-url";
 import { IconeFiltros, IconeChevronBaixo, IconeFechar } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -263,7 +264,7 @@ export function FiltrosImoveis({
   function buscar() {
     const query = new URLSearchParams();
     tipo.forEach((t) => query.append("tipo", t));
-    if (finalidade) query.set("finalidade", finalidade);
+    if (finalidade) query.set("finalidade", finalidadeParaUrl(finalidade));
     bairro.forEach((b) => query.append("bairro", b));
     if (precoMin) query.set("precoMin", precoMin);
     if (precoMax) query.set("precoMax", precoMax);

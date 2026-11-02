@@ -75,7 +75,7 @@ test.describe("composição", () => {
     await page.goto(fichaW(IDS_E2E.imovelBreadcrumbCasa));
     const m = await migalhas(page);
     expect(m.map((x) => x.label)).toEqual(["Home", "Comprar", "Casa", "Moema"]);
-    expect(m[1].href).toBe(`${BASE_W}/imoveis?finalidade=SALE`);
+    expect(m[1].href).toBe(`${BASE_W}/imoveis?finalidade=venda`);
     const textos = await textosDosSelos(page);
     expect(textos).not.toContain("Lançamento");
     expect(textos).not.toContain("Usado");

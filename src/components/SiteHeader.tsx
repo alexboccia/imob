@@ -25,7 +25,7 @@ function estaAtivo(href: string, pathname: string, searchAtual: string): boolean
   const [caminho, query] = href.split("?");
   if (pathname !== caminho) return false;
   if (!query) return true;
-  // Compara só os parâmetros presentes no link (ex: finalidade=SALE) —
+  // Compara só os parâmetros presentes no link (ex: finalidade=venda) —
   // um link "Comprar" não precisa saber sobre outros filtros que o
   // usuário possa ter adicionado na URL atual.
   const paramsLink = new URLSearchParams(query);

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { MapPin, Map as MapaIcone, Home as IconeCasa, Banknote, Search } from "lucide-react";
+import { finalidadeParaUrl } from "@/lib/finalidade-url";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -156,7 +157,7 @@ export function PainelBuscaHome({
       </div>
 
       <form method="GET" action={`${basePath}/imoveis`} className="p-5 sm:p-6">
-        <input type="hidden" name="finalidade" value={finalidade} />
+        <input type="hidden" name="finalidade" value={finalidadeParaUrl(finalidade)} />
 
         <div>
           <label htmlFor="busca-home-cidade" className={classeLabel}>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { normalizarTexto } from "@/lib/texto";
+import { finalidadeParaUrl } from "@/lib/finalidade-url";
 import { FaixaDupla } from "@/components/FaixaDupla";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -149,7 +150,7 @@ export function TodosFiltrosModal({
   function buscar() {
     const query = new URLSearchParams();
     if (busca) query.set("busca", busca);
-    if (transacao) query.set("finalidade", transacao);
+    if (transacao) query.set("finalidade", finalidadeParaUrl(transacao));
     if (categoriaTipo) query.set("categoriaTipo", categoriaTipo);
     tipoSelecionado.forEach((t) => query.append("tipo", t));
     bairroSelecionado.forEach((b) => query.append("bairro", b));

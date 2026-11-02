@@ -73,8 +73,8 @@ export async function generateMetadata({
 // SiteHeader deriva de href + pathname, não de uma lista fixa.
 function navLinks(basePath: string) {
   return [
-    { href: `${basePath}/imoveis?finalidade=SALE`, label: "Comprar" },
-    { href: `${basePath}/imoveis?finalidade=RENT`, label: "Alugar" },
+    { href: `${basePath}/imoveis?finalidade=venda`, label: "Comprar" },
+    { href: `${basePath}/imoveis?finalidade=aluguel`, label: "Alugar" },
     { href: `${basePath}/imoveis?lancamento=1`, label: "Lançamentos" },
     { href: `${basePath}/anuncie`, label: "Anuncie seu imóvel" },
   ];

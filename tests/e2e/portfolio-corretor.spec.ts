@@ -220,9 +220,9 @@ test.describe("combinação com os outros filtros", () => {
   test("corretor + finalidade continua respeitando o corretor", async ({ page }) => {
     // Todos os imóveis do seed desta organização são de venda: o filtro
     // de finalidade não muda o recorte, mas também não pode apagá-lo.
-    await page.goto(`${LISTAGEM}?corretor=${PAULA}&finalidade=SALE`);
+    await page.goto(`${LISTAGEM}?corretor=${PAULA}&finalidade=venda`);
     await expect(cards(page)).toHaveCount(IMOVEIS_DA_PAULA);
-    await page.goto(`${LISTAGEM}?corretor=${PAULA}&finalidade=RENT`);
+    await page.goto(`${LISTAGEM}?corretor=${PAULA}&finalidade=aluguel`);
     await expect(cards(page)).toHaveCount(0);
     // Zero resultados por causa da finalidade não é "corretor
     // indisponível": o contexto do corretor continua na tela.

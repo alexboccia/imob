@@ -24,7 +24,7 @@ test.describe("rotas públicas na organização principal", () => {
   });
 
   test("querystring sobrevive ao rewrite", async ({ request }) => {
-    const resposta = await request.get("/imoveis?finalidade=RENT");
+    const resposta = await request.get("/imoveis?finalidade=aluguel");
     expect(resposta.status()).toBe(200);
     // A página lê o filtro: se a query tivesse sido perdida, o resultado
     // seria a listagem inteira.

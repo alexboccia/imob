@@ -9,6 +9,7 @@ import { PaginacaoPublica } from "@/components/PaginacaoPublica";
 import { SELECT_IMOVEL_CARD, paraImovelCard } from "@/lib/imovel-card";
 import { buscarDadosFiltros, resolverCorretorDoFiltro } from "@/lib/filtros-imoveis-data";
 import { campoPrecoPorFinalidade } from "@/lib/imovel-filtros";
+import { finalidadeDaUrl } from "@/lib/finalidade-url";
 import {
   hrefSemFiltroCorretor,
   interpretarFiltroCorretor,
@@ -98,6 +99,9 @@ export default async function ListaImoveisPage({
   const organizationId = organization.id;
   const basePath = resolverBasePath(orgSlug);
   const params = await searchParams;
+  // URL usa "venda"/"aluguel" (português); o resto do código (Prisma,
+  // FINALIDADE_LABEL) continua em SALE/RENT — único ponto de tradução.
+  const finalidade = finalidadeDaUrl(params.finalidade);
 
   const { page, skip, take } = interpretarPaginacao(params, {
     pageSizePadrao: PAGE_SIZE_PADRAO_PUBLICO,
@@ -148,7 +152,7 @@ export default async function ListaImoveisPage({
             ],
           }
         : {}),
-      ...(params.finalidade ? { purpose: params.finalidade as never } : {}),
+      ...(finalidade ? { purpose: finalidade as never } : {}),
       ...(tipos.length > 0
         ? { type: { in: tipos } }
         : tiposDaCategoria.length > 0
@@ -163,7 +167,7 @@ export default async function ListaImoveisPage({
       // (ver campoPrecoPorFinalidade, imovel-filtros.ts).
       ...(precoMin !== undefined || precoMax !== undefined
         ? {
-            [campoPrecoPorFinalidade(params.finalidade)]: {
+            [campoPrecoPorFinalidade(finalidade)]: {
               ...(precoMin !== undefined ? { gte: precoMin } : {}),
               ...(precoMax !== undefined ? { lte: precoMax } : {}),
             },
@@ -239,7 +243,7 @@ export default async function ListaImoveisPage({
         basePath={basePath}
         inicial={{
           tipo: tipos,
-          finalidade: params.finalidade ?? "",
+          finalidade: finalidade ?? "",
           bairro: bairros,
           precoMin: params.precoMin ?? "",
           precoMax: params.precoMax ?? "",

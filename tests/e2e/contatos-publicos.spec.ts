@@ -248,7 +248,7 @@ test.describe("responsividade", () => {
     await page.goto(BASE);
 
     await page.getByRole("link", { name: "Comprar" }).first().click();
-    await page.waitForURL(/finalidade=SALE/);
+    await page.waitForURL(/finalidade=venda/);
     await expect(barra(page)).toHaveCount(1);
   });
 });

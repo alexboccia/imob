@@ -56,8 +56,8 @@ test.describe("Site público — Home (Proposta 2)", () => {
   test("menu principal tem as rotas reais (Comprar/Alugar/Lançamentos)", async ({ page }) => {
     await page.goto("/");
     const nav = page.locator("header nav");
-    await expect(nav.getByRole("link", { name: "Comprar" })).toHaveAttribute("href", /finalidade=SALE/);
-    await expect(nav.getByRole("link", { name: "Alugar" })).toHaveAttribute("href", /finalidade=RENT/);
+    await expect(nav.getByRole("link", { name: "Comprar" })).toHaveAttribute("href", /finalidade=venda/);
+    await expect(nav.getByRole("link", { name: "Alugar" })).toHaveAttribute("href", /finalidade=aluguel/);
     await expect(nav.getByRole("link", { name: "Lançamentos" })).toHaveAttribute("href", /lancamento=1/);
   });
 
@@ -67,8 +67,8 @@ test.describe("Site público — Home (Proposta 2)", () => {
   // direto, sem clicar, que é o cenário que quebraria se alguém trocasse
   // por estado local. Asserção pelo atributo/semântica, não por cor.
   for (const { rota, ativo } of [
-    { rota: "/imoveis?finalidade=SALE", ativo: "Comprar" },
-    { rota: "/imoveis?finalidade=RENT", ativo: "Alugar" },
+    { rota: "/imoveis?finalidade=venda", ativo: "Comprar" },
+    { rota: "/imoveis?finalidade=aluguel", ativo: "Alugar" },
     { rota: "/imoveis?lancamento=1", ativo: "Lançamentos" },
   ]) {
     test(`menu marca só "${ativo}" como ativo em ${rota} (deep link, sobrevive a refresh)`, async ({
@@ -104,8 +104,8 @@ test.describe("Site público — Home (Proposta 2)", () => {
     expect(new Set(geometriaInicial.map((c) => c.altura)).size).toBe(1);
 
     for (const { rotulo, paramEsperado } of [
-      { rotulo: "Comprar", paramEsperado: /finalidade=SALE/ },
-      { rotulo: "Alugar", paramEsperado: /finalidade=RENT/ },
+      { rotulo: "Comprar", paramEsperado: /finalidade=venda/ },
+      { rotulo: "Alugar", paramEsperado: /finalidade=aluguel/ },
       { rotulo: "Lançamentos", paramEsperado: /lancamento=1/ },
     ]) {
       await nav.getByRole("link", { name: rotulo }).click();
@@ -119,7 +119,7 @@ test.describe("Site público — Home (Proposta 2)", () => {
   test("menu: contorno do item ativo usa a cor do tenant, e os inativos não têm borda visível", async ({
     page,
   }) => {
-    await page.goto("/imoveis?finalidade=SALE");
+    await page.goto("/imoveis?finalidade=venda");
     const nav = page.locator("header nav");
     const bordas = await nav.locator("a").evaluateAll((els) =>
       els.map((e) => ({
@@ -178,7 +178,7 @@ test.describe("Site público — Home (Proposta 2)", () => {
   test("Comprar leva pra listagem filtrada por venda", async ({ page }) => {
     await page.goto("/");
     await page.locator("header nav").getByRole("link", { name: "Comprar" }).click();
-    await page.waitForURL(/finalidade=SALE/);
+    await page.waitForURL(/finalidade=venda/);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Resultados da busca");
   });
 
@@ -335,7 +335,7 @@ test.describe("Site público — navegação mobile", () => {
     const menu = page.locator("header nav").last();
     await expect(menu.getByRole("link", { name: "Alugar" })).toBeVisible();
     await menu.getByRole("link", { name: "Alugar" }).click();
-    await page.waitForURL(/finalidade=RENT/);
+    await page.waitForURL(/finalidade=aluguel/);
   });
 });
 
@@ -650,8 +650,8 @@ test.describe("Site público — Home comercial (Fase 1)", () => {
   }) => {
     await page.goto("/");
     const nav = page.locator("header nav");
-    await expect(nav.getByRole("link", { name: "Comprar" })).toHaveAttribute("href", /finalidade=SALE/);
-    await expect(nav.getByRole("link", { name: "Alugar" })).toHaveAttribute("href", /finalidade=RENT/);
+    await expect(nav.getByRole("link", { name: "Comprar" })).toHaveAttribute("href", /finalidade=venda/);
+    await expect(nav.getByRole("link", { name: "Alugar" })).toHaveAttribute("href", /finalidade=aluguel/);
     await expect(nav.getByRole("link", { name: "Lançamentos" })).toHaveAttribute("href", /lancamento=1/);
     await expect(nav.getByRole("link", { name: "Anuncie seu imóvel" })).toHaveAttribute(
       "href",
