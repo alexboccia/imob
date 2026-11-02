@@ -19,7 +19,7 @@ import type { TokensTema } from "@/lib/branding/temas";
 // Um CustomEvent no `window` resolve sem nenhum dos três custos. Não é um
 // segundo sistema de persistência: nada aqui grava nada, o valor vive no
 // estado do editor e viaja no FormData pelos inputs com `name`.
-export const EVENTO_PALETA_PREVIA = "easymob:paleta-previa";
+export const EVENTO_PALETA_PREVIA = "syntaks:paleta-previa";
 
 export type DetalhePaletaPrevia = { tokens: TokensTema };
 

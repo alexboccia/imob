@@ -70,7 +70,7 @@ export async function requireOrganizationId(): Promise<string> {
 // operação para, mas a tela onde a pessoa entende o bloqueio e o
 // regulariza não pode parar junto. Um trial que expira e leva embora o
 // caminho de saída é um beco sem saída — a organização fica presa
-// dependendo de alguém de dentro do easymob.
+// dependendo de alguém de dentro do syntaks.
 //
 // Tudo o mais continua idêntico: identidade, vínculo ACTIVE, época da
 // senha e organização suspensa seguem barrando. O que se afrouxa é

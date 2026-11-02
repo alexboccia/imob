@@ -13,42 +13,28 @@ import { config } from "dotenv";
 import path from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
+import { PLANOS_CATALOGO, modulosHabilitadosDoPlano } from "../src/lib/plan-catalog";
 
 config({ path: path.resolve(__dirname, "..", ".env"), override: false });
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-const RECONCILIACAO = [
-  {
-    code: "BASICO",
-    priceMonthlyCents: 9900,
-    modulosHabilitados: ["core", "properties", "crm"],
-    limites: { PROPERTIES: 50, USERS: 1, PHOTOS_PER_PROPERTY: 10, CRM_CLIENTS: 500 },
-  },
-  {
-    code: "PRO",
-    priceMonthlyCents: 24900,
-    modulosHabilitados: [
-      "core",
-      "properties",
-      "crm",
-      "leads",
-      "pipeline",
-      "agenda",
-      "relatorios",
-      "email",
-      "whatsapp",
-    ],
-    limites: { PROPERTIES: 250, USERS: 5, PHOTOS_PER_PROPERTY: 20, CRM_CLIENTS: 5000 },
-  },
-  {
-    code: "PREMIUM",
-    priceMonthlyCents: 49900,
-    modulosHabilitados: null, // todos os módulos do catálogo, sem lista fixa
-    limites: { PROPERTIES: 1000, USERS: 15, PHOTOS_PER_PROPERTY: 40, CRM_CLIENTS: null },
-  },
-];
+// Fase 122-B (AUD-121-005) — valores vêm da MESMA fonte única usada por
+// prisma/seed.ts (src/lib/plan-catalog.ts). Antes desta fase este
+// arquivo tinha seu PRÓPRIO literal, que havia divergido do seed.ts (o
+// PRO daqui nunca ganhou "custom-domain" quando a Fase P.10 o acrescentou
+// ao seed) — rodar este script depois do seed.ts desabilitaria domínio
+// próprio do PRO em silêncio. Nunca mais pode acontecer: os dois agora
+// leem exatamente a mesma lista. STARTER fica de fora da reconciliação
+// de propósito (sempre nasce correto na criação, nunca precisou de
+// correção pontual).
+const RECONCILIACAO = PLANOS_CATALOGO.filter((p) => p.code !== "STARTER").map((p) => ({
+  code: p.code,
+  priceMonthlyCents: p.priceMonthlyCents,
+  modulosHabilitados: modulosHabilitadosDoPlano(p),
+  limites: p.limites,
+}));
 
 async function main() {
   const todosModulos = await prisma.module.findMany({ select: { id: true, code: true } });

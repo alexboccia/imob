@@ -42,7 +42,7 @@ export type PropostaRegistrada = {
   valor: number;
   lado: OfferSide;
   ocorridoEmISO: string;
-  /** Quem REGISTROU no easymob — nunca quem propôs. */
+  /** Quem REGISTROU no syntaks — nunca quem propôs. */
   registradoPor: string | null;
 };
 

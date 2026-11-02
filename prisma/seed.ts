@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, OrganizationRole } from "../src/generated/prisma/client";
+import { CATALOGO_MODULOS, PLANOS_CATALOGO, modulosHabilitadosDoPlano } from "../src/lib/plan-catalog";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -337,30 +338,15 @@ async function main() {
   );
 }
 
-// Fundação multi-tenant (EasyMob) — catálogos globais da plataforma, não
+// Fundação multi-tenant (Syntaks) — catálogos globais da plataforma, não
 // pertencem a nenhuma organização. Ver /Users/alexboccia/.claude/plans/
 // glittery-noodling-harp.md para o plano completo.
 async function seedTenancy() {
-  const modulos = [
-    { code: "core", name: "Core" },
-    { code: "properties", name: "Imóveis" },
-    { code: "crm", name: "CRM" },
-    { code: "leads", name: "Leads" },
-    { code: "pipeline", name: "Funil" },
-    { code: "agenda", name: "Agenda" },
-    { code: "financeiro", name: "Financeiro" },
-    { code: "marketing", name: "Marketing" },
-    { code: "ia", name: "Inteligência Artificial" },
-    { code: "relatorios", name: "Relatórios" },
-    { code: "integracoes", name: "Integrações" },
-    { code: "billing", name: "Cobrança" },
-    { code: "email", name: "Envio de e-mail" },
-    { code: "portais", name: "Publicação em portais" },
-    { code: "whatsapp", name: "WhatsApp" },
-    // Fase P.10.
-    { code: "custom-domain", name: "Domínio próprio" },
-    { code: "email-domain", name: "E-mail com domínio próprio" },
-  ];
+  // Fase 122-B (AUD-121-005) — catálogo de módulos e configuração "V1
+  // aprovada" dos planos vêm de uma fonte única compartilhada com
+  // scripts/reconciliar-planos-p9.ts (src/lib/plan-catalog.ts), que nunca
+  // mais podem divergir entre si.
+  const modulos = CATALOGO_MODULOS;
 
   const modulosCriados = new Map<string, string>();
   for (const modulo of modulos) {
@@ -386,57 +372,10 @@ async function seedTenancy() {
   // pros planos BASICO/PRO/PREMIUM (que já existiam antes da P.9, com
   // valores antigos) foi feita separadamente, ver scripts/reconciliar-planos-p9.ts
   // — nunca dentro deste seed idempotente.
-  const planos = [
-    {
-      code: "STARTER",
-      name: "Starter",
-      priceMonthlyCents: 0,
-      isTrial: true,
-      trialDays: 14,
-      modulosHabilitados: ["core", "properties", "crm"],
-      limites: { PROPERTIES: 10, USERS: 1, PHOTOS_PER_PROPERTY: 5, CRM_CLIENTS: 100 },
-    },
-    {
-      code: "BASICO",
-      name: "Básico",
-      priceMonthlyCents: 9900,
-      isTrial: false,
-      trialDays: null,
-      modulosHabilitados: ["core", "properties", "crm"],
-      limites: { PROPERTIES: 50, USERS: 1, PHOTOS_PER_PROPERTY: 10, CRM_CLIENTS: 500 },
-    },
-    {
-      code: "PRO",
-      name: "Pro",
-      priceMonthlyCents: 24900,
-      isTrial: false,
-      trialDays: null,
-      modulosHabilitados: [
-        "core",
-        "properties",
-        "crm",
-        "leads",
-        "pipeline",
-        "agenda",
-        "relatorios",
-        "email",
-        "whatsapp",
-        // Fase P.10 — domínio próprio a partir do PRO; e-mail com domínio
-        // próprio só no PREMIUM (via modulos.map abaixo).
-        "custom-domain",
-      ],
-      limites: { PROPERTIES: 250, USERS: 5, PHOTOS_PER_PROPERTY: 20, CRM_CLIENTS: 5000 },
-    },
-    {
-      code: "PREMIUM",
-      name: "Premium",
-      priceMonthlyCents: 49900,
-      isTrial: false,
-      trialDays: null,
-      modulosHabilitados: modulos.map((m) => m.code),
-      limites: { PROPERTIES: 1000, USERS: 15, PHOTOS_PER_PROPERTY: 40, CRM_CLIENTS: null },
-    },
-  ];
+  const planos = PLANOS_CATALOGO.map((p) => ({
+    ...p,
+    modulosHabilitados: modulosHabilitadosDoPlano(p),
+  }));
 
   for (const planoConfig of planos) {
     const existente = await prisma.plan.findUnique({ where: { code: planoConfig.code } });

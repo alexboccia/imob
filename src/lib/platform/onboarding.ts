@@ -57,7 +57,7 @@ export function calcularOnboarding(dados: DadosOnboarding): Onboarding {
     // funciona desde a criação da organização) — só fica meaningful de
     // verdade quando/se subdomínio wildcard real for provisionado (TODO
     // arquitetural, ver P.10.4.1).
-    { chave: "subdominio_easymob", label: "Subdomínio easymob disponível", status: "CONCLUIDO" },
+    { chave: "subdominio_syntaks", label: "Subdomínio syntaks disponível", status: "CONCLUIDO" },
     {
       chave: "dominio_cadastrado",
       label: "Domínio personalizado cadastrado",

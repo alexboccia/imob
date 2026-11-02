@@ -25,11 +25,11 @@ export default function PlatformLoginPage() {
       <Card className="w-full max-w-sm border-slate-800 bg-slate-900 text-slate-50">
         <CardHeader className="text-center">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-            EasyMob Platform
+            Syntaks Platform
           </p>
           <CardTitle className="text-slate-50">Platform Admin</CardTitle>
           <CardDescription className="text-slate-400">
-            Acesso restrito à equipe EasyMob
+            Acesso restrito à equipe Syntaks
           </CardDescription>
         </CardHeader>
         <CardContent>

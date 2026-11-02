@@ -1,8 +1,8 @@
 # 00 — Decisão funcional aprovada
 
-**Diagnóstico de referência**: `docs/tecnico/DIAGNOSTICO-LOGS-AUDITORIA-EASYMOB.md`.
+**Diagnóstico de referência**: `docs/tecnico/DIAGNOSTICO-LOGS-AUDITORIA-SYNTAKS.md`.
 
-**Decisão aprovada pelo proprietário**: o EasyMob oferecerá duas operações distintas para Imóveis e Clientes:
+**Decisão aprovada pelo proprietário**: o Syntaks oferecerá duas operações distintas para Imóveis e Clientes:
 
 1. **Arquivar** — retira o registro do fluxo operacional normal, preservando dados, com restauração possível.
 2. **Excluir definitivamente** — remoção irreversível, restrita a administradores autorizados, com confirmação explícita e auditoria obrigatória.

@@ -27,8 +27,8 @@ import { idImovelValido, LIMITE_FAVORITOS } from "@/lib/favoritos";
 // Tolerante a tudo, como o store de favoritos: storage bloqueado, JSON
 // corrompido ou de outro formato nunca lança — vira seleção vazia.
 
-export const PREFIXO_SELECAO = "easymob:comparar:v1:";
-export const EVENTO_SELECAO = "easymob:comparacao-alterada";
+export const PREFIXO_SELECAO = "syntaks:comparar:v1:";
+export const EVENTO_SELECAO = "syntaks:comparacao-alterada";
 
 /** Abaixo de dois imóveis não existe comparação — existe uma ficha. */
 export const MINIMO_PARA_COMPARAR = 2;

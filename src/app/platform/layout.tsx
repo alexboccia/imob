@@ -34,7 +34,7 @@ export default async function PlatformLayout({
       <aside className="w-56 border-r border-slate-800 bg-slate-950 text-slate-200 flex flex-col">
         <div className="px-4 py-4 border-b border-slate-800">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-            EasyMob
+            Syntaks
           </p>
           <p className="font-semibold text-slate-50">Platform</p>
         </div>

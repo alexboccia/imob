@@ -119,7 +119,7 @@ export const PAPEIS_RESOLUCAO_IDENTIDADE: ReadonlySet<string> = new Set([
   "MANAGER",
 ]);
 
-// Fase 27 — CONTRATO FINANCEIRO da organização com o easymob.
+// Fase 27 — CONTRATO FINANCEIRO da organização com o syntaks.
 //
 // Conjunto próprio, e não reuso de PAPEIS_GESTAO_CONFIGURACOES: aquele
 // nomeia "quem ajusta como a imobiliária opera"; este nomeia "quem

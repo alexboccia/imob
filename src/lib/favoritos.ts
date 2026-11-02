@@ -18,7 +18,7 @@
 // sistemas nunca são tocadas.
 // =======================================================================
 
-export const PREFIXO_FAVORITOS = "easymob:favoritos:v1:";
+export const PREFIXO_FAVORITOS = "syntaks:favoritos:v1:";
 // Fase 49 — o mesmo teto vale para a lista gravada e para a consulta da
 // página de favoritos: o servidor nunca recebe mais do que o navegador
 // pode guardar. Lista antiga maior é cortada (mantendo as mais recentes)

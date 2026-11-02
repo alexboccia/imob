@@ -347,7 +347,7 @@ export function FechamentoInteresse({
                 A ÚLTIMA PROPOSTA é outra coisa (Fase 33): é um valor que
                 alguém efetivamente colocou na mesa e o corretor
                 registrou. Sugerir esse número não inventa negociação
-                nenhuma — só evita redigitar o que o easymob acabou de
+                nenhuma — só evita redigitar o que o syntaks acabou de
                 guardar. Continua totalmente editável, e sem proposta
                 registrada o campo segue vazio como antes. */}
             {/* Fase 34 — a ÚNICA pergunta que o sistema não consegue

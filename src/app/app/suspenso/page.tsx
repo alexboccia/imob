@@ -13,7 +13,7 @@ export default async function ContaSuspensaPage() {
       <h1 className="text-2xl font-semibold mb-3">Conta suspensa</h1>
       <p className="text-muted-foreground mb-6">
         {session?.user?.name ? `Olá, ${session.user.name}. ` : ""}
-        O acesso da sua organização ao EasyMob está temporariamente suspenso.
+        O acesso da sua organização ao Syntaks está temporariamente suspenso.
         Nenhum dado foi apagado. Entre em contato com o suporte para
         regularizar sua conta.
       </p>

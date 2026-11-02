@@ -70,7 +70,7 @@ const platformMiddleware = authPlatform((req) => {
 type MiddlewareFn = (req: NextRequest) => ReturnType<typeof appMiddleware>;
 
 // Fase P.10 — tenant resolver por host (custom domain / subdomínio
-// easymob). Roda SÓ pra paths fora de /app e /platform (ver dispatch em
+// syntaks). Roda SÓ pra paths fora de /app e /platform (ver dispatch em
 // proxy() abaixo) — /app e /platform continuam 100% host-agnósticos,
 // nenhuma mudança de comportamento ali. Reaproveita 100% do sistema de
 // resolução por slug já existente ([orgSlug]/layout.tsx e cada

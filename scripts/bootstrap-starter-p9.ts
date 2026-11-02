@@ -21,18 +21,28 @@ import { config } from "dotenv";
 import path from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "../src/generated/prisma/client";
+import { PLANOS_CATALOGO, modulosHabilitadosDoPlano } from "../src/lib/plan-catalog";
 
+// Fase 126 (item 9 — correção de duplicação) — este literal era uma
+// TERCEIRA cópia independente dos valores do STARTER, além de
+// prisma/seed.ts e scripts/reconciliar-planos-p9.ts (as duas primeiras,
+// já consolidadas em src/lib/plan-catalog.ts na Fase 122 — a divergência
+// real encontrada então, entre o PRO de cada uma, é o motivo da
+// consolidação existir). Hoje este literal batia com plan-catalog.ts,
+// mas nada impedia um editar um sem o outro no futuro — o mesmo risco já
+// materializado uma vez. Consolidado para a mesma fonte única.
+const STARTER_CATALOGO = PLANOS_CATALOGO.find((p) => p.code === "STARTER");
+if (!STARTER_CATALOGO) {
+  throw new Error("STARTER não encontrado em src/lib/plan-catalog.ts — catálogo inconsistente.");
+}
 const STARTER = {
-  code: "STARTER",
-  name: "Starter",
-  priceMonthlyCents: 0,
-  isTrial: true,
-  trialDays: 14,
-  modulosHabilitados: ["core", "properties", "crm"],
-  limites: { PROPERTIES: 10, USERS: 1, PHOTOS_PER_PROPERTY: 5, CRM_CLIENTS: 100 } as Record<
-    string,
-    number | null
-  >,
+  code: STARTER_CATALOGO.code,
+  name: STARTER_CATALOGO.name,
+  priceMonthlyCents: STARTER_CATALOGO.priceMonthlyCents,
+  isTrial: STARTER_CATALOGO.isTrial,
+  trialDays: STARTER_CATALOGO.trialDays,
+  modulosHabilitados: modulosHabilitadosDoPlano(STARTER_CATALOGO),
+  limites: STARTER_CATALOGO.limites as Record<string, number | null>,
 } as const;
 
 const MODULOS_OBRIGATORIOS = ["core", "properties", "crm"];

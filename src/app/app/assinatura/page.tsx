@@ -54,7 +54,7 @@ export default async function AssinaturaPage() {
     <div className="space-y-6">
       <CabecalhoPagina
         titulo="Assinatura"
-        descricao="O contrato da sua imobiliária com o EasyMob."
+        descricao="O contrato da sua imobiliária com o Syntaks."
       />
 
       <section className="min-w-0 space-y-4">

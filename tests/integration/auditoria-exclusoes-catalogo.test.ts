@@ -27,7 +27,7 @@ import { logActivity } from "@/lib/activity-log";
 // =======================================================================
 // Fase de Logs de Auditoria — Etapa 1 (correção de lacunas)
 // =======================================================================
-// O diagnóstico (docs/tecnico/DIAGNOSTICO-LOGS-AUDITORIA-EASYMOB.md)
+// O diagnóstico (docs/tecnico/DIAGNOSTICO-LOGS-AUDITORIA-SYNTAKS.md)
 // encontrou 3 exclusões reais, em produção, sem nenhum rastro: Development
 // (empreendimento), FeatureOption (característica) e PropertyTypeOption
 // (tipo de imóvel). Esta suíte prova que as 3 agora geram ActivityLog —

@@ -235,7 +235,7 @@ describe("Fase P.10 — Platform Admin: ações de domínio", () => {
     operadorId = undefined;
   });
 
-  test("M) Platform Admin consegue adicionar um subdomínio easymob (sem depender de módulo do plano)", async () => {
+  test("M) Platform Admin consegue adicionar um subdomínio syntaks (sem depender de módulo do plano)", async () => {
     const operador = await autenticarComoOperador();
     operadorId = operador.id;
     const cenario = await criarCenario(); // plano padrão, SEM módulo custom-domain
@@ -243,12 +243,12 @@ describe("Fase P.10 — Platform Admin: ações de domínio", () => {
       const resultado = await adicionarDominio(
         cenario.organization.id,
         ESTADO_INICIAL_ACAO,
-        formData({ hostname: "xyz.easymob-teste.com.br", type: "EASYMOB_SUBDOMAIN" })
+        formData({ hostname: "xyz.syntaks-teste.com.br", type: "EASYMOB_SUBDOMAIN" })
       );
       expect(resultado.success).toBe(true);
 
       const dominio = await prisma.organizationDomain.findUnique({
-        where: { hostname: "xyz.easymob-teste.com.br" },
+        where: { hostname: "xyz.syntaks-teste.com.br" },
       });
       expect(dominio).not.toBeNull();
       expect(dominio?.status).toBe("PENDING");
@@ -589,7 +589,7 @@ describe("Correção AU — buscarHostnameCustomAtivo (SEO: só ACTIVE conta)", 
       await prisma.organizationDomain.create({
         data: {
           organizationId: cenario.organization.id,
-          hostname: "au-subdominio.easymob-teste.com.br",
+          hostname: "au-subdominio.syntaks-teste.com.br",
           type: "EASYMOB_SUBDOMAIN",
           status: "ACTIVE",
           verificationToken: "token-au-subdominio",

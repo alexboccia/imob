@@ -13,7 +13,7 @@ import { IDS_E2E, ORG_NAVEGACAO } from "./helpers";
 const BASE = `/${ORG_NAVEGACAO.slug}`;
 const FAVORITOS = `${BASE}/favoritos`;
 const ficha = (id: string) => `${BASE}/imoveis/${id}`;
-const chave = (slug: string) => `easymob:favoritos:v1:${slug}`;
+const chave = (slug: string) => `syntaks:favoritos:v1:${slug}`;
 const RECENTE = IDS_E2E.imovelNavegacaoRecente;
 const MEIO = IDS_E2E.imovelNavegacaoMeio;
 const ANTIGO = IDS_E2E.imovelNavegacaoAntigo;

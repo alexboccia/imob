@@ -382,7 +382,7 @@ export function InteresseImovelItem({
           lostReason={interesse.lostReason}
           // Fase 33 — quando o negócio ainda não foi fechado, o diálogo
           // já abre com a ÚLTIMA proposta: é o valor que está na mesa, e
-          // redigitá-lo era pedir ao corretor um número que o easymob
+          // redigitá-lo era pedir ao corretor um número que o syntaks
           // acabou de registrar. Continua totalmente editável, e não
           // sobrepõe um valor de fechamento já existente.
           valorSugerido={interesse.closedValue ?? interesse.propostas[0]?.valor ?? null}

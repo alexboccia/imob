@@ -1,4 +1,4 @@
-# Redesign da tela de detalhes do cliente — EasyMob
+# Redesign da tela de detalhes do cliente — Syntaks
 
 Implementação local, testada e documentada da reestruturação completa da
 ficha `/app/clientes/[id]` em abas, conforme a autorização "EASYMOB —

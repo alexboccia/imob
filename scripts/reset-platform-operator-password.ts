@@ -2,7 +2,7 @@
 // (isso é scripts/seed-platform-operator.ts, que de propósito NÃO atualiza
 // senha de e-mail já cadastrado, pra não sobrescrever sem querer numa
 // re-execução do bootstrap). Uso manual, mesmas convenções de segurança:
-//   PLATFORM_OPERATOR_EMAIL=voce@easymob.com PLATFORM_OPERATOR_NOVA_SENHA=... \
+//   PLATFORM_OPERATOR_EMAIL=voce@syntaks.com PLATFORM_OPERATOR_NOVA_SENHA=... \
 //     npx tsx scripts/reset-platform-operator-password.ts
 import bcrypt from "bcryptjs";
 import { config } from "dotenv";

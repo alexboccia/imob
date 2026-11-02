@@ -9,7 +9,7 @@ import {
 import { CadastroForm } from "./CadastroForm";
 
 export const metadata = {
-  title: "Criar conta da sua imobiliária — EasyMob",
+  title: "Criar conta da sua imobiliária — Syntaks",
 };
 
 // Cadastro público. Nenhuma consulta ao banco: a página só apresenta o

@@ -10,7 +10,7 @@ import { login, IDS_E2E } from "./helpers";
 // este arquivo MUTA o estado dos registros (arquiva, restaura, exclui).
 //
 // Capturas de tela salvas em
-// docs/tecnico/logs-auditoria-easymob/evidencias/ — evidência real de
+// docs/tecnico/logs-auditoria-syntaks/evidencias/ — evidência real de
 // homologação visual, não um smoke test HTTP.
 
 const CREDENCIAIS_OWNER_A = {
@@ -20,7 +20,7 @@ const CREDENCIAIS_OWNER_A = {
 
 // Caminho resolvido contra o cwd do runner (raiz do repo), não contra
 // este arquivo — path.screenshot NÃO é relativo ao spec.
-const PASTA_EVIDENCIAS = "docs/tecnico/logs-auditoria-easymob/evidencias";
+const PASTA_EVIDENCIAS = "docs/tecnico/logs-auditoria-syntaks/evidencias";
 
 test.describe("Logs de Auditoria — homologação visual", () => {
   test.describe.configure({ mode: "serial" });

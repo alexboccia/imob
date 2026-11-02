@@ -82,7 +82,7 @@ test.describe("Atribuição — jornada", () => {
     // próprio, então o único sinal determinístico é o storage.
     await expect
       .poll(() =>
-        page.evaluate(() => window.sessionStorage.getItem("easymob:atribuicao") !== null)
+        page.evaluate(() => window.sessionStorage.getItem("syntaks:atribuicao") !== null)
       )
       .toBe(true);
     await page.goto(URL_IMOVEL);
@@ -152,7 +152,7 @@ test.describe("Atribuição — fail-open e formulário", () => {
     // fail-open do NOSSO código do de qualquer biblioteca.
     await pagina.addInitScript(() => {
       const real = window.sessionStorage;
-      const bloqueada = (chave: string) => chave.startsWith("easymob:");
+      const bloqueada = (chave: string) => chave.startsWith("syntaks:");
       Object.defineProperty(window, "sessionStorage", {
         configurable: true,
         get: () => ({

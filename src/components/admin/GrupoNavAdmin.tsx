@@ -76,10 +76,10 @@ export function ItemNavLinkAdmin({
 // nova (o evento nativo "storage" só dispara em OUTRAS abas).
 // =======================================================================
 
-const EVENTO_PREFERENCIA_GRUPO = "easymob:menu-grupo-alterado";
+const EVENTO_PREFERENCIA_GRUPO = "syntaks:menu-grupo-alterado";
 
 function chavePreferencia(titulo: string): string {
-  return `easymob:menu-grupo:${titulo}`;
+  return `syntaks:menu-grupo:${titulo}`;
 }
 
 function lerPreferencia(titulo: string): boolean {

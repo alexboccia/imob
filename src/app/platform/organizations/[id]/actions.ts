@@ -577,7 +577,7 @@ export async function reenviarConvite(
 }
 
 // ============================================================
-// Fase P.10 — Domínios (custom domain / subdomínio easymob)
+// Fase P.10 — Domínios (custom domain / subdomínio syntaks)
 // ============================================================
 
 const adicionarDominioSchema = z.object({
@@ -649,7 +649,7 @@ const statusDominioSchema = z.enum(["PENDING", "VERIFIED", "ACTIVE", "FAILED", "
 const STATUS_RESOLVAVEIS_DOMINIO = new Set(["VERIFIED", "ACTIVE"]);
 
 // V1: mudança de status é sempre manual (Platform Operator confirmou DNS/
-// certificado fora do easymob, ver P.10.3.3/P.10.4) — nenhuma verificação
+// certificado fora do syntaks, ver P.10.3.3/P.10.4) — nenhuma verificação
 // automática de DNS acontece aqui.
 export async function atualizarStatusDominio(
   domainId: string,

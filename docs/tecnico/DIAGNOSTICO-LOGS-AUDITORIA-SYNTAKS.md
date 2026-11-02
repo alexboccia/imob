@@ -1,10 +1,10 @@
-# Diagnóstico — Logs de Auditoria de Usuários (EasyMob)
+# Diagnóstico — Logs de Auditoria de Usuários (Syntaks)
 
 Diagnóstico técnico puro. Nenhuma migration, alteração de schema, de banco ou de interface foi feita. HEAD do repositório preservado.
 
 ## 1. Resumo executivo
 
-O EasyMob **já possui infraestrutura real de auditoria tenant-scoped, ativa em produção há várias fases, mas 100% invisível** — o modelo `ActivityLog` é escrito por 13 arquivos diferentes, cobrindo boa parte dos módulos principais, porém **nenhuma tela ou API jamais lê essa tabela**. É um cofre cheio sem porta. A segunda peça (nível plataforma, `PlatformAuditLog`) já tem UI funcional em `/platform/audit` — e serve de modelo pronto para copiar.
+O Syntaks **já possui infraestrutura real de auditoria tenant-scoped, ativa em produção há várias fases, mas 100% invisível** — o modelo `ActivityLog` é escrito por 13 arquivos diferentes, cobrindo boa parte dos módulos principais, porém **nenhuma tela ou API jamais lê essa tabela**. É um cofre cheio sem porta. A segunda peça (nível plataforma, `PlatformAuditLog`) já tem UI funcional em `/platform/audit` — e serve de modelo pronto para copiar.
 
 As lacunas reais não são "criar auditoria do zero": são (1) construir a tela que falta, (2) preencher os módulos que não escrevem no log nenhum (Pipeline/Deals, Comissões, Assinaturas/Planos, Empreendimentos, Características, Tipos de Imóvel), (3) capturar valores antes/depois nas edições (hoje nenhuma edição grava `payload` com o que mudou), e (4) resolver que **hoje não existe exclusão de clientes/imóveis na aplicação** — o exemplo citado pelo proprietário ("um corretor... excluir um cliente") não corresponde a uma funcionalidade existente.
 
@@ -70,7 +70,7 @@ Toda exclusão no projeto é **hard delete** (`prisma.X.delete`/`deleteMany`). I
 
 Busquei em todo `src/app/app/` por `property.delete`/`person.delete` (os modelos de Imóvel e Cliente) — **zero ocorrências**. As únicas duas chamadas de `property.deleteMany`/`person.deleteMany` em todo o projeto estão em `src/app/platform/organizations/[id]/actions.ts:465-466`, dentro de `deletarOrganization()` — ou seja, só quando o **Super Admin da plataforma exclui a imobiliária inteira**, nunca numa ação de usuário comum excluindo um imóvel ou cliente individual.
 
-**Consequência direta**: o exemplo dado na demanda ("se um corretor... excluir um cliente") **não corresponde a nenhuma funcionalidade existente no EasyMob hoje**. O que existe, para imóveis, é a transição de status para `INACTIVE` (já com rastro parcial via `PropertyStatusHistory`). Para clientes, **não existe nenhuma forma de removê-los** — nem exclusão, nem arquivamento, nem status análogo. Isso precisa ser esclarecido com o proprietário antes de prosseguir (ver seção 14, decisão pendente).
+**Consequência direta**: o exemplo dado na demanda ("se um corretor... excluir um cliente") **não corresponde a nenhuma funcionalidade existente no Syntaks hoje**. O que existe, para imóveis, é a transição de status para `INACTIVE` (já com rastro parcial via `PropertyStatusHistory`). Para clientes, **não existe nenhuma forma de removê-los** — nem exclusão, nem arquivamento, nem status análogo. Isso precisa ser esclarecido com o proprietário antes de prosseguir (ver seção 14, decisão pendente).
 
 ### 2.7 — Módulos que **não** escrevem em `ActivityLog` hoje (lacuna real)
 
@@ -251,7 +251,7 @@ Nenhum componente visual foi criado nesta etapa, conforme solicitado.
 
 ## RESULTADO ESPERADO — RESPOSTAS DIRETAS
 
-**A. O EasyMob já possui logs de auditoria?**
+**A. O Syntaks já possui logs de auditoria?**
 **PARCIALMENTE.** A infraestrutura (modelo, serviço, isolamento multi-tenant) existe e está ativa em produção desde antes desta demanda — mas é 100% escrita, 0% lida. Não há como alguém, hoje, consultar esses dados — nem o proprietário de uma imobiliária, nem o Super Admin da plataforma (que já tem sua própria auditoria equivalente, `PlatformAuditLog`, com UI funcional).
 
 **B. O que já funciona?**

@@ -11,8 +11,8 @@ import { IDS_E2E, ORG_NAVEGACAO } from "./helpers";
 const BASE = `/${ORG_NAVEGACAO.slug}`;
 const FAVORITOS = `${BASE}/favoritos`;
 const COMPARAR = `${BASE}/favoritos/comparar`;
-const chaveFavoritos = `easymob:favoritos:v1:${ORG_NAVEGACAO.slug}`;
-const chaveSelecao = `easymob:comparar:v1:${ORG_NAVEGACAO.slug}`;
+const chaveFavoritos = `syntaks:favoritos:v1:${ORG_NAVEGACAO.slug}`;
+const chaveSelecao = `syntaks:comparar:v1:${ORG_NAVEGACAO.slug}`;
 
 const RECENTE = IDS_E2E.imovelNavegacaoRecente;
 const MEIO = IDS_E2E.imovelNavegacaoMeio;

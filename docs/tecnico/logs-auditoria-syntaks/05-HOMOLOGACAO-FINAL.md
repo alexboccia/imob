@@ -11,7 +11,7 @@ Validar de forma real — não presumida — tudo que as entregas anteriores (`0
 - Escrita de `tests/e2e/logs-auditoria-homologacao.spec.ts` (5 testes, execução serial), cobrindo: arquivar/listar-sem/listar-com/restaurar de Imóvel; o mesmo para Cliente; exclusão definitiva de Imóvel com modal, confirmação digitada e botão desabilitado até o texto bater exatamente; o mesmo para Cliente; e a tela `/app/auditoria` com filtro por módulo.
 - 4 fixtures novas e dedicadas (`imovelArquivamentoOrgA`, `pessoaArquivamentoOrgA`, `imovelExclusaoOrgA`, `pessoaExclusaoOrgA`), seguindo a convenção já estabelecida no projeto de nunca compartilhar um registro mutável entre specs — criadas em `prisma/seed-e2e.ts`, 100% sintéticas e descartáveis, no banco de teste isolado (`imoveis_test`).
 - 3 bugs reais encontrados e corrigidos durante a própria execução dos testes (seção 4) — nenhum deles presumido, todos reproduzidos e confirmados antes de qualquer correção.
-- Suíte final: **5/5 testes passando**, 11 capturas de tela reais salvas em `docs/tecnico/logs-auditoria-easymob/evidencias/`.
+- Suíte final: **5/5 testes passando**, 11 capturas de tela reais salvas em `docs/tecnico/logs-auditoria-syntaks/evidencias/`.
 - Releitura linha a linha das 6 Server Actions de arquivamento/restauração/exclusão (não apenas citação do relatório anterior).
 - Releitura da migration `20261015025514_add_archiving_property_person` contra o SQL real do arquivo, não contra a memória do relatório anterior.
 - Gate completo reexecutado: `tsc`, `lint`, suíte de testes completa, `build`.
@@ -100,7 +100,7 @@ Sim, tecnicamente pronta para aplicação em produção (seção 5) — aditiva,
 | `npm run lint` | Aprovado, zero avisos |
 | `npm run test` (suíte completa) | **3893/3893**, zero regressões (mesma contagem da entrega `04` — nenhum teste novo de unidade/integração foi necessário nesta etapa, o trabalho foi inteiramente E2E) |
 | `npm run build` | Aprovado — todas as rotas, incluindo `/app/imoveis/[id]`, `/app/clientes/[id]`, `/app/auditoria`, presentes e corretamente marcadas como dinâmicas (`ƒ`) |
-| `tests/e2e/logs-auditoria-homologacao.spec.ts` (novo, homologação visual real) | **5/5 passando**, 11 capturas de tela reais em `docs/tecnico/logs-auditoria-easymob/evidencias/` (2,9 MB) |
+| `tests/e2e/logs-auditoria-homologacao.spec.ts` (novo, homologação visual real) | **5/5 passando**, 11 capturas de tela reais em `docs/tecnico/logs-auditoria-syntaks/evidencias/` (2,9 MB) |
 
 ## 11. Riscos residuais e pendências explícitas
 
@@ -112,7 +112,7 @@ Sim, tecnicamente pronta para aplicação em produção (seção 5) — aditiva,
 
 ## 12. Evidências
 
-- 11 capturas de tela reais, em `docs/tecnico/logs-auditoria-easymob/evidencias/` (`01` a `11`), geradas por uma execução real e integral da suíte `logs-auditoria-homologacao.spec.ts` contra um build de produção local (`next start`), banco de teste isolado e sintético, navegador Chromium real.
+- 11 capturas de tela reais, em `docs/tecnico/logs-auditoria-syntaks/evidencias/` (`01` a `11`), geradas por uma execução real e integral da suíte `logs-auditoria-homologacao.spec.ts` contra um build de produção local (`next start`), banco de teste isolado e sintético, navegador Chromium real.
 - Saída completa da execução final: `5 passed (16.4s)`.
 - Leitura de código citada linha a linha nas seções 4 e 5, não apenas referenciada.
 

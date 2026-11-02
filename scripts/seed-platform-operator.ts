@@ -2,7 +2,7 @@
 // seed principal (prisma/seed.ts) de propósito: é um bootstrap único de
 // identidade de plataforma, uma preocupação completamente separada dos
 // catálogos/dados de tenant que o seed principal povoa. Rodar manualmente:
-//   SEED_PLATFORM_ADMIN_EMAIL=voce@easymob.com SEED_PLATFORM_ADMIN_SENHA=... \
+//   SEED_PLATFORM_ADMIN_EMAIL=voce@syntaks.com SEED_PLATFORM_ADMIN_SENHA=... \
 //     npx tsx scripts/seed-platform-operator.ts
 import bcrypt from "bcryptjs";
 import { config } from "dotenv";

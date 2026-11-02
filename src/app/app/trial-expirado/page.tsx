@@ -16,7 +16,7 @@ export default async function TrialExpiradoPage() {
   // Fase 27 — quem responde pelo contrato precisa CHEGAR ao contrato.
   // Antes, esta tela só oferecia "Sair": o trial expirava e levava
   // junto o caminho de regularização, prendendo a organização à espera
-  // de alguém de dentro do easymob.
+  // de alguém de dentro do syntaks.
   const podeVerAssinatura = temPapel(await papelAtual(), PAPEIS_FINANCEIRO);
 
   return (
@@ -25,7 +25,7 @@ export default async function TrialExpiradoPage() {
       <p className="text-muted-foreground mb-6">
         {session?.user?.name ? `Olá, ${session.user.name}. ` : ""}
         Seus dados continuam armazenados. Escolha um plano para continuar usando o
-        EasyMob.
+        Syntaks.
       </p>
       {podeVerAssinatura && (
         <p className="mb-6">

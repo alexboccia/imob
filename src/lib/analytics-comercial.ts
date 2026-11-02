@@ -49,7 +49,7 @@ import {
 
 // =======================================================================
 // Analytics comercial (Fase 5) — primeira camada de análise de CAPTAÇÃO
-// do easymob, calculada sob demanda a partir de eventos que o CRM já
+// do syntaks, calculada sob demanda a partir de eventos que o CRM já
 // registra. Nenhuma tabela nova, nenhuma view materializada, nenhum
 // cron/worker: só leitura agregada de Interaction/Property.
 //

@@ -98,7 +98,7 @@ export default async function PoliticaDePrivacidadePage({
           </p>
           <p>
             Quando você envia uma solicitação pelo site, quem recebe e responde é {nome}. O site é
-            publicado com a plataforma easymob, que hospeda e mantém o sistema em nome da
+            publicado com a plataforma syntaks, que hospeda e mantém o sistema em nome da
             imobiliária.
           </p>
         </Secao>

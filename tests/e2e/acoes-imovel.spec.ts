@@ -20,7 +20,7 @@ const botaoCompartilhar = (page: Page) =>
   page.locator("[data-acoes-imovel]").getByRole("button", { name: "Compartilhar", exact: true });
 const botaoSalvar = (page: Page) => page.locator("[data-salvar-imovel]");
 const canonica = (page: Page) => page.locator('link[rel="canonical"]').getAttribute("href");
-const chave = (slug: string) => `easymob:favoritos:v1:${slug}`;
+const chave = (slug: string) => `syntaks:favoritos:v1:${slug}`;
 
 async function caixa(locator: Locator) {
   const box = await locator.boundingBox();

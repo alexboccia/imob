@@ -76,8 +76,8 @@ describe("hostnameReservado", () => {
   const originalBase = process.env.PUBLIC_ORG_SUBDOMAIN_BASE;
 
   beforeEach(() => {
-    process.env.NEXT_PUBLIC_SITE_URL = "https://easymob.ondigitalocean.app";
-    process.env.PUBLIC_ORG_SUBDOMAIN_BASE = "easymob.com.br";
+    process.env.NEXT_PUBLIC_SITE_URL = "https://syntaks.ondigitalocean.app";
+    process.env.PUBLIC_ORG_SUBDOMAIN_BASE = "syntaks.com.br";
   });
 
   afterEach(() => {
@@ -98,17 +98,17 @@ describe("hostnameReservado", () => {
   });
 
   test("domínio oficial (NEXT_PUBLIC_SITE_URL) é reservado", () => {
-    expect(hostnameReservado("easymob.ondigitalocean.app")).toBe(true);
+    expect(hostnameReservado("syntaks.ondigitalocean.app")).toBe(true);
   });
 
   test("labels reservados sob o domínio-base de subdomínio são bloqueados", () => {
-    expect(hostnameReservado("app.easymob.com.br")).toBe(true);
-    expect(hostnameReservado("platform.easymob.com.br")).toBe(true);
-    expect(hostnameReservado("www.easymob.com.br")).toBe(true);
+    expect(hostnameReservado("app.syntaks.com.br")).toBe(true);
+    expect(hostnameReservado("platform.syntaks.com.br")).toBe(true);
+    expect(hostnameReservado("www.syntaks.com.br")).toBe(true);
   });
 
   test("subdomínio de organização legítimo NÃO é reservado", () => {
-    expect(hostnameReservado("xyz.easymob.com.br")).toBe(false);
+    expect(hostnameReservado("xyz.syntaks.com.br")).toBe(false);
   });
 
   test("domínio de cliente completamente externo não é reservado", () => {
@@ -117,7 +117,7 @@ describe("hostnameReservado", () => {
 
   test("sem PUBLIC_ORG_SUBDOMAIN_BASE configurado, não quebra e não reserva subdomínios", () => {
     delete process.env.PUBLIC_ORG_SUBDOMAIN_BASE;
-    expect(hostnameReservado("xyz.easymob.com.br")).toBe(false);
+    expect(hostnameReservado("xyz.syntaks.com.br")).toBe(false);
     expect(hostnameReservado("localhost")).toBe(true);
   });
 

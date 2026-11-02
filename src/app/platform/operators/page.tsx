@@ -19,7 +19,7 @@ export default async function PlatformOperatorsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Equipe EasyMob</CardTitle>
+          <CardTitle className="text-base">Equipe Syntaks</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="divide-y">

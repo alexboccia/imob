@@ -1291,7 +1291,7 @@ export async function registrarProposta(
             propertyInterestId: interesse.id,
             amount: valor.valor,
             side: lado,
-            // AUTORIA: quem registrou no easymob. `side` acima é quem
+            // AUTORIA: quem registrou no syntaks. `side` acima é quem
             // PROPÔS — o corretor registra a proposta do cliente.
             createdByMemberId: autorMemberId,
           },

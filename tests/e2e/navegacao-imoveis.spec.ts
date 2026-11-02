@@ -226,7 +226,7 @@ test.describe("ações seguem o imóvel atual", () => {
 
     const salvos = await page.evaluate(
       (k) => JSON.parse(localStorage.getItem(k) ?? "[]"),
-      `easymob:favoritos:v1:${ORG_NAVEGACAO.slug}`
+      `syntaks:favoritos:v1:${ORG_NAVEGACAO.slug}`
     );
     expect(salvos).toEqual([MEIO]);
   });

@@ -77,7 +77,7 @@ function armazenamentoFalso(inicial: Record<string, string> = {}) {
 
 describe("favoritos", () => {
   test("chave versionada por organização", () => {
-    expect(chaveFavoritos("org-a")).toBe("easymob:favoritos:v1:org-a");
+    expect(chaveFavoritos("org-a")).toBe("syntaks:favoritos:v1:org-a");
     expect(chaveFavoritos("org-a")).not.toBe(chaveFavoritos("org-b"));
   });
 

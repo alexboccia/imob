@@ -17,7 +17,7 @@ import { atribuicaoAtual } from "@/lib/atribuicao-client";
 // endpoint estiver fora do ar: o clique no WhatsApp abre o WhatsApp do
 // mesmo jeito e a navegação acontece do mesmo jeito.
 
-const CHAVE_VISITOR = "easymob:visitor";
+const CHAVE_VISITOR = "syntaks:visitor";
 
 // Identificador pseudônimo do navegador: UUID aleatório, sem nenhum
 // significado externo, first-party, criado pela própria aplicação.

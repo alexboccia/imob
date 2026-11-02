@@ -24,7 +24,7 @@ export function AdicionarDominioForm({ organizationId }: { organizationId: strin
           className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
         >
           <option value="CUSTOM">Domínio próprio</option>
-          <option value="EASYMOB_SUBDOMAIN">Subdomínio easymob</option>
+          <option value="EASYMOB_SUBDOMAIN">Subdomínio syntaks</option>
         </select>
         <Button type="submit" size="sm" disabled={pendente}>
           {pendente ? "Adicionando..." : "Adicionar domínio"}

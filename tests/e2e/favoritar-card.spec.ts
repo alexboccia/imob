@@ -20,7 +20,7 @@ const BASE = `/${ORG_NAVEGACAO.slug}`;
 const LISTA = `${BASE}/imoveis`;
 const FAVORITOS = `${BASE}/favoritos`;
 const ficha = (id: string) => `${BASE}/imoveis/${id}`;
-const chave = (slug: string) => `easymob:favoritos:v1:${slug}`;
+const chave = (slug: string) => `syntaks:favoritos:v1:${slug}`;
 const MEIO = IDS_E2E.imovelNavegacaoMeio;
 const RECENTE = IDS_E2E.imovelNavegacaoRecente;
 const TITULO_MEIO = "Imovel Navegacao Meio E2E";

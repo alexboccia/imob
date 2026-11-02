@@ -336,7 +336,7 @@ export default async function OrganizationDetailsPage({
         <CardContent>
           <p className="text-xs text-muted-foreground mb-2">
             Nenhum DNS/DigitalOcean/Cloudflare é alterado automaticamente aqui — cadastro é só o registro no
-            easymob. Aponte um CNAME de <span className="font-mono">www</span> para{" "}
+            syntaks. Aponte um CNAME de <span className="font-mono">www</span> para{" "}
             <span className="font-mono">{process.env.CUSTOM_DOMAIN_CNAME_TARGET ?? "(configurar CUSTOM_DOMAIN_CNAME_TARGET)"}</span>
             , confirme o DNS, cadastre o domínio manualmente na DigitalOcean, aguarde o certificado, e só então marque
             o status como VERIFIED/ACTIVE aqui.
@@ -368,7 +368,7 @@ export default async function OrganizationDetailsPage({
         <CardContent>
           <p className="text-xs text-muted-foreground mb-3">
             Remetente das notificações automáticas (contato, convites) — nunca uma caixa de e-mail hospedada pelo
-            easymob. Configure SPF/DKIM/DMARC no domínio conforme a configuração real do Resend antes de marcar como
+            syntaks. Configure SPF/DKIM/DMARC no domínio conforme a configuração real do Resend antes de marcar como
             verificado.
           </p>
           <EmailDomainSection

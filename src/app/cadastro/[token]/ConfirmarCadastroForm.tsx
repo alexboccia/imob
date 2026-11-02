@@ -53,7 +53,7 @@ export function ConfirmarCadastroForm({
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          Você já tem uma conta no EasyMob. Sua senha continua a mesma — esta confirmação
+          Você já tem uma conta no Syntaks. Sua senha continua a mesma — esta confirmação
           apenas cria a nova imobiliária com você como proprietário.
         </p>
       )}

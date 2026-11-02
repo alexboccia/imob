@@ -30,7 +30,7 @@ import {
 // Tudo aqui é fail-open: em modo restrito, storage bloqueado ou cota
 // estourada, as funções devolvem null/vazio e a página segue normal.
 
-const CHAVE_ATRIBUICAO = "easymob:atribuicao";
+const CHAVE_ATRIBUICAO = "syntaks:atribuicao";
 
 function lerArmazenada(): Atribuicao | null {
   try {

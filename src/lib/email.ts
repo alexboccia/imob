@@ -142,7 +142,7 @@ export async function enviarEmailConviteOwner({
   }
 
   const linhas = [
-    `Você foi convidado a administrar "${nomeOrganizacao}" no EasyMob.`,
+    `Você foi convidado a administrar "${nomeOrganizacao}" no Syntaks.`,
     "",
     "Defina sua senha e ative sua conta pelo link abaixo:",
     linkConvite,
@@ -154,7 +154,7 @@ export async function enviarEmailConviteOwner({
     await cliente.emails.send({
       from: remetente,
       to: para,
-      subject: "Bem-vindo ao EasyMob — configure sua conta",
+      subject: "Bem-vindo ao Syntaks — configure sua conta",
       text: linhas.join("\n"),
     });
     return { enviado: true };
@@ -209,10 +209,10 @@ export async function enviarEmailConviteMembro({
   }
 
   const linhas = [
-    `${nomeQuemConvidou} convidou você para a equipe de "${nomeOrganizacao}" no EasyMob.`,
+    `${nomeQuemConvidou} convidou você para a equipe de "${nomeOrganizacao}" no Syntaks.`,
     "",
     jaTemConta
-      ? "Você já tem uma conta no EasyMob. Aceite o convite pelo link abaixo — sua senha continua a mesma:"
+      ? "Você já tem uma conta no Syntaks. Aceite o convite pelo link abaixo — sua senha continua a mesma:"
       : "Crie sua senha e ative sua conta pelo link abaixo:",
     linkConvite,
     "",
@@ -223,7 +223,7 @@ export async function enviarEmailConviteMembro({
     await cliente.emails.send({
       from: remetente,
       to: para,
-      subject: `Convite para a equipe de ${nomeOrganizacao} — EasyMob`,
+      subject: `Convite para a equipe de ${nomeOrganizacao} — Syntaks`,
       text: linhas.join("\n"),
     });
     return { enviado: true };
@@ -271,7 +271,7 @@ export async function enviarEmailRecuperacaoSenha({
   }
 
   const linhas = [
-    "Recebemos um pedido para redefinir a senha da sua conta no EasyMob.",
+    "Recebemos um pedido para redefinir a senha da sua conta no Syntaks.",
     "",
     "Escolha uma nova senha pelo link abaixo:",
     linkRedefinicao,
@@ -285,7 +285,7 @@ export async function enviarEmailRecuperacaoSenha({
     await cliente.emails.send({
       from: remetente,
       to: para,
-      subject: "Redefinir sua senha — EasyMob",
+      subject: "Redefinir sua senha — Syntaks",
       text: linhas.join("\n"),
     });
     return { enviado: true };
@@ -330,7 +330,7 @@ export async function enviarEmailCadastroImobiliaria({
   }
 
   const linhas = [
-    `Recebemos um pedido para criar a conta de "${nomeImobiliaria}" no EasyMob.`,
+    `Recebemos um pedido para criar a conta de "${nomeImobiliaria}" no Syntaks.`,
     "",
     "Confirme pelo link abaixo para ativar sua conta e entrar:",
     linkCadastro,
@@ -344,7 +344,7 @@ export async function enviarEmailCadastroImobiliaria({
     await cliente.emails.send({
       from: remetente,
       to: para,
-      subject: "Confirme o cadastro da sua imobiliária — EasyMob",
+      subject: "Confirme o cadastro da sua imobiliária — Syntaks",
       text: linhas.join("\n"),
     });
     return { enviado: true };

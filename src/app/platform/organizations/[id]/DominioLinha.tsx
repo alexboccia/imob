@@ -10,7 +10,7 @@ const STATUS_OPCOES = ["PENDING", "VERIFIED", "ACTIVE", "FAILED", "DISABLED"] as
 
 const TIPO_LABEL: Record<string, string> = {
   CUSTOM: "Domínio próprio",
-  EASYMOB_SUBDOMAIN: "Subdomínio easymob",
+  EASYMOB_SUBDOMAIN: "Subdomínio syntaks",
 };
 
 export function DominioLinha({

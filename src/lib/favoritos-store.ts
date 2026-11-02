@@ -21,7 +21,7 @@ import {
 // =======================================================================
 
 const memoria = new Map<string, string[]>();
-export const EVENTO_FAVORITOS = "easymob:favoritos-alterados";
+export const EVENTO_FAVORITOS = "syntaks:favoritos-alterados";
 
 function lerLista(orgSlug: string): string[] {
   return memoria.get(orgSlug) ?? lerFavoritos(armazenamentoDoNavegador(), orgSlug);

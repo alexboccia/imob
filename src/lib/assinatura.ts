@@ -49,7 +49,7 @@ export const ESTADOS_ASSINATURA: Record<SubscriptionStatus, EstadoAssinatura> = 
   ACTIVE: {
     status: "ACTIVE",
     rotulo: "Assinatura ativa",
-    descricao: "Contrato vigente entre a imobiliária e o easymob.",
+    descricao: "Contrato vigente entre a imobiliária e o syntaks.",
     operacaoLiberadaPeloStatus: true,
   },
   PAST_DUE: {

@@ -51,7 +51,7 @@ export function DefinirSenhaForm({
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          Você já tem uma conta no EasyMob. Aceitar não altera sua senha — apenas libera
+          Você já tem uma conta no Syntaks. Aceitar não altera sua senha — apenas libera
           seu acesso {nomeOrganizacao ? `a ${nomeOrganizacao}` : "a esta imobiliária"}.
         </p>
       )}

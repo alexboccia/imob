@@ -76,9 +76,9 @@ describe("calcularOnboarding — publicationStatus", () => {
 });
 
 describe("calcularOnboarding — itens individuais", () => {
-  test("subdomínio easymob é sempre CONCLUIDO no modelo de acesso atual", () => {
+  test("subdomínio syntaks é sempre CONCLUIDO no modelo de acesso atual", () => {
     const resultado = calcularOnboarding(BASE);
-    expect(item(resultado, "subdominio_easymob").status).toBe("CONCLUIDO");
+    expect(item(resultado, "subdominio_syntaks").status).toBe("CONCLUIDO");
   });
 
   test("dns_configurado e dominio_verificado ficam PENDENTE sem nenhum domínio custom cadastrado", () => {

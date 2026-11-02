@@ -15,7 +15,7 @@ const criarOperatorSchema = z.object({
   senha: z.string().min(8, "A senha precisa ter ao menos 8 caracteres."),
 });
 
-// PlatformOperator é identidade INTERNA da equipe EasyMob (não um cliente)
+// PlatformOperator é identidade INTERNA da equipe Syntaks (não um cliente)
 // — diferente do onboarding do OWNER (Fase 3), aqui o próprio Super Admin
 // que está criando já define a senha inicial diretamente, sem precisar
 // do fluxo de convite/token (isso é proporcional: convite existe pra não

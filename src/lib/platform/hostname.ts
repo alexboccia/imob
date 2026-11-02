@@ -59,7 +59,7 @@ export function normalizarHostname(bruto: string): string | null {
 // Hosts que uma Organization NUNCA pode reivindicar como
 // OrganizationDomain — hosts internos/locais, origin da hospedagem
 // (DigitalOcean), o domínio oficial da plataforma (NEXT_PUBLIC_SITE_URL),
-// e labels reservados sob o domínio-base de subdomínio easymob
+// e labels reservados sob o domínio-base de subdomínio syntaks
 // (PUBLIC_ORG_SUBDOMAIN_BASE, quando configurado) — mesma lista de slugs
 // reservados usada pra Organization.slug (SLUGS_RESERVADOS), por
 // consistência: um slug reservado nunca pode virar
