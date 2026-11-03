@@ -16,6 +16,8 @@
 // rótulo, não está naquela listagem — e o link não pode prometer isso.
 // =======================================================================
 
+import { finalidadeParaUrl } from "@/lib/finalidade-url";
+
 export type MigalhaImovel = { label: string; href: string };
 
 type ImovelParaBreadcrumb = {
@@ -29,7 +31,10 @@ type ImovelParaBreadcrumb = {
 type Parametros = Record<string, string>;
 
 function listagem(basePath: string, parametros: Parametros): string {
-  const qs = new URLSearchParams(parametros).toString();
+  const traduzidos = parametros.finalidade
+    ? { ...parametros, finalidade: finalidadeParaUrl(parametros.finalidade) }
+    : parametros;
+  const qs = new URLSearchParams(traduzidos).toString();
   return `${basePath}/imoveis${qs ? `?${qs}` : ""}`;
 }
 

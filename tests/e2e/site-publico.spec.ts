@@ -201,7 +201,7 @@ test.describe("Site público — Home (Proposta 2)", () => {
 
     await page.waitForURL(/\/imoveis\?/);
     const url = new URL(page.url());
-    expect(url.searchParams.get("finalidade")).toBe("SALE");
+    expect(url.searchParams.get("finalidade")).toBe("venda");
     expect(url.searchParams.get("cidade")).toBe("São Paulo");
     expect(url.searchParams.get("bairro")).toBe("Centro");
     expect(url.searchParams.get("tipo")).toBe("Apartamento");
@@ -227,7 +227,7 @@ test.describe("Site público — Home (Proposta 2)", () => {
 
     await page.waitForURL(/\/imoveis\?/);
     const url = new URL(page.url());
-    expect(url.searchParams.get("finalidade")).toBe("RENT");
+    expect(url.searchParams.get("finalidade")).toBe("aluguel");
     expect(url.searchParams.get("cidade")).toBe("Campinas");
     expect(url.searchParams.get("precoMax")).toBe("3000");
     // Prova real do bug corrigido: o imóvel de aluguel seedado

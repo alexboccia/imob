@@ -42,10 +42,10 @@ describe("migalhasDoImovel", () => {
       "Santana",
     ]);
     const venda = migalhasDoImovel("", base);
-    expect(venda[1].href).toBe("/imoveis?finalidade=SALE");
+    expect(venda[1].href).toBe("/imoveis?finalidade=venda");
     const aluguel = migalhasDoImovel("", { ...base, purpose: "RENT" });
     expect(labels(aluguel)[1]).toBe("Alugar");
-    expect(aluguel[1].href).toBe("/imoveis?finalidade=RENT");
+    expect(aluguel[1].href).toBe("/imoveis?finalidade=aluguel");
     // Venda E locação não está em nenhuma das duas listagens do menu.
     const ambos = migalhasDoImovel("", { ...base, purpose: "SALE_AND_RENT" });
     expect(labels(ambos)[1]).toBe("Imóveis");
@@ -62,7 +62,7 @@ describe("migalhasDoImovel", () => {
   test("C) sem bairro: a cidade é o contexto; sem nenhum dos dois, o nível some", () => {
     const semBairro = migalhasDoImovel("", { ...base, neighborhood: "  " });
     expect(labels(semBairro)).toEqual(["Home", "Comprar", "Apartamento", "São Paulo"]);
-    expect(params(semBairro[3].href)).toEqual({ finalidade: "SALE", tipo: "Apartamento", cidade: "São Paulo" });
+    expect(params(semBairro[3].href)).toEqual({ finalidade: "venda", tipo: "Apartamento", cidade: "São Paulo" });
 
     const nada = migalhasDoImovel("", { ...base, neighborhood: null, city: null });
     expect(labels(nada)).toEqual(["Home", "Comprar", "Apartamento"]);
@@ -70,13 +70,13 @@ describe("migalhasDoImovel", () => {
 
   test("bairro sem cidade não inventa cidade no filtro", () => {
     const m = migalhasDoImovel("", { ...base, city: null });
-    expect(params(m[3].href)).toEqual({ finalidade: "SALE", tipo: "Apartamento", bairro: "Santana" });
+    expect(params(m[3].href)).toEqual({ finalidade: "venda", tipo: "Apartamento", bairro: "Santana" });
   });
 
   test("D) sem tipo: o nível some e o bairro não carrega tipo", () => {
     const m = migalhasDoImovel("", { ...base, type: "" });
     expect(labels(m)).toEqual(["Home", "Comprar", "Santana"]);
-    expect(params(m[2].href)).toEqual({ finalidade: "SALE", cidade: "São Paulo", bairro: "Santana" });
+    expect(params(m[2].href)).toEqual({ finalidade: "venda", cidade: "São Paulo", bairro: "Santana" });
   });
 
   test("nenhum placeholder, e valores aparados", () => {

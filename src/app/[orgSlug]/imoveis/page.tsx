@@ -236,6 +236,12 @@ export default async function ListaImoveisPage({
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <FiltrosImoveis
+        // Remonta sempre que a query muda (ex: clicar "Alugar" no menu
+        // enquanto já em /imoveis) — sem isso, o componente ficava
+        // montado e o estado local (useState(inicial.x)) preservava o
+        // valor antigo do pill "Tipo de negócio" em vez de refletir a
+        // nova URL.
+        key={JSON.stringify(params)}
         tipos={dadosFiltros.tipos.map((t) => t.nome)}
         bairros={dadosFiltros.bairros.map((b) => b.nome)}
         caracteristicas={dadosFiltros.caracteristicas}

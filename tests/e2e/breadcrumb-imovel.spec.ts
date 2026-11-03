@@ -88,7 +88,7 @@ test.describe("composição", () => {
     const m = await migalhas(page);
     expect(m.map((x) => x.label)).toEqual(["Home", "Alugar", "Studio", "Pinheiros"]);
     expect(params(m[3].href)).toEqual({
-      finalidade: "RENT",
+      finalidade: "aluguel",
       tipo: "Studio",
       cidade: "São Paulo",
       bairro: "Pinheiros",
@@ -111,7 +111,7 @@ test.describe("composição", () => {
     await page.goto(fichaW(IDS_E2E.imovelBreadcrumbSemContexto));
     const m = await migalhas(page);
     expect(m.map((x) => x.label)).toEqual(["Home", "Comprar", "São Paulo"]);
-    expect(params(m[2].href)).toEqual({ finalidade: "SALE", cidade: "São Paulo" });
+    expect(params(m[2].href)).toEqual({ finalidade: "venda", cidade: "São Paulo" });
     expect(await contexto(page).innerText()).not.toMatch(/não informad|sem tipo|sem bairro|—|undefined|null/i);
     const textos = await textosDosSelos(page);
     expect(textos).toHaveLength(1);
