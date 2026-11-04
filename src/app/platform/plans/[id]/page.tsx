@@ -26,7 +26,7 @@ export default async function PlatformPlanDetailsPage({
   if (!plano) notFound();
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">{plano.name}</h1>

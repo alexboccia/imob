@@ -53,7 +53,7 @@ export function EditarPlanoForm({
   const [estado, formAction, pendente] = useActionState(atualizarComId, ESTADO_INICIAL_ACAO);
 
   return (
-    <form action={formAction} className="space-y-6 max-w-md">
+    <form action={formAction} className="space-y-6">
       {quantidadeOrganizacoes > 0 && (
         <p className="text-sm bg-amber-50 text-amber-900 border border-amber-200 rounded-md p-3">
           Atenção: {quantidadeOrganizacoes} organization

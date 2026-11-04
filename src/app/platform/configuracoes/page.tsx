@@ -16,7 +16,7 @@ export default async function PlatformConfiguracoesPage() {
   const config = await buscarConfiguracaoSuporte();
 
   return (
-    <div className="max-w-xl space-y-6">
+    <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Configurações</h1>
 
       <Card>

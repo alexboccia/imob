@@ -12,7 +12,7 @@ export default async function NovaOrganizationPage() {
   });
 
   return (
-    <div className="max-w-lg">
+    <div>
       <h1 className="text-2xl font-semibold mb-6">Nova organization</h1>
       <CriarOrganizationForm planos={planos} />
     </div>

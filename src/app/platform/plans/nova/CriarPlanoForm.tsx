@@ -25,7 +25,7 @@ export function CriarPlanoForm() {
   const [estado, formAction, pendente] = useActionState(criarPlano, ESTADO_INICIAL);
 
   return (
-    <form action={formAction} className="space-y-6 max-w-md">
+    <form action={formAction} className="space-y-6">
       <div className="space-y-1">
         <Label htmlFor="code">Código técnico</Label>
         <Input id="code" name="code" placeholder="ENTERPRISE" className="font-mono uppercase" />
