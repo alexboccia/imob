@@ -22,18 +22,6 @@ function obterCliente() {
 // fora de TENANT_SCOPED_MODELS, então esta consulta funciona com o
 // `organizationId` explícito abaixo sem nenhum bypass.
 async function resolverRemetente(organizationId: string): Promise<string | null> {
-  // Fase 126 (preparação da Imobiliária Demo) — organização demo nunca
-  // dispara e-mail real, para nenhum dos cinco tipos deste arquivo.
-  // Reusa o MESMO caminho de "sem remetente configurado" que já existe
-  // (cada chamador já trata `null` como "não enviar, logar aviso,
-  // devolver enviado:false quando aplicável") — nenhuma lógica nova por
-  // chamador, um só ponto de verificação.
-  const organizacao = await prisma.organization.findUnique({
-    where: { id: organizationId },
-    select: { isDemo: true },
-  });
-  if (organizacao?.isDemo) return null;
-
   const emailDomain = await prisma.organizationEmailDomain.findUnique({
     where: { organizationId },
     select: { status: true, fromName: true, fromAddress: true },
