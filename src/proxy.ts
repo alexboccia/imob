@@ -2,8 +2,9 @@ import NextAuth from "next-auth";
 import { NextResponse, type NextRequest } from "next/server";
 import { authConfig } from "@/lib/auth.config";
 import { platformAuthConfig } from "@/lib/platform/auth.config";
-import { normalizarHostname, hostnameReservado } from "@/lib/platform/hostname";
+import { normalizarHostname, hostnameReservado, hostnameInstitucional } from "@/lib/platform/hostname";
 import { resolverOrgSlugPorHostname } from "@/lib/platform/organization-domain";
+import { decidirRotaInstitucional } from "@/lib/platform/institucional-routing";
 
 // Next.js só permite um arquivo de middleware — as duas áreas (/app,
 // identidade de OrganizationMember; /platform, identidade de
@@ -94,6 +95,24 @@ async function resolverTenantPorHost(req: NextRequest): Promise<NextResponse | u
 
   const host = normalizarHostname(hostBruto);
   if (!host) return undefined;
+
+  // Site institucional do SaaS (syntaks.com.br) — checado ANTES do fast
+  // path de host reservado de propósito: é um domínio totalmente
+  // separado do domínio canônico das imobiliárias clientes, nunca deve
+  // herdar o rewrite de PUBLIC_ORG_SLUG de next.config.ts (que não é
+  // sensível a host — ver diagnóstico da Etapa A, risco #1). Só os
+  // caminhos da lista fechada de `decidirRotaInstitucional` respondem;
+  // qualquer outro 404 aqui mesmo, antes de chegar em qualquer rota de
+  // organização.
+  if (hostnameInstitucional(host)) {
+    const decisao = decidirRotaInstitucional(req.nextUrl.pathname);
+    if (decisao.tipo === "nao_encontrado") {
+      return new NextResponse("Not Found", { status: 404 });
+    }
+    const url = req.nextUrl.clone();
+    url.pathname = decisao.destino;
+    return NextResponse.rewrite(url);
+  }
 
   // Fast path: host conhecido/reservado (domínio canônico da plataforma,
   // origin da DigitalOcean, localhost) — zero query nova, delega pro

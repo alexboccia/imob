@@ -22,6 +22,18 @@ function obterCliente() {
 // fora de TENANT_SCOPED_MODELS, então esta consulta funciona com o
 // `organizationId` explícito abaixo sem nenhum bypass.
 async function resolverRemetente(organizationId: string): Promise<string | null> {
+  // Fase 126 (preparação da Imobiliária Demo) — organização demo nunca
+  // dispara e-mail real, para nenhum dos cinco tipos deste arquivo.
+  // Reusa o MESMO caminho de "sem remetente configurado" que já existe
+  // (cada chamador já trata `null` como "não enviar, logar aviso,
+  // devolver enviado:false quando aplicável") — nenhuma lógica nova por
+  // chamador, um só ponto de verificação.
+  const organizacao = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { isDemo: true },
+  });
+  if (organizacao?.isDemo) return null;
+
   const emailDomain = await prisma.organizationEmailDomain.findUnique({
     where: { organizationId },
     select: { status: true, fromName: true, fromAddress: true },
@@ -353,6 +365,66 @@ export async function enviarEmailCadastroImobiliaria({
     logger.error("Falha ao enviar e-mail de cadastro de imobiliária", erro, {
       modulo: "email",
     });
+    return { enviado: false };
+  }
+}
+
+// Lead do site institucional (Etapa D do briefing comercial Syntaks,
+// src/app/institucional/). Sem organizationId (não é formulário de
+// nenhuma imobiliária cliente) — destino é INSTITUTIONAL_LEADS_EMAIL,
+// não há CRM/destino comercial definido ainda (ver
+// docs/comercial/00-diagnostico-produto.md). `enviado: false` nunca é
+// tratado como "lead perdido" silenciosamente pelo chamador — ver
+// institucional/actions.ts.
+export async function enviarEmailLeadInstitucional({
+  nome,
+  email,
+  whatsapp,
+  nomeImobiliaria,
+}: {
+  nome: string;
+  email: string;
+  whatsapp: string;
+  nomeImobiliaria: string;
+}): Promise<{ enviado: boolean }> {
+  const cliente = obterCliente();
+  if (!cliente) {
+    logger.warn("RESEND_API_KEY não configurada — lead institucional não foi enviado", {
+      modulo: "email",
+    });
+    return { enviado: false };
+  }
+
+  const remetente = process.env.RESEND_FROM_EMAIL ?? null;
+  const destino = process.env.INSTITUTIONAL_LEADS_EMAIL ?? null;
+  if (!remetente || !destino) {
+    logger.warn(
+      "RESEND_FROM_EMAIL ou INSTITUTIONAL_LEADS_EMAIL não configurado — lead institucional não foi enviado",
+      { modulo: "email" }
+    );
+    return { enviado: false };
+  }
+
+  const linhas = [
+    `Nome: ${nome}`,
+    `E-mail: ${email}`,
+    `WhatsApp: ${whatsapp}`,
+    `Imobiliária: ${nomeImobiliaria}`,
+    "",
+    "Origem: formulário \"Agendar demonstração\" — syntaks.com.br",
+  ];
+
+  try {
+    await cliente.emails.send({
+      from: remetente,
+      to: destino,
+      replyTo: email,
+      subject: `Nova solicitação de demonstração — ${nomeImobiliaria}`,
+      text: linhas.join("\n"),
+    });
+    return { enviado: true };
+  } catch (erro) {
+    logger.error("Falha ao enviar e-mail de lead institucional", erro, { modulo: "email" });
     return { enviado: false };
   }
 }

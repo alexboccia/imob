@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "vitest";
-import { normalizarHostname, hostnameReservado } from "@/lib/platform/hostname";
+import { normalizarHostname, hostnameReservado, hostnameInstitucional } from "@/lib/platform/hostname";
 
 describe("normalizarHostname", () => {
   test("uppercase é normalizado pra lowercase", () => {
@@ -125,5 +125,46 @@ describe("hostnameReservado", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "not-a-valid-url";
     expect(() => hostnameReservado("www.xyz.com.br")).not.toThrow();
     expect(hostnameReservado("www.xyz.com.br")).toBe(false);
+  });
+});
+
+describe("hostnameInstitucional", () => {
+  const originalUrl = process.env.NEXT_PUBLIC_INSTITUTIONAL_URL;
+
+  afterEach(() => {
+    if (originalUrl === undefined) delete process.env.NEXT_PUBLIC_INSTITUTIONAL_URL;
+    else process.env.NEXT_PUBLIC_INSTITUTIONAL_URL = originalUrl;
+  });
+
+  test("sem NEXT_PUBLIC_INSTITUTIONAL_URL configurado, nunca reconhece nenhum host", () => {
+    delete process.env.NEXT_PUBLIC_INSTITUTIONAL_URL;
+    expect(hostnameInstitucional("syntaks.com.br")).toBe(false);
+  });
+
+  test("reconhece o host exato configurado", () => {
+    process.env.NEXT_PUBLIC_INSTITUTIONAL_URL = "https://syntaks.com.br";
+    expect(hostnameInstitucional("syntaks.com.br")).toBe(true);
+  });
+
+  test("reconhece a variante www.", () => {
+    process.env.NEXT_PUBLIC_INSTITUTIONAL_URL = "https://syntaks.com.br";
+    expect(hostnameInstitucional("www.syntaks.com.br")).toBe(true);
+  });
+
+  test("não reconhece subdomínio arbitrário (continua candidato a domínio de organização)", () => {
+    process.env.NEXT_PUBLIC_INSTITUTIONAL_URL = "https://syntaks.com.br";
+    expect(hostnameInstitucional("xyz.syntaks.com.br")).toBe(false);
+    expect(hostnameInstitucional("demo.syntaks.com.br")).toBe(false);
+  });
+
+  test("não reconhece domínio completamente diferente", () => {
+    process.env.NEXT_PUBLIC_INSTITUTIONAL_URL = "https://syntaks.com.br";
+    expect(hostnameInstitucional("www.xyz.com.br")).toBe(false);
+  });
+
+  test("NEXT_PUBLIC_INSTITUTIONAL_URL malformado nunca quebra a checagem", () => {
+    process.env.NEXT_PUBLIC_INSTITUTIONAL_URL = "not-a-valid-url";
+    expect(() => hostnameInstitucional("syntaks.com.br")).not.toThrow();
+    expect(hostnameInstitucional("syntaks.com.br")).toBe(false);
   });
 });

@@ -96,3 +96,24 @@ export function hostnameReservado(hostnameNormalizado: string): boolean {
 
   return false;
 }
+
+// Site institucional do SaaS (syntaks.com.br) — domínio separado do
+// domínio canônico das imobiliárias clientes (NEXT_PUBLIC_SITE_URL, hoje
+// demo.syntaks.com.br). Espera receber um hostname JÁ normalizado, igual
+// a hostnameReservado.
+export function hostnameInstitucional(hostnameNormalizado: string): boolean {
+  const host = hostnameNormalizado.toLowerCase();
+  const urlInstitucional = process.env.NEXT_PUBLIC_INSTITUTIONAL_URL;
+  if (!urlInstitucional) return false;
+  try {
+    const hostInstitucional = new URL(urlInstitucional).hostname.toLowerCase();
+    if (!hostInstitucional) return false;
+    // Aceita o host exato e a variante "www." — são o mesmo site, dois
+    // hostnames. Nunca aceita subdomínio arbitrário (ex:
+    // "algo.syntaks.com.br" continua sendo tratado como domínio
+    // potencial de organização, não como o site institucional).
+    return host === hostInstitucional || host === `www.${hostInstitucional}`;
+  } catch {
+    return false;
+  }
+}

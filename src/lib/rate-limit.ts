@@ -61,6 +61,11 @@ export const LIMITES = {
   // usar o produto como máquina de spam contra uma pessoa.
   cadastroPorIp: { limite: 5, janelaSegundos: 60 * 60 },
   cadastroPorEmail: { limite: 3, janelaSegundos: 60 * 60 },
+  // Site institucional (syntaks.com.br) — "Agendar demonstração". Mesmos
+  // números de cadastroPorIp/PorEmail: é o mesmo perfil de risco (form
+  // público, sem confirmação de e-mail antes de notificar alguém).
+  leadInstitucionalPorIp: { limite: 5, janelaSegundos: 60 * 60 },
+  leadInstitucionalPorEmail: { limite: 3, janelaSegundos: 60 * 60 },
   recuperacaoPorIp: { limite: 10, janelaSegundos: 60 * 60 },
   recuperacaoPorEmail: { limite: 5, janelaSegundos: 60 * 60 },
   analyticsPorIp: { limite: 300, janelaSegundos: 10 * 60 },
@@ -272,6 +277,32 @@ export async function verificarLimiteCadastro(
       // hashCurto: o e-mail nunca vira chave em texto claro no
       // armazenamento de limite.
       chave: `rl:signup:email:${hashCurto(params.emailNormalizado)}`,
+      limite: limiteEmail,
+      janelaSegundos: janelaEmail,
+      motivo: "email",
+    });
+  }
+  return aplicarChecagens(store, checagens);
+}
+
+// Lead do site institucional (Etapa D do briefing comercial Syntaks).
+// Fail-open como todo o resto — ver verificarLimiteCadastro, mesmo
+// racional (sem e-mail obrigatório pra validar identidade antes do
+// envio, o balde por e-mail é a única proteção contra martelar o mesmo
+// endereço).
+export async function verificarLimiteLeadInstitucional(
+  store: KvStore,
+  params: { ip: string; emailNormalizado: string | null }
+): Promise<ResultadoLimite> {
+  const { limite: limiteIp, janelaSegundos: janelaIp } = LIMITES.leadInstitucionalPorIp;
+  const { limite: limiteEmail, janelaSegundos: janelaEmail } = LIMITES.leadInstitucionalPorEmail;
+
+  const checagens: ChecagemLimite[] = [
+    { chave: `rl:lead-institucional:ip:${params.ip}`, limite: limiteIp, janelaSegundos: janelaIp, motivo: "ip" },
+  ];
+  if (params.emailNormalizado) {
+    checagens.push({
+      chave: `rl:lead-institucional:email:${hashCurto(params.emailNormalizado)}`,
       limite: limiteEmail,
       janelaSegundos: janelaEmail,
       motivo: "email",

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { normalizarHostname, hostnameReservado } from "@/lib/platform/hostname";
+import { normalizarHostname, hostnameReservado, hostnameInstitucional } from "@/lib/platform/hostname";
 
 // Mesmo padrão de gerarTokenAcesso (src/lib/platform/invite.ts) — 192
 // bits de entropia, nunca reaproveitado como segredo de sessão. V1 não
@@ -58,6 +58,7 @@ export async function buscarHostnameCustomAtivo(organizationId: string): Promise
 export type OrigemPublicacao =
   | { tipo: "global" }
   | { tipo: "custom"; hostname: string; organizationId: string }
+  | { tipo: "institucional" }
   | { tipo: "desconhecido" };
 
 // Resolve, a partir de um Host bruto (ex: vindo de headers().get("host")
@@ -76,6 +77,7 @@ export async function resolverOrigemPublicacao(hostBruto: string | null): Promis
   const host = normalizarHostname(hostBruto);
   if (!host) return { tipo: "desconhecido" };
 
+  if (hostnameInstitucional(host)) return { tipo: "institucional" };
   if (hostnameReservado(host)) return { tipo: "global" };
 
   const dominio = await prisma.organizationDomain.findFirst({

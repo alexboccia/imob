@@ -117,6 +117,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return [];
   }
 
+  // Site institucional do SaaS — uma única URL estática, nunca mistura
+  // com o sitemap de nenhuma organização (ver proxy.ts: o host
+  // institucional nunca chega a rota de organização nenhuma).
+  if (origem.tipo === "institucional") {
+    const base = process.env.NEXT_PUBLIC_INSTITUTIONAL_URL;
+    if (!base) return [];
+    return [{ url: base, lastModified: new Date(), changeFrequency: "weekly", priority: 1 }];
+  }
+
   if (origem.tipo === "custom") {
     const organization = await prisma.organization.findUnique({
       where: { id: origem.organizationId, active: true },

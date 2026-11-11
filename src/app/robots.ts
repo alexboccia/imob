@@ -20,7 +20,12 @@ import { resolverOrigemPublicacao } from "@/lib/platform/organization-domain";
 // dinâmico de propósito (mesmo racional documentado em sitemap.ts).
 export default async function robots(): Promise<MetadataRoute.Robots> {
   const origem = await resolverOrigemPublicacao((await headers()).get("host"));
-  const sitemapUrl = origem.tipo === "custom" ? `https://${origem.hostname}/sitemap.xml` : getSiteUrl("/sitemap.xml");
+  const sitemapUrl =
+    origem.tipo === "custom"
+      ? `https://${origem.hostname}/sitemap.xml`
+      : origem.tipo === "institucional"
+        ? `${process.env.NEXT_PUBLIC_INSTITUTIONAL_URL ?? ""}/sitemap.xml`
+        : getSiteUrl("/sitemap.xml");
 
   return {
     rules: {
