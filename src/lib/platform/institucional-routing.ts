@@ -8,7 +8,7 @@
 // Lista fechada de propósito — qualquer caminho fora dela devolve 404 em
 // vez de silenciosamente herdar comportamento de organização (ver
 // risco #1 do diagnóstico da Etapa A: colisão de roteamento raiz).
-const CAMINHOS_INSTITUCIONAIS = new Set<string>(["/"]);
+const CAMINHOS_INSTITUCIONAIS = new Set<string>(["/", "/planos"]);
 
 export type DecisaoRotaInstitucional = { tipo: "rewrite"; destino: string } | { tipo: "nao_encontrado" };
 

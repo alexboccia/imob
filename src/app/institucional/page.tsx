@@ -1,11 +1,12 @@
+import Link from "next/link";
 import { Building2, CalendarClock, KanbanSquare, Megaphone, ShieldCheck, Users, Wallet } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { agoraEmMs } from "@/lib/tempo";
+import { Header } from "./Header";
+import { Footer } from "./Footer";
 import { LeadForm } from "./LeadForm";
-
-const LOGO_SYNTAKS = "/brand/syntaks-logo.png";
 
 const PROBLEMAS = [
   { titulo: "Informação espalhada", texto: "Cada corretor guarda contato de cliente no próprio celular — perdido quando ele sai." },
@@ -21,18 +22,21 @@ const FUNCIONALIDADES = [
     titulo: "Pipeline visual, sem negociação esquecida",
     texto:
       "Cada negociação mostra em qual etapa está e há quanto tempo — com base no histórico real de mudança de etapa, nunca na \"última edição\". Interessado → Visita → Proposta → Ganho/Perdido.",
+    imagem: "/screenshots/institucional/pipeline.png",
+  },
+  {
+    Icone: Wallet,
+    titulo: "Visibilidade real da operação",
+    texto:
+      "Portfólio, disponibilidade e oportunidades sempre à vista — sem planilha manual. Veja de onde vêm os leads e o que cada corretor tem na carteira.",
+    imagem: "/screenshots/institucional/imoveis-admin.png",
   },
   {
     Icone: Megaphone,
     titulo: "Divulgação pronta em segundos",
     texto:
       "A partir de uma foto real já cadastrada, o sistema compõe a imagem para Instagram Feed, Story ou WhatsApp com preço, bairro e características reais do imóvel. Sem IA alterando a foto.",
-  },
-  {
-    Icone: Wallet,
-    titulo: "Visibilidade real da operação",
-    texto:
-      "De onde vêm os leads, quanto cada corretor tem na carteira e o resultado financeiro do período — sem planilha manual. Comissão registrada por negociação, dividida entre participantes.",
+    imagem: null,
   },
 ];
 
@@ -78,28 +82,41 @@ function Captura({ rotulo }: { rotulo: string }) {
   );
 }
 
+function CapturaReal({ src, alt }: { src: string; alt: string }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border shadow-lg shadow-slate-200/60">
+      {/* eslint-disable-next-line @next/next/no-img-element -- captura estática de public/, exibida em tamanho fixo de layout */}
+      <img src={src} alt={alt} className="block w-full" />
+    </div>
+  );
+}
+
+function CardFlutuante({
+  className,
+  titulo,
+  children,
+}: {
+  className?: string;
+  titulo: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "absolute w-52 rounded-xl border bg-white p-4 shadow-xl shadow-slate-300/40",
+        className
+      )}
+    >
+      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{titulo}</p>
+      <div className="mt-1.5">{children}</div>
+    </div>
+  );
+}
+
 export default function InstitucionalPage() {
   return (
     <div className="flex flex-col" style={{ color: "var(--syntaks-navy)" }}>
-      {/* Header */}
-      <header className="sticky top-0 z-20 border-b bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-19 max-w-6xl items-center justify-between gap-6 px-6">
-          {/* eslint-disable-next-line @next/next/no-img-element -- logo estático de public/, fora do pipeline de otimização de imagem do next/image */}
-          <img src={LOGO_SYNTAKS} alt="syntaks — software de gestão imobiliária" height={34} className="h-[34px] w-auto" />
-          <nav className="hidden items-center gap-7 text-sm font-semibold text-slate-600 sm:flex">
-            <a href="#funcionalidades" className="hover:text-[var(--syntaks-blue)]">Funcionalidades</a>
-            <a href="#site-imobiliario" className="hover:text-[var(--syntaks-blue)]">Site imobiliário</a>
-            <a href="#como-funciona" className="hover:text-[var(--syntaks-blue)]">Como funciona</a>
-            <a href="#faq" className="hover:text-[var(--syntaks-blue)]">FAQ</a>
-          </nav>
-          <a
-            href="#demo"
-            className={cn(buttonVariants())}
-          >
-            Agendar demonstração
-          </a>
-        </div>
-      </header>
+      <Header />
 
       {/* Hero */}
       <section style={{ background: `linear-gradient(180deg, var(--syntaks-soft) 0%, #fff 100%)` }}>
@@ -119,10 +136,7 @@ export default function InstitucionalPage() {
               imobiliário integrado e gerador de divulgação a partir de fotos reais.
             </p>
             <div className="mt-2 flex flex-wrap gap-3">
-              <a
-                href="#demo"
-                className={cn(buttonVariants({ size: "lg" }))}
-              >
+              <a href="#demo" className={cn(buttonVariants({ size: "lg" }))}>
                 Agendar demonstração
               </a>
               <a href="#funcionalidades" className={cn(buttonVariants({ size: "lg", variant: "outline" }))}>
@@ -130,8 +144,16 @@ export default function InstitucionalPage() {
               </a>
             </div>
           </div>
-          <div className="min-w-80 flex-1">
-            <Captura rotulo="Dashboard / Central de Trabalho" />
+          <div className="relative min-w-80 flex-1 pb-8 pr-6 pt-4">
+            <CapturaReal src="/screenshots/institucional/dashboard.png" alt="Central de Trabalho do Syntaks Imóveis, com Primeiros Passos e Agenda" />
+            <CardFlutuante titulo="Pipeline" className="-bottom-6 -left-6 hidden sm:block">
+              <p className="text-2xl font-extrabold">6</p>
+              <p className="text-xs text-slate-500">negociações em andamento</p>
+            </CardFlutuante>
+            <CardFlutuante titulo="Portfólio" className="-right-6 -top-6 hidden sm:block">
+              <p className="text-2xl font-extrabold">12</p>
+              <p className="text-xs text-slate-500">imóveis cadastrados</p>
+            </CardFlutuante>
           </div>
         </div>
       </section>
@@ -181,13 +203,13 @@ export default function InstitucionalPage() {
             </h2>
           </div>
           <div className="flex flex-col gap-16">
-            {FUNCIONALIDADES.map(({ Icone, titulo, texto }, i) => (
+            {FUNCIONALIDADES.map(({ Icone, titulo, texto, imagem }, i) => (
               <div
                 key={titulo}
                 className={`flex flex-wrap items-center gap-12 ${i % 2 === 1 ? "sm:flex-row-reverse" : ""}`}
               >
                 <div className="min-w-80 flex-1">
-                  <Captura rotulo={titulo} />
+                  {imagem ? <CapturaReal src={imagem} alt={titulo} /> : <Captura rotulo={titulo} />}
                 </div>
                 <div className="min-w-80 flex-1 space-y-3">
                   <Icone className="size-7" style={{ color: "var(--syntaks-blue)" }} aria-hidden />
@@ -216,9 +238,7 @@ export default function InstitucionalPage() {
             </p>
           </div>
           <div className="min-w-80 flex-1">
-            <div className="flex aspect-[16/11] w-full items-center justify-center rounded-2xl border-2 border-dashed border-white/20 bg-white/5 p-6 text-center text-sm font-semibold text-slate-300">
-              [ captura real — site público de uma imobiliária cliente ]
-            </div>
+            <CapturaReal src="/screenshots/institucional/site-publico.png" alt="Site público de uma imobiliária cliente, com catálogo de imóveis" />
           </div>
         </div>
       </section>
@@ -279,17 +299,18 @@ export default function InstitucionalPage() {
         </div>
       </section>
 
-      {/* Planos — neutro, sem valor não aprovado */}
+      {/* Planos */}
       <section className="py-16" style={{ background: "var(--syntaks-soft)" }}>
         <div className="mx-auto flex max-w-2xl flex-col items-center gap-4 px-6 text-center">
           <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--syntaks-blue)" }}>Planos</span>
-          <h2 className="text-2xl font-extrabold tracking-tight">Conheça nossos planos — solicite uma demonstração</h2>
-          <a
-            href="#demo"
-            className={cn(buttonVariants({ size: "lg" }))}
-          >
-            Agendar demonstração
-          </a>
+          <h2 className="text-2xl font-extrabold tracking-tight">Planos para cada tamanho de equipe</h2>
+          <p className="max-w-lg text-slate-600">
+            Da primeira imobiliária em fase de testes até equipes maiores — todos os planos
+            incluem todas as funcionalidades, sem módulo bloqueado.
+          </p>
+          <Link href="/planos" className={cn(buttonVariants({ size: "lg" }))}>
+            Ver planos e preços
+          </Link>
         </div>
       </section>
 
@@ -329,33 +350,7 @@ export default function InstitucionalPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t py-12">
-        <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-8 px-6">
-          <div className="max-w-70 space-y-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element -- logo estático de public/, fora do pipeline de otimização de imagem do next/image */}
-            <img src={LOGO_SYNTAKS} alt="syntaks" height={24} className="h-6 w-auto" />
-            <p className="text-sm text-slate-500">
-              Software de gestão imobiliária. Empresa de engenharia de software e produtos SaaS.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-14 text-sm">
-            <div className="space-y-2.5">
-              <p className="font-bold">Produto</p>
-              <a href="#funcionalidades" className="block text-slate-600 hover:text-[var(--syntaks-blue)]">Funcionalidades</a>
-              <a href="#site-imobiliario" className="block text-slate-600 hover:text-[var(--syntaks-blue)]">Site imobiliário</a>
-              <a href="#como-funciona" className="block text-slate-600 hover:text-[var(--syntaks-blue)]">Como funciona</a>
-            </div>
-            <div className="space-y-2.5">
-              <p className="font-bold">Legal</p>
-              <span className="block text-slate-500">Política de Privacidade (em preparação)</span>
-            </div>
-          </div>
-        </div>
-        <p className="mx-auto mt-8 max-w-6xl px-6 text-xs text-slate-400">
-          © {new Date().getFullYear()} syntaks. Todos os direitos reservados.
-        </p>
-      </footer>
+      <Footer />
     </div>
   );
 }

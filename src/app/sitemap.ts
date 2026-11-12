@@ -123,7 +123,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (origem.tipo === "institucional") {
     const base = process.env.NEXT_PUBLIC_INSTITUTIONAL_URL;
     if (!base) return [];
-    return [{ url: base, lastModified: new Date(), changeFrequency: "weekly", priority: 1 }];
+    const agora = new Date();
+    return [
+      { url: base, lastModified: agora, changeFrequency: "weekly", priority: 1 },
+      { url: `${base}/planos`, lastModified: agora, changeFrequency: "monthly", priority: 0.8 },
+    ];
   }
 
   if (origem.tipo === "custom") {
