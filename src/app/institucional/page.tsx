@@ -136,12 +136,12 @@ export default function InstitucionalPage() {
               imobiliário integrado e gerador de divulgação a partir de fotos reais.
             </p>
             <div className="mt-2 flex flex-wrap gap-3">
-              <a href="#demo" className={cn(buttonVariants({ size: "lg" }))}>
+              <Link href="/#demo" className={cn(buttonVariants({ size: "lg" }))}>
                 Agendar demonstração
-              </a>
-              <a href="#funcionalidades" className={cn(buttonVariants({ size: "lg", variant: "outline" }))}>
+              </Link>
+              <Link href="/#funcionalidades" className={cn(buttonVariants({ size: "lg", variant: "outline" }))}>
                 Conhecer funcionalidades
-              </a>
+              </Link>
             </div>
           </div>
           <div className="relative min-w-80 flex-1 pb-8 pr-6 pt-4">
